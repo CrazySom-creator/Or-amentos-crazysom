@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crazy Som – Orçamento</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif}
+:root{--red:#c0001a;--dark:#111}
+body{background:#1a1a1a;min-height:100vh;padding:16px}
+.app{max-width:980px;margin:0 auto}
+.app-hdr{background:var(--red);padding:14px 20px;border-radius:10px 10px 0 0;display:flex;align-items:center;gap:14px}
+.app-hdr h1{color:#fff;font-size:17px;font-weight:800;letter-spacing:1px}
+.app-hdr p{color:rgba(255,255,255,.75);font-size:11px}
+.orc-ctrl{margin-left:auto;text-align:right}
+.orc-ctrl span{color:#fff;font-size:10px;opacity:.7;display:block}
+.orc-ctrl strong{color:#fff;font-size:18px}
+.orc-ctrl input{width:68px;margin-top:3px;font-size:12px;text-align:center;padding:3px 6px;border-radius:4px;border:none}
+.card{background:#fff;padding:16px 20px;border-bottom:1px solid #eee}
+.stitle{background:var(--red);color:#fff;padding:6px 12px;font-size:11px;font-weight:800;letter-spacing:1px;margin:-16px -20px 12px;text-transform:uppercase}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:9px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:9px}
+label{font-size:10px;font-weight:700;color:#666;display:block;margin-bottom:2px;text-transform:uppercase}
+input,select,textarea{width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;color:#222;background:#fafafa}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--red);background:#fff}
+textarea{resize:vertical;min-height:46px}
+.tabs{display:flex;gap:3px;margin-top:12px;flex-wrap:wrap}
+.tab{padding:6px 11px;background:#eee;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:11px;font-weight:700;color:#555;transition:.15s}
+.tab.active{background:var(--red);color:#fff}
+.tc{display:none}.tc.active{display:block}
+table.it{width:100%;border-collapse:collapse;margin-top:6px;font-size:11px}
+table.it th{background:#111;color:#fff;padding:6px 7px;text-align:left;font-size:9px;text-transform:uppercase}
+table.it td{padding:4px 6px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+table.it tr:hover td{background:#fff8f8}
+table.it input{padding:3px 5px;font-size:11px}
+.btn{padding:7px 13px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;transition:.15s}
+.btn-red{background:var(--red);color:#fff}.btn-red:hover{background:#a00015}
+.btn-dark{background:#111;color:#fff}.btn-dark:hover{background:#333}
+.btn-outline{background:#fff;color:var(--red);border:1px solid var(--red)}.btn-outline:hover{background:#fff0f0}
+.btn-sm{padding:3px 8px;font-size:10px}
+.btn-del{background:#e53935;color:#fff;padding:2px 7px;font-size:11px;border:none;border-radius:3px;cursor:pointer}
+.add-bar{display:flex;gap:7px;margin-top:7px;align-items:flex-end;flex-wrap:wrap}
+.add-bar .f{flex:1;min-width:140px}
+.sec-tot{text-align:right;padding:7px 0 2px;font-size:11px;color:#555;border-top:2px solid #eee;margin-top:5px}
+.sec-tot strong{color:var(--red);font-size:13px}
+.totbox{background:#111;color:#fff;padding:18px 20px;border-radius:0 0 10px 10px}
+.tg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px}
+.ti{border-bottom:1px solid #222;padding:7px 0}
+.ti label{color:#888;font-size:9px;text-transform:uppercase}
+.ti span{display:block;font-size:13px;font-weight:700;color:#fff;margin-top:1px}
+.ti span.red{color:#ff5555}
+.sep{border-top:1px solid #222;padding-top:11px;margin-top:4px}
+.disc-row{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.disc-row label{color:#999;font-size:10px;min-width:80px}
+.disc-row input{max-width:80px;background:#1e1e1e;color:#fff;border:1px solid #444;padding:5px 7px}
+.grand{background:var(--red);padding:12px 16px;border-radius:7px;display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+.grand span{font-size:12px;color:rgba(255,255,255,.85);font-weight:600}
+.grand strong{font-size:20px;color:#fff}
+.badge{display:inline-block;padding:1px 5px;border-radius:9px;font-size:9px;font-weight:700;background:rgba(255,255,255,.25);color:#fff;margin-left:3px}
+.tab:not(.active) .badge{background:#ccc;color:#555}
+.ctag{background:#fff3cd;color:#856404;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:700;margin-left:3px}
+.mbox{background:#0d0d0d;border:1px solid #2a2a2a;border-radius:7px;padding:12px 16px;margin-top:10px}
+.mbox h3{color:#aaa;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.mg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mi{background:#1a1a1a;border-radius:5px;padding:9px 11px}
+.mi label{color:#777;font-size:9px;text-transform:uppercase}
+.mi span{display:block;font-size:14px;font-weight:700;margin-top:2px}
+/* PDF TYPE MODAL */
+.type-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.75);z-index:8000;align-items:center;justify-content:center}
+.type-overlay.open{display:flex}
+.type-box{background:#1e1e1e;border-radius:12px;padding:28px 32px;width:100%;max-width:440px;text-align:center}
+.type-box h2{color:#fff;font-size:16px;font-weight:800;margin-bottom:6px}
+.type-box p{color:#aaa;font-size:12px;margin-bottom:24px;line-height:1.6}
+.type-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.type-card{background:#111;border:2px solid #333;border-radius:9px;padding:18px 12px;cursor:pointer;transition:.15s;text-align:center}
+.type-card:hover{border-color:var(--red);background:#1a0005}
+.type-card.selected{border-color:var(--red);background:#1a0005}
+.type-card .icon{font-size:28px;margin-bottom:8px}
+.type-card .tc-title{color:#fff;font-size:13px;font-weight:800;margin-bottom:4px}
+.type-card .tc-desc{color:#888;font-size:10px;line-height:1.5}
+.type-actions{display:flex;gap:10px;justify-content:center}
+/* PDF MODAL */
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;flex-direction:column;align-items:center;gap:12px}
+.modal-overlay.open{display:flex}
+.modal-bar{background:#222;border-radius:8px;padding:10px 16px;width:100%;max-width:794px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:10}
+.modal-bar span{color:#ccc;font-size:12px;font-weight:600;flex:1}
+/* PDF STYLES */
+.pdf-page{background:#fff;width:794px;min-height:1122px;padding:28px 32px;position:relative;box-shadow:0 4px 24px rgba(0,0,0,.4)}
+.ph{display:flex;align-items:flex-start;padding-bottom:12px;border-bottom:2px solid #111;margin-bottom:14px}
+.ph-info{flex:1}.ph-info h2{font-size:15px;font-weight:900}.ph-info p{font-size:9px;color:#444;line-height:1.7}
+.ph-right{text-align:right;min-width:155px}
+.pdate{font-size:9px;color:#666}.porcn{font-size:18px;font-weight:900}.porcl{font-size:10px;color:#777}
+.vbox{border:1px solid #bbb;border-radius:3px;padding:5px 10px;margin-top:6px;display:inline-block;text-align:center}
+.vl{font-size:8px;color:#999;text-transform:uppercase}.vd{font-size:11px;font-weight:800}
+.clibox{border:1px solid #ccc;border-radius:3px;padding:8px 12px;margin-bottom:12px;min-height:44px}
+.clibox .cn{font-size:12px;font-weight:800}
+.dados-pdf{font-size:9px;color:#222;line-height:1.9;margin-bottom:12px}
+.dados-pdf strong{font-weight:800}
+.psec{background:var(--red);color:#fff;padding:4px 9px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;margin-bottom:0}
+table.pi{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:9.5px}
+table.pi th{background:#111;color:#fff;padding:4px 7px;text-align:left;font-size:8.5px;text-transform:uppercase}
+table.pi th.r{text-align:right}
+table.pi td{padding:4px 7px;border-bottom:1px solid #eee}
+table.pi td.r{text-align:right;font-weight:700}
+table.pi tr:nth-child(even) td{background:#fafafa}
+table.pi .strow td{background:#fff0f0;font-weight:800;font-size:10px}
+table.pi .strow td.r{color:var(--red)}
+table.pres{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:10px}
+table.pres th{background:#111;color:#fff;padding:6px 9px;font-size:9px;text-transform:uppercase}
+table.pres th.r{text-align:right}
+table.pres td{padding:6px 9px;border-bottom:1px solid #eee}
+table.pres td.r{text-align:right;font-weight:700}
+table.pres .sub td{background:#f5f5f5;font-weight:800}
+table.pres .drow td{color:#e53935;font-weight:800}
+table.pres .lrow td{background:var(--red);color:#fff;font-weight:900;font-size:13px}
+.pgto-pdf{border-top:1px solid #ccc;padding-top:10px;font-size:9px;color:#333;line-height:1.8}
+.pgto-pdf strong{font-weight:800;display:block;margin-bottom:1px}
+.pgto-pdf .obs{margin-top:6px;color:#666;font-style:italic}
+.pfooter{position:absolute;bottom:20px;left:32px;right:32px;display:flex;justify-content:space-between;border-top:1px solid #ddd;padding-top:6px}
+.pfooter span{font-size:8px;color:#aaa}
+@media(max-width:600px){.g2,.g3,.tg,.mg,.type-cards{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="app-hdr">
+  <div><h1>CRAZY SOM – ORÇAMENTO</h1><p>Audiovisual e Estrutura – Uso Interno</p></div>
+  <div class="orc-ctrl">
+    <span>Nº Orçamento</span>
+    <strong id="orcDisp">#001</strong><br>
+    <input type="number" id="orcNum" value="1" min="1" oninput="updOrc(this.value)">
+  </div>
+</div>
+
+<div class="card">
+  <div class="stitle">📋 Dados do Evento</div>
+  <div class="g2">
+    <div><label>Cliente</label><input id="f-cliente" placeholder="Nome do cliente"></div>
+    <div><label>Local / Nome do Evento</label><input id="f-local" placeholder="Ex: Hotel Serra Azul – Festa CVC"></div>
+  </div>
+  <div class="g2">
+    <div><label>Endereço</label><input id="f-end" placeholder="Rua, número, cidade"></div>
+    <div><label>Tipo de Evento</label><input id="f-tipo" placeholder="Ex: Festa, Congresso, Show..."></div>
+  </div>
+  <div class="g3">
+    <div><label>Contato</label><input id="f-cont" placeholder="Nome"></div>
+    <div><label>Telefone</label><input id="f-tel" placeholder="(51) 99999-9999"></div>
+    <div><label>Público estimado</label><input type="number" id="f-pub" placeholder="500"></div>
+  </div>
+  <div class="g3">
+    <div><label>Dia do Evento</label><input type="date" id="f-dia" oninput="setDS()"></div>
+    <div><label>Montagem</label><input type="datetime-local" id="f-mont"></div>
+    <div><label>Desmontagem</label><input type="datetime-local" id="f-desm"></div>
+  </div>
+  <div class="g3" style="margin-bottom:9px">
+    <div><label>Dia da Semana</label><input id="f-sem" readonly placeholder="Auto"></div>
+    <div><label>Resp. no Local</label><input id="f-resp" placeholder="Nome"></div>
+    <div><label>Tel. Responsável</label><input id="f-telr" placeholder="(51) 99999-9999"></div>
+  </div>
+  <div class="g3" style="margin-bottom:9px">
+    <div><label>Consultor</label>
+      <select id="f-cons">
+        <option value="">Selecione...</option>
+        <option>Fabiano Santos</option><option>Giovana Borges</option>
+        <option>Jéssica Elisandra</option><option>Rafael Oliveira</option><option>Jefferson</option>
+      </select>
+    </div>
+    <div><label>Validade da Proposta</label><input type="date" id="f-val"></div>
+    <div><label>Data do Orçamento</label><input type="date" id="f-dataorc"></div>
+  </div>
+  <div style="margin-bottom:9px"><label>Observações Gerais</label><textarea id="f-obs" style="background:#fffde7;border-color:#ffe082" placeholder="Detalhes, restrições..."></textarea></div>
+  <div><label>Forma de Pagamento</label><textarea id="f-pgto">50% na contratação;
+50% até 03 dias antes da montagem.</textarea></div>
+</div>
+
+<div class="card">
+  <div class="stitle">🎛️ Itens do Orçamento</div>
+  <div class="tabs">
+    <button class="tab active" onclick="swTab('som',this)">🔊 Som <span class="badge" id="b-som">0</span></button>
+    <button class="tab" onclick="swTab('video',this)">📺 Vídeo <span class="badge" id="b-video">0</span></button>
+    <button class="tab" onclick="swTab('luz',this)">💡 Luz <span class="badge" id="b-luz">0</span></button>
+    <button class="tab" onclick="swTab('estrutura',this)">🏗️ Estrutura <span class="badge" id="b-estrutura">0</span></button>
+    <button class="tab" onclick="swTab('servico',this)">⚙️ Serviço <span class="badge" id="b-servico">0</span></button>
+    <button class="tab" onclick="swTab('logistica',this)">🚚 Logística <span class="badge" id="b-logistica">0</span></button>
+    <button class="tab" onclick="swTab('extra',this)">💰 Custos Extra <span class="badge" id="b-extra">0</span></button>
+  </div>
+  <div id="tc-som" class="tc active"></div>
+  <div id="tc-video" class="tc"></div>
+  <div id="tc-luz" class="tc"></div>
+  <div id="tc-estrutura" class="tc"></div>
+  <div id="tc-servico" class="tc"></div>
+  <div id="tc-logistica" class="tc"></div>
+  <div id="tc-extra" class="tc">
+    <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:5px;padding:8px 12px;margin-top:8px;font-size:10px;color:#7a5a00"><strong>💰 Custos Extra</strong> — Uso interno. Não aparece no PDF do cliente.</div>
+    <table class="it" id="tbl-extra"><thead><tr><th>Qtd</th><th>Descrição</th><th>Diária</th><th>Custo Unit.</th><th>Total</th><th>Marg%</th><th>Cobrado</th><th></th></tr></thead><tbody></tbody></table>
+    <div class="add-bar">
+      <div class="f"><label>Item</label><select id="sel-extra" onchange="selItem('extra',this)"><option value="">— Selecione —</option></select></div>
+      <button class="btn btn-outline btn-sm" onclick="addCustom('extra')">+ Personalizado</button>
+    </div>
+    <div class="sec-tot">Custo: <strong id="tot-extra">R$ 0,00</strong> &nbsp;|&nbsp; Cobrado c/ margem: <strong id="tot-extra-cob">R$ 0,00</strong></div>
+  </div>
+</div>
+
+<div class="totbox">
+  <div style="font-size:10px;color:#aaa;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px">📊 Resumo & Margem</div>
+  <div class="tg">
+    <div class="ti"><label>Sonorização</label><span id="r-som">R$ 0,00</span></div>
+    <div class="ti"><label>Vídeo</label><span id="r-video">R$ 0,00</span></div>
+    <div class="ti"><label>Iluminação</label><span id="r-luz">R$ 0,00</span></div>
+    <div class="ti"><label>Estrutura</label><span id="r-estrutura">R$ 0,00</span></div>
+    <div class="ti"><label>Serviço</label><span id="r-servico">R$ 0,00</span></div>
+    <div class="ti"><label>Logística</label><span id="r-logistica">R$ 0,00</span></div>
+  </div>
+  <div class="sep">
+    <div class="tg">
+      <div class="ti"><label>Total Bruto</label><span id="r-bruto">R$ 0,00</span></div>
+      <div class="ti"><label>Impostos (12%)</label><span class="red" id="r-imp">R$ 0,00</span></div>
+      <div class="ti"><label>Total c/ Impostos</label><span id="r-cimp">R$ 0,00</span></div>
+    </div>
+  </div>
+  <div class="sep">
+    <div class="disc-row">
+      <label>Desconto (%)</label>
+      <input type="number" id="descPct" value="0" min="0" max="100" step="0.5" oninput="calc()" style="max-width:75px">
+      <span style="color:#aaa;font-size:11px">= <span id="r-dv" style="color:#ff6060">R$ 0,00</span></span>
+    </div>
+    <div class="tg">
+      <div class="ti"><label>c/ Desc. (s/ imp)</label><span id="r-vdsi">R$ 0,00</span></div>
+      <div class="ti"><label>c/ Desc. (c/ imp)</label><span id="r-vdci">R$ 0,00</span></div>
+      <div class="ti"><label>Custos Extra</label><span class="red" id="r-extra">R$ 0,00</span></div>
+    </div>
+  </div>
+  <div class="mbox">
+    <h3>📈 Margem do Negócio</h3>
+    <div class="mg">
+      <div class="mi"><label>Margem sem desconto</label><span id="m-sd" style="color:#66bb6a">R$ 0,00</span></div>
+      <div class="mi"><label>Margem com desconto</label><span id="m-cd" style="color:#ffa726">R$ 0,00</span></div>
+    </div>
+    <div style="font-size:9px;color:#444;margin-top:8px;padding-top:6px;border-top:1px solid #1e1e1e">Fórmula: Total cobrado − Desconto − Imposto − Custos Extra − Logística</div>
+  </div>
+  <div class="sep" style="margin-top:12px">
+    <label style="color:#888">Valor Líquido para o Cliente (exibido no PDF)</label>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap">
+      <input type="number" id="valorLiq" placeholder="0,00" step="0.01" style="max-width:150px;background:#1e1e1e;color:#fff;border-color:#444;font-size:15px;font-weight:700;padding:7px 10px" oninput="calc()">
+      <span style="color:#aaa;font-size:10px">← Valor final apresentado ao cliente</span>
+    </div>
+  </div>
+  <div class="grand">
+    <span>TOTAL FINAL (c/ impostos)</span>
+    <strong id="r-total">R$ 0,00</strong>
+  </div>
+  <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+    <button class="btn btn-outline" onclick="limpar()">🗑️ Limpar</button>
+    <button class="btn btn-red" onclick="abrirTipoModal()">📄 Gerar PDF</button>
+  </div>
+</div>
+</div>
+
+<!-- MODAL TIPO DE PDF -->
+<div class="type-overlay" id="typeModal">
+  <div class="type-box">
+    <h2>Escolha o tipo de PDF</h2>
+    <p>Como deseja apresentar o orçamento ao cliente?</p>
+    <div class="type-cards">
+      <div class="type-card selected" id="card-det" onclick="selTipo('detalhado')">
+        <div class="icon">📋</div>
+        <div class="tc-title">Detalhado</div>
+        <div class="tc-desc">Lista todos os itens com descrição e valor unitário por categoria</div>
+      </div>
+      <div class="type-card" id="card-res" onclick="selTipo('resumido')">
+        <div class="icon">📄</div>
+        <div class="tc-title">Resumido</div>
+        <div class="tc-desc">Exibe apenas o total por categoria: Som, Vídeo, Luz, Estrutura e Serviço</div>
+      </div>
+    </div>
+    <div class="type-actions">
+      <button class="btn btn-outline" onclick="fecharTipoModal()">Cancelar</button>
+      <button class="btn btn-dark" onclick="abrirPDF('preview')">👁️ Visualizar</button>
+      <button class="btn btn-red" onclick="abrirPDF('print')">🖨️ Imprimir / PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- PDF PREVIEW MODAL -->
+<div class="modal-overlay" id="pdfModal">
+  <div class="modal-bar">
+    <span id="modal-title">📄 Orçamento – Crazy Som</span>
+    <button class="btn btn-red" onclick="abrirPDF('print')">🖨️ Imprimir / Salvar PDF</button>
+    <button class="btn btn-dark" onclick="fecharPDF()">✕ Fechar</button>
+  </div>
+  <div id="pdfContent"></div>
+</div>
+
+<script>
+const IMP=0.12;
+const secs=['som','video','luz','estrutura','servico','logistica','extra'];
+const labels={som:'Sonorização',video:'Vídeo',luz:'Iluminação',estrutura:'Estrutura',servico:'Serviço',logistica:'Logística',extra:'Custos Extra'};
+const icons={som:'🔊',video:'📺',luz:'💡',estrutura:'🏗️',servico:'⚙️',logistica:'🚚'};
+const rows={som:[],video:[],luz:[],estrutura:[],servico:[],logistica:[],extra:[]};
+let tipoSelecionado='detalhado';
+
+const precos={
+  som:[
+    {n:"Amplificador De Potência Até 5K",v:100},{n:"Caixa Ativa (Selenium/JBL/Lexsen/Staner)",v:100},
+    {n:"Caixa Ativa Jbl Eon515xt",v:120},{n:"Caixa Ativa Jbl Eon612",v:120},
+    {n:"Caixa Ativa Jbl Max 10",v:100},{n:"Caixa Ativa Jbl Max 10 (monitor)",v:100},
+    {n:'Caixa Sub Grave T18 1X18" Passiva 800W',v:80},{n:'Caixa Sub Grave Taigar 2X18" 2400W',v:150},
+    {n:'Caixa Line Array Taigar 2X8" 740W',v:100},{n:"Caixa Line Vertical Slim Turbosound Ip500",v:250},
+    {n:"Caixa Line Vertical Slim Soundking ARTOS 1200",v:250},{n:"Caixa Line Vertical Slim Blg 1515A",v:300},
+    {n:"Caixa Line Vertical Slim Taigar V851",v:500},{n:"Caixa Passiva Leacs 100W",v:60},
+    {n:"Caixa Treeway Passiva 450W",v:80},{n:"Caixas Monitor Attack (Retorno)",v:100},
+    {n:"Cubo de Baixo",v:150},{n:"Cubo de Guitarra",v:100},{n:"Direct Box Ativo Ou Passivo",v:30},
+    {n:"Kit Dj 02 Cdj 350 Pioneer + Mixer",v:200},{n:"Kit Microfonação de bateria",v:120},
+    {n:"Kit Pioneer 02 CDJ 2000 Nexus 2 + Mixer DJM 900",v:800},
+    {n:"Mesa Som Analógica 04 Canais",v:100},{n:"Mesa Som Analógica 06 Canais",v:100},
+    {n:"Mesa Som Analógica Behringer/Yamaha 12 Canais",v:100},
+    {n:"Mesa Som Digital Midas M32 32 Canais",v:400},{n:"Mesa Som Digital Soundcraft Ui24 24 Canais",v:250},
+    {n:"Mesa Som Digital Yamaha 01V 16 Canais",v:200},{n:"Mesa Som Digital Duonn Atrium 12 Canais",v:200},
+    {n:"Microfone Com Fio Akg/Samson/Sennheiser",v:30},{n:"Microfone Com Fio Shure Sm58",v:60},
+    {n:"Microfone Goosneck (pulpito)",v:100},{n:"Microfone Sem Fio Bastão Sennheiser",v:120},
+    {n:"Microfone Sem Fio Headset Sennheiser",v:120},{n:"Microfone Sem Fio Bastão Shure",v:120},
+    {n:"Microfone Sem Fio Bastão Kadosh",v:100},{n:"Antena longo alcance Combainer",v:150},
+    {n:"Notebook Para Trilhas",v:120},{n:"Pedestal De Microfone",v:30},
+    {n:"Power Play (sem fones)",v:100},{n:"Rack De Amplificação E Processamento",v:300},
+  ],
+  video:[
+    {n:"Base plataforma de abrir",v:300},{n:"Cpu Servidor De Vídeo",v:350},
+    {n:"Estrutura P30 Até 10M² De Painel",v:250},{n:"Estrutura P30 Até 10M² Outdoor",v:500},
+    {n:"Estrutura P30 Até 24M² De Painel",v:500},{n:"Notebook Placa De Vídeo Dedicado",v:150},
+    {n:"Painel Led Ph2.5Mm Indoor (M²)",v:300},{n:"Painel Led Ph2.9Mm Indoor (M²)",v:250},
+    {n:"Painel Led Ph3.9Mm Outdoor (M²)",v:250},{n:"Painel Led Ph6Mm Indoor (M²)",v:150},
+    {n:"Passador de slides",v:50},{n:"Poster Led 1,00x2,00M P2.5mm",v:1200},
+    {n:"Poster Led 1,00x3,00M P2.5mm",v:1800},{n:"Processadora De Vídeo",v:300},
+    {n:"Processadora TB 40",v:300},{n:"Projetor 2.700 Lumens",v:120},{n:"Projetor 3.500 Lumens",v:150},
+    {n:"Tela de projeção e pedestal",v:100},{n:'Totem Touch 32" Armário',v:1300},
+    {n:'Totem Touch 32" Curvo',v:1200},{n:'Totem Touch 40" Armário',v:1500},
+    {n:'Totem Touch 55" Armário',v:1700},{n:'Totem Touch 70" Armário',v:1900},
+    {n:"Diaria adicional do Totem",v:200},{n:"Adesivação do Totem",v:300},
+    {n:"Pedestal de suporte para TV",v:30},{n:'Tv 32"',v:120},{n:'Tv 40"/43"',v:150},
+    {n:'Tv 55"',v:300},{n:'Tv 70"',v:500},{n:'Tv 98"',v:1000},
+    {n:'Tv 32" doghouse + notebook cronometro',v:250},{n:'Tv 40" doghouse + notebook cronometro',v:300},
+    {n:'Tv 32" doghouse + Spliter HDMI retorno',v:250},{n:'Tv 40" doghouse + Spliter HDMI retorno',v:300},
+    {n:"Webcam Logitech C920",v:100},
+  ],
+  luz:[
+    {n:"Canhão Led 3W Rgb",v:30},{n:"Canhão Led 5W Rgbwa",v:35},
+    {n:"Cabeamento / elétrica",v:100},{n:"Cabo trifasico com granada",v:100},
+    {n:"Main Power",v:100},{n:"Elipisoidal Led",v:80},{n:"Fresnel Cob 200 Led",v:60},
+    {n:"Máquina De Fumaça",v:100},{n:"Máquina De Fumaça Haze",v:150},
+    {n:"Mesa Controladora Dmx",v:50},{n:"Mesa Grand M.A.2",v:350},{n:"Mini Brut",v:50},
+    {n:"Moving Head Beam 200 5R",v:125},{n:"Moving Head Beam 9R",v:150},
+    {n:"Moving Head Wash",v:150},{n:"Refletor HQI",v:50},{n:"Refletor LED branco 100w",v:30},
+    {n:"Ribalta Led Rgb",v:75},{n:"Sistema Gerenciamento Lumikit",v:150},
+    {n:"Spliter DMX",v:50},{n:"Strobo LED RGB",v:50},{n:"Varal De Luz 15M",v:80},{n:"Varal De Luz 30M",v:150},
+  ],
+  estrutura:[
+    {n:"Backdrop 2Mx2M Boxtruss P15",v:280},{n:"Backdrop 3Mx2M Boxtruss P15",v:320},
+    {n:"Backdrop 3Mx3M Boxtruss P15",v:360},{n:"Backdrop 4Mx2M Boxtruss P15",v:360},
+    {n:"Backdrop 5Mx3M Boxtruss P15",v:440},{n:"Alumalock",v:50},
+    {n:"Boxtruss Treliça P15 (M)",v:20},{n:"Boxtruss Treliça P30 (M)",v:25},
+    {n:"Boxtruss Treliça Q30 (M)",v:20},{n:"Cubo P15",v:20},{n:"Cubo P30",v:25},{n:"Cubo Q30",v:20},
+    {n:"Escada Palco Até 60Cm",v:60},{n:"Escada Palco 60 A 100Cm",v:100},
+    {n:"Grade de contenção 2,00x1,00M",v:20},{n:"Guarda corpo 2,00x1,00m",v:20},
+    {n:"Praticavel 2x1 20/30/40Cm",v:100},{n:"Praticavel 2x1 60 A 100Cm",v:100},
+    {n:"Carpete Semi-Novo (M²)",v:25},{n:"Carpete Novo (M²)",v:40},
+    {n:"Púlpito de acrílico",v:250},{n:"Sleeve block",v:50},
+    {n:"Talha",v:50},{n:"Torre Boxtruss 3M",v:80},{n:"Unifilas",v:40},
+  ],
+  servico:[
+    {n:"Técnico de Vídeo",v:400},{n:"Técnico de Áudio",v:400},{n:"Técnico de Luz",v:400},
+    {n:"Técnico Audiovisual",v:350},{n:"Auxiliar Técnico",v:300},{n:"Laudo Técnico + ART",v:750},
+  ],
+  logistica:[
+    {n:"Montagem",v:200},{n:"Desmontagem",v:100},{n:"Hotel",v:0},{n:"Almoço/Janta",v:45},
+    {n:"Frete",v:0},{n:"Combustível",v:0},{n:"Projeto",v:0},{n:"Pedágio",v:0},{n:"Carregadores",v:200},
+  ],
+  extra:[
+    {n:"Locação equipamento externo",v:0},{n:"Fornecedor terceiro",v:0},
+    {n:"Consumíveis",v:0},{n:"Manutenção",v:0},{n:"Outros custos",v:0},
+  ]
+};
+
+// Build section UIs
+['som','video','luz','estrutura','servico','logistica'].forEach(s=>{
+  const el=document.getElementById('tc-'+s);
+  el.innerHTML=`
+    <table class="it" id="tbl-${s}"><thead><tr><th>Qtd</th><th>Descrição</th><th>Diária</th><th>Valor Unit.</th><th>Total</th><th>c/Imp</th><th></th></tr></thead><tbody></tbody></table>
+    <div class="add-bar">
+      <div class="f"><label>Buscar item</label><select id="sel-${s}" onchange="selItem('${s}',this)"><option value="">— Selecione da tabela —</option></select></div>
+      <button class="btn btn-outline btn-sm" onclick="addCustom('${s}')">+ Personalizado</button>
+    </div>
+    <div class="sec-tot">Total ${labels[s]}: <strong id="tot-${s}">R$ 0,00</strong> &nbsp;|&nbsp; c/ Imp: <strong id="tot-${s}-imp">R$ 0,00</strong></div>
+  `;
+  precos[s].forEach(item=>{
+    const o=document.createElement('option');
+    o.value=JSON.stringify(item);
+    o.text=item.n+(item.v?' – R$ '+fmtN(item.v):'');
+    document.getElementById('sel-'+s).appendChild(o);
+  });
+});
+precos.extra.forEach(item=>{
+  const o=document.createElement('option');o.value=JSON.stringify(item);o.text=item.n;
+  document.getElementById('sel-extra').appendChild(o);
+});
+
+function fmtN(v){return Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function fmt(v){return 'R$ '+fmtN(v)}
+function uid(){return Date.now()+'_'+Math.random().toString(36).slice(2)}
+function gv(id){const e=document.getElementById(id);return e?e.value:''}
+function updOrc(v){document.getElementById('orcDisp').textContent='#'+String(v||1).padStart(3,'0')}
+function setDS(){
+  const d=new Date(gv('f-dia')+'T12:00:00');
+  const ds=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+  document.getElementById('f-sem').value=ds[d.getDay()]||'';
+}
+function swTab(s,btn){
+  document.querySelectorAll('.tc').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tc-'+s).classList.add('active');btn.classList.add('active');
+}
+function selItem(s,sel){if(!sel.value)return;const item=JSON.parse(sel.value);addRow(s,item.n,item.v,false);sel.value='';}
+function addCustom(s){addRow(s,'',0,true)}
+function addRow(s,name,val,custom){rows[s].push({id:uid(),name,val,qty:1,diaria:1,custom,marg:20});renderSec(s);calc();}
+function secTot(s){return rows[s].reduce((t,r)=>t+r.qty*r.val*r.diaria,0)}
+
+function renderSec(s){
+  if(s==='extra'){renderExtra();return;}
+  const tbody=document.querySelector('#tbl-'+s+' tbody');
+  if(!tbody)return;
+  tbody.innerHTML='';
+  rows[s].forEach(r=>{
+    const tot=r.qty*r.val*r.diaria;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><input type="number" value="${r.qty}" min="1" style="width:48px" onchange="upd('${s}','${r.id}','qty',this.value)"></td>
+      <td>${r.custom?`<input type="text" value="${eh(r.name)}" placeholder="Nome" style="min-width:190px" onchange="upd('${s}','${r.id}','name',this.value)"><span class="ctag">CUSTOM</span>`:`<span>${r.name}</span>`}</td>
+      <td><input type="number" value="${r.diaria}" min="1" style="width:48px" onchange="upd('${s}','${r.id}','diaria',this.value)"></td>
+      <td><input type="number" value="${r.val}" min="0" step="0.01" style="width:80px" onchange="upd('${s}','${r.id}','val',this.value)"></td>
+      <td style="font-weight:700">${fmt(tot)}</td>
+      <td style="color:#999;font-size:10px">${fmt(tot*(1+IMP))}</td>
+      <td><button class="btn-del" onclick="delRow('${s}','${r.id}')">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('b-'+s).textContent=rows[s].length;
+  const t=secTot(s);
+  const tEl=document.getElementById('tot-'+s),tiEl=document.getElementById('tot-'+s+'-imp');
+  if(tEl)tEl.textContent=fmt(t);if(tiEl)tiEl.textContent=fmt(t*(1+IMP));
+}
+
+function renderExtra(){
+  const tbody=document.querySelector('#tbl-extra tbody');
+  tbody.innerHTML='';
+  rows.extra.forEach(r=>{
+    const custo=r.qty*r.val*r.diaria,cob=custo*(1+r.marg/100);
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><input type="number" value="${r.qty}" min="1" style="width:44px" onchange="upd('extra','${r.id}','qty',this.value)"></td>
+      <td>${r.custom?`<input type="text" value="${eh(r.name)}" placeholder="Descrição" style="min-width:160px" onchange="upd('extra','${r.id}','name',this.value)"><span class="ctag">CUSTOM</span>`:`<span>${r.name}</span>`}</td>
+      <td><input type="number" value="${r.diaria}" min="1" style="width:44px" onchange="upd('extra','${r.id}','diaria',this.value)"></td>
+      <td><input type="number" value="${r.val}" min="0" step="0.01" style="width:75px" onchange="upd('extra','${r.id}','val',this.value)"></td>
+      <td style="color:#e53935;font-weight:700">${fmt(custo)}</td>
+      <td><input type="number" value="${r.marg}" min="0" step="1" style="width:52px" onchange="upd('extra','${r.id}','marg',this.value)">%</td>
+      <td style="color:#66bb6a;font-weight:700">${fmt(cob)}</td>
+      <td><button class="btn-del" onclick="delRow('extra','${r.id}')">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('b-extra').textContent=rows.extra.length;
+  const custo=rows.extra.reduce((s,r)=>s+r.qty*r.val*r.diaria,0);
+  const cob=rows.extra.reduce((s,r)=>s+r.qty*r.val*r.diaria*(1+r.marg/100),0);
+  document.getElementById('tot-extra').textContent=fmt(custo);
+  document.getElementById('tot-extra-cob').textContent=fmt(cob);
+}
+
+function upd(s,id,field,val){
+  const r=rows[s].find(x=>x.id===id);if(!r)return;
+  if(['qty','diaria','val','marg'].includes(field))r[field]=parseFloat(val)||0;else r[field]=val;
+  renderSec(s);calc();
+}
+function delRow(s,id){rows[s]=rows[s].filter(x=>x.id!==id);renderSec(s);calc();}
+function eh(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}
+
+function calc(){
+  ['som','video','luz','estrutura','servico','logistica'].forEach(s=>{
+    const t=secTot(s);
+    const el=document.getElementById('r-'+s);if(el)el.textContent=fmt(t);
+    const tEl=document.getElementById('tot-'+s),tiEl=document.getElementById('tot-'+s+'-imp');
+    if(tEl)tEl.textContent=fmt(t);if(tiEl)tiEl.textContent=fmt(t*(1+IMP));
+  });
+  const bruto=['som','video','luz','estrutura','servico','logistica'].reduce((t,s)=>t+secTot(s),0);
+  const imp=bruto*IMP,cImp=bruto+imp;
+  const dp=parseFloat(gv('descPct'))||0;
+  const dv=cImp*(dp/100),dvSI=bruto*(dp/100);
+  const vdsi=bruto-dvSI,vdci=cImp-dv;
+  const xc=rows.extra.reduce((s,r)=>s+r.qty*r.val*r.diaria,0);
+  const log=secTot('logistica');
+  const msd=bruto-imp-xc-log;
+  const mcd=vdci-imp-(dv*IMP)-xc-log;
+  const st=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+  st('r-bruto',fmt(bruto));st('r-imp',fmt(imp));st('r-cimp',fmt(cImp));
+  st('r-dv','-'+fmt(dv));st('r-vdsi',fmt(vdsi));st('r-vdci',fmt(vdci));
+  st('r-extra',fmt(xc));st('r-total',fmt(vdci));
+  st('m-sd',fmt(msd));st('m-cd',fmt(mcd));
+  renderExtra();
+}
+
+function limpar(){
+  if(!confirm('Limpar todos os dados?'))return;
+  secs.forEach(s=>{rows[s]=[];renderSec(s);});
+  ['f-cliente','f-local','f-end','f-tipo','f-cont','f-tel','f-pub','f-sem','f-resp','f-telr','f-obs'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['f-dia','f-mont','f-desm','f-val','f-dataorc'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  document.getElementById('f-cons').value='';
+  document.getElementById('descPct').value=0;document.getElementById('valorLiq').value='';
+  document.getElementById('f-pgto').value='50% na contratação;\n50% até 03 dias antes da montagem.';
+  calc();
+}
+
+// === TIPO MODAL ===
+function abrirTipoModal(){document.getElementById('typeModal').classList.add('open')}
+function fecharTipoModal(){document.getElementById('typeModal').classList.remove('open')}
+function selTipo(t){
+  tipoSelecionado=t;
+  document.getElementById('card-det').classList.toggle('selected',t==='detalhado');
+  document.getElementById('card-res').classList.toggle('selected',t==='resumido');
+}
+
+// === PDF BUILD ===
+function buildPDF(tipo){
+  const fD=s=>{if(!s)return'—';return new Date(s+'T12:00:00').toLocaleDateString('pt-BR')};
+  const fDT=s=>{if(!s)return'ao Final do evento';const d=new Date(s);return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})};
+  const orcN=gv('orcNum')||'1';
+  const year=new Date().getFullYear();
+  const orcFull=year+'00'+String(orcN).padStart(2,'0');
+  const dataorc=gv('f-dataorc')?fD(gv('f-dataorc')):new Date().toLocaleDateString('pt-BR');
+  const dp=parseFloat(gv('descPct'))||0;
+  const vl=parseFloat(gv('valorLiq'))||0;
+
+  // Serviço = servico + logistica unificados
+  const totSom=secTot('som'),totVid=secTot('video'),totLuz=secTot('luz');
+  const totEst=secTot('estrutura'),totServ=secTot('servico')+secTot('logistica');
+  const bruto=totSom+totVid+totLuz+totEst+totServ;
+  const imp=bruto*IMP,cImp=bruto+imp;
+  const dv=cImp*(dp/100);
+  const totalFinal=vl>0?vl:(cImp-dv);
+  const descVal=vl>0?(cImp-vl):dv;
+
+  function hdr(full){
+    return `<div class="ph">
+      <div class="ph-info">
+        <h2>Crazy Som</h2>
+        <p>OSVALDO CRUZ, 36 - NITEROI - Canoas - RS - CEP: 92110-470<br>
+        (51) 3428-5053 &nbsp;|&nbsp; fabianoperc@gmail.com
+        ${full?'<br>CNPJ: 10.909.827/0001-76 &nbsp; IE: 0240563999<br>CRAZY COMERCIO E LOCACAO DE EQUIPAMENTOS LTDA':''}</p>
+      </div>
+      <div class="ph-right">
+        <div class="pdate">${dataorc}</div>
+        <div class="porcl">Orçamento</div>
+        <div class="porcn">${orcFull}</div>
+        ${full&&gv('f-val')?`<div class="vbox"><div class="vl">Validade da proposta</div><div class="vd">${fD(gv('f-val'))}</div></div>`:''}
+      </div>
+    </div>`;
+  }
+
+  const dadosEvento=`
+    <div class="clibox"><div class="cn">${gv('f-local')||gv('f-cliente')||'—'}</div></div>
+    <div class="dados-pdf">
+      <strong>Cliente:</strong> ${gv('f-cliente')||'—'}<br>
+      <strong>Local e nome do evento:</strong> ${gv('f-local')||'—'}<br>
+      <strong>Endereço:</strong> ${gv('f-end')||'—'}<br>
+      <strong>Contato:</strong> ${gv('f-cont')||'—'} &nbsp;&nbsp; <strong>Telefone:</strong> ${gv('f-tel')||'—'}<br>
+      <strong>Dia do evento:</strong> ${fD(gv('f-dia'))} &nbsp;&nbsp; <strong>Dia da semana:</strong> ${gv('f-sem')||'—'}<br>
+      <strong>Montagem:</strong> ${fDT(gv('f-mont'))} &nbsp;&nbsp; <strong>Desmontagem:</strong> ${fDT(gv('f-desm'))}<br>
+      ${gv('f-pub')?`<strong>Público:</strong> ${parseInt(gv('f-pub')).toLocaleString('pt-BR')} pessoas &nbsp;&nbsp;`:''}<strong>Tipo de evento:</strong> ${gv('f-tipo')||'—'}<br>
+      <strong>Consultor:</strong> ${gv('f-cons')||'—'}
+    </div>`;
+
+  // Tabela de resumo financeiro (igual nos dois modos)
+  const resumoAtivos=[
+    {nome:'SONORIZAÇÃO',tot:totSom},{nome:'VÍDEO',tot:totVid},
+    {nome:'ILUMINAÇÃO',tot:totLuz},{nome:'ESTRUTURA',tot:totEst},{nome:'SERVIÇO',tot:totServ}
+  ].filter(x=>x.tot>0);
+
+  let resumoHTML=`<table class="pres"><thead><tr><th>Qt.</th><th>Produto / Serviço</th><th class="r">Valor Unitário</th><th class="r">Subtotal</th></tr></thead><tbody>`;
+  resumoAtivos.forEach(x=>{resumoHTML+=`<tr><td>1</td><td>${x.nome}</td><td class="r">${fmtN(x.tot)}</td><td class="r">${fmtN(x.tot)}</td></tr>`;});
+  resumoHTML+=`<tr class="sub"><td colspan="2" style="text-align:right">Total</td><td></td><td class="r">${fmtN(cImp)}</td></tr>`;
+  if(descVal>0)resumoHTML+=`<tr class="drow"><td colspan="2" style="text-align:right">Descontos</td><td></td><td class="r">– ${fmtN(descVal)}</td></tr>`;
+  resumoHTML+=`<tr class="lrow"><td colspan="2">Valor líquido</td><td></td><td class="r" style="font-size:13px">${fmtN(totalFinal)}</td></tr>`;
+  resumoHTML+='</tbody></table>';
+
+  const pgtoHTML=`<div class="pgto-pdf">
+    ${gv('f-pgto')?`<strong>Forma de pagamento:</strong>${gv('f-pgto').split('\n').join('<br>')}`:''} 
+    ${gv('f-obs')?`<div class="obs">OBS: ${gv('f-obs')}</div>`:''}
+  </div>`;
+
+  // === RESUMIDO ===
+  if(tipo==='resumido'){
+    return `<div class="pdf-page">
+      ${hdr(true)}
+      ${dadosEvento}
+      ${resumoHTML}
+      ${pgtoHTML}
+      <div class="pfooter"><span>Crazy Som – CNPJ: 10.909.827/0001-76</span><span>Página 1 de 1</span></div>
+    </div>`;
+  }
+
+  // === DETALHADO ===
+  function secTable(secList, nomeUnificado, icone){
+    const allRows=secList.flatMap(s=>rows[s]);
+    if(!allRows.length)return'';
+    let html=`<div class="psec">${icone} ${nomeUnificado}</div>
+    <table class="pi"><thead><tr><th style="width:36px">Qtd</th><th>Descrição</th><th class="r" style="width:80px">Valor Unit.</th><th class="r" style="width:80px">Total</th></tr></thead><tbody>`;
+    allRows.forEach(r=>{
+      const tot=r.qty*r.val*r.diaria;
+      html+=`<tr><td>${String(r.qty).padStart(2,'0')}</td><td>${r.name||'—'}</td><td class="r">${fmt(r.val)}</td><td class="r">${fmt(tot)}</td></tr>`;
+    });
+    const stot=secList.reduce((t,s)=>t+secTot(s),0);
+    html+=`<tr class="strow"><td colspan="3" style="text-align:right;padding-right:8px">Total ${nomeUnificado}</td><td class="r">${fmt(stot)}</td></tr>`;
+    html+='</tbody></table>';
+    return html;
+  }
+
+  const p1=secTable(['som'],'Sonorização','🔊')+secTable(['video'],'Vídeo','📺')+secTable(['luz'],'Iluminação','💡');
+  const p2=secTable(['estrutura'],'Estrutura','🏗️')+secTable(['servico','logistica'],'Serviço','⚙️');
+
+  return `
+    <div class="pdf-page">
+      ${hdr(true)}
+      ${dadosEvento}
+      ${p1}
+      <div class="pfooter"><span>Crazy Som – CNPJ: 10.909.827/0001-76</span><span>Continua na próxima página... &nbsp; Página 1 de 2</span></div>
+    </div>
+    <div class="pdf-page" style="margin-top:16px">
+      ${hdr(false)}
+      ${p2}
+      ${resumoHTML}
+      ${pgtoHTML}
+      <div class="pfooter"><span>Crazy Som – CNPJ: 10.909.827/0001-76</span><span>Página 2 de 2</span></div>
+    </div>`;
+}
+
+function abrirPDF(modo){
+  fecharTipoModal();
+  const html=buildPDF(tipoSelecionado);
+  const label=tipoSelecionado==='detalhado'?'📋 Orçamento Detalhado':'📄 Orçamento Resumido';
+  if(modo==='preview'){
+    document.getElementById('pdfContent').innerHTML=html;
+    document.getElementById('modal-title').textContent=label+' – Crazy Som';
+    document.getElementById('pdfModal').classList.add('open');
+    document.getElementById('pdfModal').scrollTop=0;
+  } else {
+    const css=`*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif}
+    body{background:#fff;padding:0}
+    .pdf-page{background:#fff;width:794px;min-height:1122px;padding:28px 32px;position:relative;margin:0 auto;page-break-after:always}
+    .ph{display:flex;align-items:flex-start;padding-bottom:12px;border-bottom:2px solid #111;margin-bottom:14px}
+    .ph-info{flex:1}.ph-info h2{font-size:15px;font-weight:900}.ph-info p{font-size:9px;color:#444;line-height:1.7}
+    .ph-right{text-align:right;min-width:155px}.pdate{font-size:9px;color:#666}.porcn{font-size:18px;font-weight:900}.porcl{font-size:10px;color:#777}
+    .vbox{border:1px solid #bbb;border-radius:3px;padding:5px 10px;margin-top:6px;display:inline-block;text-align:center}
+    .vl{font-size:8px;color:#999;text-transform:uppercase}.vd{font-size:11px;font-weight:800}
+    .clibox{border:1px solid #ccc;border-radius:3px;padding:8px 12px;margin-bottom:12px}.cn{font-size:12px;font-weight:800}
+    .dados-pdf{font-size:9px;line-height:1.9;margin-bottom:12px}.dados-pdf strong{font-weight:800}
+    .psec{background:#c0001a;color:#fff;padding:4px 9px;font-size:9px;font-weight:800;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    table.pi{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:9.5px}
+    table.pi th{background:#111;color:#fff;padding:4px 7px;text-align:left;font-size:8.5px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    table.pi th.r{text-align:right}
+    table.pi td{padding:4px 7px;border-bottom:1px solid #eee}
+    table.pi td.r{text-align:right;font-weight:700}
+    table.pi tr:nth-child(even) td{background:#fafafa}
+    table.pi .strow td{background:#fff0f0;font-weight:800;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    table.pi .strow td.r{color:#c0001a}
+    table.pres{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:10px}
+    table.pres th{background:#111;color:#fff;padding:6px 9px;font-size:9px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    table.pres th.r{text-align:right}
+    table.pres td{padding:6px 9px;border-bottom:1px solid #eee}
+    table.pres td.r{text-align:right;font-weight:700}
+    table.pres .sub td{background:#f5f5f5;font-weight:800}
+    table.pres .drow td{color:#e53935;font-weight:800}
+    table.pres .lrow td{background:#c0001a;color:#fff;font-weight:900;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .pgto-pdf{border-top:1px solid #ccc;padding-top:10px;font-size:9px;color:#333;line-height:1.8}
+    .pgto-pdf strong{font-weight:800;display:block;margin-bottom:1px}
+    .pgto-pdf .obs{margin-top:6px;color:#666;font-style:italic}
+    .pfooter{position:absolute;bottom:20px;left:32px;right:32px;display:flex;justify-content:space-between;border-top:1px solid #ddd;padding-top:6px}
+    .pfooter span{font-size:8px;color:#aaa}
+    @media print{body{margin:0}.pdf-page{page-break-after:always;margin:0}}`;
+    const w=window.open('','_blank','width=900,height=700');
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${label} – Crazy Som</title><style>${css}</style></head><body>${html}<script>window.onload=function(){window.print();}<\/script></body></html>`);
+    w.document.close();
+  }
+}
+
+function fecharPDF(){document.getElementById('pdfModal').classList.remove('open')}
+
+document.getElementById('f-dataorc').value=new Date().toISOString().split('T')[0];
+calc();
+</script>
+</body>
+</html>
