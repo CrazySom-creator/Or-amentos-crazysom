@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Crazy Som – Orçamento v12</title>
+<title>Crazy Som – Orçamento v14</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif}
 :root{--R:#c0001a;--D:#111}
@@ -1411,7 +1411,7 @@ function buildPDF(tipo){
 
   const impLabel = impAtual==='cimp'
     ? '<span style="background:#1a6e2e;color:#fff;font-size:7px;padding:1px 4px;border-radius:2px;margin-left:4px;font-weight:800">IMPOSTOS INCLUSOS</span>'
-    : '<span style="background:#7a5a00;color:#fff;font-size:7px;padding:1px 4px;border-radius:2px;margin-left:4px;font-weight:800">SEM IMPOSTO</span>';
+    : '';
 
   const hdr=full=>`<div class="ph"><div class="ph-i"><h2>Crazy Som ${impLabel}</h2>
     <p>OSVALDO CRUZ, 36 - NITEROI - Canoas - RS - CEP: 92110-470<br>(51) 3428-5053 &nbsp;|&nbsp; fabianoperc@gmail.com
