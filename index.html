@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Crazy Som – Orçamento v16</title>
+<title>Crazy Som – Orçamento v17</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif}
 :root{--R:#c0001a;--D:#111}
@@ -403,6 +403,17 @@ table.pres .lrow td{background:rgba(192,0,26,0.9);color:#fff;font-weight:900;fon
 
   <div class="tabs" id="tabs-wrap"></div>
   <div id="panes-wrap"></div>
+</div>
+
+<!-- PAINEL APROVAÇÃO -->
+<div style="background:#fff;padding:15px 18px;border-bottom:1px solid #eee" id="aprov-card">
+  <div style="background:#c0001a;color:#fff;padding:5px 12px;font-size:11px;font-weight:800;letter-spacing:1px;margin:-15px -18px 11px;text-transform:uppercase">✅ Status &amp; Aprovação</div>
+  <div id="aprov-status-bar"></div>
+  <div id="aprov-actions-wrap"></div>
+  <div id="aprov-hist" style="display:none;background:#f9f9f9;border:1px solid #eee;border-radius:6px;padding:10px 14px;margin-top:8px;font-size:10px">
+    <h4 style="color:#555;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:7px">📜 Histórico</h4>
+    <div id="aprov-hist-list"></div>
+  </div>
 </div>
 
 <div class="totbox">
@@ -1017,7 +1028,8 @@ function aprovAcao(novoStatus){
 
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwV251xtPwAUjSn-CJM88-iySrObu5oZqF9FQuMQdmhSbHAu_DRnrCy9VJGRSwwKzAR/exec";
 let driveCache = [];
-let driveIdAtual = null; // id do orçamento carregado (para atualizar ao salvar)
+let driveIdAtual = null;
+let driveNumAtual = null;
 
 function driveStatus(msg, tipo='ok'){
   const el=document.getElementById('drive-status');
@@ -1064,19 +1076,26 @@ async function driveSalvar(){
   driveStatus('⏳ Salvando...','');
   const num=gv('f-num')||'SN', cli=gv('f-cliente')||'SemCliente';
   const data=gv('f-data')||new Date().toISOString().split('T')[0];
+
+  // Se o número do orçamento mudou em relação ao que está no Drive, salva como NOVO
+  if(driveIdAtual && driveNumAtual && driveNumAtual !== num){
+    driveIdAtual = null; // força criação de novo arquivo
+  }
+
   try{
     const r=await fetch(SCRIPT_URL,{
       method:'POST',
       body:JSON.stringify({
-        action:'save',
-        id: driveIdAtual||null,
+        action:'save', id:driveIdAtual||null,
         numero:num, cliente:cli, data,
-        dados:{form:getForm(),state, aprovStatus, aprovHist}
+        dados:{form:getForm(),state,aprovStatus,aprovHist}
       })
     });
     const d=await r.json();
     if(!d.ok) throw new Error(d.erro||'Erro ao salvar');
     driveIdAtual=d.id;
+    driveNumAtual=num;
+    _pendCache=null; // limpa cache de pendências
     driveStatus('✅ Salvo: '+d.nome,'ok');
     driveListar();
   }catch(e){
@@ -1360,6 +1379,7 @@ function limpar(){
   document.getElementById('val-liq').value='';
   document.getElementById('f-pgto').value='50% na contratação;\n50% até 03 dias antes da montagem.';
   ['cep-st','doc-st','cep-ev-st'].forEach(id=>{ const e=document.getElementById(id); if(e) e.textContent=''; });
+  driveIdAtual=null; driveNumAtual=null;
   sv('orc-disp','—'); buildTabs(); calc();
 }
 
@@ -1608,22 +1628,4 @@ function gerarOS(){
   <table class="eq"><thead><tr><th style="width:48px">QTD</th><th>DESCRIÇÃO DO EQUIPAMENTO / SERVIÇO</th><th style="width:30px;text-align:center">✓</th></tr></thead><tbody>${corpoOS}</tbody></table>
   <div class="xt">📝 MATERIAIS EXTRAS / PERIFÉRICOS</div>
   <div class="xh">Anote abaixo cabos, adaptadores, consumíveis e demais itens adicionais:</div>
-  <table class="ext"><thead><tr><th style="width:48px">QTD</th><th>DESCRIÇÃO</th><th style="width:30px;text-align:center">✓</th></tr></thead><tbody>${extras}</tbody></table>
-  <div class="assin"><div class="assin-box"><div class="aline">Responsável Técnico</div></div><div class="assin-box"><div class="aline">Conferência / Separação</div></div><div class="assin-box"><div class="aline">Carregamento / Saída</div></div></div>
-  <div class="foot">Crazy Som – OSVALDO CRUZ, 36 - NITEROI - Canoas - RS &nbsp;|&nbsp; (51) 3428-5053 &nbsp;|&nbsp; fabianoperc@gmail.com &nbsp;|&nbsp; CNPJ: 10.909.827/0001-76</div>
-</div></body></html>`;
-  const w=window.open('','_blank');
-  if(!w){alert('⚠️ Pop-up bloqueado!');return;}
-  w.document.open(); w.document.write(osHTML); w.document.close();
-}
-
-// ── INIT ─────────────────────────────────────
-buildTabs();
-document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
-calcDiariasAuto();
-calc();
-// renderAprov só após tudo carregado
-setTimeout(()=>{ if(usuarioAtual) renderAprov(); }, 100);
-</script>
-</body>
-</html>
+  <table class="ext"><thead><tr><th style="width:48px">QTD</th><th>DESCRIÇÃO</th
