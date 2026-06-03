@@ -254,11 +254,11 @@ table.pres .lrow td{background:rgba(192,0,26,0.9);color:#fff;font-weight:900;fon
 <div class="drive-panel">
   <div class="st" style="margin:-15px -18px 11px">☁️ Orçamentos Salvos – Google Drive</div>
   <div class="drive-search">
-    <input id="drive-q" placeholder="🔍 Buscar por número, cliente ou data..." oninput="driveSearch()">
-    <button class="btn btn-r btn-sm" onclick="driveListar()">🔄 Atualizar</button>
+    <input id="drive-q" placeholder="🔍 Buscar por número, cliente ou data..." onkeydown="if(event.key==='Enter') driveListar()">
+    <button class="btn btn-b btn-sm" onclick="driveListar()">🔍 Localizar</button>
     <button class="btn btn-g btn-sm" onclick="driveSalvar()">☁️ Salvar no Drive</button>
   </div>
-  <div id="drive-list" class="drive-list"><div class="drive-loading">Clique em 🔄 Atualizar para carregar os orçamentos</div></div>
+  <div id="drive-list" class="drive-list" style="display:none"></div>
   <div id="drive-status" class="drive-status"></div>
 </div>
 
@@ -680,7 +680,8 @@ function driveStatus(msg, tipo='ok'){
 
 async function driveListar(){
   const el=document.getElementById('drive-list');
-  el.innerHTML='<div class="drive-loading">⏳ Carregando...</div>';
+  el.style.display='block';
+  el.innerHTML='<div class="drive-loading">⏳ Buscando no Drive...</div>';
   driveStatus('');
   try{
     const r=await fetch(SCRIPT_URL+'?action=list&q='+encodeURIComponent(document.getElementById('drive-q').value||''));
