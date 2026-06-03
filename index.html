@@ -2,342 +2,418 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Crazy Som – Orçamento</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crazy Som – Orçamento v4</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif}
-:root{--red:#c0001a;--dark:#111}
-body{background:#1a1a1a;min-height:100vh;padding:16px}
-.app{max-width:980px;margin:0 auto}
-.app-hdr{background:var(--red);padding:14px 20px;border-radius:10px 10px 0 0;display:flex;align-items:center;gap:14px}
-.app-hdr h1{color:#fff;font-size:17px;font-weight:800;letter-spacing:1px}
-.app-hdr p{color:rgba(255,255,255,.75);font-size:11px}
-.orc-ctrl{margin-left:auto;text-align:right}
-.orc-ctrl span{color:#fff;font-size:10px;opacity:.7;display:block}
-.orc-ctrl strong{color:#fff;font-size:18px}
-.orc-ctrl input{width:68px;margin-top:3px;font-size:12px;text-align:center;padding:3px 6px;border-radius:4px;border:none}
-.card{background:#fff;padding:16px 20px;border-bottom:1px solid #eee}
-.stitle{background:var(--red);color:#fff;padding:6px 12px;font-size:11px;font-weight:800;letter-spacing:1px;margin:-16px -20px 12px;text-transform:uppercase}
-.g2{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:9px}
-.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:9px}
+:root{--R:#c0001a;--D:#111}
+body{background:#181818;padding:14px;min-height:100vh}
+.wrap{max-width:980px;margin:0 auto}
+.app-hdr{background:var(--R);padding:14px 20px;border-radius:10px 10px 0 0;display:flex;align-items:center;gap:12px}
+.app-hdr h1{color:#fff;font-size:16px;font-weight:800;letter-spacing:1px}
+.app-hdr p{color:rgba(255,255,255,.7);font-size:11px}
+.orc-n{margin-left:auto;text-align:right}
+.orc-n small{color:#fff;font-size:10px;opacity:.65;display:block}
+.orc-n b{color:#fff;font-size:19px;font-weight:800}
+.card{background:#fff;padding:15px 18px;border-bottom:1px solid #eee}
+.st{background:var(--R);color:#fff;padding:5px 12px;font-size:11px;font-weight:800;letter-spacing:1px;margin:-15px -18px 11px;text-transform:uppercase}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px}
 label{font-size:10px;font-weight:700;color:#666;display:block;margin-bottom:2px;text-transform:uppercase}
 input,select,textarea{width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;color:#222;background:#fafafa}
-input:focus,select:focus,textarea:focus{outline:none;border-color:var(--red);background:#fff}
-textarea{resize:vertical;min-height:46px}
-.tabs{display:flex;gap:3px;margin-top:12px;flex-wrap:wrap}
-.tab{padding:6px 11px;background:#eee;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:11px;font-weight:700;color:#555;transition:.15s}
-.tab.active{background:var(--red);color:#fff}
-.tc{display:none}.tc.active{display:block}
-table.it{width:100%;border-collapse:collapse;margin-top:6px;font-size:11px}
-table.it th{background:#111;color:#fff;padding:6px 7px;text-align:left;font-size:9px;text-transform:uppercase}
-table.it td{padding:4px 6px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
-table.it tr:hover td{background:#fff8f8}
-table.it input{padding:3px 5px;font-size:11px}
-.btn{padding:7px 13px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;transition:.15s}
-.btn-red{background:var(--red);color:#fff}.btn-red:hover{background:#a00015}
-.btn-dark{background:#111;color:#fff}.btn-dark:hover{background:#333}
-.btn-outline{background:#fff;color:var(--red);border:1px solid var(--red)}.btn-outline:hover{background:#fff0f0}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--R)}
+textarea{resize:vertical;min-height:44px}
+.irow{display:flex;gap:5px;align-items:flex-end}
+.irow input{flex:1}
+.hint{font-size:10px;color:#888;margin-top:2px;min-height:13px}
+.tabs{display:flex;gap:2px;margin-top:12px;flex-wrap:wrap}
+.tbtn{padding:6px 11px;background:#ddd;border:none;border-radius:5px 5px 0 0;cursor:pointer;font-size:11px;font-weight:700;color:#555}
+.tbtn.active{background:var(--R);color:#fff}
+.tpane{display:none;padding-top:7px}
+.tpane.active{display:block}
+.amb-bar{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:8px;padding:8px;background:#f5f5f5;border-radius:5px;border:1px solid #e0e0e0}
+.amb-bar label{min-width:auto;font-size:10px;color:#555;margin:0}
+.abtn{padding:4px 10px;background:#e0e0e0;border:1px solid #ccc;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;color:#555}
+.abtn.active{background:var(--R);color:#fff;border-color:var(--R)}
+.abtn-add{padding:4px 10px;background:#e8f4fd;border:1px dashed #90caf9;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;color:#1565c0}
+.abtn-del{padding:2px 6px;background:#e53935;border:none;border-radius:3px;cursor:pointer;font-size:10px;color:#fff;margin-left:2px}
+table.it{width:100%;border-collapse:collapse;font-size:11px;margin-top:5px}
+table.it th{background:var(--D);color:#fff;padding:5px 6px;text-align:left;font-size:9px;text-transform:uppercase}
+table.it td{padding:3px 5px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+table.it input,table.it select{padding:2px 5px;font-size:11px}
+.bmov{background:none;border:1px solid #ddd;border-radius:3px;cursor:pointer;font-size:10px;padding:1px 5px;color:#666;line-height:1}
+.bmov:hover{background:var(--R);color:#fff;border-color:var(--R)}
+.btn{padding:6px 12px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700}
+.btn-r{background:var(--R);color:#fff}
+.btn-d{background:var(--D);color:#fff}
+.btn-g{background:#2e7d32;color:#fff}
+.btn-b{background:#1565c0;color:#fff}
+.btn-o{background:#fff;color:var(--R);border:1px solid var(--R)}
 .btn-sm{padding:3px 8px;font-size:10px}
-.btn-del{background:#e53935;color:#fff;padding:2px 7px;font-size:11px;border:none;border-radius:3px;cursor:pointer}
-.add-bar{display:flex;gap:7px;margin-top:7px;align-items:flex-end;flex-wrap:wrap}
-.add-bar .f{flex:1;min-width:140px}
-.sec-tot{text-align:right;padding:7px 0 2px;font-size:11px;color:#555;border-top:2px solid #eee;margin-top:5px}
-.sec-tot strong{color:var(--red);font-size:13px}
-.totbox{background:#111;color:#fff;padding:18px 20px;border-radius:0 0 10px 10px}
-.tg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px}
-.ti{border-bottom:1px solid #222;padding:7px 0}
-.ti label{color:#888;font-size:9px;text-transform:uppercase}
-.ti span{display:block;font-size:13px;font-weight:700;color:#fff;margin-top:1px}
-.ti span.red{color:#ff5555}
-.sep{border-top:1px solid #222;padding-top:11px;margin-top:4px}
-.disc-row{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
-.disc-row label{color:#999;font-size:10px;min-width:80px}
-.disc-row input{max-width:80px;background:#1e1e1e;color:#fff;border:1px solid #444;padding:5px 7px}
-.grand{background:var(--red);padding:12px 16px;border-radius:7px;display:flex;justify-content:space-between;align-items:center;margin-top:12px}
-.grand span{font-size:12px;color:rgba(255,255,255,.85);font-weight:600}
-.grand strong{font-size:20px;color:#fff}
-.badge{display:inline-block;padding:1px 5px;border-radius:9px;font-size:9px;font-weight:700;background:rgba(255,255,255,.25);color:#fff;margin-left:3px}
-.tab:not(.active) .badge{background:#ccc;color:#555}
+.bdel{background:#e53935;color:#fff;padding:2px 7px;font-size:10px;border:none;border-radius:3px;cursor:pointer}
+.add-bar{display:flex;gap:6px;margin-top:7px;align-items:flex-end;flex-wrap:wrap}
+.add-bar .f{flex:1;min-width:130px}
+.stot{text-align:right;padding:6px 0 2px;font-size:11px;color:#555;border-top:2px solid #eee;margin-top:5px}
+.stot b{color:var(--R);font-size:12px}
+.badge{display:inline-block;padding:1px 5px;border-radius:8px;font-size:9px;font-weight:700;background:rgba(255,255,255,.25);color:#fff;margin-left:3px}
+.tbtn:not(.active) .badge{background:#bbb;color:#444}
 .ctag{background:#fff3cd;color:#856404;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:700;margin-left:3px}
-.mbox{background:#0d0d0d;border:1px solid #2a2a2a;border-radius:7px;padding:12px 16px;margin-top:10px}
-.mbox h3{color:#aaa;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
-.mg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.mi{background:#1a1a1a;border-radius:5px;padding:9px 11px}
-.mi label{color:#777;font-size:9px;text-transform:uppercase}
-.mi span{display:block;font-size:14px;font-weight:700;margin-top:2px}
-/* PDF TYPE MODAL */
-.type-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.75);z-index:8000;align-items:center;justify-content:center}
-.type-overlay.open{display:flex}
-.type-box{background:#1e1e1e;border-radius:12px;padding:28px 32px;width:100%;max-width:440px;text-align:center}
-.type-box h2{color:#fff;font-size:16px;font-weight:800;margin-bottom:6px}
-.type-box p{color:#aaa;font-size:12px;margin-bottom:24px;line-height:1.6}
-.type-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
-.type-card{background:#111;border:2px solid #333;border-radius:9px;padding:18px 12px;cursor:pointer;transition:.15s;text-align:center}
-.type-card:hover{border-color:var(--red);background:#1a0005}
-.type-card.selected{border-color:var(--red);background:#1a0005}
-.type-card .icon{font-size:28px;margin-bottom:8px}
-.type-card .tc-title{color:#fff;font-size:13px;font-weight:800;margin-bottom:4px}
-.type-card .tc-desc{color:#888;font-size:10px;line-height:1.5}
-.type-actions{display:flex;gap:10px;justify-content:center}
-/* PDF MODAL */
-.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;flex-direction:column;align-items:center;gap:12px}
-.modal-overlay.open{display:flex}
-.modal-bar{background:#222;border-radius:8px;padding:10px 16px;width:100%;max-width:794px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:10}
-.modal-bar span{color:#ccc;font-size:12px;font-weight:600;flex:1}
-/* PDF STYLES */
-.pdf-page{background:#fff;width:794px;min-height:1122px;padding:28px 32px;position:relative;box-shadow:0 4px 24px rgba(0,0,0,.4)}
-.ph{display:flex;align-items:flex-start;padding-bottom:12px;border-bottom:2px solid #111;margin-bottom:14px}
-.ph-info{flex:1}.ph-info h2{font-size:15px;font-weight:900}.ph-info p{font-size:9px;color:#444;line-height:1.7}
-.ph-right{text-align:right;min-width:155px}
-.pdate{font-size:9px;color:#666}.porcn{font-size:18px;font-weight:900}.porcl{font-size:10px;color:#777}
-.vbox{border:1px solid #bbb;border-radius:3px;padding:5px 10px;margin-top:6px;display:inline-block;text-align:center}
-.vl{font-size:8px;color:#999;text-transform:uppercase}.vd{font-size:11px;font-weight:800}
-.clibox{border:1px solid #ccc;border-radius:3px;padding:8px 12px;margin-bottom:12px;min-height:44px}
-.clibox .cn{font-size:12px;font-weight:800}
-.dados-pdf{font-size:9px;color:#222;line-height:1.9;margin-bottom:12px}
-.dados-pdf strong{font-weight:800}
-.psec{background:var(--red);color:#fff;padding:4px 9px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;margin-bottom:0}
-table.pi{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:9.5px}
-table.pi th{background:#111;color:#fff;padding:4px 7px;text-align:left;font-size:8.5px;text-transform:uppercase}
+.totbox{background:var(--D);color:#fff;padding:16px 18px;border-radius:0 0 10px 10px}
+.tg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:10px}
+.tg2{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px}
+.ti{border-bottom:1px solid #222;padding:6px 0}
+.ti label{color:#888;font-size:9px;text-transform:uppercase}
+.tval{display:block;font-size:13px;font-weight:700;color:#fff;margin-top:1px}
+.tval.red{color:#ff5555}
+.sep{border-top:1px solid #252525;padding-top:10px;margin-top:6px}
+.drow{display:flex;align-items:center;gap:9px;margin-bottom:7px;flex-wrap:wrap}
+.drow label{color:#999;font-size:10px;min-width:78px}
+.drow input{background:#1c1c1c;color:#fff;border:1px solid #3a3a3a;padding:5px 7px;max-width:100px}
+.grand{background:var(--R);padding:11px 15px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;margin-top:11px;flex-wrap:wrap;gap:8px}
+.grand span{font-size:12px;color:rgba(255,255,255,.85);font-weight:600}
+.grand b{font-size:20px;color:#fff}
+.mbox{background:#0a0a0a;border:1px solid #222;border-radius:6px;padding:11px 14px;margin-top:9px}
+.mbox h3{color:#aaa;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:7px}
+.mg{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.mi{background:#181818;border-radius:5px;padding:8px 10px}
+.mi label{color:#666;font-size:9px;text-transform:uppercase}
+.mval{display:block;font-size:14px;font-weight:700;margin-top:2px}
+.sbar{background:#1c1c1c;border:1px solid #2a2a2a;border-radius:6px;padding:9px 13px;margin-top:9px;display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.sbar span{color:#999;font-size:11px;flex:1}
+.ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:8000;align-items:center;justify-content:center}
+.ov.open{display:flex}
+.mbox2{background:#1c1c1c;border-radius:11px;padding:26px 30px;width:100%;max-width:480px;text-align:center}
+.mbox2 h2{color:#fff;font-size:16px;font-weight:800;margin-bottom:5px}
+.mbox2 p{color:#aaa;font-size:12px;margin-bottom:18px;line-height:1.6}
+.tcards{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:18px}
+.tcard{background:#111;border:2px solid #2a2a2a;border-radius:8px;padding:16px 10px;cursor:pointer;text-align:center}
+.tcard.sel{border-color:var(--R);background:#180005}
+.tcard .ic{font-size:26px;margin-bottom:7px}
+.tcard .tt{color:#fff;font-size:13px;font-weight:800;margin-bottom:3px}
+.tcard .td2{color:#777;font-size:10px;line-height:1.5}
+/* tipo imp row */
+.imp-row{display:flex;gap:8px;justify-content:center;margin-bottom:16px;flex-wrap:wrap}
+.ibtn{padding:7px 14px;border-radius:5px;border:2px solid #333;background:#111;color:#aaa;cursor:pointer;font-size:11px;font-weight:700}
+.ibtn.sel{border-color:var(--R);background:#1a0006;color:#fff}
+.macts{display:flex;gap:9px;justify-content:center}
+.pov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;overflow-y:auto;padding:18px;flex-direction:column;align-items:center;gap:11px}
+.pov.open{display:flex}
+.pbar{background:#1e1e1e;border-radius:7px;padding:9px 14px;width:100%;max-width:210mm;display:flex;gap:9px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:10}
+.pbar span{color:#ccc;font-size:12px;font-weight:600;flex:1}
+.pdf-page{background:#fff;width:210mm;min-height:297mm;padding:14mm 14mm 22mm;position:relative;box-shadow:0 4px 24px rgba(0,0,0,.5);font-family:'Segoe UI',Arial,sans-serif}
+.ph{display:flex;align-items:flex-start;padding-bottom:9px;border-bottom:2.5px solid #111;margin-bottom:11px}
+.ph-i{flex:1}.ph-i h2{font-size:16px;font-weight:900;color:#111}.ph-i p{font-size:8.5px;color:#444;line-height:1.8;margin-top:2px}
+.ph-r{text-align:right;min-width:145px}.pd{font-size:8.5px;color:#777}.pl{font-size:9px;color:#888;margin-top:3px}.pn{font-size:17px;font-weight:900;color:#111}
+.vbox{border:1px solid #ccc;border-radius:3px;padding:4px 9px;margin-top:4px;display:inline-block;text-align:center}
+.vbox .vl{font-size:7.5px;color:#999;text-transform:uppercase}.vbox .vd{font-size:10px;font-weight:800;color:#111}
+.clibox{border:1px solid #ddd;border-radius:3px;padding:7px 11px;margin-bottom:8px;background:#fafafa}
+.clibox .cn{font-size:12px;font-weight:800;color:#111;margin-bottom:2px}.clibox .cs{font-size:8.5px;color:#555;line-height:1.7}
+.evpbox{border:1px solid #ddd;border-left:3px solid var(--R);border-radius:3px;padding:7px 11px;margin-bottom:9px;background:#fafafa}
+.evpbox .en{font-size:11px;font-weight:800;color:var(--R);margin-bottom:2px}.evpbox .es{font-size:8.5px;color:#555;line-height:1.7}
+.psec{background:rgba(192,0,26,0.9);color:#fff;padding:4px 9px;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:1px;border-radius:2px 2px 0 0}
+.ambhdr{background:rgba(51,51,51,0.9);color:#fff;padding:4px 9px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1px;border-radius:2px;margin:8px 0 3px}
+table.pi{width:100%;border-collapse:collapse;margin-bottom:8px;font-size:8.5px}
+table.pi th{background:rgba(34,34,34,0.9);color:#fff;padding:4px 7px;text-align:left;font-size:8px;text-transform:uppercase}
 table.pi th.r{text-align:right}
-table.pi td{padding:4px 7px;border-bottom:1px solid #eee}
+table.pi td{padding:3px 7px;border-bottom:1px solid #eee;vertical-align:top}
 table.pi td.r{text-align:right;font-weight:700}
-table.pi tr:nth-child(even) td{background:#fafafa}
-table.pi .strow td{background:#fff0f0;font-weight:800;font-size:10px}
-table.pi .strow td.r{color:var(--red)}
-table.pres{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:10px}
-table.pres th{background:#111;color:#fff;padding:6px 9px;font-size:9px;text-transform:uppercase}
+table.pi tr:nth-child(even) td{background:#f9f9f9}
+table.pi .strow td{background:#fee;font-weight:800;font-size:9px}
+table.pi .strow td.r{color:var(--R)}
+table.pi .incrow td{color:#444;background:#f5f5f5}
+table.pres{width:100%;border-collapse:collapse;margin-bottom:13px;font-size:9px}
+table.pres th{background:rgba(34,34,34,0.9);color:#fff;padding:5px 9px;font-size:8.5px;text-transform:uppercase}
 table.pres th.r{text-align:right}
-table.pres td{padding:6px 9px;border-bottom:1px solid #eee}
+table.pres td{padding:5px 9px;border-bottom:1px solid #eee}
 table.pres td.r{text-align:right;font-weight:700}
-table.pres .sub td{background:#f5f5f5;font-weight:800}
-table.pres .drow td{color:#e53935;font-weight:800}
-table.pres .lrow td{background:var(--red);color:#fff;font-weight:900;font-size:13px}
-.pgto-pdf{border-top:1px solid #ccc;padding-top:10px;font-size:9px;color:#333;line-height:1.8}
-.pgto-pdf strong{font-weight:800;display:block;margin-bottom:1px}
-.pgto-pdf .obs{margin-top:6px;color:#666;font-style:italic}
-.pfooter{position:absolute;bottom:20px;left:32px;right:32px;display:flex;justify-content:space-between;border-top:1px solid #ddd;padding-top:6px}
-.pfooter span{font-size:8px;color:#aaa}
-@media(max-width:600px){.g2,.g3,.tg,.mg,.type-cards{grid-template-columns:1fr}}
+table.pres .sub td{background:#f0f0f0;font-weight:800}
+table.pres .drow2 td{color:#c0001a;font-weight:800;background:#fff5f5}
+table.pres .lrow td{background:rgba(192,0,26,0.9);color:#fff;font-weight:900;font-size:12px}
+.pgto-pdf{border:1px solid #ddd;border-radius:3px;padding:7px 11px;font-size:8.5px;color:#333;line-height:1.8}
+.pgto-pdf .pt{font-weight:800;font-size:9px;text-transform:uppercase;margin-bottom:2px}
+.pgto-pdf .ob{margin-top:5px;color:#666;font-style:italic;border-top:1px dashed #ddd;padding-top:4px}
+.pfooter{position:absolute;bottom:8mm;left:14mm;right:14mm;display:flex;justify-content:space-between;border-top:1px solid #e0e0e0;padding-top:3px}
+.pfooter span{font-size:7.5px;color:#aaa}
+@media(max-width:620px){.g2,.g3,.g4,.tg3,.tg2,.mg,.tcards{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<div class="app">
+<div class="wrap">
 
 <div class="app-hdr">
   <div><h1>CRAZY SOM – ORÇAMENTO</h1><p>Audiovisual e Estrutura – Uso Interno</p></div>
-  <div class="orc-ctrl">
-    <span>Nº Orçamento</span>
-    <strong id="orcDisp">#001</strong><br>
-    <input type="number" id="orcNum" value="1" min="1" oninput="updOrc(this.value)">
-  </div>
+  <div class="orc-n"><small>Nº Orçamento</small><b id="orc-disp">—</b></div>
 </div>
 
 <div class="card">
-  <div class="stitle">📋 Dados do Evento</div>
-  <div class="g2">
-    <div><label>Cliente</label><input id="f-cliente" placeholder="Nome do cliente"></div>
-    <div><label>Local / Nome do Evento</label><input id="f-local" placeholder="Ex: Hotel Serra Azul – Festa CVC"></div>
-  </div>
-  <div class="g2">
-    <div><label>Endereço</label><input id="f-end" placeholder="Rua, número, cidade"></div>
-    <div><label>Tipo de Evento</label><input id="f-tipo" placeholder="Ex: Festa, Congresso, Show..."></div>
-  </div>
-  <div class="g3">
-    <div><label>Contato</label><input id="f-cont" placeholder="Nome"></div>
-    <div><label>Telefone</label><input id="f-tel" placeholder="(51) 99999-9999"></div>
-    <div><label>Público estimado</label><input type="number" id="f-pub" placeholder="500"></div>
-  </div>
-  <div class="g3">
-    <div><label>Dia do Evento</label><input type="date" id="f-dia" oninput="setDS()"></div>
-    <div><label>Montagem</label><input type="datetime-local" id="f-mont"></div>
-    <div><label>Desmontagem</label><input type="datetime-local" id="f-desm"></div>
-  </div>
-  <div class="g3" style="margin-bottom:9px">
-    <div><label>Dia da Semana</label><input id="f-sem" readonly placeholder="Auto"></div>
-    <div><label>Resp. no Local</label><input id="f-resp" placeholder="Nome"></div>
-    <div><label>Tel. Responsável</label><input id="f-telr" placeholder="(51) 99999-9999"></div>
-  </div>
-  <div class="g3" style="margin-bottom:9px">
+  <div class="st">📋 Identificação</div>
+  <div class="g4">
+    <div><label>Nº do Orçamento</label><input id="f-num" placeholder="20260042" oninput="document.getElementById('orc-disp').textContent=this.value||'—'"></div>
+    <div><label>Data</label><input type="date" id="f-data"></div>
+    <div><label>Validade</label><input type="date" id="f-val"></div>
     <div><label>Consultor</label>
       <select id="f-cons">
         <option value="">Selecione...</option>
         <option>Fabiano Santos</option><option>Giovana Borges</option>
-        <option>Jéssica Elisandra</option><option>Rafael Oliveira</option><option>Jefferson</option>
+        <option>Jéssica Elisandra</option><option>Rafael Oliveira</option>
+        <option>Jefferson</option><option>Wagner Wolff</option>
       </select>
     </div>
-    <div><label>Validade da Proposta</label><input type="date" id="f-val"></div>
-    <div><label>Data do Orçamento</label><input type="date" id="f-dataorc"></div>
   </div>
-  <div style="margin-bottom:9px"><label>Observações Gerais</label><textarea id="f-obs" style="background:#fffde7;border-color:#ffe082" placeholder="Detalhes, restrições..."></textarea></div>
-  <div><label>Forma de Pagamento</label><textarea id="f-pgto">50% na contratação;
-50% até 03 dias antes da montagem.</textarea></div>
 </div>
 
 <div class="card">
-  <div class="stitle">🎛️ Itens do Orçamento</div>
-  <div class="tabs">
-    <button class="tab active" onclick="swTab('som',this)">🔊 Som <span class="badge" id="b-som">0</span></button>
-    <button class="tab" onclick="swTab('video',this)">📺 Vídeo <span class="badge" id="b-video">0</span></button>
-    <button class="tab" onclick="swTab('luz',this)">💡 Luz <span class="badge" id="b-luz">0</span></button>
-    <button class="tab" onclick="swTab('estrutura',this)">🏗️ Estrutura <span class="badge" id="b-estrutura">0</span></button>
-    <button class="tab" onclick="swTab('servico',this)">⚙️ Serviço <span class="badge" id="b-servico">0</span></button>
-    <button class="tab" onclick="swTab('logistica',this)">🚚 Logística <span class="badge" id="b-logistica">0</span></button>
-    <button class="tab" onclick="swTab('extra',this)">💰 Custos Extra <span class="badge" id="b-extra">0</span></button>
-  </div>
-  <div id="tc-som" class="tc active"></div>
-  <div id="tc-video" class="tc"></div>
-  <div id="tc-luz" class="tc"></div>
-  <div id="tc-estrutura" class="tc"></div>
-  <div id="tc-servico" class="tc"></div>
-  <div id="tc-logistica" class="tc"></div>
-  <div id="tc-extra" class="tc">
-    <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:5px;padding:8px 12px;margin-top:8px;font-size:10px;color:#7a5a00"><strong>💰 Custos Extra</strong> — Uso interno. Não aparece no PDF do cliente.</div>
-    <table class="it" id="tbl-extra"><thead><tr><th>Qtd</th><th>Descrição</th><th>Diária</th><th>Custo Unit.</th><th>Total</th><th>Marg%</th><th>Cobrado</th><th></th></tr></thead><tbody></tbody></table>
-    <div class="add-bar">
-      <div class="f"><label>Item</label><select id="sel-extra" onchange="selItem('extra',this)"><option value="">— Selecione —</option></select></div>
-      <button class="btn btn-outline btn-sm" onclick="addCustom('extra')">+ Personalizado</button>
+  <div class="st">👤 Dados do Cliente</div>
+  <div class="g3">
+    <div><label>Nome / Razão Social</label><input id="f-cliente" placeholder="Nome ou Razão Social"></div>
+    <div>
+      <label>CNPJ / CPF</label>
+      <div class="irow"><input id="f-doc" placeholder="00.000.000/0001-00" oninput="fmtDoc(this)"><button class="btn btn-o btn-sm" onclick="buscaCNPJ()">🔍</button></div>
+      <div class="hint" id="doc-st"></div>
     </div>
-    <div class="sec-tot">Custo: <strong id="tot-extra">R$ 0,00</strong> &nbsp;|&nbsp; Cobrado c/ margem: <strong id="tot-extra-cob">R$ 0,00</strong></div>
+    <div><label>Contato / Telefone</label><input id="f-tel" placeholder="Nome – (51) 99999-9999"></div>
+  </div>
+  <div class="g4">
+    <div>
+      <label>CEP do Cliente</label>
+      <div class="irow"><input id="f-cep" placeholder="00000-000" maxlength="9" oninput="fmtCep(this)"><button class="btn btn-o btn-sm" onclick="buscaCEP('f-cep','f-end','f-endnum','f-cidade','cep-st','f-bairro')">🔍</button></div>
+      <div class="hint" id="cep-st"></div>
+    </div>
+    <div><label>Logradouro</label><input id="f-end" placeholder="Rua, Av..."></div>
+    <div><label>Nº / Complemento</label><input id="f-endnum" placeholder="123 / Sala 1"></div>
+    <div><label>Bairro</label><input id="f-bairro" placeholder="Centro"></div>
+    <div><label>Cidade / UF</label><input id="f-cidade" placeholder="Porto Alegre / RS"></div>
   </div>
 </div>
 
+<div class="card">
+  <div class="st">📍 Local do Evento</div>
+  <div class="g3" style="margin-bottom:8px">
+    <div><label>Nome / Local do Evento</label><input id="f-local" placeholder="Hotel Serra Azul – Festa CVC"></div>
+    <div><label>Tipo de Evento</label><input id="f-tipo" placeholder="Festa, Congresso, Show..."></div>
+    <div><label>Resp. no Local / Tel.</label><input id="f-resp" placeholder="Nome – (51) 99999-9999"></div>
+  </div>
+  <div class="g4">
+    <div>
+      <label>CEP do Evento</label>
+      <div class="irow"><input id="f-cep-ev" placeholder="00000-000" maxlength="9" oninput="fmtCep(this)"><button class="btn btn-o btn-sm" onclick="buscaCEP('f-cep-ev','f-end-ev','f-num-ev','f-cid-ev','cep-ev-st','f-bairro-ev')">🔍</button></div>
+      <div class="hint" id="cep-ev-st"></div>
+    </div>
+    <div><label>Logradouro do Evento</label><input id="f-end-ev" placeholder="Rua, Av..."></div>
+    <div><label>Nº / Complemento</label><input id="f-num-ev" placeholder="123"></div>
+    <div><label>Bairro do Evento</label><input id="f-bairro-ev" placeholder="Centro"></div>
+    <div><label>Cidade / UF</label><input id="f-cid-ev" placeholder="Porto Alegre / RS"></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="st">🗓️ Datas e Horários</div>
+  <div class="g4" style="margin-bottom:8px">
+    <div><label>Início do Evento</label><input type="date" id="f-dia" oninput="setDS()"></div>
+    <div><label>Dia da Semana (início)</label><input id="f-sem" readonly placeholder="Auto"></div>
+    <div><label>Fim do Evento</label><input type="date" id="f-dia-fim" oninput="setDSFim(); calcDiariasAuto()"></div>
+    <div><label>Dia da Semana (fim)</label><input id="f-sem-fim" readonly placeholder="Auto"></div>
+  </div>
+  <div class="g4" style="margin-bottom:8px">
+    <div><label>Horário de Início</label><input type="time" id="f-hi"></div>
+    <div><label>Horário de Encerramento</label><input type="time" id="f-hf"></div>
+    <div><label>Dias do Evento</label><input id="f-dias-ev" readonly placeholder="Auto" style="background:#fffde7;border-color:#ffe082;font-weight:700;color:#333"></div>
+    <div><label>Diárias Equip. (regra ½)</label><input id="f-diarias-equip" readonly placeholder="Auto" style="background:#e8f4fd;border-color:#90caf9;font-weight:700;color:#1565c0"></div>
+  </div>
+  <div class="g4" style="margin-bottom:8px">
+    <div><label>Data Montagem</label><input type="date" id="f-dm"></div>
+    <div><label>Hora Montagem</label><input type="time" id="f-hm"></div>
+    <div><label>Data Desmontagem</label><input type="date" id="f-dd"></div>
+    <div><label>Hora Desmontagem</label><input type="time" id="f-hd"></div>
+  </div>
+  <div class="g3">
+    <div><label>Público Estimado</label><input type="number" id="f-pub" placeholder="500"></div>
+    <div style="grid-column:span 2"><label>Observações Gerais</label><textarea id="f-obs" style="background:#fffde7;border-color:#ffe082;min-height:36px" placeholder="Detalhes, restrições..."></textarea></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="st">🎛️ Itens do Orçamento</div>
+  <div class="tabs" id="tabs-wrap"></div>
+  <div id="panes-wrap"></div>
+</div>
+
 <div class="totbox">
-  <div style="font-size:10px;color:#aaa;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px">📊 Resumo & Margem</div>
-  <div class="tg">
-    <div class="ti"><label>Sonorização</label><span id="r-som">R$ 0,00</span></div>
-    <div class="ti"><label>Vídeo</label><span id="r-video">R$ 0,00</span></div>
-    <div class="ti"><label>Iluminação</label><span id="r-luz">R$ 0,00</span></div>
-    <div class="ti"><label>Estrutura</label><span id="r-estrutura">R$ 0,00</span></div>
-    <div class="ti"><label>Serviço</label><span id="r-servico">R$ 0,00</span></div>
-    <div class="ti"><label>Logística</label><span id="r-logistica">R$ 0,00</span></div>
+  <div style="font-size:10px;color:#aaa;margin-bottom:9px;text-transform:uppercase;letter-spacing:1px">📊 Resumo & Margem</div>
+  <div class="tg3">
+    <div class="ti"><label>Sonorização</label><span class="tval" id="r-som">R$ 0,00</span></div>
+    <div class="ti"><label>Vídeo</label><span class="tval" id="r-video">R$ 0,00</span></div>
+    <div class="ti"><label>Iluminação</label><span class="tval" id="r-luz">R$ 0,00</span></div>
+    <div class="ti"><label>Estrutura</label><span class="tval" id="r-estrutura">R$ 0,00</span></div>
+    <div class="ti"><label>Serviço</label><span class="tval" id="r-servico">R$ 0,00</span></div>
+    <div class="ti"><label>Logística</label><span class="tval" id="r-logistica">R$ 0,00</span></div>
   </div>
   <div class="sep">
-    <div class="tg">
-      <div class="ti"><label>Total Bruto</label><span id="r-bruto">R$ 0,00</span></div>
-      <div class="ti"><label>Impostos (12%)</label><span class="red" id="r-imp">R$ 0,00</span></div>
-      <div class="ti"><label>Total c/ Impostos</label><span id="r-cimp">R$ 0,00</span></div>
+    <div class="tg3">
+      <div class="ti"><label>Total Bruto</label><span class="tval" id="r-bruto">R$ 0,00</span></div>
+      <div class="ti"><label>Impostos (13,5%)</label><span class="tval red" id="r-imp">R$ 0,00</span></div>
+      <div class="ti"><label>Total c/ Impostos</label><span class="tval" id="r-cimp">R$ 0,00</span></div>
     </div>
   </div>
   <div class="sep">
-    <div class="disc-row">
-      <label>Desconto (%)</label>
-      <input type="number" id="descPct" value="0" min="0" max="100" step="0.5" oninput="calc()" style="max-width:75px">
-      <span style="color:#aaa;font-size:11px">= <span id="r-dv" style="color:#ff6060">R$ 0,00</span></span>
-    </div>
-    <div class="tg">
-      <div class="ti"><label>c/ Desc. (s/ imp)</label><span id="r-vdsi">R$ 0,00</span></div>
-      <div class="ti"><label>c/ Desc. (c/ imp)</label><span id="r-vdci">R$ 0,00</span></div>
-      <div class="ti"><label>Custos Extra</label><span class="red" id="r-extra">R$ 0,00</span></div>
+    <div class="tg2" style="margin-bottom:10px">
+      <div>
+        <div class="drow"><label>Desconto %</label><input type="number" id="desc-pct" value="0" min="0" max="100" step="0.5" oninput="syncDesc('pct')"><span style="color:#aaa;font-size:10px">= <span id="r-dv" style="color:#ff6060">R$ 0,00</span></span></div>
+        <div class="drow"><label>Desconto R$</label><input type="number" id="desc-rs" value="0" min="0" step="1" oninput="syncDesc('rs')"></div>
+      </div>
+      <div class="tg2" style="gap:8px;margin:0">
+        <div class="ti"><label>c/Desc s/imp</label><span class="tval" id="r-vdsi">R$ 0,00</span></div>
+        <div class="ti"><label>c/Desc c/imp</label><span class="tval" id="r-vdci">R$ 0,00</span></div>
+      </div>
     </div>
   </div>
   <div class="mbox">
     <h3>📈 Margem do Negócio</h3>
     <div class="mg">
-      <div class="mi"><label>Margem sem desconto</label><span id="m-sd" style="color:#66bb6a">R$ 0,00</span></div>
-      <div class="mi"><label>Margem com desconto</label><span id="m-cd" style="color:#ffa726">R$ 0,00</span></div>
+      <div class="mi">
+        <label>Margem s/ Imposto</label>
+        <span class="mval" id="m-sd" style="color:#66bb6a">R$ 0,00</span>
+        <span id="m-sd-pct" style="font-size:11px;color:#66bb6a;display:block;margin-top:2px">0,00%</span>
+        <span style="font-size:9px;color:#444;margin-top:3px;display:block">Bruto − Desc − Serv − Log − Extra</span>
+      </div>
+      <div class="mi">
+        <label>Margem c/ Imposto</label>
+        <span class="mval" id="m-cd" style="color:#ffa726">R$ 0,00</span>
+        <span id="m-cd-pct" style="font-size:11px;color:#ffa726;display:block;margin-top:2px">0,00%</span>
+        <span style="font-size:9px;color:#444;margin-top:3px;display:block">Total c/imp − Desc − Imp − Serv − Log − Extra</span>
+      </div>
     </div>
-    <div style="font-size:9px;color:#444;margin-top:8px;padding-top:6px;border-top:1px solid #1e1e1e">Fórmula: Total cobrado − Desconto − Imposto − Custos Extra − Logística</div>
   </div>
-  <div class="sep" style="margin-top:12px">
-    <label style="color:#888">Valor Líquido para o Cliente (exibido no PDF)</label>
-    <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap">
-      <input type="number" id="valorLiq" placeholder="0,00" step="0.01" style="max-width:150px;background:#1e1e1e;color:#fff;border-color:#444;font-size:15px;font-weight:700;padding:7px 10px" oninput="calc()">
-      <span style="color:#aaa;font-size:10px">← Valor final apresentado ao cliente</span>
+  <div class="sep" style="margin-top:11px">
+    <label style="color:#888">Valor Líquido Final para o Cliente (PDF) — preencha para arredondar</label>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:5px">
+      <input type="number" id="val-liq" placeholder="0,00" step="1" style="max-width:175px;background:#1c1c1c;color:#fff;border-color:#3a3a3a;font-size:14px;font-weight:700;padding:6px 9px" oninput="calc()">
+      <span style="color:#555;font-size:10px">← deixe vazio para usar o valor calculado</span>
     </div>
+  </div>
+  <div style="margin:11px 0 0">
+    <label style="color:#888">Forma de Pagamento (aparece no PDF)</label>
+    <textarea id="f-pgto" style="background:#1c1c1c;color:#ddd;border-color:#333;margin-top:4px">50% na contratação;
+50% até 03 dias antes da montagem.</textarea>
   </div>
   <div class="grand">
-    <span>TOTAL FINAL (c/ impostos)</span>
-    <strong id="r-total">R$ 0,00</strong>
+    <div><span>TOTAL FINAL (c/ impostos)</span><div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:1px" id="desc-label"></div></div>
+    <b id="r-total">R$ 0,00</b>
   </div>
-  <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-    <button class="btn btn-outline" onclick="limpar()">🗑️ Limpar</button>
-    <button class="btn btn-red" onclick="abrirTipoModal()">📄 Gerar PDF</button>
+  <div class="sbar">
+    <span>💾 Orçamento</span>
+    <button class="btn btn-g btn-sm" onclick="salvar()">💾 Salvar</button>
+    <label class="btn btn-b btn-sm" style="cursor:pointer">📂 Carregar<input type="file" accept=".json" style="display:none" onchange="carregar(this)"></label>
+    <button class="btn btn-d btn-sm" onclick="gerarOS()">📋 Ordem de Serviço</button>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:9px;justify-content:flex-end;flex-wrap:wrap">
+    <button class="btn btn-o" onclick="limpar()">🗑️ Limpar</button>
+    <button class="btn btn-r" onclick="abrirTipo()">📄 Gerar PDF</button>
   </div>
 </div>
-</div>
-
-<!-- MODAL TIPO DE PDF -->
-<div class="type-overlay" id="typeModal">
-  <div class="type-box">
-    <h2>Escolha o tipo de PDF</h2>
-    <p>Como deseja apresentar o orçamento ao cliente?</p>
-    <div class="type-cards">
-      <div class="type-card selected" id="card-det" onclick="selTipo('detalhado')">
-        <div class="icon">📋</div>
-        <div class="tc-title">Detalhado</div>
-        <div class="tc-desc">Lista todos os itens com descrição e valor unitário por categoria</div>
-      </div>
-      <div class="type-card" id="card-res" onclick="selTipo('resumido')">
-        <div class="icon">📄</div>
-        <div class="tc-title">Resumido</div>
-        <div class="tc-desc">Exibe apenas o total por categoria: Som, Vídeo, Luz, Estrutura e Serviço</div>
-      </div>
-    </div>
-    <div class="type-actions">
-      <button class="btn btn-outline" onclick="fecharTipoModal()">Cancelar</button>
-      <button class="btn btn-dark" onclick="abrirPDF('preview')">👁️ Visualizar</button>
-      <button class="btn btn-red" onclick="abrirPDF('print')">🖨️ Imprimir / PDF</button>
-    </div>
-  </div>
 </div>
 
-<!-- PDF PREVIEW MODAL -->
-<div class="modal-overlay" id="pdfModal">
-  <div class="modal-bar">
-    <span id="modal-title">📄 Orçamento – Crazy Som</span>
-    <button class="btn btn-red" onclick="abrirPDF('print')">🖨️ Imprimir / Salvar PDF</button>
-    <button class="btn btn-dark" onclick="fecharPDF()">✕ Fechar</button>
+<!-- MODAL TIPO PDF -->
+<div class="ov" id="tipo-modal">
+  <div class="mbox2">
+    <h2>Gerar PDF do Orçamento</h2>
+    <p>Escolha o formato e o tipo de valores:</p>
+
+    <div style="text-align:left;margin-bottom:10px">
+      <div style="color:#aaa;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">📋 Formato</div>
+      <div class="tcards">
+        <div class="tcard sel" id="card-det" onclick="selTipo('det')"><div class="ic">📋</div><div class="tt">Detalhado</div><div class="td2">Todos os itens com valores por ambiente</div></div>
+        <div class="tcard" id="card-res" onclick="selTipo('res')"><div class="ic">📄</div><div class="tt">Resumido</div><div class="td2">Lista de itens sem valores + total por ambiente</div></div>
+      </div>
+    </div>
+
+    <div style="text-align:left;margin-bottom:18px">
+      <div style="color:#aaa;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">💰 Valores no PDF</div>
+      <div class="imp-row">
+        <button class="ibtn sel" id="ibtn-cimp" onclick="selImp('cimp')">Com Imposto<br><span style="font-weight:400;font-size:10px;opacity:.8">Valores já incluem 13,5%</span></button>
+        <button class="ibtn" id="ibtn-simp" onclick="selImp('simp')">Sem Imposto<br><span style="font-weight:400;font-size:10px;opacity:.8">Valores sem tributação</span></button>
+      </div>
+    </div>
+
+    <div class="macts">
+      <button class="btn btn-o" onclick="document.getElementById('tipo-modal').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-d" onclick="abrirPDF('prev')">👁️ Visualizar</button>
+      <button class="btn btn-r" onclick="abrirPDF('imp')">🖨️ Imprimir</button>
+    </div>
   </div>
-  <div id="pdfContent"></div>
+</div>
+
+<div class="pov" id="pdf-ov">
+  <div class="pbar">
+    <span id="pdf-title">Orçamento – Crazy Som</span>
+    <button class="btn btn-r btn-sm" onclick="abrirPDF('imp')">🖨️ Imprimir / PDF</button>
+    <button class="btn btn-d btn-sm" onclick="document.getElementById('pdf-ov').classList.remove('open')">✕ Fechar</button>
+  </div>
+  <div id="pdf-content"></div>
 </div>
 
 <script>
-const IMP=0.12;
-const secs=['som','video','luz','estrutura','servico','logistica','extra'];
-const labels={som:'Sonorização',video:'Vídeo',luz:'Iluminação',estrutura:'Estrutura',servico:'Serviço',logistica:'Logística',extra:'Custos Extra'};
-const icons={som:'🔊',video:'📺',luz:'💡',estrutura:'🏗️',servico:'⚙️',logistica:'🚚'};
-const rows={som:[],video:[],luz:[],estrutura:[],servico:[],logistica:[],extra:[]};
-let tipoSelecionado='detalhado';
+const IMP = 0.135;
+const SECS = ['som','video','luz','estrutura','servico','logistica','extra'];
+const SEC_LBL = {som:'Sonorização',video:'Vídeo',luz:'Iluminação',estrutura:'Estrutura',servico:'Serviço',logistica:'Logística',extra:'Custos Extra'};
+const SEC_ICO = {som:'🔊',video:'📺',luz:'💡',estrutura:'🏗️',servico:'⚙️',logistica:'🚚',extra:'💰'};
 
-const precos={
+const state = {};
+SECS.forEach(s => {
+  state[s] = { ambientes:[{id:'default',nome:'Geral'}], ambAtiva:'default', rows:{default:[]} };
+});
+
+let tipoAtual = 'det';
+let impAtual = 'cimp'; // 'cimp' ou 'simp'
+
+// ── PREÇOS ──────────────────────────────────
+const PX = {'Painel Led Ph2.5Mm Indoor':384,'Painel Led Ph2.9Mm Indoor':336,'Painel Led Ph3.9Mm Outdoor':256,'Painel Led Ph6Mm Indoor':160};
+const isPainel = n => Object.keys(PX).some(k=>n&&n.includes(k));
+const getPx    = n => { const k=Object.keys(PX).find(k=>n&&n.includes(k)); return k?PX[k]:null; };
+const ELEV = [{l:'20cm',v:100},{l:'30cm',v:100},{l:'40cm',v:100},{l:'60cm',v:100},{l:'80cm',v:100},{l:'100cm',v:100}];
+const isPalco = n => n&&n.trim().toLowerCase()==='palco';
+function calcPalco(r){ const a=r.larg*r.prof,np=Math.ceil(a/2),vp=r.elObj?r.elObj.v:100; const tc=r.carp&&r.carpT?a*(r.carpT==='novo'?40:25):0; return{area:a,np,tc,total:np*vp+tc}; }
+const OCULT = ['Montagem','Desmontagem','Frete','Almoço/Janta','Combustível','Hotel','Pedágio','Projeto','Carregadores'];
+const isOcult = n => OCULT.some(o=>n&&n.toLowerCase().includes(o.toLowerCase()));
+
+const PRECOS = {
   som:[
     {n:"Amplificador De Potência Até 5K",v:100},{n:"Caixa Ativa (Selenium/JBL/Lexsen/Staner)",v:100},
-    {n:"Caixa Ativa Jbl Eon515xt",v:120},{n:"Caixa Ativa Jbl Eon612",v:120},
-    {n:"Caixa Ativa Jbl Max 10",v:100},{n:"Caixa Ativa Jbl Max 10 (monitor)",v:100},
-    {n:'Caixa Sub Grave T18 1X18" Passiva 800W',v:80},{n:'Caixa Sub Grave Taigar 2X18" 2400W',v:150},
-    {n:'Caixa Line Array Taigar 2X8" 740W',v:100},{n:"Caixa Line Vertical Slim Turbosound Ip500",v:250},
-    {n:"Caixa Line Vertical Slim Soundking ARTOS 1200",v:250},{n:"Caixa Line Vertical Slim Blg 1515A",v:300},
-    {n:"Caixa Line Vertical Slim Taigar V851",v:500},{n:"Caixa Passiva Leacs 100W",v:60},
-    {n:"Caixa Treeway Passiva 450W",v:80},{n:"Caixas Monitor Attack (Retorno)",v:100},
-    {n:"Cubo de Baixo",v:150},{n:"Cubo de Guitarra",v:100},{n:"Direct Box Ativo Ou Passivo",v:30},
-    {n:"Kit Dj 02 Cdj 350 Pioneer + Mixer",v:200},{n:"Kit Microfonação de bateria",v:120},
-    {n:"Kit Pioneer 02 CDJ 2000 Nexus 2 + Mixer DJM 900",v:800},
+    {n:"Caixa Ativa Jbl Eon515xt",v:120},{n:"Caixa Ativa Jbl Eon612",v:120},{n:"Caixa Ativa Jbl Max 10",v:100},
+    {n:"Caixa Ativa Jbl Max 10 (monitor)",v:100},{n:'Caixa Sub Grave T18 1X18" Passiva 800W',v:80},
+    {n:'Caixa Sub Grave Taigar 2X18" 2400W',v:150},{n:'Caixa Line Array Taigar 2X8" 740W',v:100},
+    {n:"Caixa Line Slim Turbosound Ip500",v:250},{n:"Caixa Line Slim Soundking ARTOS 1200",v:250},
+    {n:"Caixa Line Slim Blg 1515A",v:300},{n:"Caixa Line Slim Taigar V851",v:500},
+    {n:"Caixa Passiva Leacs 100W",v:60},{n:"Caixa Treeway Passiva 450W",v:80},
+    {n:"Caixas Monitor Attack (Retorno)",v:100},{n:"Cubo de Baixo",v:150},{n:"Cubo de Guitarra",v:100},
+    {n:"Direct Box Ativo Ou Passivo",v:30},{n:"Kit Dj 02 Cdj 350 Pioneer + Mixer",v:200},
+    {n:"Kit Microfonação de bateria",v:120},{n:"Kit Pioneer 02 CDJ 2000 Nexus 2 + Mixer DJM 900",v:800},
     {n:"Mesa Som Analógica 04 Canais",v:100},{n:"Mesa Som Analógica 06 Canais",v:100},
-    {n:"Mesa Som Analógica Behringer/Yamaha 12 Canais",v:100},
-    {n:"Mesa Som Digital Midas M32 32 Canais",v:400},{n:"Mesa Som Digital Soundcraft Ui24 24 Canais",v:250},
-    {n:"Mesa Som Digital Yamaha 01V 16 Canais",v:200},{n:"Mesa Som Digital Duonn Atrium 12 Canais",v:200},
-    {n:"Microfone Com Fio Akg/Samson/Sennheiser",v:30},{n:"Microfone Com Fio Shure Sm58",v:60},
-    {n:"Microfone Goosneck (pulpito)",v:100},{n:"Microfone Sem Fio Bastão Sennheiser",v:120},
-    {n:"Microfone Sem Fio Headset Sennheiser",v:120},{n:"Microfone Sem Fio Bastão Shure",v:120},
-    {n:"Microfone Sem Fio Bastão Kadosh",v:100},{n:"Antena longo alcance Combainer",v:150},
-    {n:"Notebook Para Trilhas",v:120},{n:"Pedestal De Microfone",v:30},
-    {n:"Power Play (sem fones)",v:100},{n:"Rack De Amplificação E Processamento",v:300},
+    {n:"Mesa Som Analógica Behringer/Yamaha 12 Canais",v:100},{n:"Mesa Som Digital Midas M32 32 Canais",v:400},
+    {n:"Mesa Som Digital Soundcraft Ui24 24 Canais",v:250},{n:"Mesa Som Digital Yamaha 01V 16 Canais",v:200},
+    {n:"Mesa Som Digital Duonn Atrium 12 Canais",v:200},{n:"Microfone Com Fio Akg/Samson/Sennheiser",v:30},
+    {n:"Microfone Com Fio Shure Sm58",v:60},{n:"Microfone Goosneck (pulpito)",v:100},
+    {n:"Microfone Sem Fio Bastão Sennheiser",v:120},{n:"Microfone Sem Fio Headset Sennheiser",v:120},
+    {n:"Microfone Sem Fio Bastão Shure",v:120},{n:"Microfone Sem Fio Bastão Kadosh",v:100},
+    {n:"Antena longo alcance Combainer",v:150},{n:"Notebook Para Trilhas",v:120},
+    {n:"Pedestal De Microfone",v:30},{n:"Power Play (sem fones)",v:100},
+    {n:"Rack De Amplificação E Processamento",v:300},
   ],
   video:[
     {n:"Base plataforma de abrir",v:300},{n:"Cpu Servidor De Vídeo",v:350},
     {n:"Estrutura P30 Até 10M² De Painel",v:250},{n:"Estrutura P30 Até 10M² Outdoor",v:500},
     {n:"Estrutura P30 Até 24M² De Painel",v:500},{n:"Notebook Placa De Vídeo Dedicado",v:150},
-    {n:"Painel Led Ph2.5Mm Indoor (M²)",v:300},{n:"Painel Led Ph2.9Mm Indoor (M²)",v:250},
-    {n:"Painel Led Ph3.9Mm Outdoor (M²)",v:250},{n:"Painel Led Ph6Mm Indoor (M²)",v:150},
+    {n:"Painel Led Ph2.5Mm Indoor",v:300},{n:"Painel Led Ph2.9Mm Indoor",v:250},
+    {n:"Painel Led Ph3.9Mm Outdoor",v:250},{n:"Painel Led Ph6Mm Indoor",v:150},
     {n:"Passador de slides",v:50},{n:"Poster Led 1,00x2,00M P2.5mm",v:1200},
     {n:"Poster Led 1,00x3,00M P2.5mm",v:1800},{n:"Processadora De Vídeo",v:300},
     {n:"Processadora TB 40",v:300},{n:"Projetor 2.700 Lumens",v:120},{n:"Projetor 3.500 Lumens",v:150},
     {n:"Tela de projeção e pedestal",v:100},{n:'Totem Touch 32" Armário',v:1300},
     {n:'Totem Touch 32" Curvo',v:1200},{n:'Totem Touch 40" Armário',v:1500},
     {n:'Totem Touch 55" Armário',v:1700},{n:'Totem Touch 70" Armário',v:1900},
-    {n:"Diaria adicional do Totem",v:200},{n:"Adesivação do Totem",v:300},
-    {n:"Pedestal de suporte para TV",v:30},{n:'Tv 32"',v:120},{n:'Tv 40"/43"',v:150},
+    {n:"Diaria adicional Totem",v:200},{n:"Adesivação Totem",v:300},
+    {n:"Pedestal suporte TV",v:30},{n:'Tv 32"',v:120},{n:'Tv 40"/43"',v:150},
     {n:'Tv 55"',v:300},{n:'Tv 70"',v:500},{n:'Tv 98"',v:1000},
     {n:'Tv 32" doghouse + notebook cronometro',v:250},{n:'Tv 40" doghouse + notebook cronometro',v:300},
     {n:'Tv 32" doghouse + Spliter HDMI retorno',v:250},{n:'Tv 40" doghouse + Spliter HDMI retorno',v:300},
@@ -355,6 +431,7 @@ const precos={
     {n:"Spliter DMX",v:50},{n:"Strobo LED RGB",v:50},{n:"Varal De Luz 15M",v:80},{n:"Varal De Luz 30M",v:150},
   ],
   estrutura:[
+    {n:"Palco",v:0},
     {n:"Backdrop 2Mx2M Boxtruss P15",v:280},{n:"Backdrop 3Mx2M Boxtruss P15",v:320},
     {n:"Backdrop 3Mx3M Boxtruss P15",v:360},{n:"Backdrop 4Mx2M Boxtruss P15",v:360},
     {n:"Backdrop 5Mx3M Boxtruss P15",v:440},{n:"Alumalock",v:50},
@@ -381,317 +458,659 @@ const precos={
   ]
 };
 
-// Build section UIs
-['som','video','luz','estrutura','servico','logistica'].forEach(s=>{
-  const el=document.getElementById('tc-'+s);
-  el.innerHTML=`
-    <table class="it" id="tbl-${s}"><thead><tr><th>Qtd</th><th>Descrição</th><th>Diária</th><th>Valor Unit.</th><th>Total</th><th>c/Imp</th><th></th></tr></thead><tbody></tbody></table>
-    <div class="add-bar">
-      <div class="f"><label>Buscar item</label><select id="sel-${s}" onchange="selItem('${s}',this)"><option value="">— Selecione da tabela —</option></select></div>
-      <button class="btn btn-outline btn-sm" onclick="addCustom('${s}')">+ Personalizado</button>
-    </div>
-    <div class="sec-tot">Total ${labels[s]}: <strong id="tot-${s}">R$ 0,00</strong> &nbsp;|&nbsp; c/ Imp: <strong id="tot-${s}-imp">R$ 0,00</strong></div>
-  `;
-  precos[s].forEach(item=>{
-    const o=document.createElement('option');
-    o.value=JSON.stringify(item);
-    o.text=item.n+(item.v?' – R$ '+fmtN(item.v):'');
-    document.getElementById('sel-'+s).appendChild(o);
-  });
-});
-precos.extra.forEach(item=>{
-  const o=document.createElement('option');o.value=JSON.stringify(item);o.text=item.n;
-  document.getElementById('sel-extra').appendChild(o);
-});
+// ── HELPERS ──────────────────────────────────
+const fmtN = v => Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt  = v => 'R$ '+fmtN(v);
+const uid  = () => Math.random().toString(36).slice(2)+Date.now().toString(36);
+const gv   = id => { const e=document.getElementById(id); return e?e.value:''; };
+const sv   = (id,v) => { const e=document.getElementById(id); if(e) e.textContent=v; };
+const eh   = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+const fD   = s => { try{ return new Date(s+'T12:00:00').toLocaleDateString('pt-BR'); }catch{ return s||''; } };
+const safe = v => (isNaN(v)||!isFinite(v))?0:v;
 
-function fmtN(v){return Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
-function fmt(v){return 'R$ '+fmtN(v)}
-function uid(){return Date.now()+'_'+Math.random().toString(36).slice(2)}
-function gv(id){const e=document.getElementById(id);return e?e.value:''}
-function updOrc(v){document.getElementById('orcDisp').textContent='#'+String(v||1).padStart(3,'0')}
-function setDS(){
-  const d=new Date(gv('f-dia')+'T12:00:00');
-  const ds=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
-  document.getElementById('f-sem').value=ds[d.getDay()]||'';
+function fmtCep(el){ let v=el.value.replace(/\D/g,'').slice(0,8); if(v.length>5) v=v.slice(0,5)+'-'+v.slice(5); el.value=v; }
+function fmtDoc(el){
+  let v=el.value.replace(/\D/g,'');
+  if(v.length<=11){ v=v.slice(0,11); if(v.length>9) v=v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6,9)+'-'+v.slice(9); else if(v.length>6) v=v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6); else if(v.length>3) v=v.slice(0,3)+'.'+v.slice(3); }
+  else{ v=v.slice(0,14); if(v.length>12) v=v.slice(0,2)+'.'+v.slice(2,5)+'.'+v.slice(5,8)+'/'+v.slice(8,12)+'-'+v.slice(12); else if(v.length>8) v=v.slice(0,2)+'.'+v.slice(2,5)+'.'+v.slice(5,8)+'/'+v.slice(8); else if(v.length>5) v=v.slice(0,2)+'.'+v.slice(2,5)+'.'+v.slice(5); else if(v.length>2) v=v.slice(0,2)+'.'+v.slice(2); }
+  el.value=v;
 }
-function swTab(s,btn){
-  document.querySelectorAll('.tc').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  document.getElementById('tc-'+s).classList.add('active');btn.classList.add('active');
+async function buscaCEP(c,e,n,ci,st,br){
+  const cep=document.getElementById(c).value.replace(/\D/g,'');
+  if(cep.length!==8){document.getElementById(st).textContent='⚠️ CEP inválido';return;}
+  document.getElementById(st).textContent='🔍 Buscando...';
+  try{ const r=await fetch('https://viacep.com.br/ws/'+cep+'/json/'); const d=await r.json(); if(d.erro){document.getElementById(st).textContent='⚠️ CEP não encontrado';return;} document.getElementById(e).value=d.logradouro||''; document.getElementById(ci).value=(d.localidade||'')+(d.uf?' / '+d.uf:''); if(br&&document.getElementById(br)) document.getElementById(br).value=d.bairro||''; document.getElementById(st).textContent='✅ '+(d.bairro||'CEP encontrado'); document.getElementById(n).focus(); }
+  catch{ document.getElementById(st).textContent='⚠️ Erro ao buscar CEP'; }
 }
-function selItem(s,sel){if(!sel.value)return;const item=JSON.parse(sel.value);addRow(s,item.n,item.v,false);sel.value='';}
-function addCustom(s){addRow(s,'',0,true)}
-function addRow(s,name,val,custom){rows[s].push({id:uid(),name,val,qty:1,diaria:1,custom,marg:20});renderSec(s);calc();}
-function secTot(s){return rows[s].reduce((t,r)=>t+r.qty*r.val*r.diaria,0)}
+async function buscaCNPJ(){
+  const doc=gv('f-doc').replace(/\D/g,''); const st=document.getElementById('doc-st');
+  if(doc.length!==14){st.textContent=doc.length===11?'ℹ️ Apenas CNPJ':'⚠️ CNPJ inválido';return;}
+  st.textContent='🔍 Buscando...';
+  let d=null;
+  for(const url of ['https://brasilapi.com.br/api/cnpj/v1/'+doc,'https://publica.cnpj.ws/cnpj/'+doc]){
+    try{ const r=await fetch(url,{headers:{Accept:'application/json'}}); if(r.ok){d=await r.json();if(d&&(d.razao_social||d.nome))break;} }catch{}
+  }
+  if(!d){st.textContent='⚠️ Não encontrado. Preencha manualmente.';return;}
+  const razao=d.razao_social||d.nome||'', fantasia=d.nome_fantasia||d.alias||'';
+  if(razao) document.getElementById('f-cliente').value=razao;
+  const logr=d.logradouro||(d.estabelecimento&&d.estabelecimento.logradouro)||'';
+  const num=d.numero||(d.estabelecimento&&d.estabelecimento.numero)||'';
+  const comp=d.complemento||(d.estabelecimento&&d.estabelecimento.complemento)||'';
+  const mun=d.municipio||(d.estabelecimento&&d.estabelecimento.cidade&&d.estabelecimento.cidade.nome)||'';
+  const uf=d.uf||(d.estabelecimento&&d.estabelecimento.estado&&d.estabelecimento.estado.sigla)||'';
+  const cepR=d.cep||(d.estabelecimento&&d.estabelecimento.cep)||'';
+  if(logr) document.getElementById('f-end').value=logr;
+  if(num) document.getElementById('f-endnum').value=num+(comp?' / '+comp:'');
+  if(mun||uf) document.getElementById('f-cidade').value=(mun||'')+(uf?' / '+uf:'');
+  if(cepR){ const cn=cepR.replace(/\D/g,''); if(cn.length===8){document.getElementById('f-cep').value=cn.slice(0,5)+'-'+cn.slice(5); await buscaCEP('f-cep','f-end','f-endnum','f-cidade','cep-st','f-bairro');} }
+  st.textContent='✅ '+(fantasia||razao||'CNPJ encontrado');
+}
+function setDS(){ try{ const d=new Date(gv('f-dia')+'T12:00:00'); const ds=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado']; document.getElementById('f-sem').value=ds[d.getDay()]||''; }catch{} }
+function setDSFim(){ try{ const d=new Date(gv('f-dia-fim')+'T12:00:00'); const ds=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado']; document.getElementById('f-sem-fim').value=ds[d.getDay()]||''; }catch{} }
 
-function renderSec(s){
-  if(s==='extra'){renderExtra();return;}
-  const tbody=document.querySelector('#tbl-'+s+' tbody');
-  if(!tbody)return;
-  tbody.innerHTML='';
-  rows[s].forEach(r=>{
-    const tot=r.qty*r.val*r.diaria;
-    const tr=document.createElement('tr');
-    tr.innerHTML=`
-      <td><input type="number" value="${r.qty}" min="1" style="width:48px" onchange="upd('${s}','${r.id}','qty',this.value)"></td>
-      <td>${r.custom?`<input type="text" value="${eh(r.name)}" placeholder="Nome" style="min-width:190px" onchange="upd('${s}','${r.id}','name',this.value)"><span class="ctag">CUSTOM</span>`:`<span>${r.name}</span>`}</td>
-      <td><input type="number" value="${r.diaria}" min="1" style="width:48px" onchange="upd('${s}','${r.id}','diaria',this.value)"></td>
-      <td><input type="number" value="${r.val}" min="0" step="0.01" style="width:80px" onchange="upd('${s}','${r.id}','val',this.value)"></td>
-      <td style="font-weight:700">${fmt(tot)}</td>
-      <td style="color:#999;font-size:10px">${fmt(tot*(1+IMP))}</td>
-      <td><button class="btn-del" onclick="delRow('${s}','${r.id}')">✕</button></td>
-    `;
-    tbody.appendChild(tr);
-  });
-  document.getElementById('b-'+s).textContent=rows[s].length;
-  const t=secTot(s);
-  const tEl=document.getElementById('tot-'+s),tiEl=document.getElementById('tot-'+s+'-imp');
-  if(tEl)tEl.textContent=fmt(t);if(tiEl)tiEl.textContent=fmt(t*(1+IMP));
+function getDiasEvento(){
+  const ini=gv('f-dia'), fim=gv('f-dia-fim');
+  if(!ini) return 1;
+  const d1=new Date(ini+'T12:00:00'), d2=fim?new Date(fim+'T12:00:00'):d1;
+  const diff=Math.round((d2-d1)/(1000*60*60*24));
+  return Math.max(1,diff+1);
 }
-
-function renderExtra(){
-  const tbody=document.querySelector('#tbl-extra tbody');
-  tbody.innerHTML='';
-  rows.extra.forEach(r=>{
-    const custo=r.qty*r.val*r.diaria,cob=custo*(1+r.marg/100);
-    const tr=document.createElement('tr');
-    tr.innerHTML=`
-      <td><input type="number" value="${r.qty}" min="1" style="width:44px" onchange="upd('extra','${r.id}','qty',this.value)"></td>
-      <td>${r.custom?`<input type="text" value="${eh(r.name)}" placeholder="Descrição" style="min-width:160px" onchange="upd('extra','${r.id}','name',this.value)"><span class="ctag">CUSTOM</span>`:`<span>${r.name}</span>`}</td>
-      <td><input type="number" value="${r.diaria}" min="1" style="width:44px" onchange="upd('extra','${r.id}','diaria',this.value)"></td>
-      <td><input type="number" value="${r.val}" min="0" step="0.01" style="width:75px" onchange="upd('extra','${r.id}','val',this.value)"></td>
-      <td style="color:#e53935;font-weight:700">${fmt(custo)}</td>
-      <td><input type="number" value="${r.marg}" min="0" step="1" style="width:52px" onchange="upd('extra','${r.id}','marg',this.value)">%</td>
-      <td style="color:#66bb6a;font-weight:700">${fmt(cob)}</td>
-      <td><button class="btn-del" onclick="delRow('extra','${r.id}')">✕</button></td>
-    `;
-    tbody.appendChild(tr);
-  });
-  document.getElementById('b-extra').textContent=rows.extra.length;
-  const custo=rows.extra.reduce((s,r)=>s+r.qty*r.val*r.diaria,0);
-  const cob=rows.extra.reduce((s,r)=>s+r.qty*r.val*r.diaria*(1+r.marg/100),0);
-  document.getElementById('tot-extra').textContent=fmt(custo);
-  document.getElementById('tot-extra-cob').textContent=fmt(cob);
+function getDiariasEquip(){
+  const dias=getDiasEvento();
+  return dias===1?1:1+(dias-1)*0.5;
 }
-
-function upd(s,id,field,val){
-  const r=rows[s].find(x=>x.id===id);if(!r)return;
-  if(['qty','diaria','val','marg'].includes(field))r[field]=parseFloat(val)||0;else r[field]=val;
-  renderSec(s);calc();
-}
-function delRow(s,id){rows[s]=rows[s].filter(x=>x.id!==id);renderSec(s);calc();}
-function eh(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}
-
-function calc(){
-  ['som','video','luz','estrutura','servico','logistica'].forEach(s=>{
-    const t=secTot(s);
-    const el=document.getElementById('r-'+s);if(el)el.textContent=fmt(t);
-    const tEl=document.getElementById('tot-'+s),tiEl=document.getElementById('tot-'+s+'-imp');
-    if(tEl)tEl.textContent=fmt(t);if(tiEl)tiEl.textContent=fmt(t*(1+IMP));
-  });
-  const bruto=['som','video','luz','estrutura','servico','logistica'].reduce((t,s)=>t+secTot(s),0);
-  const imp=bruto*IMP,cImp=bruto+imp;
-  const dp=parseFloat(gv('descPct'))||0;
-  const dv=cImp*(dp/100),dvSI=bruto*(dp/100);
-  const vdsi=bruto-dvSI,vdci=cImp-dv;
-  const xc=rows.extra.reduce((s,r)=>s+r.qty*r.val*r.diaria,0);
-  const log=secTot('logistica');
-  const msd=bruto-imp-xc-log;
-  const mcd=vdci-imp-(dv*IMP)-xc-log;
-  const st=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
-  st('r-bruto',fmt(bruto));st('r-imp',fmt(imp));st('r-cimp',fmt(cImp));
-  st('r-dv','-'+fmt(dv));st('r-vdsi',fmt(vdsi));st('r-vdci',fmt(vdci));
-  st('r-extra',fmt(xc));st('r-total',fmt(vdci));
-  st('m-sd',fmt(msd));st('m-cd',fmt(mcd));
-  renderExtra();
-}
-
-function limpar(){
-  if(!confirm('Limpar todos os dados?'))return;
-  secs.forEach(s=>{rows[s]=[];renderSec(s);});
-  ['f-cliente','f-local','f-end','f-tipo','f-cont','f-tel','f-pub','f-sem','f-resp','f-telr','f-obs'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
-  ['f-dia','f-mont','f-desm','f-val','f-dataorc'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
-  document.getElementById('f-cons').value='';
-  document.getElementById('descPct').value=0;document.getElementById('valorLiq').value='';
-  document.getElementById('f-pgto').value='50% na contratação;\n50% até 03 dias antes da montagem.';
+function calcDiariasAuto(){
+  const dias=getDiasEvento(), dEquip=getDiariasEquip();
+  const el=document.getElementById('f-dias-ev'); if(el) el.value=dias+(dias===1?' dia':' dias');
+  const el2=document.getElementById('f-diarias-equip'); if(el2) el2.value=dEquip.toFixed(1)+(dEquip===1?' diária':' diárias');
+  const SECS_EQUIP=['som','video','luz','estrutura','extra'];
+  SECS_EQUIP.forEach(s=>{ Object.values(state[s].rows).forEach(arr=>{ arr.forEach(r=>{ r.diaria=dEquip; }); }); });
+  Object.values(state['logistica'].rows).forEach(arr=>{ arr.forEach(r=>{ r.diaria=1; }); });
+  Object.values(state['servico'].rows).forEach(arr=>{ arr.forEach(r=>{ r.diaria=dias; }); });
+  SECS.forEach(s=>{ try{ renderRows(s); }catch{} });
   calc();
 }
 
-// === TIPO MODAL ===
-function abrirTipoModal(){document.getElementById('typeModal').classList.add('open')}
-function fecharTipoModal(){document.getElementById('typeModal').classList.remove('open')}
-function selTipo(t){
-  tipoSelecionado=t;
-  document.getElementById('card-det').classList.toggle('selected',t==='detalhado');
-  document.getElementById('card-res').classList.toggle('selected',t==='resumido');
+// ── ABAS PRINCIPAIS ──────────────────────────
+function buildTabs(){
+  const W=document.getElementById('tabs-wrap'), P=document.getElementById('panes-wrap');
+  W.innerHTML=''; P.innerHTML='';
+  SECS.forEach((s,i)=>{
+    const cnt=Object.values(state[s].rows).reduce((t,a)=>t+a.length,0);
+    const btn=document.createElement('button');
+    btn.className='tbtn'+(i===0?' active':''); btn.id='stab-'+s;
+    btn.innerHTML=SEC_ICO[s]+' '+SEC_LBL[s]+' <span class="badge" id="sbadge-'+s+'">'+cnt+'</span>';
+    btn.addEventListener('click',()=>swTab(s)); W.appendChild(btn);
+    const pane=document.createElement('div');
+    pane.className='tpane'+(i===0?' active':''); pane.id='spane-'+s;
+    P.appendChild(pane);
+    buildSecPane(s);
+  });
 }
 
-// === PDF BUILD ===
+function swTab(s){
+  document.querySelectorAll('.tbtn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tpane').forEach(p=>p.classList.remove('active'));
+  document.getElementById('stab-'+s).classList.add('active');
+  document.getElementById('spane-'+s).classList.add('active');
+}
+
+// ── SEÇÃO COM SUB-ABAS AMBIENTE ───────────────
+function buildSecPane(s){
+  const pane=document.getElementById('spane-'+s); if(!pane) return;
+  let info='';
+  if(s==='logistica') info=`<div style="background:#e8f4fd;border:1px solid #90caf9;border-radius:4px;padding:7px 11px;font-size:10px;color:#1565c0;margin-bottom:7px"><b>🚚 Logística</b> — No PDF aparece como linha única "Logística – R$ X.xxx,xx" sem detalhar itens.</div>`;
+  if(s==='extra') info=`<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:4px;padding:7px 11px;font-size:10px;color:#7a5a00;margin-bottom:7px"><b>💰 Custos Extra</b> — Uso interno. Não aparece no PDF do cliente.</div>`;
+  pane.innerHTML=info+`<div class="amb-bar" id="ambbar-${s}"></div><div id="ambcontent-${s}"></div>`;
+  if(s==='logistica'){
+    pane.innerHTML+=`<div style="margin-top:11px"><label>Texto de serviços inclusos no PDF (um por linha)</label><textarea id="f-svinc" style="margin-top:4px;background:#f0f7ff;border-color:#90caf9;min-height:60px">Montagem\nDesmontagem\nTransporte</textarea></div>`;
+    setTimeout(()=>{ const ta=document.getElementById('f-svinc'); if(ta) ta.value='Montagem\nDesmontagem\nTransporte'; },10);
+  }
+  renderAmbBar(s); renderAmbContent(s);
+}
+
+function renderAmbBar(s){
+  const bar=document.getElementById('ambbar-'+s); if(!bar) return;
+  const st=state[s];
+  bar.innerHTML='<label style="margin-right:4px">Ambiente:</label>';
+  st.ambientes.forEach(a=>{
+    const btn=document.createElement('button');
+    btn.className='abtn'+(a.id===st.ambAtiva?' active':'');
+    btn.textContent=a.nome; btn.dataset.ambid=a.id;
+    btn.addEventListener('click',()=>{ st.ambAtiva=a.id; renderAmbBar(s); renderAmbContent(s); });
+    if(a.id!=='default'&&st.ambientes.length>1){
+      const d=document.createElement('button');
+      d.className='abtn-del'; d.textContent='✕'; d.title='Remover este ambiente';
+      d.addEventListener('click',e=>{ e.stopPropagation(); removerAmb(s,a.id); });
+      const wrap=document.createElement('span'); wrap.style.cssText='display:inline-flex;align-items:center;gap:1px';
+      wrap.appendChild(btn); wrap.appendChild(d); bar.appendChild(wrap);
+    } else { bar.appendChild(btn); }
+  });
+  const addBtn=document.createElement('button');
+  addBtn.className='abtn-add'; addBtn.textContent='+ Ambiente';
+  addBtn.addEventListener('click',()=>addAmb(s)); bar.appendChild(addBtn);
+  const ativo=st.ambientes.find(a=>a.id===st.ambAtiva);
+  if(ativo&&ativo.id!=='default'){
+    const inp=document.createElement('input');
+    inp.type='text'; inp.value=ativo.nome; inp.placeholder='Nome do ambiente';
+    inp.style.cssText='max-width:160px;margin-left:8px;font-size:11px;padding:3px 7px;border:1px solid #90caf9;background:#f0f7ff;border-radius:4px;';
+    inp.addEventListener('input',()=>{ ativo.nome=inp.value; bar.querySelectorAll('.abtn').forEach(b=>{if(b.dataset.ambid===ativo.id) b.textContent=inp.value||'Ambiente';}); calc(); });
+    inp.addEventListener('blur',()=>{ renderAmbBar(s); });
+    bar.appendChild(inp);
+  }
+}
+
+function addAmb(s){
+  const st=state[s], id=uid(), num=st.ambientes.length;
+  st.ambientes.push({id,nome:'Ambiente '+num}); st.rows[id]=[];
+  st.ambAtiva=id; renderAmbBar(s); renderAmbContent(s);
+}
+function removerAmb(s,id){
+  const st=state[s];
+  if(!confirm('Remover este ambiente e seus itens?')) return;
+  st.ambientes=st.ambientes.filter(a=>a.id!==id); delete st.rows[id];
+  if(st.ambAtiva===id) st.ambAtiva=st.ambientes[0].id;
+  renderAmbBar(s); renderAmbContent(s); calc();
+}
+
+function renderAmbContent(s){
+  const el=document.getElementById('ambcontent-'+s); if(!el) return;
+  const st=state[s], aid=st.ambAtiva;
+  if(!st.rows[aid]) st.rows[aid]=[];
+
+  let addBar='';
+  if(s==='extra'){
+    addBar=`<div class="add-bar"><div class="f"><label>Adicionar</label><select id="sel-${s}" onchange="selItem('${s}',this)"><option value="">— Selecione —</option></select></div><button class="btn btn-o btn-sm" onclick="addCustom('${s}')">+ Personalizado</button></div>
+    <div class="stot">Custo: <b id="tot-extra">R$ 0,00</b> &nbsp;|&nbsp; Cobrado: <b id="tot-extra-cob">R$ 0,00</b></div>`;
+  } else {
+    addBar=`<div class="add-bar"><div class="f"><label>Buscar item</label><select id="sel-${s}" onchange="selItem('${s}',this)"><option value="">— Selecione da tabela —</option></select></div><button class="btn btn-o btn-sm" onclick="addCustom('${s}')">+ Personalizado</button></div>
+    <div class="stot">Total ${SEC_LBL[s]}: <b id="tot-${s}">R$ 0,00</b> &nbsp;|&nbsp; c/Imp: <b id="tot-${s}-imp">R$ 0,00</b></div>`;
+  }
+
+  const thead = s==='logistica'
+    ? `<tr><th style="width:22px"></th><th>Qtd</th><th colspan="2">Descrição</th><th>Valor Unit.</th><th>Total</th><th>c/Imp</th><th></th></tr>`
+    : `<tr><th style="width:22px"></th><th>Qtd</th><th>Descrição</th><th>Diária</th><th>Valor Unit.</th><th>Total</th><th>c/Imp</th><th></th></tr>`;
+  el.innerHTML=`<table class="it" id="tbl-${s}"><thead>${thead}</thead><tbody id="tbody-${s}"></tbody></table>${addBar}`;
+
+  setTimeout(()=>{
+    const sel=document.getElementById('sel-'+s);
+    if(sel&&PRECOS[s]){ PRECOS[s].forEach(it=>{ const o=document.createElement('option'); o.value=JSON.stringify(it); o.text=it.n+(it.v?' – R$ '+fmtN(it.v):''); sel.appendChild(o); }); }
+    renderRows(s);
+  },0);
+}
+
+// ── MOVER ITENS ──────────────────────────────
+function moveRow(s, aid, id, dir){
+  const rows = state[s].rows[aid];
+  const i = rows.findIndex(r => r.id === id);
+  if(i < 0) return;
+  if(dir === -1 && i === 0) return;
+  if(dir === 1 && i === rows.length - 1) return;
+  const [item] = rows.splice(i, 1);
+  rows.splice(i + dir, 0, item);
+  renderRows(s);
+  calc();
+}
+
+function initDrag(tbody, s, aid){ /* não usado */ }
+
+// ── ROWS ─────────────────────────────────────
+function selItem(s,sel){ if(!sel.value) return; const it=JSON.parse(sel.value); addRow(s,it.n,it.v,false); sel.value=''; }
+function addCustom(s){ addRow(s,'',0,true); }
+function addRow(s,name,val,custom){
+  const st=state[s], aid=st.ambAtiva;
+  if(!st.rows[aid]) st.rows[aid]=[];
+  const painel=s==='video'&&isPainel(name), palco=s==='estrutura'&&isPalco(name);
+  const dAuto=s==='servico'?getDiasEvento():s==='logistica'?1:getDiariasEquip();
+  st.rows[aid].push({id:uid(),name,val,qty:1,diaria:dAuto,custom,painel,
+    larg:painel?3:palco?4:null,alt:painel?2:null,prof:palco?2:null,elev:painel?0:null,
+    elObj:palco?ELEV[0]:null,palco,carp:palco?false:null,carpT:palco?'novo':null,carpC:palco?'':null,marg:20});
+  renderRows(s); calc();
+}
+
+function rowTot(r){
+  if(r.painel) return safe(r.larg*r.alt*r.val*r.diaria*r.qty);
+  if(r.palco||isPalco(r.name)) return safe(calcPalco(r).total*r.diaria*r.qty);
+  return safe(r.qty*r.val*r.diaria);
+}
+function secTotAll(s){ return Object.values(state[s].rows).reduce((t,arr)=>t+arr.reduce((a,r)=>a+rowTot(r),0),0); }
+
+function renderRows(s){
+  const st=state[s], aid=st.ambAtiva, rows=st.rows[aid]||[];
+  const tbody=document.getElementById('tbody-'+s); if(!tbody) return;
+  tbody.innerHTML='';
+  rows.forEach(r=>{
+    const isPal=r.palco||isPalco(r.name), tot=rowTot(r);
+    const tr=document.createElement('tr');
+    tr.dataset.rowid=r.id;
+    const handle=`<td style="white-space:nowrap"><button class="bmov" onclick="moveRow('${s}','${aid}','${r.id}',-1)">▲</button><button class="bmov" onclick="moveRow('${s}','${aid}','${r.id}',1)">▼</button></td>`;
+
+    if(r.painel){
+      const m2=safe(r.larg*r.alt).toFixed(2), pxW=Math.round(r.larg*getPx(r.name)), pxH=Math.round(r.alt*getPx(r.name));
+      tr.innerHTML=handle+`<td><input type="number" value="${r.qty}" min="1" style="width:42px" onchange="updRow('${s}','${aid}','${r.id}','qty',this.value)"></td>
+        <td><div style="font-size:11px;font-weight:600;margin-bottom:2px">${r.name}</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;font-size:10px">
+          Larg:<input type="number" value="${r.larg}" min="0.1" step="0.1" style="width:52px" onchange="updRow('${s}','${aid}','${r.id}','larg',this.value)">m
+          Alt:<input type="number" value="${r.alt}" min="0.1" step="0.1" style="width:52px" onchange="updRow('${s}','${aid}','${r.id}','alt',this.value)">m
+          Elev:<input type="number" value="${r.elev}" min="0" step="0.1" style="width:48px" onchange="updRow('${s}','${aid}','${r.id}','elev',this.value)">m
+          <span style="color:var(--R);font-weight:700">${m2}m²</span><span style="color:#555">${pxW}×${pxH}px</span>
+        </div></td>
+        <td><input type="number" value="${r.diaria}" min="0.5" step="0.5" style="width:48px" onchange="updRow('${s}','${aid}','${r.id}','diaria',this.value)"></td>
+        <td>${fmt(r.val)}<br><span style="font-size:9px;color:#888">/m²</span></td>
+        <td style="font-weight:700">${fmt(tot)}</td><td style="color:#999;font-size:10px">${fmt(tot*(1+IMP))}</td>
+        <td><button class="bdel" onclick="delRow('${s}','${aid}','${r.id}')">✕</button></td>`;
+    } else if(isPal){
+      const c=calcPalco(r), eOpts=ELEV.map(e=>`<option value="${e.l}"${r.elObj&&r.elObj.l===e.l?' selected':''}>` +e.l+`</option>`).join('');
+      tr.innerHTML=handle+`<td><input type="number" value="${r.qty}" min="1" style="width:42px" onchange="updRow('${s}','${aid}','${r.id}','qty',this.value)"></td>
+        <td><div style="font-size:11px;font-weight:700;margin-bottom:3px">🎪 Palco</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;font-size:10px;margin-bottom:3px">
+          Larg:<input type="number" value="${r.larg}" min="0.5" step="0.5" style="width:52px" onchange="updRow('${s}','${aid}','${r.id}','larg',this.value)">m
+          Prof:<input type="number" value="${r.prof}" min="0.5" step="0.5" style="width:52px" onchange="updRow('${s}','${aid}','${r.id}','prof',this.value)">m
+          Elev:<select style="width:70px" onchange="updRow('${s}','${aid}','${r.id}','elObj',this.value)">${eOpts}</select>
+          <span style="color:var(--R);font-weight:700">${c.area.toFixed(2)}m² → ${c.np} prat.</span>
+        </div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;font-size:10px">
+          Carpete:<select style="width:90px" onchange="updRow('${s}','${aid}','${r.id}','carp',this.value)">
+            <option value="false"${!r.carp?' selected':''}>Sem carpete</option>
+            <option value="true"${r.carp?' selected':''}>Com carpete</option>
+          </select>
+          ${r.carp?`<select style="width:70px" onchange="updRow('${s}','${aid}','${r.id}','carpT',this.value)"><option value="novo"${r.carpT==='novo'?' selected':''}>Novo</option><option value="usado"${r.carpT==='usado'?' selected':''}>Usado</option></select>${r.carpT==='novo'?`<input type="text" value="${eh(r.carpC)}" placeholder="Cor" style="width:75px" onchange="updRow('${s}','${aid}','${r.id}','carpC',this.value)">`:''}<span>Carpete: ${fmt(c.tc)}</span>`:''}
+        </div></td>
+        <td><input type="number" value="${r.diaria}" min="0.5" step="0.5" style="width:48px" onchange="updRow('${s}','${aid}','${r.id}','diaria',this.value)"></td>
+        <td style="font-size:10px;color:#777">Auto</td>
+        <td style="font-weight:700">${fmt(tot)}</td><td style="color:#999;font-size:10px">${fmt(tot*(1+IMP))}</td>
+        <td><button class="bdel" onclick="delRow('${s}','${aid}','${r.id}')">✕</button></td>`;
+    } else if(s==='extra'){
+      const custo=r.qty*r.val*r.diaria, cob=custo*(1+r.marg/100);
+      tr.innerHTML=handle+`<td><input type="number" value="${r.qty}" min="1" style="width:42px" onchange="updRow('${s}','${aid}','${r.id}','qty',this.value)"></td>
+        <td>${r.custom?`<input type="text" value="${eh(r.name)}" placeholder="Descrição" style="min-width:145px" onchange="updRow('${s}','${aid}','${r.id}','name',this.value)"><span class="ctag">CUSTOM</span>`:`<span>${r.name}</span>`}</td>
+        <td><input type="number" value="${r.diaria}" min="0.5" step="0.5" style="width:48px" onchange="updRow('${s}','${aid}','${r.id}','diaria',this.value)"></td>
+        <td><input type="number" value="${r.val}" min="0" step="0.01" style="width:73px" onchange="updRow('${s}','${aid}','${r.id}','val',this.value)"></td>
+        <td style="color:#e53935;font-weight:700">${fmt(custo)}</td>
+        <td><input type="number" value="${r.marg}" min="0" step="1" style="width:48px" onchange="updRow('${s}','${aid}','${r.id}','marg',this.value)">%</td>
+        <td style="color:#66bb6a;font-weight:700">${fmt(cob)}</td>
+        <td><button class="bdel" onclick="delRow('${s}','${aid}','${r.id}')">✕</button></td>`;
+    } else if(s==='logistica'){
+      tr.innerHTML=handle+`<td><input type="number" value="${r.qty}" min="1" style="width:46px" onchange="updRow('${s}','${aid}','${r.id}','qty',this.value)"></td>
+        <td colspan="2">${r.custom?`<input type="text" value="${eh(r.name)}" placeholder="Nome" style="min-width:220px" onchange="updRow('${s}','${aid}','${r.id}','name',this.value)"><span class="ctag">CUSTOM</span>`:`<span>${r.name}</span>`}</td>
+        <td><input type="number" value="${r.val}" min="0" step="0.01" style="width:76px" onchange="updRow('${s}','${aid}','${r.id}','val',this.value)"></td>
+        <td style="font-weight:700">${fmt(tot)}</td><td style="color:#999;font-size:10px">${fmt(tot*(1+IMP))}</td>
+        <td><button class="bdel" onclick="delRow('${s}','${aid}','${r.id}')">✕</button></td>`;
+    } else {
+      tr.innerHTML=handle+`<td><input type="number" value="${r.qty}" min="1" style="width:46px" onchange="updRow('${s}','${aid}','${r.id}','qty',this.value)"></td>
+        <td>${r.custom?`<input type="text" value="${eh(r.name)}" placeholder="Nome" style="min-width:175px" onchange="updRow('${s}','${aid}','${r.id}','name',this.value)"><span class="ctag">CUSTOM</span>`:`<span>${r.name}</span>`}</td>
+        <td><input type="number" value="${r.diaria}" min="0.5" step="${s==='servico'?1:0.5}" style="width:48px" onchange="updRow('${s}','${aid}','${r.id}','diaria',this.value)"></td>
+        <td><input type="number" value="${r.val}" min="0" step="0.01" style="width:76px" onchange="updRow('${s}','${aid}','${r.id}','val',this.value)"></td>
+        <td style="font-weight:700">${fmt(tot)}</td><td style="color:#999;font-size:10px">${fmt(tot*(1+IMP))}</td>
+        <td><button class="bdel" onclick="delRow('${s}','${aid}','${r.id}')">✕</button></td>`;
+    }
+    tbody.appendChild(tr);
+  });
+
+  // Inicializar drag após renderizar (não usado mais)
+  initDrag(tbody, s, aid);
+
+  const cnt=Object.values(state[s].rows).reduce((t,a)=>t+a.length,0);
+  const badgeEl=document.getElementById('sbadge-'+s); if(badgeEl) badgeEl.textContent=cnt;
+  const totAll=secTotAll(s);
+  if(s==='extra'){
+    const custo=rows.reduce((t,r)=>t+r.qty*r.val*r.diaria,0);
+    const cob=rows.reduce((t,r)=>t+r.qty*r.val*r.diaria*(1+r.marg/100),0);
+    sv('tot-extra',fmt(custo)); sv('tot-extra-cob',fmt(cob));
+  } else {
+    const tEl=document.getElementById('tot-'+s), tiEl=document.getElementById('tot-'+s+'-imp');
+    if(tEl) tEl.textContent=fmt(totAll); if(tiEl) tiEl.textContent=fmt(totAll*(1+IMP));
+  }
+}
+
+function updRow(s,aid,id,field,val){
+  const arr=state[s].rows[aid]; if(!arr) return;
+  const r=arr.find(x=>x.id===id); if(!r) return;
+  if(['qty','val','marg','larg','alt','elev','prof'].includes(field)) r[field]=parseFloat(val)||0;
+  else if(field==='diaria') r[field]=parseFloat(val)||0.5;
+  else if(field==='elObj') r.elObj=ELEV.find(e=>e.l===val)||ELEV[0];
+  else if(field==='carp') r.carp=(val==='true');
+  else r[field]=val;
+  if(field==='name'&&s==='video'){r.painel=isPainel(val);if(r.painel&&r.larg==null){r.larg=3;r.alt=2;r.elev=0;}}
+  if(field==='name'&&s==='estrutura'){r.palco=isPalco(val);if(r.palco){r.larg=4;r.prof=2;r.elObj=ELEV[0];r.carp=false;r.carpT='novo';r.carpC='';}}
+  renderRows(s); calc();
+}
+function delRow(s,aid,id){
+  const arr=state[s].rows[aid]; if(!arr) return;
+  state[s].rows[aid]=arr.filter(x=>x.id!==id); renderRows(s); calc();
+}
+
+// ── CÁLCULO ───────────────────────────────────
+function syncDesc(from){
+  const bruto=['som','video','luz','estrutura','servico','logistica'].reduce((t,s)=>t+secTotAll(s),0);
+  const cImp=bruto*(1+IMP);
+  if(from==='pct') document.getElementById('desc-rs').value=(cImp*(parseFloat(gv('desc-pct'))||0)/100).toFixed(2);
+  else document.getElementById('desc-pct').value=(cImp>0?((parseFloat(gv('desc-rs'))||0)/cImp*100):0).toFixed(2);
+  calc();
+}
+
+function calc(){
+  const MAIN=['som','video','luz','estrutura','servico','logistica'];
+  MAIN.forEach(s=>{ const t=secTotAll(s); sv('r-'+s,fmt(t)); });
+  const bruto=MAIN.reduce((t,s)=>t+secTotAll(s),0);
+  const imp=bruto*IMP, cImp=bruto+imp;
+  const drs=parseFloat(gv('desc-rs'))||0, dpct=parseFloat(gv('desc-pct'))||0;
+  const dv=safe(drs>0?drs:cImp*(dpct/100));
+  const vdsi=safe(cImp>0?bruto-bruto*(dv/cImp):bruto), vdci=safe(cImp-dv);
+  const xc=safe(Object.values(state.extra.rows).reduce((t,arr)=>t+arr.reduce((a,r)=>a+r.qty*r.val*r.diaria,0),0));
+  const srv=secTotAll('servico'), log=secTotAll('logistica');
+  const descSImp=safe(cImp>0?bruto*(dv/cImp):0);
+  const msd=safe(bruto-descSImp-srv-log-xc);
+  const msdPct=safe(bruto>0?(msd/bruto*100):0);
+  const mcd=safe(bruto-imp-descSImp-srv-log-xc);
+  const mcdPct=safe(cImp>0?(mcd/cImp*100):0);
+  const vl=parseFloat(gv('val-liq'))||0, total=safe(vl>0?vl:vdci);
+  sv('r-bruto',fmt(bruto)); sv('r-imp',fmt(imp)); sv('r-cimp',fmt(cImp));
+  sv('r-dv','-'+fmt(dv)); sv('r-vdsi',fmt(vdsi)); sv('r-vdci',fmt(vdci)); sv('r-total',fmt(total));
+  sv('m-sd',fmt(msd)); sv('m-cd',fmt(mcd));
+  sv('m-sd-pct',fmtN(msdPct)+'%'); sv('m-cd-pct',fmtN(mcdPct)+'%');
+  const dl=document.getElementById('desc-label');
+  if(dl) dl.textContent=dv>0?'Desconto: -'+fmt(dv):(vl>0?'Valor ajustado manualmente':'');
+}
+
+// ── SALVAR / CARREGAR ────────────────────────
+const FORM_IDS=['f-num','f-data','f-val','f-cons','f-cliente','f-doc','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade',
+  'f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev',
+  'f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dd','f-hd',
+  'f-pub','f-obs','f-pgto','f-svinc','desc-pct','desc-rs','val-liq'];
+
+function getForm(){ const o={}; FORM_IDS.forEach(id=>{ const e=document.getElementById(id); if(e) o[id]=e.value; }); return o; }
+function setForm(f){ Object.entries(f).forEach(([id,v])=>{ const e=document.getElementById(id); if(e) e.value=v; }); sv('orc-disp',f['f-num']||'—'); }
+function nomeArq(ext){ return (gv('f-num')||'orc').trim()+' - '+(gv('f-cliente')||'cliente').trim()+'.'+ext; }
+
+function salvar(){
+  const data={form:getForm(),state};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=nomeArq('json'); a.click(); URL.revokeObjectURL(a.href);
+}
+function carregar(input){
+  const file=input.files[0]; if(!file) return;
+  const fr=new FileReader();
+  fr.onload=e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      if(data.state){ SECS.forEach(s=>{ if(data.state[s]){ state[s].ambientes=data.state[s].ambientes||[{id:'default',nome:'Geral'}]; state[s].ambAtiva=data.state[s].ambAtiva||'default'; state[s].rows=data.state[s].rows||{default:[]}; if(!state[s].rows[state[s].ambAtiva]) state[s].rows[state[s].ambAtiva]=[]; } }); }
+      if(data.form) setForm(data.form);
+      buildTabs(); calc(); alert('✅ Orçamento carregado!');
+    }catch(err){ alert('⚠️ Arquivo inválido: '+err.message); }
+  };
+  fr.readAsText(file); input.value='';
+}
+function limpar(){
+  if(!confirm('Limpar todos os dados?')) return;
+  SECS.forEach(s=>{ state[s]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{default:[]}}; });
+  FORM_IDS.filter(id=>!['desc-pct','desc-rs','val-liq','f-pgto','f-svinc'].includes(id)).forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+  document.getElementById('f-cons').value='';
+  document.getElementById('desc-pct').value=0; document.getElementById('desc-rs').value=0;
+  document.getElementById('val-liq').value='';
+  document.getElementById('f-pgto').value='50% na contratação;\n50% até 03 dias antes da montagem.';
+  ['cep-st','doc-st','cep-ev-st'].forEach(id=>{ const e=document.getElementById(id); if(e) e.textContent=''; });
+  sv('orc-disp','—'); buildTabs(); calc();
+}
+
+// ── PDF ───────────────────────────────────────
+function abrirTipo(){ document.getElementById('tipo-modal').classList.add('open'); }
+function selTipo(t){ tipoAtual=t; document.getElementById('card-det').classList.toggle('sel',t==='det'); document.getElementById('card-res').classList.toggle('sel',t==='res'); }
+function selImp(t){ impAtual=t; document.getElementById('ibtn-cimp').classList.toggle('sel',t==='cimp'); document.getElementById('ibtn-simp').classList.toggle('sel',t==='simp'); }
+function getSvinc(){ const e=document.getElementById('f-svinc'); return e?e.value:''; }
+
+// Fator multiplicador para valores no PDF
+// cimp: multiplica tudo por (1+IMP) → valor já inclui imposto e soma = total c/imp
+// simp: mantém valores sem imposto
+function pdfFator(){ return impAtual==='cimp'?(1+IMP):1; }
+
+function buildDesc(r){
+  const isPal=r.palco||isPalco(r.name); let d=r.name||'—';
+  if(r.painel){ const pxW=Math.round(r.larg*getPx(r.name)),pxH=Math.round(r.alt*getPx(r.name)); d+=` ${Number(r.larg).toFixed(2)}×${Number(r.alt).toFixed(2)}m`; if(r.elev>0) d+=` – Elevação: ${Number(r.elev).toFixed(2)}m`; d+=`<br><span style="font-size:7.5px;color:#888">Resolução: ${pxW}×${pxH}px</span>`; }
+  else if(isPal){ d=`Palco ${Number(r.larg).toFixed(2)}×${Number(r.prof).toFixed(2)}m – Elevação: ${r.elObj?r.elObj.l:'—'}`; if(r.carp) d+=`<br><span style="font-size:7.5px;color:#888">Carpete ${r.carpT==='novo'?'Novo':'Usado'}${r.carpC?' – '+r.carpC:''}</span>`; }
+  return d;
+}
+
 function buildPDF(tipo){
-  const fD=s=>{if(!s)return'—';return new Date(s+'T12:00:00').toLocaleDateString('pt-BR')};
-  const fDT=s=>{if(!s)return'ao Final do evento';const d=new Date(s);return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})};
-  const orcN=gv('orcNum')||'1';
-  const year=new Date().getFullYear();
-  const orcFull=year+'00'+String(orcN).padStart(2,'0');
-  const dataorc=gv('f-dataorc')?fD(gv('f-dataorc')):new Date().toLocaleDateString('pt-BR');
-  const dp=parseFloat(gv('descPct'))||0;
-  const vl=parseFloat(gv('valorLiq'))||0;
+  const F = pdfFator(); // fator de imposto para valores no PDF
+  const orcN=gv('f-num')||'—';
+  const dataorc=gv('f-data')?fD(gv('f-data')):new Date().toLocaleDateString('pt-BR');
+  const drs=parseFloat(gv('desc-rs'))||0, dpct=parseFloat(gv('desc-pct'))||0;
+  const bruto=['som','video','luz','estrutura','servico','logistica'].reduce((t,s)=>t+secTotAll(s),0);
+  const imp=bruto*IMP, cImp=bruto+imp;
+  const dv=drs>0?drs:cImp*(dpct/100);
+  const vl=parseFloat(gv('val-liq'))||0;
+  // Total final no rodapé do PDF
+  const totalCImp=vl>0?vl:(cImp-dv);
+  const totalSImp=vl>0?vl/( 1+IMP):(bruto-bruto*(dv/cImp));
+  const totalFinal = impAtual==='cimp' ? totalCImp : totalSImp;
+  // Desconto proporcional nos valores
+  const descFrac = cImp>0 ? dv/cImp : 0; // fração de desconto sobre o total c/imp
 
-  // Serviço = servico + logistica unificados
-  const totSom=secTot('som'),totVid=secTot('video'),totLuz=secTot('luz');
-  const totEst=secTot('estrutura'),totServ=secTot('servico')+secTot('logistica');
-  const bruto=totSom+totVid+totLuz+totEst+totServ;
-  const imp=bruto*IMP,cImp=bruto+imp;
-  const dv=cImp*(dp/100);
-  const totalFinal=vl>0?vl:(cImp-dv);
-  const descVal=vl>0?(cImp-vl):dv;
+  const incLines=getSvinc().split('\n').map(l=>l.trim()).filter(Boolean);
+  const endCli=[gv('f-end'),gv('f-endnum'),gv('f-bairro'),gv('f-cidade')].filter(Boolean).join(', ');
+  const endEv=[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
+  const dIni=gv('f-dia'), dFim=gv('f-dia-fim');
+  let horEv=fD(dIni);
+  if(gv('f-sem')) horEv+=' ('+gv('f-sem')+')';
+  if(dFim&&dFim!==dIni){ horEv+=' a '+fD(dFim); if(gv('f-sem-fim')) horEv+=' ('+gv('f-sem-fim')+')'; }
+  if(gv('f-hi')) horEv+=' – Início: '+gv('f-hi'); if(gv('f-hf')) horEv+=' Fim: '+gv('f-hf');
+  const diasEvStr=getDiasEvento(); if(diasEvStr>1) horEv+=' ('+diasEvStr+' dias)';
+  let mStr=fD(gv('f-dm')); if(gv('f-hm')) mStr+=' às '+gv('f-hm');
+  let dStr=fD(gv('f-dd')); if(gv('f-hd')) dStr+=' às '+gv('f-hd');
 
-  function hdr(full){
-    return `<div class="ph">
-      <div class="ph-info">
-        <h2>Crazy Som</h2>
-        <p>OSVALDO CRUZ, 36 - NITEROI - Canoas - RS - CEP: 92110-470<br>
-        (51) 3428-5053 &nbsp;|&nbsp; fabianoperc@gmail.com
-        ${full?'<br>CNPJ: 10.909.827/0001-76 &nbsp; IE: 0240563999<br>CRAZY COMERCIO E LOCACAO DE EQUIPAMENTOS LTDA':''}</p>
-      </div>
-      <div class="ph-right">
-        <div class="pdate">${dataorc}</div>
-        <div class="porcl">Orçamento</div>
-        <div class="porcn">${orcFull}</div>
-        ${full&&gv('f-val')?`<div class="vbox"><div class="vl">Validade da proposta</div><div class="vd">${fD(gv('f-val'))}</div></div>`:''}
-      </div>
-    </div>`;
+  const impLabel = impAtual==='cimp'
+    ? '<span style="background:#1a6e2e;color:#fff;font-size:7px;padding:1px 4px;border-radius:2px;margin-left:4px;font-weight:800">IMPOSTOS INCLUSOS</span>'
+    : '<span style="background:#7a5a00;color:#fff;font-size:7px;padding:1px 4px;border-radius:2px;margin-left:4px;font-weight:800">SEM IMPOSTO</span>';
+
+  const hdr=full=>`<div class="ph"><div class="ph-i"><h2>Crazy Som ${impLabel}</h2>
+    <p>OSVALDO CRUZ, 36 - NITEROI - Canoas - RS - CEP: 92110-470<br>(51) 3428-5053 &nbsp;|&nbsp; fabianoperc@gmail.com
+    ${full?'<br>CNPJ: 10.909.827/0001-76 &nbsp;|&nbsp; IE: 0240563999<br>CRAZY COMERCIO E LOCACAO DE EQUIPAMENTOS LTDA':''}</p></div>
+    <div class="ph-r"><div class="pd">${dataorc}</div><div class="pl">Orçamento</div><div class="pn">${orcN}</div>
+    ${full&&gv('f-val')?`<div class="vbox"><div class="vl">Validade</div><div class="vd">${fD(gv('f-val'))}</div></div>`:''}</div></div>`;
+
+  const blocos=`<div class="clibox"><div class="cn">${gv('f-cliente')||'—'}</div><div class="cs">
+    ${gv('f-doc')?`<b>CNPJ/CPF:</b> ${gv('f-doc')}<br>`:''}${endCli?`<b>Endereço:</b> ${endCli}<br>`:''}${gv('f-tel')?`<b>Contato:</b> ${gv('f-tel')}<br>`:''}
+  </div></div>
+  <div class="evpbox"><div class="en">📍 ${gv('f-local')||'Local do Evento'}</div><div class="es">
+    ${endEv?`<b>Endereço:</b> ${endEv}<br>`:''}
+    <b>Tipo:</b> ${gv('f-tipo')||'—'} &nbsp;|&nbsp; <b>Data:</b> ${horEv||'—'}<br>
+    ${mStr?`<b>Montagem:</b> ${mStr}`:''}${dStr?` &nbsp;|&nbsp; <b>Desmontagem:</b> ${dStr}<br>`:''}
+    ${gv('f-pub')?`<b>Público:</b> ${parseInt(gv('f-pub')).toLocaleString('pt-BR')} pessoas<br>`:''}
+    ${gv('f-resp')?`<b>Resp. no local:</b> ${gv('f-resp')}<br>`:''}
+    ${gv('f-cons')?`<b>Consultor:</b> ${gv('f-cons')}`:''}
+  </div></div>`;
+
+  const todosAmb=[]; const ambIds=new Set();
+  SECS.filter(s=>s!=='extra').forEach(s=>{ state[s].ambientes.forEach(a=>{ if(!ambIds.has(a.id)){ambIds.add(a.id);todosAmb.push({id:a.id,nome:a.nome});} }); });
+  const multiAmb=todosAmb.length>1||todosAmb.some(a=>a.id!=='default');
+
+  // rowTot com fator de imposto
+  function rowTotF(r){ return rowTot(r)*F*(1-descFrac); }
+
+  function secBlock(s,aid,det){
+    // Logística: nunca detalha, aparece como linha única no resumo
+    if(s==='logistica') return '';
+    const rows=(state[s].rows[aid]||[]).filter(r=>!(s==='logistica'&&isOcult(r.name)));
+    if(!rows.length) return '';
+    if(det){
+      let h=`<div class="psec">${SEC_ICO[s]} ${SEC_LBL[s]}</div><table class="pi"><thead><tr><th style="width:30px">Qtd</th><th>Descrição</th><th class="r" style="width:68px">Unit.</th><th class="r" style="width:68px">Total</th></tr></thead><tbody>`;
+      rows.forEach(r=>{
+        const tot=rowTotF(r);
+        const unitF = r.painel ? (r.val*F*(1-descFrac)) : (isPalco(r.name) ? null : (r.val*F*(1-descFrac)));
+        h+=`<tr><td>${String(r.qty).padStart(2,'0')}</td><td>${buildDesc(r)}</td><td class="r">${r.painel?fmt(unitF)+'/m²':isPalco(r.name)?'—':fmt(unitF)}</td><td class="r">${fmt(tot)}</td></tr>`;
+      });
+      const stot=Object.values(state[s].rows).reduce((t,arr)=>t+arr.reduce((a,r)=>a+rowTotF(r),0),0);
+      return h+`<tr class="strow"><td colspan="3" style="text-align:right;padding-right:7px">Total ${SEC_LBL[s]}</td><td class="r">${fmt(stot)}</td></tr></tbody></table>`;
+    } else {
+      let h=`<div class="psec">${SEC_ICO[s]} ${SEC_LBL[s]}</div><table class="pi"><thead><tr><th style="width:30px">Qtd</th><th>Descrição</th></tr></thead><tbody>`;
+      rows.forEach(r=>{ h+=`<tr><td>${String(r.qty).padStart(2,'0')}</td><td>${buildDesc(r)}</td></tr>`; });
+      return h+'</tbody></table>';
+    }
   }
 
-  const dadosEvento=`
-    <div class="clibox"><div class="cn">${gv('f-local')||gv('f-cliente')||'—'}</div></div>
-    <div class="dados-pdf">
-      <strong>Cliente:</strong> ${gv('f-cliente')||'—'}<br>
-      <strong>Local e nome do evento:</strong> ${gv('f-local')||'—'}<br>
-      <strong>Endereço:</strong> ${gv('f-end')||'—'}<br>
-      <strong>Contato:</strong> ${gv('f-cont')||'—'} &nbsp;&nbsp; <strong>Telefone:</strong> ${gv('f-tel')||'—'}<br>
-      <strong>Dia do evento:</strong> ${fD(gv('f-dia'))} &nbsp;&nbsp; <strong>Dia da semana:</strong> ${gv('f-sem')||'—'}<br>
-      <strong>Montagem:</strong> ${fDT(gv('f-mont'))} &nbsp;&nbsp; <strong>Desmontagem:</strong> ${fDT(gv('f-desm'))}<br>
-      ${gv('f-pub')?`<strong>Público:</strong> ${parseInt(gv('f-pub')).toLocaleString('pt-BR')} pessoas &nbsp;&nbsp;`:''}<strong>Tipo de evento:</strong> ${gv('f-tipo')||'—'}<br>
-      <strong>Consultor:</strong> ${gv('f-cons')||'—'}
-    </div>`;
-
-  // Tabela de resumo financeiro (igual nos dois modos)
-  const resumoAtivos=[
-    {nome:'SONORIZAÇÃO',tot:totSom},{nome:'VÍDEO',tot:totVid},
-    {nome:'ILUMINAÇÃO',tot:totLuz},{nome:'ESTRUTURA',tot:totEst},{nome:'SERVIÇO',tot:totServ}
-  ].filter(x=>x.tot>0);
-
-  let resumoHTML=`<table class="pres"><thead><tr><th>Qt.</th><th>Produto / Serviço</th><th class="r">Valor Unitário</th><th class="r">Subtotal</th></tr></thead><tbody>`;
-  resumoAtivos.forEach(x=>{resumoHTML+=`<tr><td>1</td><td>${x.nome}</td><td class="r">${fmtN(x.tot)}</td><td class="r">${fmtN(x.tot)}</td></tr>`;});
-  resumoHTML+=`<tr class="sub"><td colspan="2" style="text-align:right">Total</td><td></td><td class="r">${fmtN(cImp)}</td></tr>`;
-  if(descVal>0)resumoHTML+=`<tr class="drow"><td colspan="2" style="text-align:right">Descontos</td><td></td><td class="r">– ${fmtN(descVal)}</td></tr>`;
-  resumoHTML+=`<tr class="lrow"><td colspan="2">Valor líquido</td><td></td><td class="r" style="font-size:13px">${fmtN(totalFinal)}</td></tr>`;
-  resumoHTML+='</tbody></table>';
-
-  const pgtoHTML=`<div class="pgto-pdf">
-    ${gv('f-pgto')?`<strong>Forma de pagamento:</strong>${gv('f-pgto').split('\n').join('<br>')}`:''} 
-    ${gv('f-obs')?`<div class="obs">OBS: ${gv('f-obs')}</div>`:''}
-  </div>`;
-
-  // === RESUMIDO ===
-  if(tipo==='resumido'){
-    return `<div class="pdf-page">
-      ${hdr(true)}
-      ${dadosEvento}
-      ${resumoHTML}
-      ${pgtoHTML}
-      <div class="pfooter"><span>Crazy Som – CNPJ: 10.909.827/0001-76</span><span>Página 1 de 1</span></div>
-    </div>`;
-  }
-
-  // === DETALHADO ===
-  function secTable(secList, nomeUnificado, icone){
-    const allRows=secList.flatMap(s=>rows[s]);
-    if(!allRows.length)return'';
-    let html=`<div class="psec">${icone} ${nomeUnificado}</div>
-    <table class="pi"><thead><tr><th style="width:36px">Qtd</th><th>Descrição</th><th class="r" style="width:80px">Valor Unit.</th><th class="r" style="width:80px">Total</th></tr></thead><tbody>`;
-    allRows.forEach(r=>{
-      const tot=r.qty*r.val*r.diaria;
-      html+=`<tr><td>${String(r.qty).padStart(2,'0')}</td><td>${r.name||'—'}</td><td class="r">${fmt(r.val)}</td><td class="r">${fmt(tot)}</td></tr>`;
+  // Corpo por ambiente (sem logistica)
+  const SECS_PDF=['som','video','luz','estrutura','servico'];
+  let corpo='';
+  if(multiAmb){
+    todosAmb.forEach(amb=>{
+      const temItens=SECS_PDF.some(s=>(state[s].rows[amb.id]||[]).length>0);
+      if(!temItens) return;
+      corpo+=`<div class="ambhdr">🏢 ${amb.nome}</div>`;
+      SECS_PDF.forEach(s=>{ corpo+=secBlock(s,amb.id,tipo==='det'); });
+      if(tipo==='det'){
+        const subtot=SECS_PDF.reduce((t,s)=>(state[s].rows[amb.id]||[]).reduce((a,r)=>a+rowTotF(r),t),0);
+        corpo+=`<table class="pi"><tbody><tr class="strow"><td colspan="3" style="text-align:right">Subtotal ${amb.nome}</td><td class="r">${fmt(subtot)}</td></tr></tbody></table>`;
+      }
     });
-    const stot=secList.reduce((t,s)=>t+secTot(s),0);
-    html+=`<tr class="strow"><td colspan="3" style="text-align:right;padding-right:8px">Total ${nomeUnificado}</td><td class="r">${fmt(stot)}</td></tr>`;
-    html+='</tbody></table>';
-    return html;
+  } else {
+    SECS_PDF.forEach(s=>{ corpo+=secBlock(s,'default',tipo==='det'); });
   }
 
-  const p1=secTable(['som'],'Sonorização','🔊')+secTable(['video'],'Vídeo','📺')+secTable(['luz'],'Iluminação','💡');
-  const p2=secTable(['estrutura'],'Estrutura','🏗️')+secTable(['servico','logistica'],'Serviço','⚙️');
+  // Logística total (linha única no resumo)
+  const logTotal=secTotAll('logistica')*F*(1-descFrac);
 
-  return `
-    <div class="pdf-page">
-      ${hdr(true)}
-      ${dadosEvento}
-      ${p1}
-      <div class="pfooter"><span>Crazy Som – CNPJ: 10.909.827/0001-76</span><span>Continua na próxima página... &nbsp; Página 1 de 2</span></div>
-    </div>
-    <div class="pdf-page" style="margin-top:16px">
-      ${hdr(false)}
-      ${p2}
-      ${resumoHTML}
-      ${pgtoHTML}
-      <div class="pfooter"><span>Crazy Som – CNPJ: 10.909.827/0001-76</span><span>Página 2 de 2</span></div>
-    </div>`;
+  // Resumo final (página 2)
+  const totalLabel = impAtual==='cimp' ? 'Valor Total (impostos inclusos)' : 'Valor Total (sem imposto)';
+  let res=`<table class="pres"><thead><tr><th>Produto / Serviço</th><th class="r" style="width:110px">Valor</th></tr></thead><tbody>`;
+  if(multiAmb){
+    todosAmb.forEach(amb=>{
+      const t=SECS_PDF.reduce((tot,s)=>(state[s].rows[amb.id]||[]).reduce((a,r)=>a+rowTotF(r),tot),0);
+      if(t>0) res+=`<tr><td>${amb.nome}</td><td class="r">${fmtN(t)}</td></tr>`;
+    });
+  } else {
+    [{n:'SONORIZAÇÃO',s:'som'},{n:'VÍDEO',s:'video'},{n:'ILUMINAÇÃO',s:'luz'},{n:'ESTRUTURA',s:'estrutura'},{n:'SERVIÇO',s:'servico'}]
+      .filter(x=>secTotAll(x.s)>0)
+      .forEach(x=>{
+        const t=secTotAll(x.s)*F*(1-descFrac);
+        res+=`<tr><td>${x.n}</td><td class="r">${fmtN(t)}</td></tr>`;
+      });
+  }
+  // Logística como linha única
+  if(logTotal>0) res+=`<tr><td>🚚 LOGÍSTICA</td><td class="r">${fmtN(logTotal)}</td></tr>`;
+  res+=`<tr class="lrow"><td>${totalLabel}</td><td class="r">${fmtN(totalFinal)}</td></tr></tbody></table>`;
+
+  const pgto=`<div class="pgto-pdf">${gv('f-pgto')?`<div class="pt">Forma de Pagamento</div>${gv('f-pgto').split('\n').join('<br>')}`:''} ${gv('f-obs')?`<div class="ob">OBS: ${gv('f-obs')}</div>`:''}</div>`;
+  const foot1=`<div class="pfooter"><span>Crazy Som – CNPJ: 10.909.827/0001-76</span><span>Continua... Pág. 1/2</span></div>`;
+  const foot2=`<div class="pfooter"><span>Crazy Som – CNPJ: 10.909.827/0001-76</span><span>Pág. 2/2</span></div>`;
+
+  return `<div class="pdf-page">${hdr(true)}${blocos}${corpo}${foot1}</div>
+          <div class="pdf-page" style="margin-top:12px">${hdr(false)}${res}${pgto}${foot2}</div>`;
 }
 
 function abrirPDF(modo){
-  fecharTipoModal();
-  const html=buildPDF(tipoSelecionado);
-  const label=tipoSelecionado==='detalhado'?'📋 Orçamento Detalhado':'📄 Orçamento Resumido';
-  if(modo==='preview'){
-    document.getElementById('pdfContent').innerHTML=html;
-    document.getElementById('modal-title').textContent=label+' – Crazy Som';
-    document.getElementById('pdfModal').classList.add('open');
-    document.getElementById('pdfModal').scrollTop=0;
+  document.getElementById('tipo-modal').classList.remove('open');
+  const html=buildPDF(tipoAtual);
+  const fmtLabel=tipoAtual==='det'?'📋 Detalhado':'📄 Resumido';
+  const impLabel=impAtual==='cimp'?'c/Imp':'s/Imp';
+  const label=`${fmtLabel} – ${impLabel} – Crazy Som`;
+  if(modo==='prev'){
+    document.getElementById('pdf-content').innerHTML=html;
+    document.getElementById('pdf-title').textContent=label;
+    document.getElementById('pdf-ov').classList.add('open');
+    document.getElementById('pdf-ov').scrollTop=0;
   } else {
-    const css=`*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif}
-    body{background:#fff;padding:0}
-    .pdf-page{background:#fff;width:794px;min-height:1122px;padding:28px 32px;position:relative;margin:0 auto;page-break-after:always}
-    .ph{display:flex;align-items:flex-start;padding-bottom:12px;border-bottom:2px solid #111;margin-bottom:14px}
-    .ph-info{flex:1}.ph-info h2{font-size:15px;font-weight:900}.ph-info p{font-size:9px;color:#444;line-height:1.7}
-    .ph-right{text-align:right;min-width:155px}.pdate{font-size:9px;color:#666}.porcn{font-size:18px;font-weight:900}.porcl{font-size:10px;color:#777}
-    .vbox{border:1px solid #bbb;border-radius:3px;padding:5px 10px;margin-top:6px;display:inline-block;text-align:center}
-    .vl{font-size:8px;color:#999;text-transform:uppercase}.vd{font-size:11px;font-weight:800}
-    .clibox{border:1px solid #ccc;border-radius:3px;padding:8px 12px;margin-bottom:12px}.cn{font-size:12px;font-weight:800}
-    .dados-pdf{font-size:9px;line-height:1.9;margin-bottom:12px}.dados-pdf strong{font-weight:800}
-    .psec{background:#c0001a;color:#fff;padding:4px 9px;font-size:9px;font-weight:800;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    table.pi{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:9.5px}
-    table.pi th{background:#111;color:#fff;padding:4px 7px;text-align:left;font-size:8.5px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    table.pi th.r{text-align:right}
-    table.pi td{padding:4px 7px;border-bottom:1px solid #eee}
-    table.pi td.r{text-align:right;font-weight:700}
-    table.pi tr:nth-child(even) td{background:#fafafa}
-    table.pi .strow td{background:#fff0f0;font-weight:800;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    table.pi .strow td.r{color:#c0001a}
-    table.pres{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:10px}
-    table.pres th{background:#111;color:#fff;padding:6px 9px;font-size:9px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    table.pres th.r{text-align:right}
-    table.pres td{padding:6px 9px;border-bottom:1px solid #eee}
-    table.pres td.r{text-align:right;font-weight:700}
-    table.pres .sub td{background:#f5f5f5;font-weight:800}
-    table.pres .drow td{color:#e53935;font-weight:800}
-    table.pres .lrow td{background:#c0001a;color:#fff;font-weight:900;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .pgto-pdf{border-top:1px solid #ccc;padding-top:10px;font-size:9px;color:#333;line-height:1.8}
-    .pgto-pdf strong{font-weight:800;display:block;margin-bottom:1px}
-    .pgto-pdf .obs{margin-top:6px;color:#666;font-style:italic}
-    .pfooter{position:absolute;bottom:20px;left:32px;right:32px;display:flex;justify-content:space-between;border-top:1px solid #ddd;padding-top:6px}
-    .pfooter span{font-size:8px;color:#aaa}
-    @media print{body{margin:0}.pdf-page{page-break-after:always;margin:0}}`;
-    const w=window.open('','_blank','width=900,height=700');
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${label} – Crazy Som</title><style>${css}</style></head><body>${html}<script>window.onload=function(){window.print();}<\/script></body></html>`);
-    w.document.close();
+    const css=`@page{size:A4;margin:0}*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif}body{background:#fff}
+    .pdf-page{background:#fff;width:210mm;min-height:297mm;padding:14mm 14mm 22mm;position:relative;page-break-after:always}
+    .ph{display:flex;align-items:flex-start;padding-bottom:9px;border-bottom:2.5px solid #111;margin-bottom:11px}
+    .ph-i{flex:1}.ph-i h2{font-size:16px;font-weight:900}.ph-i p{font-size:8.5px;color:#444;line-height:1.8;margin-top:2px}
+    .ph-r{text-align:right;min-width:145px}.pd{font-size:8.5px;color:#777}.pl{font-size:9px;color:#888;margin-top:3px}.pn{font-size:17px;font-weight:900}
+    .vbox{border:1px solid #ccc;border-radius:3px;padding:4px 9px;margin-top:4px;display:inline-block;text-align:center}.vl{font-size:7.5px;color:#999;text-transform:uppercase}.vd{font-size:10px;font-weight:800}
+    .clibox{border:1px solid #ddd;border-radius:3px;padding:7px 11px;margin-bottom:8px;background:#fafafa;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .clibox .cn{font-size:12px;font-weight:800;margin-bottom:2px}.clibox .cs{font-size:8.5px;color:#555;line-height:1.7}
+    .evpbox{border:1px solid #ddd;border-left:3px solid #c0001a;border-radius:3px;padding:7px 11px;margin-bottom:9px;background:#fafafa;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .evpbox .en{font-size:11px;font-weight:800;color:#c0001a;margin-bottom:2px}.evpbox .es{font-size:8.5px;color:#555;line-height:1.7}
+    .ambhdr{background:rgba(51,51,51,0.9);color:#fff;padding:4px 9px;font-size:9.5px;font-weight:800;text-transform:uppercase;border-radius:2px;margin:8px 0 3px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .psec{background:rgba(192,0,26,0.9);color:#fff;padding:4px 9px;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:1px;border-radius:2px 2px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    table.pi{width:100%;border-collapse:collapse;margin-bottom:8px;font-size:8.5px}
+    table.pi th{background:rgba(34,34,34,0.9);color:#fff;padding:4px 7px;text-align:left;font-size:8px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    table.pi th.r{text-align:right}table.pi td{padding:3px 7px;border-bottom:1px solid #eee;vertical-align:top}
+    table.pi td.r{text-align:right;font-weight:700}table.pi tr:nth-child(even) td{background:#f9f9f9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    table.pi .strow td{background:#fee;font-weight:800;font-size:9px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.table.pi .strow td.r{color:#c0001a}
+    table.pi .incrow td{color:#444;background:#f5f5f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    table.pres{width:100%;border-collapse:collapse;margin-bottom:13px;font-size:9px}
+    table.pres th{background:rgba(34,34,34,0.9);color:#fff;padding:5px 9px;font-size:8.5px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    table.pres th.r{text-align:right}table.pres td{padding:5px 9px;border-bottom:1px solid #eee}table.pres td.r{text-align:right;font-weight:700}
+    table.pres .sub td{background:#f0f0f0;font-weight:800;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    table.pres .drow2 td{color:#c0001a;font-weight:800;background:#fff5f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    table.pres .lrow td{background:rgba(192,0,26,0.9);color:#fff;font-weight:900;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .pgto-pdf{border:1px solid #ddd;border-radius:3px;padding:7px 11px;font-size:8.5px;color:#333;line-height:1.8}
+    .pgto-pdf .pt{font-weight:800;font-size:9px;text-transform:uppercase;margin-bottom:2px}.pgto-pdf .ob{margin-top:5px;color:#666;font-style:italic;border-top:1px dashed #ddd;padding-top:4px}
+    .pfooter{position:absolute;bottom:8mm;left:14mm;right:14mm;display:flex;justify-content:space-between;border-top:1px solid #e0e0e0;padding-top:3px}.pfooter span{font-size:7.5px;color:#aaa}`;
+    const w=window.open('','_blank');
+    if(!w){alert('⚠️ Pop-up bloqueado!\n\nNo Chrome: clique no ícone na barra de endereço → Sempre permitir pop-ups.');return;}
+    w.document.open(); w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+label+'</title><style>'+css+'</style></head><body>'+html+'<script>window.onload=function(){window.print();}<\/script></body></html>'); w.document.close();
   }
 }
 
-function fecharPDF(){document.getElementById('pdfModal').classList.remove('open')}
+// ── ORDEM DE SERVIÇO ─────────────────────────
+function gerarOS(){
+  const OC=OCULT; const isOc=n=>OC.some(o=>n&&n.toLowerCase().includes(o.toLowerCase()));
+  let mStr=fD(gv('f-dm')); if(gv('f-hm')) mStr+=' às '+gv('f-hm');
+  let dStr=fD(gv('f-dd')); if(gv('f-hd')) dStr+=' às '+gv('f-hd');
+  const dIni=gv('f-dia'), dFim=gv('f-dia-fim');
+  let horEv=fD(dIni);
+  if(gv('f-sem')) horEv+=' ('+gv('f-sem')+')';
+  if(dFim&&dFim!==dIni){ horEv+=' a '+fD(dFim); if(gv('f-sem-fim')) horEv+=' ('+gv('f-sem-fim')+')'; }
+  if(gv('f-hi')) horEv+=' – Início: '+gv('f-hi'); if(gv('f-hf')) horEv+=' Fim: '+gv('f-hf');
+  const diasEvStr=getDiasEvento(); if(diasEvStr>1) horEv+=' ('+diasEvStr+' dias)';
+  const endEv=[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
+  const incLines=getSvinc().split('\n').map(l=>l.trim()).filter(Boolean);
+  const dataorc=gv('f-data')?fD(gv('f-data')):new Date().toLocaleDateString('pt-BR');
+  const SECS_OS=['som','video','luz','estrutura','servico','logistica'];
+  const todosAmb=[]; const ambIds=new Set();
+  SECS_OS.forEach(s=>{ state[s].ambientes.forEach(a=>{ if(!ambIds.has(a.id)){ambIds.add(a.id);todosAmb.push({id:a.id,nome:a.nome});} }); });
+  function buildRow(r){
+    const isPal=r.palco||isPalco(r.name); let desc=r.name||'';
+    if(r.painel){ const pxW=Math.round(r.larg*getPx(r.name)),pxH=Math.round(r.alt*getPx(r.name)); desc+=` – ${Number(r.larg).toFixed(2)}×${Number(r.alt).toFixed(2)}m`; if(r.elev>0) desc+=` – Elev: ${Number(r.elev).toFixed(2)}m`; desc+=` [${pxW}×${pxH}px]`; }
+    else if(isPal){ desc=`Palco ${Number(r.larg).toFixed(2)}×${Number(r.prof).toFixed(2)}m – Elev: ${r.elObj?r.elObj.l:'—'}`; if(r.carp) desc+=` | Carpete ${r.carpT==='novo'?'Novo':'Usado'}${r.carpC?' – '+r.carpC:''}`; }
+    return `<tr><td class="qtd">${r.qty}x</td><td class="item">${desc}</td><td class="chk">☐</td></tr>`;
+  }
+  let corpoOS='';
+  const multiAmb=todosAmb.length>1||todosAmb.some(a=>a.id!=='default');
+  if(multiAmb){
+    todosAmb.forEach(amb=>{
+      const temItens=SECS_OS.some(s=>(state[s].rows[amb.id]||[]).filter(r=>!isOc(r.name)).length>0);
+      if(!temItens) return;
+      corpoOS+=`<tr><td colspan="3" style="background:rgba(51,51,51,0.9);color:#fff;font-weight:bold;padding:5px 8px;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact">🏢 ${amb.nome}</td></tr>`;
+      SECS_OS.forEach(s=>{ const rows=(state[s].rows[amb.id]||[]).filter(r=>!isOc(r.name)); const isLog=(s==='logistica'); if(!rows.length&&(!isLog||!incLines.length)) return; corpoOS+=`<tr><td colspan="3" style="background:rgba(192,0,26,0.9);color:#fff;font-weight:bold;padding:3px 8px;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact">${SEC_ICO[s]} ${SEC_LBL[s].toUpperCase()}</td></tr>`; rows.forEach(r=>{ corpoOS+=buildRow(r); }); if(isLog) incLines.forEach(l=>{ corpoOS+=`<tr><td class="qtd">—</td><td class="item">${l}</td><td class="chk">☐</td></tr>`; }); });
+      corpoOS+=`<tr><td colspan="3" style="height:5px"></td></tr>`;
+    });
+  } else {
+    SECS_OS.forEach(s=>{ const rows=(state[s].rows['default']||[]).filter(r=>!isOc(r.name)); const isLog=(s==='logistica'); if(!rows.length&&(!isLog||!incLines.length)) return; corpoOS+=`<tr><td colspan="3" style="background:rgba(192,0,26,0.9);color:#fff;font-weight:bold;padding:4px 8px;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact">${SEC_ICO[s]} ${SEC_LBL[s].toUpperCase()}</td></tr>`; rows.forEach(r=>{ corpoOS+=buildRow(r); }); if(isLog) incLines.forEach(l=>{ corpoOS+=`<tr><td class="qtd">—</td><td class="item">${l}</td><td class="chk">☐</td></tr>`; }); corpoOS+=`<tr><td colspan="3" style="height:4px"></td></tr>`; });
+  }
+  const extras=Array(15).fill(`<tr><td colspan="3" style="height:23px;border-bottom:1px solid #ccc;padding:0 7px">&nbsp;</td></tr>`).join('');
+  const osHTML=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<style>*{box-sizing:border-box;margin:0;padding:0;font-family:Calibri,Arial,sans-serif}body{background:#eee;padding:18px}.bar{background:#111;padding:9px 14px;border-radius:5px;display:flex;gap:9px;align-items:center;margin-bottom:14px}.bar span{color:#aaa;font-size:12px;flex:1}.bar button{padding:7px 15px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700}.br{background:#c0001a;color:#fff}.bd{background:#444;color:#fff}.page{background:#fff;width:210mm;margin:0 auto;padding:13mm 13mm 17mm;box-shadow:0 4px 18px rgba(0,0,0,.2)}.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:9px;border-bottom:3px solid #c0001a;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.hdr h1{font-size:21px;font-weight:900;color:#c0001a}.hdr p{font-size:10px;color:#666;margin-top:2px}.hr{text-align:right}.hr .os{font-size:17px;font-weight:900}.hr .osn{font-size:14px;font-weight:bold;color:#c0001a}.hr .osd{font-size:10px;color:#888}.info{background:#f7f7f7;border:1px solid #ddd;border-radius:3px;padding:7px 11px;margin-bottom:11px}.info table{width:100%;border-collapse:collapse}.info td{padding:2px 5px;font-size:11px;vertical-align:top}.info .lbl{font-weight:bold;color:#555;width:125px;white-space:nowrap}table.eq{width:100%;border-collapse:collapse;margin-bottom:3px}table.eq th{background:rgba(17,17,17,0.9);color:#fff;padding:4px 7px;font-size:10px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.qtd{width:46px;padding:3px 7px;border:1px solid #e0e0e0;font-weight:bold;text-align:center;font-size:12px;vertical-align:top}.item{padding:3px 7px;border:1px solid #e0e0e0;font-size:11.5px}.chk{width:30px;padding:3px 7px;border:1px solid #e0e0e0;text-align:center;font-size:13px}tr:nth-child(even) .qtd,tr:nth-child(even) .item,tr:nth-child(even) .chk{background:#fafafa;-webkit-print-color-adjust:exact;print-color-adjust:exact}.xt{font-size:12px;font-weight:bold;color:#c0001a;border-bottom:2px solid #c0001a;padding-bottom:3px;margin:16px 0 4px;text-transform:uppercase}.xh{font-size:10px;color:#888;margin-bottom:5px}table.ext{width:100%;border-collapse:collapse}table.ext th{background:rgba(85,85,85,0.9);color:#fff;padding:4px 7px;font-size:10px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.assin{display:flex;gap:18px;margin-top:26px}.assin-box{flex:1;text-align:center}.aline{border-top:1px solid #444;padding-top:4px;font-size:10px;color:#555;margin-top:30px}.foot{margin-top:14px;border-top:1px solid #ddd;padding-top:5px;font-size:9px;color:#aaa;text-align:center}@media print{body{background:#fff;padding:0}.bar{display:none}.page{box-shadow:none;margin:0;padding:11mm 11mm 14mm;width:100%}}</style></head><body>
+<div class="bar"><span>📋 Ordem de Serviço – Crazy Som</span><button class="br" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button><button class="bd" onclick="window.close()">✕ Fechar</button></div>
+<div class="page">
+  <div class="hdr"><div><h1>CRAZY SOM</h1><p>Audiovisual e Estrutura &nbsp;|&nbsp; (51) 3428-5053 &nbsp;|&nbsp; CNPJ: 10.909.827/0001-76</p></div>
+    <div class="hr"><div class="os">ORDEM DE SERVIÇO</div><div class="osn">${gv('f-num')||'—'}</div><div class="osd">Emissão: ${dataorc}</div></div></div>
+  <div class="info"><table>
+    <tr><td class="lbl">Cliente:</td><td><b>${gv('f-cliente')||'—'}</b></td><td class="lbl">Consultor:</td><td>${gv('f-cons')||'—'}</td></tr>
+    <tr><td class="lbl">Local do Evento:</td><td><b>${gv('f-local')||'—'}</b></td><td class="lbl">Tipo:</td><td>${gv('f-tipo')||'—'}</td></tr>
+    ${endEv?`<tr><td class="lbl">Endereço:</td><td colspan="3">${endEv}</td></tr>`:''}
+    <tr><td class="lbl">Data/Hora Evento:</td><td>${horEv||'—'}</td><td class="lbl">Público:</td><td>${gv('f-pub')?parseInt(gv('f-pub')).toLocaleString('pt-BR')+' pessoas':'—'}</td></tr>
+    ${mStr?`<tr><td class="lbl">Montagem:</td><td>${mStr}</td><td class="lbl">Desmontagem:</td><td>${dStr||'—'}</td></tr>`:''}
+    ${gv('f-resp')?`<tr><td class="lbl">Resp. no Local:</td><td colspan="3">${gv('f-resp')}</td></tr>`:''}
+    ${gv('f-obs')?`<tr><td class="lbl">Observações:</td><td colspan="3" style="font-style:italic;color:#555">${gv('f-obs')}</td></tr>`:''}
+  </table></div>
+  <table class="eq"><thead><tr><th style="width:48px">QTD</th><th>DESCRIÇÃO DO EQUIPAMENTO / SERVIÇO</th><th style="width:30px;text-align:center">✓</th></tr></thead><tbody>${corpoOS}</tbody></table>
+  <div class="xt">📝 MATERIAIS EXTRAS / PERIFÉRICOS</div>
+  <div class="xh">Anote abaixo cabos, adaptadores, consumíveis e demais itens adicionais:</div>
+  <table class="ext"><thead><tr><th style="width:48px">QTD</th><th>DESCRIÇÃO</th><th style="width:30px;text-align:center">✓</th></tr></thead><tbody>${extras}</tbody></table>
+  <div class="assin"><div class="assin-box"><div class="aline">Responsável Técnico</div></div><div class="assin-box"><div class="aline">Conferência / Separação</div></div><div class="assin-box"><div class="aline">Carregamento / Saída</div></div></div>
+  <div class="foot">Crazy Som – OSVALDO CRUZ, 36 - NITEROI - Canoas - RS &nbsp;|&nbsp; (51) 3428-5053 &nbsp;|&nbsp; fabianoperc@gmail.com &nbsp;|&nbsp; CNPJ: 10.909.827/0001-76</div>
+</div></body></html>`;
+  const w=window.open('','_blank');
+  if(!w){alert('⚠️ Pop-up bloqueado!');return;}
+  w.document.open(); w.document.write(osHTML); w.document.close();
+}
 
-document.getElementById('f-dataorc').value=new Date().toISOString().split('T')[0];
+// ── INIT ─────────────────────────────────────
+buildTabs();
+document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
+calcDiariasAuto();
 calc();
 </script>
 </body>
