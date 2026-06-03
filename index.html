@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Crazy Som – Orçamento v9</title>
+<title>Crazy Som – Orçamento v12</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif}
 :root{--R:#c0001a;--D:#111}
@@ -67,13 +67,19 @@ table.it input,table.it select{padding:2px 5px;font-size:11px}
 .adm-user .au-cargo{color:#aaa;font-size:10px}
 .adm-user input{width:130px;padding:5px 8px;background:#1c1c1c;border:1px solid #444;border-radius:4px;color:#fff;font-size:11px}
 .adm-user .btn-adm-save{padding:5px 10px;background:var(--R);color:#fff;border:none;border-radius:4px;font-size:10px;cursor:pointer;font-weight:700;white-space:nowrap}
-/* PENDÊNCIAS */
+/* TOAST PENDÊNCIAS */
+.toast-pend{position:fixed;bottom:24px;right:24px;background:#1565c0;color:#fff;border-radius:10px;padding:14px 18px;font-size:12px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.4);z-index:99998;cursor:pointer;display:none;max-width:320px;animation:slideIn .35s ease}
+.toast-pend:hover{background:#0d47a1}
+.toast-pend .tp-titulo{font-size:13px;font-weight:800;margin-bottom:4px}
+.toast-pend .tp-sub{font-size:11px;opacity:.85}
+.toast-pend .tp-fechar{position:absolute;top:8px;right:10px;background:none;border:none;color:#fff;font-size:14px;cursor:pointer;opacity:.7;padding:0}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+/* PENDÊNCIAS MODAL */
 .pend-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:97000;align-items:center;justify-content:center}
 .pend-ov.open{display:flex}
 .pend-box{background:#1c1c1c;border-radius:12px;padding:28px 32px;width:100%;max-width:620px;max-height:85vh;overflow-y:auto}
-.pend-box h2{color:#fff;font-size:16px;font-weight:800;margin-bottom:4px}
-.pend-box p{color:#aaa;font-size:11px;margin-bottom:18px}
-.pend-item{background:#111;border-radius:7px;padding:12px 14px;margin-bottom:9px;border-left:4px solid #333}
+.pend-item{background:#111;border-radius:7px;padding:12px 14px;margin-bottom:9px;border-left:4px solid #333;cursor:pointer;transition:.15s}
+.pend-item:hover{background:#1a1a1a;border-left-width:6px}
 .pend-item.analise{border-color:#1565c0}
 .pend-item.gerencial{border-color:#e65100}
 .pend-item.diretoria{border-color:#6a1b9a}
@@ -84,6 +90,7 @@ table.it input,table.it select{padding:2px 5px;font-size:11px}
 .pend-item .pi-val{color:var(--R);font-size:12px;font-weight:700}
 .pend-item .pi-info{font-size:10px;color:#777;line-height:1.7}
 .pend-item .pi-resp{color:#fff;font-weight:700}
+.pend-item .pi-abrir{font-size:10px;color:#90caf9;margin-top:4px;font-weight:700}
 .pend-empty{text-align:center;padding:30px;color:#666;font-size:12px}
 .pend-loading{text-align:center;padding:20px;color:#888;font-size:12px}
 /* STATUS BADGE */
@@ -362,7 +369,14 @@ table.pres .lrow td{background:rgba(192,0,26,0.9);color:#fff;font-weight:900;fon
   </div>
 </div>
 
-<!-- PENDÊNCIAS -->
+<!-- TOAST PENDÊNCIAS -->
+<div class="toast-pend" id="toast-pend" onclick="abrirPendencias()">
+  <button class="tp-fechar" onclick="event.stopPropagation();fecharToast()">✕</button>
+  <div class="tp-titulo">⏳ Orçamentos Aguardando</div>
+  <div class="tp-sub" id="toast-pend-sub">Você tem pendências de aprovação</div>
+</div>
+
+<!-- PENDÊNCIAS MODAL -->
 <div class="pend-ov" id="pend-ov">
   <div class="pend-box">
     <h2>⏳ Orçamentos Pendentes</h2>
@@ -1595,4 +1609,21 @@ function gerarOS(){
   <div class="xt">📝 MATERIAIS EXTRAS / PERIFÉRICOS</div>
   <div class="xh">Anote abaixo cabos, adaptadores, consumíveis e demais itens adicionais:</div>
   <table class="ext"><thead><tr><th style="width:48px">QTD</th><th>DESCRIÇÃO</th><th style="width:30px;text-align:center">✓</th></tr></thead><tbody>${extras}</tbody></table>
-  <div class="assin"><div class="assin-box"><div class="aline">Responsável Técnico</div></div><div class="assin-box"><div class="aline">Conferência / S
+  <div class="assin"><div class="assin-box"><div class="aline">Responsável Técnico</div></div><div class="assin-box"><div class="aline">Conferência / Separação</div></div><div class="assin-box"><div class="aline">Carregamento / Saída</div></div></div>
+  <div class="foot">Crazy Som – OSVALDO CRUZ, 36 - NITEROI - Canoas - RS &nbsp;|&nbsp; (51) 3428-5053 &nbsp;|&nbsp; fabianoperc@gmail.com &nbsp;|&nbsp; CNPJ: 10.909.827/0001-76</div>
+</div></body></html>`;
+  const w=window.open('','_blank');
+  if(!w){alert('⚠️ Pop-up bloqueado!');return;}
+  w.document.open(); w.document.write(osHTML); w.document.close();
+}
+
+// ── INIT ─────────────────────────────────────
+buildTabs();
+document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
+calcDiariasAuto();
+calc();
+// renderAprov só após tudo carregado
+setTimeout(()=>{ if(usuarioAtual) renderAprov(); }, 100);
+</script>
+</body>
+</html>
