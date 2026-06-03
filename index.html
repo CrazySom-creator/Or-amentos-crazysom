@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Crazy Som – Orçamento v7</title>
+<title>Crazy Som – Orçamento v9</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif}
 :root{--R:#c0001a;--D:#111}
@@ -353,9 +353,10 @@ table.pres .lrow td{background:rgba(192,0,26,0.9);color:#fff;font-weight:900;fon
 <div class="adm-ov" id="adm-ov">
   <div class="adm-box">
     <h2>⚙️ Gerenciar Usuários</h2>
-    <p>Altere as senhas dos colaboradores. Somente o administrador tem acesso.</p>
+    <p>Altere login, senha e cargo dos colaboradores. Somente o administrador tem acesso.</p>
     <div id="adm-user-list"></div>
-    <div style="margin-top:16px;text-align:right">
+    <div style="margin-top:12px;display:flex;gap:8px;justify-content:space-between">
+      <button class="btn btn-g btn-sm" onclick="admNovoUsuario()">+ Novo Usuário</button>
       <button class="btn btn-o btn-sm" onclick="document.getElementById('adm-ov').classList.remove('open')">Fechar</button>
     </div>
   </div>
@@ -1077,13 +1078,24 @@ async function driveCarregar(id, nome){
     const d=await r.json();
     if(!d.ok) throw new Error(d.erro||'Erro ao carregar');
     const data=d.dados;
-    if(data.state){ SECS.forEach(s=>{ if(data.state[s]){ state[s].ambientes=data.state[s].ambientes||[{id:'default',nome:'Geral'}]; state[s].ambAtiva=data.state[s].ambAtiva||'default'; state[s].rows=data.state[s].rows||{default:[]}; if(!state[s].rows[state[s].ambAtiva]) state[s].rows[state[s].ambAtiva]=[]; } }); }
+    // Carregar state
+    if(data.state){
+      SECS.forEach(s=>{
+        if(data.state[s]){
+          state[s].ambientes = data.state[s].ambientes||[{id:'default',nome:'Geral'}];
+          state[s].ambAtiva  = data.state[s].ambAtiva||'default';
+          state[s].rows      = data.state[s].rows||{default:[]};
+          if(!state[s].rows[state[s].ambAtiva]) state[s].rows[state[s].ambAtiva]=[];
+        }
+      });
+    }
     if(data.form) setForm(data.form);
-    if(data.aprovStatus) aprovStatus=data.aprovStatus;
-    if(data.aprovHist)   aprovHist=data.aprovHist;
-    driveIdAtual=id;
+    // Aprovação — compatível com arquivos antigos (sem esses campos)
+    aprovStatus = data.aprovStatus || 'rascunho';
+    aprovHist   = data.aprovHist   || [];
+    driveIdAtual = id;
     buildTabs(); calc();
-    document.getElementById('aprov-card').style.display='block';
+    document.getElementById('aprov-card').style.display = 'block';
     renderAprov();
     driveStatus('✅ Carregado: '+nome,'ok');
   }catch(e){
@@ -1301,9 +1313,26 @@ function carregar(input){
   fr.onload=e=>{
     try{
       const data=JSON.parse(e.target.result);
-      if(data.state){ SECS.forEach(s=>{ if(data.state[s]){ state[s].ambientes=data.state[s].ambientes||[{id:'default',nome:'Geral'}]; state[s].ambAtiva=data.state[s].ambAtiva||'default'; state[s].rows=data.state[s].rows||{default:[]}; if(!state[s].rows[state[s].ambAtiva]) state[s].rows[state[s].ambAtiva]=[]; } }); }
+      if(data.state){
+        SECS.forEach(s=>{
+          if(data.state[s]){
+            state[s].ambientes = data.state[s].ambientes||[{id:'default',nome:'Geral'}];
+            state[s].ambAtiva  = data.state[s].ambAtiva||'default';
+            state[s].rows      = data.state[s].rows||{default:[]};
+            if(!state[s].rows[state[s].ambAtiva]) state[s].rows[state[s].ambAtiva]=[];
+          }
+        });
+      }
       if(data.form) setForm(data.form);
-      buildTabs(); calc(); alert('✅ Orçamento carregado!');
+      // Compatível com arquivos antigos
+      aprovStatus = data.aprovStatus || 'rascunho';
+      aprovHist   = data.aprovHist   || [];
+      buildTabs(); calc();
+      if(usuarioAtual){
+        document.getElementById('aprov-card').style.display='block';
+        renderAprov();
+      }
+      alert('✅ Orçamento carregado!');
     }catch(err){ alert('⚠️ Arquivo inválido: '+err.message); }
   };
   fr.readAsText(file); input.value='';
@@ -1438,7 +1467,7 @@ function buildPDF(tipo){
   const logTotal=secTotAll('logistica')*F*(1-descFrac);
 
   // Resumo final (página 2)
-  const totalLabel = impAtual==='cimp' ? 'Valor Total (impostos inclusos)' : 'Valor Total (sem imposto)';
+  const totalLabel = impAtual==='cimp' ? 'Valor Total (impostos inclusos)' : 'Valor Total';
   let res=`<table class="pres"><thead><tr><th>Produto / Serviço</th><th class="r" style="width:110px">Valor</th></tr></thead><tbody>`;
   if(multiAmb){
     todosAmb.forEach(amb=>{
@@ -1566,19 +1595,4 @@ function gerarOS(){
   <div class="xt">📝 MATERIAIS EXTRAS / PERIFÉRICOS</div>
   <div class="xh">Anote abaixo cabos, adaptadores, consumíveis e demais itens adicionais:</div>
   <table class="ext"><thead><tr><th style="width:48px">QTD</th><th>DESCRIÇÃO</th><th style="width:30px;text-align:center">✓</th></tr></thead><tbody>${extras}</tbody></table>
-  <div class="assin"><div class="assin-box"><div class="aline">Responsável Técnico</div></div><div class="assin-box"><div class="aline">Conferência / Separação</div></div><div class="assin-box"><div class="aline">Carregamento / Saída</div></div></div>
-  <div class="foot">Crazy Som – OSVALDO CRUZ, 36 - NITEROI - Canoas - RS &nbsp;|&nbsp; (51) 3428-5053 &nbsp;|&nbsp; fabianoperc@gmail.com &nbsp;|&nbsp; CNPJ: 10.909.827/0001-76</div>
-</div></body></html>`;
-  const w=window.open('','_blank');
-  if(!w){alert('⚠️ Pop-up bloqueado!');return;}
-  w.document.open(); w.document.write(osHTML); w.document.close();
-}
-
-// ── INIT ─────────────────────────────────────
-buildTabs();
-document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
-calcDiariasAuto();
-calc();
-</script>
-</body>
-</html>
+  <div class="assin"><div class="assin-box"><div class="aline">Responsável Técnico</div></div><div class="assin-box"><div class="aline">Conferência / S
