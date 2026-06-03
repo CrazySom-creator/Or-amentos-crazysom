@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Crazy Som – Orçamento v5</title>
+<title>Crazy Som – Orçamento v7</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif}
 :root{--R:#c0001a;--D:#111}
@@ -42,7 +42,88 @@ table.it{width:100%;border-collapse:collapse;font-size:11px;margin-top:5px}
 table.it th{background:var(--D);color:#fff;padding:5px 6px;text-align:left;font-size:9px;text-transform:uppercase}
 table.it td{padding:3px 5px;border-bottom:1px solid #f0f0f0;vertical-align:middle;background:#fff;color:#222}
 table.it input,table.it select{padding:2px 5px;font-size:11px}
-/* DRIVE PANEL */
+/* LOGIN */
+.login-ov{position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:99999;display:flex;align-items:center;justify-content:center}
+.login-box{background:#1c1c1c;border-radius:12px;padding:36px 40px;width:100%;max-width:380px;text-align:center}
+.login-box h2{color:#fff;font-size:20px;font-weight:800;margin-bottom:4px}
+.login-box p{color:#aaa;font-size:12px;margin-bottom:24px}
+.login-field{text-align:left;margin-bottom:14px}
+.login-field label{color:#aaa;font-size:10px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:5px}
+.login-field input{width:100%;padding:9px 12px;border:1px solid #333;border-radius:5px;background:#111;color:#fff;font-size:13px}
+.login-field input:focus{outline:none;border-color:var(--R)}
+.login-err{color:#ff5555;font-size:11px;margin-bottom:12px;min-height:16px;text-align:center}
+.login-btn{width:100%;padding:10px;background:var(--R);color:#fff;border:none;border-radius:5px;font-size:13px;font-weight:800;cursor:pointer}
+.login-btn:hover{background:#a00015}
+/* ADM PANEL */
+.adm-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:98000;align-items:center;justify-content:center}
+.adm-ov.open{display:flex}
+.adm-box{background:#1c1c1c;border-radius:12px;padding:28px 32px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto}
+.adm-box h2{color:#fff;font-size:16px;font-weight:800;margin-bottom:4px}
+.adm-box p{color:#aaa;font-size:11px;margin-bottom:18px}
+.adm-user{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#111;border-radius:6px;margin-bottom:8px}
+.adm-user .au-info{flex:1}
+.adm-user .au-nome{color:#fff;font-size:12px;font-weight:700}
+.adm-user .au-login{color:#888;font-size:10px}
+.adm-user .au-cargo{color:#aaa;font-size:10px}
+.adm-user input{width:130px;padding:5px 8px;background:#1c1c1c;border:1px solid #444;border-radius:4px;color:#fff;font-size:11px}
+.adm-user .btn-adm-save{padding:5px 10px;background:var(--R);color:#fff;border:none;border-radius:4px;font-size:10px;cursor:pointer;font-weight:700;white-space:nowrap}
+/* PENDÊNCIAS */
+.pend-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:97000;align-items:center;justify-content:center}
+.pend-ov.open{display:flex}
+.pend-box{background:#1c1c1c;border-radius:12px;padding:28px 32px;width:100%;max-width:620px;max-height:85vh;overflow-y:auto}
+.pend-box h2{color:#fff;font-size:16px;font-weight:800;margin-bottom:4px}
+.pend-box p{color:#aaa;font-size:11px;margin-bottom:18px}
+.pend-item{background:#111;border-radius:7px;padding:12px 14px;margin-bottom:9px;border-left:4px solid #333}
+.pend-item.analise{border-color:#1565c0}
+.pend-item.gerencial{border-color:#e65100}
+.pend-item.diretoria{border-color:#6a1b9a}
+.pend-item.revisao{border-color:#c62828}
+.pend-item .pi-topo{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.pend-item .pi-num{color:#fff;font-size:13px;font-weight:800}
+.pend-item .pi-cli{color:#aaa;font-size:11px;flex:1}
+.pend-item .pi-val{color:var(--R);font-size:12px;font-weight:700}
+.pend-item .pi-info{font-size:10px;color:#777;line-height:1.7}
+.pend-item .pi-resp{color:#fff;font-weight:700}
+.pend-empty{text-align:center;padding:30px;color:#666;font-size:12px}
+.pend-loading{text-align:center;padding:20px;color:#888;font-size:12px}
+/* STATUS BADGE */
+.status-bar{display:flex;align-items:center;gap:10px;padding:8px 14px;border-radius:6px;margin-bottom:10px;font-size:11px;font-weight:700}
+.status-bar.rascunho{background:#fff8e1;border:1px solid #ffe082;color:#7a5a00}
+.status-bar.analise{background:#e3f2fd;border:1px solid #90caf9;color:#1565c0}
+.status-bar.gerencial{background:#fff3e0;border:1px solid #ffb74d;color:#e65100}
+.status-bar.diretoria{background:#f3e5f5;border:1px solid #ce93d8;color:#6a1b9a}
+.status-bar.aprovado{background:#e8f5e9;border:1px solid #a5d6a7;color:#1b5e20}
+.status-bar.revisao{background:#ffebee;border:1px solid #ef9a9a;color:#b71c1c}
+.status-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.rascunho .status-dot{background:#f9a825}
+.analise .status-dot{background:#1565c0}
+.gerencial .status-dot{background:#e65100}
+.diretoria .status-dot{background:#6a1b9a}
+.aprovado .status-dot{background:#2e7d32}
+.revisao .status-dot{background:#c62828}
+.aprov-hist{background:#f9f9f9;border:1px solid #eee;border-radius:6px;padding:10px 14px;margin-top:8px;font-size:10px}
+.aprov-hist h4{color:#555;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:7px}
+.aprov-evt{display:flex;gap:8px;align-items:flex-start;padding:4px 0;border-bottom:1px solid #f0f0f0}
+.aprov-evt:last-child{border-bottom:none}
+.aprov-evt .ae-ico{font-size:14px;flex-shrink:0}
+.aprov-evt .ae-info{flex:1}
+.aprov-evt .ae-acao{font-weight:700;color:#222}
+.aprov-evt .ae-det{color:#888;font-size:9px}
+.aprov-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.btn-aprov{padding:7px 14px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700}
+.ba-enviar{background:#1565c0;color:#fff}
+.ba-aprovar{background:#2e7d32;color:#fff}
+.ba-gerente{background:#e65100;color:#fff}
+.ba-diretor{background:#6a1b9a;color:#fff}
+.ba-revisao{background:#c62828;color:#fff}
+.ba-obs{width:100%;padding:6px 9px;border:1px solid #ddd;border-radius:4px;font-size:11px;resize:none;min-height:38px;margin-top:6px;background:#fff;color:#222}
+.user-badge{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border-radius:6px;padding:5px 10px;margin-left:auto}
+.user-badge span{color:#fff;font-size:11px;font-weight:700}
+.user-badge small{color:rgba(255,255,255,.7);font-size:9px;display:block}
+.btn-logout{background:rgba(255,255,255,.2);border:none;color:#fff;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:10px;font-weight:700}
+.btn-logout:hover{background:rgba(255,255,255,.35)}
+.btn-pend{background:rgba(255,255,255,.15);border:none;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-weight:700;margin-right:4px}
+.btn-pend:hover{background:rgba(255,255,255,.3)}
 .drive-panel{background:#fff;padding:15px 18px;border-bottom:1px solid #eee}
 .drive-search{display:flex;gap:8px;margin-bottom:10px;align-items:center}
 .drive-search input{flex:1;padding:7px 10px;border:1px solid #ccc;border-radius:4px;font-size:12px}
@@ -161,6 +242,12 @@ table.pres .lrow td{background:rgba(192,0,26,0.9);color:#fff;font-weight:900;fon
 <div class="app-hdr">
   <div><h1>CRAZY SOM – ORÇAMENTO</h1><p>Audiovisual e Estrutura – Uso Interno</p></div>
   <div class="orc-n"><small>Nº Orçamento</small><b id="orc-disp">—</b></div>
+  <div class="user-badge" id="user-badge" style="display:none">
+    <div><span id="user-nome">—</span><small id="user-cargo">—</small></div>
+    <button class="btn-pend" onclick="abrirPendencias()" title="Pendências">⏳ Pendências</button>
+    <button class="btn-pend" id="btn-adm" onclick="abrirAdm()" title="Gerenciar usuários" style="display:none">⚙️ ADM</button>
+    <button class="btn-logout" onclick="logout()">Sair</button>
+  </div>
 </div>
 
 <div class="card">
@@ -250,7 +337,43 @@ table.pres .lrow td{background:rgba(192,0,26,0.9);color:#fff;font-weight:900;fon
   </div>
 </div>
 
-<!-- PAINEL DRIVE -->
+<!-- LOGIN OVERLAY -->
+<div class="login-ov" id="login-ov">
+  <div class="login-box">
+    <h2>🎛️ Crazy Som</h2>
+    <p>Sistema de Orçamentos – Acesso Restrito</p>
+    <div class="login-field"><label>Usuário</label><input type="text" id="l-user" placeholder="ex: fabiano.santos" onkeydown="if(event.key==='Enter')document.getElementById('l-pass').focus()"></div>
+    <div class="login-field"><label>Senha</label><input type="password" id="l-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div class="login-err" id="l-err"></div>
+    <button class="login-btn" onclick="doLogin()">Entrar →</button>
+  </div>
+</div>
+
+<!-- ADM PANEL -->
+<div class="adm-ov" id="adm-ov">
+  <div class="adm-box">
+    <h2>⚙️ Gerenciar Usuários</h2>
+    <p>Altere as senhas dos colaboradores. Somente o administrador tem acesso.</p>
+    <div id="adm-user-list"></div>
+    <div style="margin-top:16px;text-align:right">
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('adm-ov').classList.remove('open')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- PENDÊNCIAS -->
+<div class="pend-ov" id="pend-ov">
+  <div class="pend-box">
+    <h2>⏳ Orçamentos Pendentes</h2>
+    <p>Orçamentos aguardando aprovação no Google Drive</p>
+    <div id="pend-list"><div class="pend-loading">⏳ Buscando pendências...</div></div>
+    <div style="margin-top:16px;text-align:right">
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('pend-ov').classList.remove('open')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+
 <div class="drive-panel">
   <div class="st" style="margin:-15px -18px 11px">☁️ Orçamentos Salvos – Google Drive</div>
   <div class="drive-search">
@@ -667,7 +790,216 @@ function renderAmbContent(s){
   },0);
 }
 
-// ── GOOGLE DRIVE INTEGRATION ─────────────────
+// ── USUÁRIOS & LOGIN ─────────────────────────
+// Senhas em hash simples (SHA-like via btoa) — altere apenas pelo painel ADM
+let USUARIOS = [
+  {id:'fabiano.santos',   nome:'Fabiano Santos',    cargo:'Consultor',          nivel:'adm',       senha: btoa('crazy@2026')},
+  {id:'giovana.borges',   nome:'Giovana Borges',    cargo:'Consultora',         nivel:'consultor', senha: btoa('crazy@2026')},
+  {id:'jessica.elisandra',nome:'Jéssica Elisandra', cargo:'Consultora',         nivel:'consultor', senha: btoa('crazy@2026')},
+  {id:'rafael.oliveira',  nome:'Rafael Oliveira',   cargo:'Consultor',          nivel:'consultor', senha: btoa('crazy@2026')},
+  {id:'jefferson',        nome:'Jefferson',         cargo:'Consultor',          nivel:'consultor', senha: btoa('crazy@2026')},
+  {id:'wagner.wolff',     nome:'Wagner Wolff',      cargo:'Consultor',          nivel:'consultor', senha: btoa('crazy@2026')},
+  {id:'tec1',             nome:'Técnico 1',         cargo:'Área Técnica',       nivel:'tecnico',   senha: btoa('crazy@2026')},
+  {id:'tec2',             nome:'Técnico 2',         cargo:'Área Técnica',       nivel:'tecnico',   senha: btoa('crazy@2026')},
+  {id:'gerente',          nome:'Gerente Comercial', cargo:'Gerência Comercial', nivel:'gerente',   senha: btoa('crazy@2026')},
+  {id:'diretor',          nome:'Diretor Comercial', cargo:'Diretoria',          nivel:'diretor',   senha: btoa('crazy@2026')},
+];
+
+// Responsável de cada status (para painel de pendências)
+const RESP_STATUS = {
+  analise:   {label:'Área Técnica',        cargo:'tecnico'},
+  gerencial: {label:'Gerente Comercial',   cargo:'gerente'},
+  diretoria: {label:'Diretoria Comercial', cargo:'diretor'},
+  revisao:   {label:'Consultor',           cargo:'consultor'},
+};
+
+const STATUS_CFG = {
+  rascunho:  {label:'🟡 Rascunho',            cls:'rascunho'},
+  analise:   {label:'🔵 Em Análise Técnica',   cls:'analise'},
+  gerencial: {label:'🟠 Aprovação Gerencial',  cls:'gerencial'},
+  diretoria: {label:'🟣 Aprovação Diretoria',  cls:'diretoria'},
+  aprovado:  {label:'🟢 Aprovado',             cls:'aprovado'},
+  revisao:   {label:'🔴 Revisão Solicitada',   cls:'revisao'},
+};
+
+let usuarioAtual = null;
+let aprovStatus = 'rascunho';
+let aprovHist = [];
+const LIMITE_TECNICO = 4000;
+
+// ── LOGIN ─────────────────────────────────────
+function doLogin(){
+  const user = document.getElementById('l-user').value.trim().toLowerCase();
+  const pass = document.getElementById('l-pass').value;
+  const err  = document.getElementById('l-err');
+  const u    = USUARIOS.find(x => x.id === user);
+  if(!u || u.senha !== btoa(pass)){
+    err.textContent = '❌ Usuário ou senha incorretos.';
+    document.getElementById('l-pass').value = '';
+    return;
+  }
+  err.textContent = '';
+  usuarioAtual = u;
+  document.getElementById('login-ov').style.display = 'none';
+  document.getElementById('user-badge').style.display = 'flex';
+  document.getElementById('user-nome').textContent = u.nome;
+  document.getElementById('user-cargo').textContent = u.cargo;
+  // Botão ADM só para nível adm
+  document.getElementById('btn-adm').style.display = u.nivel === 'adm' ? 'inline-block' : 'none';
+  renderAprov();
+}
+
+function logout(){
+  usuarioAtual = null;
+  document.getElementById('login-ov').style.display = 'flex';
+  document.getElementById('user-badge').style.display = 'none';
+  document.getElementById('l-user').value = '';
+  document.getElementById('l-pass').value = '';
+  document.getElementById('l-err').textContent = '';
+}
+
+// ── PAINEL ADM ────────────────────────────────
+function abrirAdm(){
+  const list = document.getElementById('adm-user-list');
+  list.innerHTML = USUARIOS.map((u,i) => `
+    <div class="adm-user">
+      <div class="au-info">
+        <div class="au-nome">${u.nome}</div>
+        <div class="au-login">Login: <b style="color:#fff">${u.id}</b></div>
+        <div class="au-cargo">${u.cargo} · ${u.nivel}</div>
+      </div>
+      <input type="password" id="adm-pass-${i}" placeholder="Nova senha" autocomplete="new-password">
+      <button class="btn-adm-save" onclick="admSalvarSenha(${i})">Salvar</button>
+    </div>`).join('');
+  document.getElementById('adm-ov').classList.add('open');
+}
+
+function admSalvarSenha(i){
+  const inp = document.getElementById('adm-pass-'+i);
+  const nova = inp.value.trim();
+  if(nova.length < 4){ alert('Senha deve ter ao menos 4 caracteres.'); return; }
+  USUARIOS[i].senha = btoa(nova);
+  inp.value = '';
+  inp.placeholder = '✅ Salva!';
+  setTimeout(()=>{ inp.placeholder = 'Nova senha'; }, 2000);
+}
+
+// ── PAINEL DE PENDÊNCIAS ──────────────────────
+async function abrirPendencias(){
+  document.getElementById('pend-ov').classList.add('open');
+  const list = document.getElementById('pend-list');
+  list.innerHTML = '<div class="pend-loading">⏳ Buscando no Drive...</div>';
+  try{
+    const r = await fetch(SCRIPT_URL+'?action=list&q=');
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.erro);
+    // Para cada orçamento, carregar e verificar status
+    const pendentes = [];
+    for(const item of d.lista){
+      try{
+        const r2 = await fetch(SCRIPT_URL+'?action=load&id='+item.id);
+        const d2 = await r2.json();
+        if(!d2.ok) continue;
+        const dados = d2.dados;
+        const st = dados.aprovStatus||'rascunho';
+        if(['analise','gerencial','diretoria','revisao'].includes(st)){
+          const bruto = ['som','video','luz','estrutura','servico','logistica']
+            .reduce((t,s)=> t + (dados.state&&dados.state[s]?Object.values(dados.state[s].rows||{}).reduce((a,arr)=>a+arr.reduce((x,row)=>x+(row.qty||0)*(row.val||0)*(row.diaria||1),0),0):0), 0);
+          pendentes.push({
+            id: item.id, nome: item.nome, st,
+            valor: bruto*(1+IMP),
+            resp: RESP_STATUS[st]||{label:'—'},
+            hist: dados.aprovHist||[],
+            form: dados.form||{},
+          });
+        }
+      }catch{}
+    }
+    if(!pendentes.length){
+      list.innerHTML = '<div class="pend-empty">✅ Nenhum orçamento pendente no momento!</div>';
+      return;
+    }
+    list.innerHTML = pendentes.map(p=>{
+      const ult = p.hist.length ? p.hist[p.hist.length-1] : null;
+      const cfg = STATUS_CFG[p.st]||{};
+      return `<div class="pend-item ${p.st}">
+        <div class="pi-topo">
+          <span class="pi-num">${p.form['f-num']||p.nome}</span>
+          <span class="pi-cli">${p.form['f-cliente']||'—'}</span>
+          <span class="pi-val">${fmt(p.valor)}</span>
+        </div>
+        <div class="pi-info">
+          ${cfg.label||p.st} &nbsp;·&nbsp;
+          Aguardando: <span class="pi-resp">${p.resp.label}</span>
+          ${ult?`&nbsp;·&nbsp; Última ação: ${ult.usuario} em ${ult.data}`:''}
+          ${p.form['f-dia']?`&nbsp;·&nbsp; Evento: ${new Date(p.form['f-dia']+'T12:00:00').toLocaleDateString('pt-BR')}`:''}
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    list.innerHTML = `<div class="pend-empty">⚠️ Erro ao buscar: ${e.message}</div>`;
+  }
+}
+
+// ── APROVAÇÃO ─────────────────────────────────
+function renderAprov(){
+  if(!usuarioAtual) return;
+  const cfg = STATUS_CFG[aprovStatus]||STATUS_CFG.rascunho;
+  const nivel = usuarioAtual.nivel;
+  const nivelEfetivo = nivel==='adm'?'consultor':nivel;
+  const totalOrc = ['som','video','luz','estrutura','servico','logistica'].reduce((t,s)=>t+secTotAll(s),0);
+  const cImp = totalOrc*(1+IMP);
+
+  document.getElementById('aprov-status-bar').innerHTML =
+    `<div class="status-bar ${cfg.cls}"><div class="status-dot"></div><span>${cfg.label}</span>
+     <span style="margin-left:auto;font-size:10px;opacity:.7">Total c/imp: ${fmt(cImp)}</span></div>`;
+
+  const histEl  = document.getElementById('aprov-hist');
+  const histList= document.getElementById('aprov-hist-list');
+  if(aprovHist.length){
+    histEl.style.display='block';
+    histList.innerHTML = aprovHist.map(h=>`
+      <div class="aprov-evt">
+        <div class="ae-ico">${h.ico}</div>
+        <div class="ae-info">
+          <div class="ae-acao">${h.acao} — <span style="color:var(--R)">${h.usuario}</span></div>
+          <div class="ae-det">${h.cargo} · ${h.data}${h.obs?` · "${h.obs}"`:''}</div>
+        </div>
+      </div>`).join('');
+  } else { histEl.style.display='none'; }
+
+  const obsField = `<textarea class="ba-obs" id="aprov-obs" placeholder="Observação (opcional)..."></textarea>`;
+  let acoes = '';
+
+  if((nivelEfetivo==='consultor'||nivelEfetivo==='adm') && aprovStatus==='rascunho'){
+    acoes = `${obsField}<div class="aprov-actions"><button class="btn-aprov ba-enviar" onclick="aprovAcao('analise')">📤 Enviar para Análise Técnica</button></div>`;
+  } else if((nivelEfetivo==='consultor'||nivelEfetivo==='adm') && aprovStatus==='revisao'){
+    acoes = `${obsField}<div class="aprov-actions"><button class="btn-aprov ba-enviar" onclick="aprovAcao('analise')">📤 Reenviar para Análise Técnica</button></div>`;
+  } else if(nivelEfetivo==='tecnico' && aprovStatus==='analise'){
+    acoes = cImp<=LIMITE_TECNICO
+      ? `${obsField}<div class="aprov-actions"><button class="btn-aprov ba-aprovar" onclick="aprovAcao('aprovado')">✅ Aprovar (até R$ 4.000)</button><button class="btn-aprov ba-revisao" onclick="aprovAcao('revisao')">🔄 Solicitar Revisão</button></div>`
+      : `${obsField}<div class="aprov-actions"><button class="btn-aprov ba-gerente" onclick="aprovAcao('gerencial')">📊 Encaminhar ao Gerente</button><button class="btn-aprov ba-revisao" onclick="aprovAcao('revisao')">🔄 Solicitar Revisão</button></div>`;
+  } else if(nivelEfetivo==='gerente' && aprovStatus==='gerencial'){
+    acoes = `${obsField}<div class="aprov-actions"><button class="btn-aprov ba-aprovar" onclick="aprovAcao('aprovado')">✅ Aprovar</button><button class="btn-aprov ba-diretor" onclick="aprovAcao('diretoria')">🏆 Encaminhar à Diretoria</button><button class="btn-aprov ba-revisao" onclick="aprovAcao('revisao')">🔄 Solicitar Revisão</button></div>`;
+  } else if(nivelEfetivo==='diretor' && aprovStatus==='diretoria'){
+    acoes = `${obsField}<div class="aprov-actions"><button class="btn-aprov ba-aprovar" onclick="aprovAcao('aprovado')">✅ Aprovar</button><button class="btn-aprov ba-revisao" onclick="aprovAcao('revisao')">🔄 Reprovar / Revisão</button></div>`;
+  } else {
+    const msgs = {rascunho:'Aguardando envio pelo consultor.',analise:'Aguardando análise técnica.',gerencial:'Aguardando aprovação do gerente comercial.',diretoria:'Aguardando aprovação da diretoria.',aprovado:'✅ Orçamento aprovado! Pode gerar o PDF.',revisao:'🔄 Revisão solicitada. Aguardando correção do consultor.'};
+    acoes = `<p style="font-size:11px;color:#888;margin-top:6px">${msgs[aprovStatus]||''}</p>`;
+  }
+  document.getElementById('aprov-actions-wrap').innerHTML = acoes;
+}
+
+function aprovAcao(novoStatus){
+  const obs = (document.getElementById('aprov-obs')||{}).value||'';
+  const ico = {analise:'📤',gerencial:'📊',diretoria:'🏆',aprovado:'✅',revisao:'🔄'}[novoStatus]||'•';
+  const acaoLabel = {analise:'Enviado para Análise Técnica',gerencial:'Encaminhado ao Gerente Comercial',diretoria:'Encaminhado à Diretoria',aprovado:'Aprovado',revisao:'Revisão Solicitada'}[novoStatus]||novoStatus;
+  aprovHist.push({ico, acao:acaoLabel, usuario:usuarioAtual.nome, cargo:usuarioAtual.cargo, data:new Date().toLocaleString('pt-BR'), obs, de:aprovStatus, para:novoStatus});
+  aprovStatus = novoStatus;
+  renderAprov();
+}
+
+
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwV251xtPwAUjSn-CJM88-iySrObu5oZqF9FQuMQdmhSbHAu_DRnrCy9VJGRSwwKzAR/exec";
 let driveCache = [];
 let driveIdAtual = null; // id do orçamento carregado (para atualizar ao salvar)
@@ -724,7 +1056,7 @@ async function driveSalvar(){
         action:'save',
         id: driveIdAtual||null,
         numero:num, cliente:cli, data,
-        dados:{form:getForm(),state}
+        dados:{form:getForm(),state, aprovStatus, aprovHist}
       })
     });
     const d=await r.json();
@@ -747,8 +1079,10 @@ async function driveCarregar(id, nome){
     const data=d.dados;
     if(data.state){ SECS.forEach(s=>{ if(data.state[s]){ state[s].ambientes=data.state[s].ambientes||[{id:'default',nome:'Geral'}]; state[s].ambAtiva=data.state[s].ambAtiva||'default'; state[s].rows=data.state[s].rows||{default:[]}; if(!state[s].rows[state[s].ambAtiva]) state[s].rows[state[s].ambAtiva]=[]; } }); }
     if(data.form) setForm(data.form);
+    if(data.aprovStatus) aprovStatus=data.aprovStatus;
+    if(data.aprovHist)   aprovHist=data.aprovHist;
     driveIdAtual=id;
-    buildTabs(); calc();
+    buildTabs(); calc(); renderAprov();
     driveStatus('✅ Carregado: '+nome,'ok');
   }catch(e){
     driveStatus('Erro ao carregar: '+e.message,'err');
