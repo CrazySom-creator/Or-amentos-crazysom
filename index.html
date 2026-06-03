@@ -1082,7 +1082,9 @@ async function driveCarregar(id, nome){
     if(data.aprovStatus) aprovStatus=data.aprovStatus;
     if(data.aprovHist)   aprovHist=data.aprovHist;
     driveIdAtual=id;
-    buildTabs(); calc(); renderAprov();
+    buildTabs(); calc();
+    document.getElementById('aprov-card').style.display='block';
+    renderAprov();
     driveStatus('✅ Carregado: '+nome,'ok');
   }catch(e){
     driveStatus('Erro ao carregar: '+e.message,'err');
