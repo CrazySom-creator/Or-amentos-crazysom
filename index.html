@@ -663,59 +663,56 @@ function mudarAbaAprov(aba){
   carregarListaAprov(aba);
 }
 
-let _aprovadosCache=[];
-let _aprovadosOffset=0;
-const APROVADOS_POR_PAG=10;
+// Busca com limite de concorrência para evitar sobrecarga
+async function fetchComLimite(itens, limite=5){
+  const resultados=[];
+  for(let i=0;i<itens.length;i+=limite){
+    const lote=itens.slice(i,i+limite);
+    const res=await Promise.all(lote.map(async item=>{
+      // Tenta até 2 vezes
+      for(let t=0;t<2;t++){
+        try{
+          const r=await fetch(SCRIPT_URL+'?action=load&id='+item.id);
+          if(!r.ok) continue;
+          const d=await r.json();
+          if(!d.ok) continue;
+          const dados=d.dados;
+          const st=dados.aprovStatus||'rascunho';
+          const bruto=['som','video','luz','estrutura','servico','logistica'].reduce((t,s)=>{
+            if(!dados.state||!dados.state[s]) return t;
+            return t+Object.values(dados.state[s].rows||{}).reduce((a,arr)=>a+arr.reduce((x,row)=>x+(row.qty||0)*(row.val||0)*(row.diaria||1),0),0);
+          },0);
+          return{driveId:item.id,nome:item.nome,modificado:item.modificado,st,valor:bruto*(1+IMP),form:dados.form||{},hist:dados.aprovHist||[],dados};
+        }catch{}
+      }
+      return null;
+    }));
+    resultados.push(...res);
+  }
+  return resultados.filter(x=>x);
+}
 
 async function carregarListaAprov(aba){
   const lista=document.getElementById('aprov-lista');
   lista.innerHTML='<div style="text-align:center;padding:30px;color:#888;font-size:12px">⏳ Carregando orçamentos do Drive...</div>';
-  _aprovadosOffset=0;
-  _aprovadosCache=[];
+  _aprovadosOffset=0;_aprovadosCache=[];
   try{
     const r=await fetch(SCRIPT_URL+'?action=list&q=');
     const d=await r.json();
     if(!d.ok) throw new Error(d.erro||'Erro ao listar');
     const itens=d.lista||[];
     if(!itens.length){lista.innerHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">Nenhum orçamento no Drive.</div>';return;}
-
-    lista.innerHTML='<div style="text-align:center;padding:20px;color:#888;font-size:12px">⏳ Analisando '+itens.length+' orçamento(s)...</div>';
-
-    // Carrega todos em paralelo
-    const resultados=await Promise.all(itens.map(async item=>{
-      try{
-        const r2=await fetch(SCRIPT_URL+'?action=load&id='+item.id);
-        const d2=await r2.json();
-        if(!d2.ok) return null;
-        const dados=d2.dados;
-        const st=dados.aprovStatus||'rascunho';
-        const bruto=['som','video','luz','estrutura','servico','logistica'].reduce((t,s)=>{
-          if(!dados.state||!dados.state[s]) return t;
-          return t+Object.values(dados.state[s].rows||{}).reduce((a,arr)=>a+arr.reduce((x,row)=>x+(row.qty||0)*(row.val||0)*(row.diaria||1),0),0);
-        },0);
-        return{driveId:item.id,nome:item.nome,modificado:item.modificado,st,valor:bruto*(1+IMP),form:dados.form||{},hist:dados.aprovHist||[],dados};
-      }catch{return null;}
-    }));
-
-    const validos=resultados.filter(x=>x);
-
+    lista.innerHTML=`<div style="text-align:center;padding:20px;color:#888;font-size:12px">⏳ Carregando ${itens.length} orçamento(s)...</div>`;
+    const validos=await fetchComLimite(itens,5);
     if(aba==='pend'){
-      // Pendentes: todos que não são rascunho nem aprovado
       const pendentes=validos.filter(x=>x.st!=='aprovado'&&x.st!=='rascunho');
       window._listaAprov=pendentes;
-      if(!pendentes.length){
-        lista.innerHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">✅ Nenhum orçamento pendente!</div>';
-        return;
-      }
+      if(!pendentes.length){lista.innerHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">✅ Nenhum orçamento pendente!</div>';return;}
       lista.innerHTML=pendentes.map((orc,idx)=>buildOrcCard(orc,idx)).join('');
     } else {
-      // Aprovados: paginação de 10 em 10
       _aprovadosCache=validos.filter(x=>x.st==='aprovado');
-      if(!_aprovadosCache.length){
-        lista.innerHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">Nenhum orçamento aprovado ainda.</div>';
-        return;
-      }
       window._listaAprov=_aprovadosCache;
+      if(!_aprovadosCache.length){lista.innerHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">Nenhum orçamento aprovado ainda.</div>';return;}
       renderAprovados();
     }
   }catch(e){
@@ -782,6 +779,10 @@ function getBotoesAcao(orc,idx){
   return '';
 }
 
+let _aprovadosCache=[];
+let _aprovadosOffset=0;
+const APROVADOS_POR_PAG=10;
+
 function buildOrcCard(orc,idx){
   const si=SI[orc.st]||SI.rascunho;
   const ult=orc.hist.length?orc.hist[orc.hist.length-1]:null;
@@ -789,7 +790,9 @@ function buildOrcCard(orc,idx){
   const etapas=['analise','gerencial','diretoria','aprovado'];
   const iAtual=etapas.indexOf(orc.st);
   const etapasHTML=etapas.map((e,i)=>{
-    const cls=i<iAtual?'feito':i===iAtual?'atual':'futuro';
+    // "aprovado" sempre fica verde, mesmo sendo o atual
+    const isAprovado=(e==='aprovado'&&orc.st==='aprovado');
+    const cls=isAprovado?'feito':(i<iAtual?'feito':i===iAtual?'atual':'futuro');
     const lbl={analise:'Técnico',gerencial:'Gerente',diretoria:'Diretoria',aprovado:'Aprovado'}[e];
     return `<span class="etapa ${cls}">${lbl}</span>`;
   }).join('<span style="color:#444;font-size:9px;margin:0 1px">›</span>');
@@ -928,7 +931,50 @@ const safe=v=>(isNaN(v)||!isFinite(v))?0:v;
 function fmtCep(el){let v=el.value.replace(/\D/g,'').slice(0,8);if(v.length>5)v=v.slice(0,5)+'-'+v.slice(5);el.value=v;}
 function fmtDoc(el){let v=el.value.replace(/\D/g,'');if(v.length<=11){if(v.length>9)v=v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6,9)+'-'+v.slice(9);else if(v.length>6)v=v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6);else if(v.length>3)v=v.slice(0,3)+'.'+v.slice(3);}else{v=v.slice(0,14);if(v.length>12)v=v.slice(0,2)+'.'+v.slice(2,5)+'.'+v.slice(5,8)+'/'+v.slice(8,12)+'-'+v.slice(12);else if(v.length>8)v=v.slice(0,2)+'.'+v.slice(2,5)+'.'+v.slice(5,8)+'/'+v.slice(8);else if(v.length>5)v=v.slice(0,2)+'.'+v.slice(2,5)+'.'+v.slice(5);else if(v.length>2)v=v.slice(0,2)+'.'+v.slice(2);}el.value=v;}
 async function buscaCEP(c,e,n,ci,st,br){const cep=document.getElementById(c).value.replace(/\D/g,'');if(cep.length!==8){document.getElementById(st).textContent='⚠️ CEP inválido';return;}document.getElementById(st).textContent='🔍 Buscando...';try{const r=await fetch('https://viacep.com.br/ws/'+cep+'/json/');const d=await r.json();if(d.erro){document.getElementById(st).textContent='⚠️ CEP não encontrado';return;}document.getElementById(e).value=d.logradouro||'';document.getElementById(ci).value=(d.localidade||'')+(d.uf?' / '+d.uf:'');if(br&&document.getElementById(br))document.getElementById(br).value=d.bairro||'';document.getElementById(st).textContent='✅ '+(d.bairro||'OK');document.getElementById(n).focus();}catch{document.getElementById(st).textContent='⚠️ Erro';}}
-async function buscaCNPJ(){const doc=gv('f-doc').replace(/\D/g,'');const st=document.getElementById('doc-st');if(doc.length!==14){st.textContent=doc.length===11?'ℹ️ CPF':'⚠️ CNPJ inválido';return;}st.textContent='🔍 Buscando...';let d=null;for(const url of['https://brasilapi.com.br/api/cnpj/v1/'+doc,'https://publica.cnpj.ws/cnpj/'+doc]){try{const r=await fetch(url,{headers:{Accept:'application/json'}});if(r.ok){d=await r.json();if(d&&(d.razao_social||d.nome))break;}}catch{}}if(!d){st.textContent='⚠️ Não encontrado.';return;}if(d.razao_social||d.nome)document.getElementById('f-cliente').value=d.razao_social||d.nome;st.textContent='✅ OK';}
+async function buscaCNPJ(){
+  const doc=gv('f-doc').replace(/\D/g,'');
+  const st=document.getElementById('doc-st');
+  if(doc.length!==14){st.textContent=doc.length===11?'ℹ️ CPF — busca manual':'⚠️ CNPJ inválido';return;}
+  st.textContent='🔍 Buscando...';
+  let d=null;
+  // Tenta BrasilAPI primeiro, depois publica.cnpj.ws
+  for(const url of['https://brasilapi.com.br/api/cnpj/v1/'+doc,'https://publica.cnpj.ws/cnpj/'+doc]){
+    try{
+      const r=await fetch(url,{headers:{Accept:'application/json'}});
+      if(r.ok){d=await r.json();if(d&&(d.razao_social||d.nome_fantasia||d.nome))break;}
+    }catch{}
+  }
+  if(!d){st.textContent='⚠️ Não encontrado. Preencha manualmente.';return;}
+
+  // Razão social
+  const razao=d.razao_social||d.nome||'';
+  const fantasia=d.nome_fantasia||d.alias||'';
+  if(razao) document.getElementById('f-cliente').value=razao;
+
+  // Endereço — BrasilAPI retorna campos diretos, publica.cnpj.ws retorna dentro de "estabelecimento"
+  const est=d.estabelecimento||{};
+  const logr=d.logradouro||est.logradouro||'';
+  const num=d.numero||est.numero||'';
+  const comp=d.complemento||est.complemento||'';
+  const bairro=d.bairro||est.bairro||'';
+  const mun=d.municipio||est.cidade?.nome||'';
+  const uf=d.uf||est.estado?.sigla||'';
+  const cepR=(d.cep||est.cep||'').replace(/\D/g,'');
+
+  if(logr) document.getElementById('f-end').value=logr;
+  if(num||comp) document.getElementById('f-endnum').value=[num,comp].filter(Boolean).join(' / ');
+  if(bairro) document.getElementById('f-bairro').value=bairro;
+  if(mun||uf) document.getElementById('f-cidade').value=[mun,uf].filter(Boolean).join(' / ');
+  if(cepR.length===8){
+    const cepFmt=cepR.slice(0,5)+'-'+cepR.slice(5);
+    document.getElementById('f-cep').value=cepFmt;
+    // Busca CEP para complementar (logradouro oficial)
+    await buscaCEP('f-cep','f-end','f-endnum','f-cidade','cep-st','f-bairro');
+    // Restaura número/complemento pois buscaCEP pode limpar
+    if(num||comp) document.getElementById('f-endnum').value=[num,comp].filter(Boolean).join(' / ');
+  }
+  st.textContent='✅ '+(fantasia||razao||'CNPJ encontrado');
+}
 function setDS(){try{const d=new Date(gv('f-dia')+'T12:00:00');document.getElementById('f-sem').value=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d.getDay()]||'';}catch{}}
 function setDSFim(){try{const d=new Date(gv('f-dia-fim')+'T12:00:00');document.getElementById('f-sem-fim').value=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d.getDay()]||'';}catch{}}
 function getDiasEvento(){const ini=gv('f-dia'),fim=gv('f-dia-fim');if(!ini)return 1;const d1=new Date(ini+'T12:00:00'),d2=fim?new Date(fim+'T12:00:00'):d1;return Math.max(1,Math.round((d2-d1)/(1000*60*60*24))+1);}
