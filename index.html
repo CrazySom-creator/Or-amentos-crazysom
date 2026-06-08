@@ -676,9 +676,22 @@ function admNovo(){
 // PENDÊNCIAS
 // ══════════════════════════════════════════
 function meusFiltros(){
-  if(!usuarioAtual)return[];
-  const m={adm:['analise','gerencial','diretoria','revisao'],consultor:['revisao'],tecnico:['analise'],gerente:['gerencial'],diretor:['diretoria']};
-  return m[usuarioAtual.nivel]||[];
+  if(!usuarioAtual) return [];
+  const nivel=usuarioAtual.nivel;
+  // ADM e Gerente veem tudo
+  if(nivel==='adm'||nivel==='gerente') return ['analise','gerencial','diretoria','revisao'];
+  // Técnico vê análise técnica
+  if(nivel==='tecnico') return ['analise'];
+  // Diretor vê aguardando diretoria
+  if(nivel==='diretor') return ['diretoria'];
+  // Consultor vê TODOS os seus orçamentos pendentes (qualquer status exceto rascunho e aprovado)
+  if(nivel==='consultor') return ['analise','gerencial','diretoria','revisao'];
+  return [];
+}
+
+// Label do responsável atual pelo status
+function respLabel(st){
+  return {analise:'Área Técnica',gerencial:'Gerente Comercial',diretoria:'Diretoria',revisao:'Consultor (revisão)',aprovado:'Aprovado'}[st]||'—';
 }
 
 async function verificarPendencias(){
@@ -888,7 +901,35 @@ function renderRows(s){
     const tr=document.createElement('tr');tr.dataset.rowid=r.id;
     const mv=`<td><button class="bmov" onclick="moveRow('${s}','${aid}','${r.id}',-1)">▲</button><button class="bmov" onclick="moveRow('${s}','${aid}','${r.id}',1)">▼</button></td>`;
     if(r.painel){const m2=safe(r.larg*r.alt).toFixed(2),pxW=Math.round(r.larg*getPx(r.name)),pxH=Math.round(r.alt*getPx(r.name));tr.innerHTML=mv+`<td><input type="number" value="${r.qty}" min="1" style="width:42px" onchange="updRow('${s}','${aid}','${r.id}','qty',this.value)"></td><td><div style="font-size:11px;font-weight:600;margin-bottom:2px">${r.name}</div><div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;font-size:10px">Larg:<input type="number" value="${r.larg}" min="0.1" step="0.1" style="width:52px" onchange="updRow('${s}','${aid}','${r.id}','larg',this.value)">m Alt:<input type="number" value="${r.alt}" min="0.1" step="0.1" style="width:52px" onchange="updRow('${s}','${aid}','${r.id}','alt',this.value)">m Elev:<input type="number" value="${r.elev}" min="0" step="0.1" style="width:48px" onchange="updRow('${s}','${aid}','${r.id}','elev',this.value)">m <span style="color:var(--R);font-weight:700">${m2}m²</span><span style="color:#555">${pxW}×${pxH}px</span></div></td><td><input type="number" value="${r.diaria}" min="0.5" step="0.5" style="width:48px" onchange="updRow('${s}','${aid}','${r.id}','diaria',this.value)"></td><td>${fmt(r.val)}/m²</td><td style="font-weight:700">${fmt(tot)}</td><td style="color:#999;font-size:10px">${fmt(tot*(1+IMP))}</td><td><button class="bdel" onclick="delRow('${s}','${aid}','${r.id}')">✕</button></td>`;}
-    else if(isPal){const c=calcPalco(r),eOpts=ELEV.map(e=>`<option value="${e.l}"${r.elObj&&r.elObj.l===e.l?' selected':''}>${e.l}</option>`).join('');tr.innerHTML=mv+`<td><input type="number" value="${r.qty}" min="1" style="width:42px" onchange="updRow('${s}','${aid}','${r.id}','qty',this.value)"></td><td><div style="font-size:11px;font-weight:700;margin-bottom:3px">🎪 Palco</div><div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;font-size:10px;margin-bottom:3px">Larg:<input type="number" value="${r.larg}" min="0.5" step="0.5" style="width:52px" onchange="updRow('${s}','${aid}','${r.id}','larg',this.value)">m Prof:<input type="number" value="${r.prof}" min="0.5" step="0.5" style="width:52px" onchange="updRow('${s}','${aid}','${r.id}','prof',this.value)">m Elev:<select style="width:70px" onchange="updRow('${s}','${aid}','${r.id}','elObj',this.value)">${eOpts}</select><span style="color:var(--R);font-weight:700">${c.area.toFixed(2)}m² → ${c.np} prat.</span></div><div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;font-size:10px">Carpete:<select style="width:90px" onchange="updRow('${s}','${aid}','${r.id}','carp',this.value)"><option value="false"${!r.carp?' selected':''}>Sem carpete</option><option value="true"${r.carp?' selected':''}>Com carpete</option></select>${r.carp?`<select style="width:70px" onchange="updRow('${s}','${aid}','${r.id}','carpT',this.value)"><option value="novo"${r.carpT==='novo'?' selected':''}>Novo</option><option value="usado"${r.carpT==='usado'?' selected':''}>Usado</option></select><span>Carpete: ${fmt(c.tc)}</span>`:''}</div></td><td><input type="number" value="${r.diaria}" min="0.5" step="0.5" style="width:48px" onchange="updRow('${s}','${aid}','${r.id}','diaria',this.value)"></td><td style="font-size:10px;color:#777">Auto</td><td style="font-weight:700">${fmt(tot)}</td><td style="color:#999;font-size:10px">${fmt(tot*(1+IMP))}</td><td><button class="bdel" onclick="delRow('${s}','${aid}','${r.id}')">✕</button></td>`;}
+    else if(isPal){const c=calcPalco(r),eOpts=ELEV.map(e=>`<option value="${e.l}"${r.elObj&&r.elObj.l===e.l?' selected':''}>${e.l}</option>`).join('');
+    tr.innerHTML=mv+`<td><input type="number" value="${r.qty}" min="1" style="width:42px" onchange="updRow('${s}','${aid}','${r.id}','qty',this.value)"></td>
+    <td><div style="font-size:11px;font-weight:700;margin-bottom:3px">🎪 Palco</div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;font-size:10px;margin-bottom:3px">
+      Larg:<input type="number" value="${r.larg}" min="0.5" step="0.5" style="width:52px" onchange="updRow('${s}','${aid}','${r.id}','larg',this.value)">m
+      Prof:<input type="number" value="${r.prof}" min="0.5" step="0.5" style="width:52px" onchange="updRow('${s}','${aid}','${r.id}','prof',this.value)">m
+      Elev:<select style="width:70px" onchange="updRow('${s}','${aid}','${r.id}','elObj',this.value)">${eOpts}</select>
+      <span style="color:var(--R);font-weight:700">${c.area.toFixed(2)}m² → ${c.np} prat.</span>
+    </div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;font-size:10px">
+      Carpete:
+      <select style="width:90px" onchange="updRow('${s}','${aid}','${r.id}','carp',this.value)">
+        <option value="false"${!r.carp?' selected':''}>Sem carpete</option>
+        <option value="true"${r.carp?' selected':''}>Com carpete</option>
+      </select>
+      ${r.carp?`
+        <select style="width:70px" onchange="updRow('${s}','${aid}','${r.id}','carpT',this.value)">
+          <option value="novo"${r.carpT==='novo'?' selected':''}>Novo</option>
+          <option value="usado"${r.carpT==='usado'?' selected':''}>Usado</option>
+        </select>
+        ${r.carpT==='novo'?`<input type="text" value="${eh(r.carpC||'')}" placeholder="Cor do carpete" style="width:90px;font-size:10px;padding:2px 5px" onchange="updRow('${s}','${aid}','${r.id}','carpC',this.value)">`:''} 
+        <span style="color:#555">Carpete: ${fmt(c.tc)}</span>
+      `:''}
+    </div></td>
+    <td><input type="number" value="${r.diaria}" min="0.5" step="0.5" style="width:48px" onchange="updRow('${s}','${aid}','${r.id}','diaria',this.value)"></td>
+    <td style="font-size:10px;color:#777">Auto</td>
+    <td style="font-weight:700">${fmt(tot)}</td>
+    <td style="color:#999;font-size:10px">${fmt(tot*(1+IMP))}</td>
+    <td><button class="bdel" onclick="delRow('${s}','${aid}','${r.id}')">✕</button></td>`;}
     else if(s==='extra'){const custo=r.qty*r.val*r.diaria,cob=custo*(1+r.marg/100);tr.innerHTML=mv+`<td><input type="number" value="${r.qty}" min="1" style="width:42px" onchange="updRow('${s}','${aid}','${r.id}','qty',this.value)"></td><td>${r.custom?`<input type="text" value="${eh(r.name)}" placeholder="Descrição" style="min-width:145px" onchange="updRow('${s}','${aid}','${r.id}','name',this.value)"><span class="ctag">CUSTOM</span>`:`<span>${r.name}</span>`}</td><td><input type="number" value="${r.diaria}" min="0.5" step="0.5" style="width:48px" onchange="updRow('${s}','${aid}','${r.id}','diaria',this.value)"></td><td><input type="number" value="${r.val}" min="0" step="0.01" style="width:73px" onchange="updRow('${s}','${aid}','${r.id}','val',this.value)"></td><td style="color:#e53935;font-weight:700">${fmt(custo)}</td><td><input type="number" value="${r.marg}" min="0" step="1" style="width:48px" onchange="updRow('${s}','${aid}','${r.id}','marg',this.value)">%</td><td style="color:#66bb6a;font-weight:700">${fmt(cob)}</td><td><button class="bdel" onclick="delRow('${s}','${aid}','${r.id}')">✕</button></td>`;}
     else if(s==='logistica'){tr.innerHTML=mv+`<td><input type="number" value="${r.qty}" min="1" style="width:46px" onchange="updRow('${s}','${aid}','${r.id}','qty',this.value)"></td><td colspan="2">${r.custom?`<input type="text" value="${eh(r.name)}" placeholder="Nome" style="min-width:220px" onchange="updRow('${s}','${aid}','${r.id}','name',this.value)"><span class="ctag">CUSTOM</span>`:`<span>${r.name}</span>`}</td><td><input type="number" value="${r.val}" min="0" step="0.01" style="width:76px" onchange="updRow('${s}','${aid}','${r.id}','val',this.value)"></td><td style="font-weight:700">${fmt(tot)}</td><td style="color:#999;font-size:10px">${fmt(tot*(1+IMP))}</td><td><button class="bdel" onclick="delRow('${s}','${aid}','${r.id}')">✕</button></td>`;}
     else{tr.innerHTML=mv+`<td><input type="number" value="${r.qty}" min="1" style="width:46px" onchange="updRow('${s}','${aid}','${r.id}','qty',this.value)"></td><td>${r.custom?`<input type="text" value="${eh(r.name)}" placeholder="Nome" style="min-width:175px" onchange="updRow('${s}','${aid}','${r.id}','name',this.value)"><span class="ctag">CUSTOM</span>`:`<span>${r.name}</span>`}</td><td><input type="number" value="${r.diaria}" min="0.5" step="${s==='servico'?1:0.5}" style="width:48px" onchange="updRow('${s}','${aid}','${r.id}','diaria',this.value)"></td><td><input type="number" value="${r.val}" min="0" step="0.01" style="width:76px" onchange="updRow('${s}','${aid}','${r.id}','val',this.value)"></td><td style="font-weight:700">${fmt(tot)}</td><td style="color:#999;font-size:10px">${fmt(tot*(1+IMP))}</td><td><button class="bdel" onclick="delRow('${s}','${aid}','${r.id}')">✕</button></td>`;}
