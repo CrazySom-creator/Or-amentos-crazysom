@@ -663,15 +663,23 @@ function mudarAbaAprov(aba){
   carregarListaAprov(aba);
 }
 
+let _aprovadosCache=[];
+let _aprovadosOffset=0;
+const APROVADOS_POR_PAG=10;
+
 async function carregarListaAprov(aba){
   const lista=document.getElementById('aprov-lista');
   lista.innerHTML='<div style="text-align:center;padding:30px;color:#888;font-size:12px">⏳ Carregando orçamentos do Drive...</div>';
+  _aprovadosOffset=0;
+  _aprovadosCache=[];
   try{
     const r=await fetch(SCRIPT_URL+'?action=list&q=');
     const d=await r.json();
     if(!d.ok) throw new Error(d.erro||'Erro ao listar');
     const itens=d.lista||[];
-    if(!itens.length){lista.innerHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">Nenhum orçamento encontrado no Drive.</div>';return;}
+    if(!itens.length){lista.innerHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">Nenhum orçamento no Drive.</div>';return;}
+
+    lista.innerHTML='<div style="text-align:center;padding:20px;color:#888;font-size:12px">⏳ Analisando '+itens.length+' orçamento(s)...</div>';
 
     // Carrega todos em paralelo
     const resultados=await Promise.all(itens.map(async item=>{
@@ -689,89 +697,147 @@ async function carregarListaAprov(aba){
       }catch{return null;}
     }));
 
-    const filtrados=resultados.filter(x=>x&&(aba==='pend'?x.st!=='aprovado'&&x.st!=='rascunho':x.st==='aprovado'));
+    const validos=resultados.filter(x=>x);
 
-    if(!filtrados.length){
-      lista.innerHTML=`<div style="text-align:center;padding:30px;color:#666;font-size:12px">${aba==='pend'?'✅ Nenhum orçamento pendente!':'Nenhum orçamento aprovado ainda.'}</div>`;
-      return;
+    if(aba==='pend'){
+      // Pendentes: todos que não são rascunho nem aprovado
+      const pendentes=validos.filter(x=>x.st!=='aprovado'&&x.st!=='rascunho');
+      window._listaAprov=pendentes;
+      if(!pendentes.length){
+        lista.innerHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">✅ Nenhum orçamento pendente!</div>';
+        return;
+      }
+      lista.innerHTML=pendentes.map((orc,idx)=>buildOrcCard(orc,idx)).join('');
+    } else {
+      // Aprovados: paginação de 10 em 10
+      _aprovadosCache=validos.filter(x=>x.st==='aprovado');
+      if(!_aprovadosCache.length){
+        lista.innerHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">Nenhum orçamento aprovado ainda.</div>';
+        return;
+      }
+      window._listaAprov=_aprovadosCache;
+      renderAprovados();
     }
-
-    // Mapeamento de quem deve agir em cada status
-    const aguardando={analise:'Área Técnica',gerencial:'Gerente Comercial',diretoria:'Diretoria Comercial',revisao:'Consultor (revisão)'};
-
-    lista.innerHTML=filtrados.map((orc,idx)=>{
-      const si=SI[orc.st]||SI.rascunho;
-      const ult=orc.hist.length?orc.hist[orc.hist.length-1]:null;
-      // Etapas do fluxo
-      const etapas=['analise','gerencial','diretoria','aprovado'];
-      const iAtual=etapas.indexOf(orc.st);
-      const etapasHTML=etapas.map((e,i)=>{
-        const cls=i<iAtual?'feito':i===iAtual?'atual':'futuro';
-        const lbl={analise:'Técnico',gerencial:'Gerente',diretoria:'Diretoria',aprovado:'Aprovado'}[e];
-        return `<span class="etapa ${cls}">${lbl}</span>`;
-      }).join('<span style="color:#444;font-size:9px;margin:0 1px">›</span>');
-
-      // Verificar se é a vez do usuário logado agir
-      const nivel=usuarioAtual?usuarioAtual.nivel:'';
-      const minhaVez=(nivel==='tecnico'&&orc.st==='analise')||(nivel==='gerente'&&orc.st==='gerencial')||(nivel==='diretor'&&orc.st==='diretoria')||(nivel==='adm');
-
-      return `<div class="orc-card ${orc.st}" id="orc-card-${idx}" onclick="toggleDetalhes(${idx})">
-        <div class="orc-topo">
-          <span class="orc-num">${orc.form['f-num']||'—'}</span>
-          <span class="orc-cli">${orc.form['f-cliente']||'—'}</span>
-          <span class="orc-val">${fmt(orc.valor)}</span>
-          <span class="orc-badge" style="background:${si.bg};color:${si.tx};border:1px solid ${si.bd}">${si.label}</span>
-        </div>
-        <div class="orc-info">
-          ${aba==='pend'?`<b>Aguardando:</b> ${aguardando[orc.st]||'—'} ${minhaVez?'<b style="color:#ff9800">← SUA VEZ</b>':''}`:''}<br>
-          ${orc.form['f-cons']?`<b>Consultor:</b> ${orc.form['f-cons']} · `:''}
-          ${orc.form['f-dia']?`<b>Evento:</b> ${new Date(orc.form['f-dia']+'T12:00:00').toLocaleDateString('pt-BR')} · `:''}
-          <b>Atualizado:</b> ${orc.modificado}
-          ${ult?`<br><b>Última ação:</b> ${ult.acao} por ${ult.usuario} em ${ult.data}`:''}
-        </div>
-        <div class="etapas">${etapasHTML}</div>
-        <div id="det-${idx}" class="aprov-detalhe">
-          ${orc.hist.length?`<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#aaa;margin-bottom:8px">📜 Histórico</div>`+orc.hist.map(h=>`<div class="hist-evt"><div class="hist-ico">${h.ico||'•'}</div><div class="hist-info"><div class="hist-acao">${h.acao} — <span style="color:#c0001a">${h.usuario}</span></div><div class="hist-det">${h.cargo} · ${h.data}${h.obs?' · "'+h.obs+'"':''}</div></div></div>`).join(''):'<div style="color:#666;font-size:11px">Sem histórico de aprovação.</div>'}
-          ${aba==='pend'&&minhaVez?`
-            <div class="acao-wrap">
-              <textarea class="acao-obs" id="obs-${idx}" placeholder="Observação (opcional)..."></textarea>
-              <div class="acao-btns">${getBotoesAcao(orc,idx)}</div>
-            </div>`:''}
-          <div style="margin-top:10px">
-            <button onclick="abrirOrcDrive(${idx},event)" style="padding:6px 12px;background:#1565c0;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:700">📂 Abrir orçamento</button>
-          </div>
-        </div>
-      </div>`;
-    }).join('');
-
-    // Guarda os dados para uso nas ações
-    window._listaAprov=filtrados;
-
   }catch(e){
     lista.innerHTML=`<div style="text-align:center;padding:30px;color:#888;font-size:12px">⚠️ Erro: ${e.message}</div>`;
   }
 }
 
+function renderAprovados(){
+  const lista=document.getElementById('aprov-lista');
+  const fatia=_aprovadosCache.slice(0,_aprovadosOffset+APROVADOS_POR_PAG);
+  const temMais=_aprovadosCache.length>_aprovadosOffset+APROVADOS_POR_PAG;
+  _aprovadosOffset=fatia.length;
+  // Renderiza cards do slice
+  const cardsHTML=fatia.map((orc,idx)=>buildOrcCard(orc,idx)).join('');
+  const btnMais=temMais?`<div style="text-align:center;margin-top:12px">
+    <button onclick="carregarMaisAprovados()" style="padding:9px 24px;background:#1565c0;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">
+      ⬇️ Carregar mais 10 orçamentos aprovados
+    </button>
+    <div style="font-size:10px;color:#666;margin-top:5px">Exibindo ${fatia.length} de ${_aprovadosCache.length}</div>
+  </div>`:'<div style="text-align:center;font-size:10px;color:#555;margin-top:12px">✅ Todos os '+_aprovadosCache.length+' aprovados carregados.</div>';
+  lista.innerHTML=cardsHTML+btnMais;
+}
+
+function carregarMaisAprovados(){
+  const lista=document.getElementById('aprov-lista');
+  const novaFatia=_aprovadosCache.slice(0,_aprovadosOffset+APROVADOS_POR_PAG);
+  const temMais=_aprovadosCache.length>_aprovadosOffset+APROVADOS_POR_PAG;
+  _aprovadosOffset=novaFatia.length;
+  const novosCards=_aprovadosCache.slice(_aprovadosOffset-APROVADOS_POR_PAG,_aprovadosOffset).map((orc,idx)=>buildOrcCard(orc,_aprovadosOffset-APROVADOS_POR_PAG+idx)).join('');
+  // Remove o botão antigo e adiciona novos cards + novo botão
+  const btnAntigo=lista.querySelector('div[style*="text-align:center;margin-top:12px"]');
+  if(btnAntigo) btnAntigo.remove();
+  const divCards=document.createElement('div');
+  divCards.innerHTML=novosCards;
+  lista.appendChild(divCards);
+  const btnMais=document.createElement('div');
+  btnMais.style.cssText='text-align:center;margin-top:12px';
+  btnMais.innerHTML=temMais
+    ?`<button onclick="carregarMaisAprovados()" style="padding:9px 24px;background:#1565c0;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">⬇️ Carregar mais 10</button><div style="font-size:10px;color:#666;margin-top:5px">Exibindo ${_aprovadosOffset} de ${_aprovadosCache.length}</div>`
+    :`<div style="font-size:10px;color:#555">✅ Todos os ${_aprovadosCache.length} aprovados carregados.</div>`;
+  lista.appendChild(btnMais);
+}
+
 function getBotoesAcao(orc,idx){
   if(!usuarioAtual) return '';
-  const nivel=usuarioAtual.nivel==='adm'?'consultor':usuarioAtual.nivel;
+  const nivel=usuarioAtual.nivel==='adm'?'gerente':usuarioAtual.nivel;
   const b=(cor,txt,st)=>`<button class="acao-btn" style="background:${cor}" onclick="aprovAcaoLista(${idx},'${st}',event)">${txt}</button>`;
+
+  // ADM, Gerente e Diretor têm acesso a todos os níveis
+  if(['adm','gerente','diretor'].includes(usuarioAtual.nivel)){
+    if(orc.st==='analise') return b('#2e7d32',"✅ Aprovar",'aprovado')+b('#e65100',"📊 Encaminhar ao Gerente",'gerencial')+b('#c62828',"🔄 Revisão",'revisao');
+    if(orc.st==='gerencial') return b('#2e7d32',"✅ Aprovar",'aprovado')+b('#6a1b9a',"🏆 Encaminhar Diretoria",'diretoria')+b('#c62828',"🔄 Revisão",'revisao');
+    if(orc.st==='diretoria') return b('#2e7d32',"✅ Aprovar",'aprovado')+b('#c62828',"🔄 Reprovar",'revisao');
+    if(orc.st==='revisao') return b('#1565c0',"📤 Reenviar p/ Análise",'analise')+b('#2e7d32',"✅ Aprovar direto",'aprovado');
+    return '';
+  }
+  // Técnico — só atua em análise
   if(nivel==='tecnico'&&orc.st==='analise'){
     const cImp=orc.valor;
     return cImp<=LIMITE_TEC
       ? b('#2e7d32',"✅ Aprovar",'aprovado')+b('#c62828',"🔄 Revisão",'revisao')
       : b('#e65100',"📊 Encaminhar ao Gerente",'gerencial')+b('#c62828',"🔄 Revisão",'revisao');
   }
-  if(nivel==='gerente'&&orc.st==='gerencial') return b('#2e7d32',"✅ Aprovar",'aprovado')+b('#6a1b9a',"🏆 Diretoria",'diretoria')+b('#c62828',"🔄 Revisão",'revisao');
-  if(nivel==='diretor'&&orc.st==='diretoria') return b('#2e7d32',"✅ Aprovar",'aprovado')+b('#c62828',"🔄 Reprovar",'revisao');
   return '';
+}
+
+function buildOrcCard(orc,idx){
+  const si=SI[orc.st]||SI.rascunho;
+  const ult=orc.hist.length?orc.hist[orc.hist.length-1]:null;
+  const aguardando={analise:'Área Técnica',gerencial:'Gerente Comercial',diretoria:'Diretoria Comercial',revisao:'Consultor (revisão)'};
+  const etapas=['analise','gerencial','diretoria','aprovado'];
+  const iAtual=etapas.indexOf(orc.st);
+  const etapasHTML=etapas.map((e,i)=>{
+    const cls=i<iAtual?'feito':i===iAtual?'atual':'futuro';
+    const lbl={analise:'Técnico',gerencial:'Gerente',diretoria:'Diretoria',aprovado:'Aprovado'}[e];
+    return `<span class="etapa ${cls}">${lbl}</span>`;
+  }).join('<span style="color:#444;font-size:9px;margin:0 1px">›</span>');
+
+  const nivel=usuarioAtual?usuarioAtual.nivel:'';
+  // "SUA VEZ": técnico em analise, ou adm/gerente/diretor em qualquer pendente
+  const minhaVez=(nivel==='tecnico'&&orc.st==='analise')
+    ||(['adm','gerente','diretor'].includes(nivel)&&orc.st!=='aprovado'&&orc.st!=='rascunho')
+    ||(nivel==='consultor'&&orc.st==='revisao');
+
+  const botoesAcao=getBotoesAcao(orc,idx);
+  const temAcao=botoesAcao.length>0;
+
+  return `<div class="orc-card ${orc.st}" id="orc-card-${idx}" onclick="toggleDetalhes(${idx})">
+    <div class="orc-topo">
+      <span class="orc-num">${orc.form['f-num']||'—'}</span>
+      <span class="orc-cli">${orc.form['f-cliente']||'—'}</span>
+      <span class="orc-val">${fmt(orc.valor)}</span>
+      <span class="orc-badge" style="background:${si.bg};color:${si.tx};border:1px solid ${si.bd}">${si.label}</span>
+    </div>
+    <div class="orc-info">
+      ${orc.st!=='aprovado'?`<b>Aguardando:</b> ${aguardando[orc.st]||'—'} ${minhaVez?'<b style="color:#ff9800"> ← SUA VEZ</b>':''}`:''}<br>
+      ${orc.form['f-cons']?`<b>Consultor:</b> ${orc.form['f-cons']} · `:''}
+      ${orc.form['f-dia']?`<b>Evento:</b> ${new Date(orc.form['f-dia']+'T12:00:00').toLocaleDateString('pt-BR')} · `:''}
+      <b>Atualizado:</b> ${orc.modificado}
+      ${ult?`<br><b>Última ação:</b> ${ult.acao} por ${ult.usuario} em ${ult.data}`:''}
+    </div>
+    <div class="etapas">${etapasHTML}</div>
+    <div id="det-${idx}" class="aprov-detalhe">
+      ${orc.hist.length
+        ?`<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#aaa;margin-bottom:8px">📜 Histórico</div>`
+          +orc.hist.map(h=>`<div class="hist-evt"><div class="hist-ico">${h.ico||'•'}</div><div class="hist-info"><div class="hist-acao">${h.acao} — <span style="color:#c0001a">${h.usuario}</span></div><div class="hist-det">${h.cargo} · ${h.data}${h.obs?' · "'+h.obs+'"':''}</div></div></div>`).join('')
+        :'<div style="color:#666;font-size:11px;margin-bottom:8px">Sem histórico de aprovação.</div>'
+      }
+      ${temAcao?`<div class="acao-wrap"><textarea class="acao-obs" id="obs-${idx}" placeholder="Observação (opcional)..."></textarea><div class="acao-btns">${botoesAcao}</div></div>`:''}
+      <div style="margin-top:10px">
+        <button onclick="abrirOrcDrive(${idx},event)" style="padding:6px 12px;background:#1565c0;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:700">📂 Abrir orçamento</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 function toggleDetalhes(idx){
   const el=document.getElementById('det-'+idx);
-  if(!el) return;
-  el.classList.toggle('open');
+  if(el) el.classList.toggle('open');
 }
+
+
 
 async function aprovAcaoLista(idx,novo,ev){
   ev.stopPropagation();
