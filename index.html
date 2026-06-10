@@ -1402,7 +1402,7 @@ function buildPDF(tipo){
   }else{SECS_PDF.forEach(function(s){corpo+=secBlock(s,'default',tipo==='det');});}
   var logTot=secTotAll('logistica')*F*(1-descFrac);
   var totalLabel='Valor Total'+(impAtual==='cimp'?' (impostos inclusos)':'');
-  var res='<table class="pres"><thead><tr><th>Produto / Serviço</th><th class="r" style="width:110px">Valor</th></tr></thead><tbody>';
+  var res='<table class="pres"><thead><tr><th style="background:#e8e8e8;color:#444">Produto / Serviço</th><th class="r" style="width:110px;background:#e8e8e8;color:#444">Valor</th></tr></thead><tbody>';
   if(multiAmb2){
     todosAmb.forEach(function(amb){var t2=SECS_PDF.reduce(function(tot2,s){return tot2+(state[s].rows[amb.id]||[]).reduce(function(a,r){return a+rTotF(r);},0);},0);if(t2>0)res+='<tr><td>'+amb.nome+'</td><td class="r">'+fmtN(t2)+'</td></tr>';});
   }else{
