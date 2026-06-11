@@ -1179,6 +1179,7 @@ var PDF_STYLES={
 };
 
 function buildPDF(tipo){
+  var SECS_PDF=['som','video','luz','estrutura','servico'];
   var F=pdfFator();
   var orcN=gv('f-num')||'—',dataorc=gv('f-data')?fD(gv('f-data')):new Date().toLocaleDateString('pt-BR');
   var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
@@ -1279,7 +1280,6 @@ function buildPDF(tipo){
     }
   }
 
-  var SECS_PDF=['som','video','luz','estrutura','servico'];
   var corpo='';
 
   if(multiAmb2){
