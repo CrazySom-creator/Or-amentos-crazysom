@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- v23b -->
+<!-- v23c -->
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -1163,8 +1163,8 @@ function pdfFator(){return impAtual==='cimp'?(1+IMP):1;}
 
 function buildDesc(r){
   var isPal=r.palco||isPalco(r.name);var d=r.name||'—';
-  if(r.painel){var pxW=Math.round(r.larg*getPx(r.name)),pxH=Math.round(r.alt*getPx(r.name));d+=' '+Number(r.larg).toFixed(2)+'×'+Number(r.alt).toFixed(2)+'m';if(r.elev>0)d+=' – Elevação: '+Number(r.elev).toFixed(2)+'m';d+='<br><span style="font-size:10px;color:#888">Resolução: '+pxW+'×'+pxH+'px</span>';}
-  else if(isPal){d='Palco '+Number(r.larg).toFixed(2)+'×'+Number(r.prof).toFixed(2)+'m – Elevação: '+(r.elObj?r.elObj.l:'—');if(r.carp)d+='<br><span style="font-size:10px;color:#888">Carpete '+(r.carpT==='novo'?'Novo':'Usado')+(r.carpC?' – '+r.carpC:'')+'</span>';}
+  if(r.painel){var pxW=Math.round(r.larg*(getPx(r.name)||0)),pxH=Math.round(r.alt*(getPx(r.name)||0));d+=' '+Number(r.larg).toFixed(2)+'x'+Number(r.alt).toFixed(2)+'m';if(r.elev>0)d+=' – Elev: '+Number(r.elev).toFixed(2)+'m';d+='<br><span style="font-size:9px;color:#888">Resolucao: '+pxW+'x'+pxH+'px</span>';}
+  else if(isPal){d='Palco '+Number(r.larg).toFixed(2)+'x'+Number(r.prof).toFixed(2)+'m – Elev: '+(r.elObj?r.elObj.l:'—');if(r.carp)d+='<br><span style="font-size:9px;color:#888">Carpete '+(r.carpT==='novo'?'Novo':'Usado')+(r.carpC?' – '+r.carpC:'')+'</span>';}
   return d;
 }
 
