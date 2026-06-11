@@ -1379,12 +1379,12 @@ function buildPDF(tipo){
     if(s==='logistica')return'';
     var rows2=state[s].rows[aid]||[];if(!rows2.length)return'';
     if(det){
-      var h='<div class="psec">'+SEC_ICO[s]+' '+SEC_LBL[s]+'</div><table class="pi"><thead><tr><th style="width:30px">Qtd</th><th>Descrição</th><th class="r" style="width:68px">Unit.</th><th class="r" style="width:68px">Total</th></tr></thead><tbody>';
+      var h='<div style="background:#ececec;color:#333;padding:4px 9px;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:1px;border-radius:2px 2px 0 0;border-left:3px solid #c0001a;-webkit-print-color-adjust:exact;print-color-adjust:exact">'+SEC_ICO[s]+' '+SEC_LBL[s]+'</div><table class="pi"><thead><tr><th style="width:30px;background:#e8e8e8;color:#444">Qtd</th><th style="background:#e8e8e8;color:#444">Descrição</th><th class="r" style="width:68px;background:#e8e8e8;color:#444">Unit.</th><th class="r" style="width:68px;background:#e8e8e8;color:#444">Total</th></tr></thead><tbody>';
       rows2.forEach(function(r){var tot2=rTotF(r);h+='<tr><td>'+String(r.qty).padStart(2,'0')+'</td><td>'+buildDesc(r)+'</td><td class="r">'+(r.painel?fmt(r.val*F*(1-descFrac))+'/m²':isPalco(r.name)?'—':fmt(r.val*F*(1-descFrac)))+'</td><td class="r">'+fmt(tot2)+'</td></tr>';});
       var stot2=Object.values(state[s].rows).reduce(function(t,arr){return t+arr.reduce(function(a,r){return a+rTotF(r);},0);},0);
       return h+'<tr class="strow"><td colspan="3" style="text-align:right;padding-right:7px">Total '+SEC_LBL[s]+'</td><td class="r">'+fmt(stot2)+'</td></tr></tbody></table>';
     }else{
-      var h2='<div class="psec">'+SEC_ICO[s]+' '+SEC_LBL[s]+'</div><table class="pi"><thead><tr><th style="width:30px">Qtd</th><th>Descrição</th></tr></thead><tbody>';
+      var h2='<div style="background:#ececec;color:#333;padding:4px 9px;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:1px;border-radius:2px 2px 0 0;border-left:3px solid #c0001a;-webkit-print-color-adjust:exact;print-color-adjust:exact">'+SEC_ICO[s]+' '+SEC_LBL[s]+'</div><table class="pi"><thead><tr><th style="width:30px;background:#e8e8e8;color:#444">Qtd</th><th style="background:#e8e8e8;color:#444">Descrição</th></tr></thead><tbody>';
       rows2.forEach(function(r){h2+='<tr><td>'+String(r.qty).padStart(2,'0')+'</td><td>'+buildDesc(r)+'</td></tr>';});
       return h2+'</tbody></table>';
     }
@@ -1395,9 +1395,9 @@ function buildPDF(tipo){
     todosAmb.forEach(function(amb){
       var temItens=SECS_PDF.some(function(s){return (state[s].rows[amb.id]||[]).length>0;});
       if(!temItens)return;
-      corpo+='<div class="ambhdr">🏢 '+amb.nome+'</div>';
+      corpo+='<div style="background:#e2e2e2;color:#333;padding:4px 9px;font-size:9px;font-weight:800;text-transform:uppercase;border-radius:2px;margin:8px 0 3px;border-left:3px solid #aaa;-webkit-print-color-adjust:exact;print-color-adjust:exact">🏢 '+amb.nome+'</div>';
       SECS_PDF.forEach(function(s){corpo+=secBlock(s,amb.id,tipo==='det');});
-      if(tipo==='det'){var sub2=SECS_PDF.reduce(function(t,s){return t+(state[s].rows[amb.id]||[]).reduce(function(a,r){return a+rTotF(r);},0);},0);corpo+='<table class="pi"><tbody><tr class="strow"><td colspan="3" style="text-align:right">Subtotal '+amb.nome+'</td><td class="r">'+fmt(sub2)+'</td></tr></tbody></table>';}
+      if(tipo==='det'){var sub2=SECS_PDF.reduce(function(t,s){return t+(state[s].rows[amb.id]||[]).reduce(function(a,r){return a+rTotF(r);},0);},0);corpo+='<table class="pi"><tbody><tr><td colspan="3" style="text-align:right;background:#fff0f0;font-weight:800;font-size:9px">Subtotal '+amb.nome+'</td><td class="r" style="background:#fff0f0;color:#c0001a;font-weight:800;font-size:9px">'+fmt(sub2)+'</td></tr></tbody></table>';}
     });
   }else{SECS_PDF.forEach(function(s){corpo+=secBlock(s,'default',tipo==='det');});}
   var logTot=secTotAll('logistica')*F*(1-descFrac);
