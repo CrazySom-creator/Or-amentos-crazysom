@@ -1224,9 +1224,18 @@ function buildPDF(tipo){
     +(gv('f-resp')?'<b>Resp.:</b> '+gv('f-resp')+'<br>':'')
     +(gv('f-cons')?'<b>Consultor:</b> '+gv('f-cons'):'')+'</div></div>';
 
-  var todosAmb=[],ambIds2={};
-  SECS.filter(function(s){return s!=='extra';}).forEach(function(s){state[s].ambientes.forEach(function(a){if(!ambIds2[a.id]){ambIds2[a.id]=true;todosAmb.push({id:a.id,nome:a.nome});}});});
-  var multiAmb2=todosAmb.length>1||todosAmb.some(function(a){return a.id!=='default';});
+  // Coletar ambientes agrupados por nome (evita repetição)
+  var todosAmb=[],ambNomes={};
+  SECS_PDF.forEach(function(s){
+    state[s].ambientes.forEach(function(a){
+      if(!ambNomes[a.nome]){
+        ambNomes[a.nome]={nome:a.nome,ids:[]};
+        todosAmb.push(ambNomes[a.nome]);
+      }
+      if(ambNomes[a.nome].ids.indexOf(a.id)<0)ambNomes[a.nome].ids.push(a.id);
+    });
+  });
+  var multiAmb2=todosAmb.length>1||todosAmb.some(function(a){return a.nome!=='Geral';});
 
   function rTotF(r){return rowTot(r)*F*(1-descFrac);}
 
@@ -1275,26 +1284,35 @@ function buildPDF(tipo){
 
   if(multiAmb2){
     todosAmb.forEach(function(amb){
-      var temItens=SECS_PDF.some(function(s){return (state[s].rows[amb.id]||[]).length>0;});
+      // Verificar se tem itens em qualquer ID deste ambiente
+      var temItens=SECS_PDF.some(function(s){
+        return amb.ids.some(function(aid){return (state[s].rows[aid]||[]).length>0;});
+      });
       if(!temItens)return;
-      // Cabeçalho do ambiente (apenas uma vez)
+      // Cabeçalho do ambiente — apenas uma vez
       corpo+='<div style="'+PDF_STYLES.ambhdr+'">🏢 '+amb.nome+'</div>';
-      // Seções do ambiente
-      SECS_PDF.forEach(function(s){corpo+=secBlock(s,amb.id,tipo==='det');});
-      // Subtotal do ambiente com categorias
+      // Todas as seções de todos os IDs deste ambiente
+      SECS_PDF.forEach(function(s){
+        amb.ids.forEach(function(aid){corpo+=secBlock(s,aid,tipo==='det');});
+      });
+      // Subtotal do ambiente
       if(tipo==='det'){
-        var linhasAmb='';
-        var totalAmb=0;
+        var linhasAmb='';var totalAmb=0;
         SECS_PDF.forEach(function(s){
-          var t=(state[s].rows[amb.id]||[]).reduce(function(a,r){return a+rTotF(r);},0);
-          if(t>0){linhasAmb+='<tr><td style="padding:3px 9px;border-bottom:1px solid #eee;font-size:11px;color:#555">'+SEC_LBL[s]+'</td><td style="padding:3px 9px;border-bottom:1px solid #eee;font-size:11px;text-align:right;font-weight:600">'+fmt(t)+'</td></tr>';totalAmb+=t;}
+          var t=amb.ids.reduce(function(tot,aid){return tot+(state[s].rows[aid]||[]).reduce(function(a,r){return a+rTotF(r);},0);},0);
+          if(t>0){
+            linhasAmb+='<tr><td style="padding:3px 9px;border-bottom:1px solid #eee;font-size:11px;color:#555">'+SEC_LBL[s]+'</td><td style="padding:3px 9px;border-bottom:1px solid #eee;font-size:11px;text-align:right;font-weight:600">'+fmt(t)+'</td></tr>';
+            totalAmb+=t;
+          }
         });
-        corpo+='<table style="width:100%;border-collapse:collapse;margin:4px 0 12px;background:#f9f9f9;border:1px solid #eee;border-radius:3px;font-size:11px">'
-          +'<thead><tr><th style="'+PDF_STYLES.th+';border-radius:2px 0 0 0" colspan="1">Subtotal – '+amb.nome+'</th><th style="'+PDF_STYLES.thr+';border-radius:0 2px 0 0;width:120px">Valor</th></tr></thead>'
-          +'<tbody>'+linhasAmb
-          +'<tr><td style="'+PDF_STYLES.strow+';padding:4px 9px;font-weight:800">Total '+amb.nome+'</td>'
-          +'<td style="'+PDF_STYLES.strowR+';padding:4px 9px">'+fmt(totalAmb)+'</td></tr>'
-          +'</tbody></table>';
+        if(totalAmb>0){
+          corpo+='<table style="width:100%;border-collapse:collapse;margin:4px 0 14px;border:1px solid #eee;font-size:11px">'
+            +'<thead><tr><th style="'+PDF_STYLES.th+'">Subtotal – '+amb.nome+'</th><th style="'+PDF_STYLES.thr+';width:130px">Valor</th></tr></thead>'
+            +'<tbody>'+linhasAmb
+            +'<tr><td style="'+PDF_STYLES.strow+';padding:5px 9px;font-weight:800">Total '+amb.nome+'</td>'
+            +'<td style="'+PDF_STYLES.strowR+';padding:5px 9px">'+fmt(totalAmb)+'</td></tr>'
+            +'</tbody></table>';
+        }
       }
     });
   }else{
@@ -1312,7 +1330,9 @@ function buildPDF(tipo){
 
   if(multiAmb2){
     todosAmb.forEach(function(amb){
-      var t2=SECS_PDF.reduce(function(tot2,s){return tot2+(state[s].rows[amb.id]||[]).reduce(function(a,r){return a+rTotF(r);},0);},0);
+      var t2=SECS_PDF.reduce(function(tot,s){
+        return tot+amb.ids.reduce(function(tt,aid){return tt+(state[s].rows[aid]||[]).reduce(function(a,r){return a+rTotF(r);},0);},0);
+      },0);
       if(t2>0)res+='<tr><td style="padding:5px 9px;border-bottom:1px solid #eee;font-size:11px">'+amb.nome+'</td><td style="padding:5px 9px;border-bottom:1px solid #eee;font-size:11px;text-align:right;font-weight:700">'+fmt(t2)+'</td></tr>';
     });
   }else{
