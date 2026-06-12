@@ -1694,6 +1694,13 @@ function buildPDF(tipo){
 
   if(logTot>0)res+='<tr><td>🚚 LOGÍSTICA</td><td class="r">'+fmt(logTot)+'</td></tr>';
 
+  // Serviços inclusos no PDF (Montagem, Desmontagem, Transporte, etc.)
+  if(incLines.length){
+    incLines.forEach(function(l){
+      res+='<tr><td style="padding-left:18px;color:#555;font-size:10px">↳ '+l+'</td><td class="r" style="color:#888;font-size:10px">incluso</td></tr>';
+    });
+  }
+
   var difDesc=impAtual==='cimp'?(cImp-totalFinal):(bruto-totalFinal);
   if(difDesc>0.01)res+='<tr class="drow2"><td style="text-align:right">Desconto</td><td class="r">– '+fmt(difDesc)+'</td></tr>';
 
