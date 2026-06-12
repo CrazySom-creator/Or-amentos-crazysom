@@ -239,6 +239,55 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 .ibtn.sel{border-color:var(--R);background:#1a0006;color:#fff}
 .macts{display:flex;gap:9px;justify-content:center}
 @media(max-width:620px){.g3,.g4,.tg3,.tg2,.mg,.tcards{grid-template-columns:1fr}}
+/* ── DASHBOARD ── */
+.dash-modal{max-width:960px;max-height:93vh;overflow-y:auto}
+.dash-filtros{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:9px 12px;margin-bottom:14px}
+.dash-filtros label{color:#777;font-size:10px;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:3px}
+.dash-filtros input,.dash-filtros select{background:#111;border:1px solid #2a2a2a;border-radius:4px;color:#fff;padding:5px 8px;font-size:11px}
+.dash-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px}
+.dk{background:#0a0a0a;border:1px solid #1a1a1a;border-radius:8px;padding:11px 13px;position:relative;overflow:hidden}
+.dk::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.dk.verde::before{background:#2e7d32}
+.dk.azul::before{background:#1565c0}
+.dk.vermelho::before{background:#c62828}
+.dk.laranja::before{background:#e65100}
+.dk.roxo::before{background:#6a1b9a}
+.dk.ciano::before{background:#00838f}
+.dk label{color:#666;font-size:9px;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px}
+.dk .dkv{font-size:20px;font-weight:900;color:#fff;display:block;line-height:1}
+.dk .dksub{font-size:10px;color:#555;margin-top:3px;display:block}
+.dash-row{display:grid;gap:12px;margin-bottom:12px}
+.dash-row.c2{grid-template-columns:1fr 1fr}
+.dash-row.c3{grid-template-columns:1fr 1fr 1fr}
+.dash-row.c12{grid-template-columns:1.4fr 1fr}
+.dash-row.c21{grid-template-columns:1fr 1.4fr}
+.dash-box{background:#0a0a0a;border:1px solid #1a1a1a;border-radius:8px;padding:13px 15px}
+.dash-box h3{color:#888;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;font-weight:800;display:flex;justify-content:space-between;align-items:center}
+.dash-box h3 span{color:#555;font-size:9px;font-weight:400}
+.funil-step{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.funil-label{min-width:110px;font-size:10px;color:#aaa;text-align:right}
+.funil-bar{flex:1;height:22px;border-radius:3px;position:relative;overflow:hidden;background:#111}
+.funil-fill{height:100%;border-radius:3px;display:flex;align-items:center;padding-left:8px;font-size:10px;font-weight:800;color:#fff;transition:width .5s ease}
+.funil-val{min-width:30px;font-size:11px;font-weight:800;color:#fff;text-align:right}
+.cons-row{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.cons-nome{min-width:100px;font-size:10px;color:#ccc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cons-bar{flex:1;height:16px;background:#111;border-radius:3px;overflow:hidden}
+.cons-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#c0001a,#ff5555);transition:width .4s}
+.cons-pct{min-width:36px;font-size:10px;color:#888;text-align:right}
+.cons-val{min-width:80px;font-size:10px;font-weight:700;color:#fff;text-align:right}
+.motivo-row{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.motivo-label{min-width:150px;font-size:10px;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.motivo-bar{flex:1;height:14px;background:#111;border-radius:3px;overflow:hidden}
+.motivo-fill{height:100%;border-radius:3px;background:#c62828}
+.motivo-n{min-width:20px;font-size:10px;font-weight:800;color:#ef5350;text-align:right}
+.ev-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #111;font-size:10px}
+.ev-row:last-child{border-bottom:none}
+.fin-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #111;font-size:10px}
+.fin-row:last-child{border-bottom:none}
+.dash-loading{text-align:center;padding:40px;color:#444;font-size:13px}
+.dash-vazio{color:#444;font-size:11px;text-align:center;padding:12px}
+.spark{display:flex;align-items:flex-end;gap:2px;height:32px;margin-top:6px}
+.spark-bar{flex:1;background:#c0001a;border-radius:2px 2px 0 0;min-height:2px;opacity:.7}
 /* ── RELATÓRIOS ── */
 .rel-modal{max-width:900px;max-height:92vh;overflow-y:auto}
 .rel-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px;border-bottom:1px solid #2a2a2a;padding-bottom:8px}
@@ -337,6 +386,66 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
       <button class="btn btn-g btn-sm" onclick="admNovo()">+ Novo Usuário</button>
       <button class="btn btn-o btn-sm" onclick="document.getElementById('adm-ov').classList.remove('open')">Fechar</button>
     </div>
+  </div>
+</div>
+
+<div class="ov" id="dashfin-ov">
+  <div class="modal-box dash-modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div>
+        <h2 style="margin-bottom:2px">💰 Dashboard Financeiro</h2>
+        <p class="sub" id="dashfin-sub" style="margin:0">Carregando dados...</p>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center">
+        <button class="btn btn-r btn-sm" onclick="dashFinAtualizar()">🔄 Atualizar</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('dashfin-ov').classList.remove('open')">✕</button>
+      </div>
+    </div>
+    <div class="dash-filtros">
+      <div><label>De</label><input type="date" id="dashfin-de"></div>
+      <div><label>Até</label><input type="date" id="dashfin-ate"></div>
+      <div><label>Status Parcela</label>
+        <select id="dashfin-status">
+          <option value="">Todos</option>
+          <option value="pago">Pago</option>
+          <option value="pendente">Pendente</option>
+          <option value="atrasado">Atrasado</option>
+        </select>
+      </div>
+      <div><button class="btn btn-r btn-sm" onclick="dashFinRenderizar()">📊 Aplicar</button></div>
+    </div>
+    <div id="dashfin-corpo"><div class="dash-loading">⏳ Carregando...</div></div>
+  </div>
+</div>
+
+<div class="ov" id="dash-ov">
+  <div class="modal-box dash-modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div>
+        <h2 style="margin-bottom:2px">📈 Dashboard Comercial</h2>
+        <p class="sub" id="dash-sub" style="margin:0">Carregando dados...</p>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center">
+        <button class="btn btn-r btn-sm" onclick="dashAtualizar()">🔄 Atualizar</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('dash-ov').classList.remove('open')">✕</button>
+      </div>
+    </div>
+
+    <div class="dash-filtros">
+      <div><label>De</label><input type="date" id="dash-de"></div>
+      <div><label>Até</label><input type="date" id="dash-ate"></div>
+      <div><label>Consultor</label>
+        <select id="dash-cons">
+          <option value="">Todos</option>
+          <option>Fabiano Santos</option><option>Giovana Borges</option>
+          <option>Jéssica Elisandra</option><option>Rafael Oliveira</option>
+          <option>Jefferson</option><option>Wagner Wolff</option>
+        </select>
+      </div>
+      <div><button class="btn btn-r btn-sm" onclick="dashRenderizar()">📊 Aplicar</button></div>
+    </div>
+
+    <div id="dash-corpo"><div class="dash-loading">⏳ Carregando orçamentos do Drive...</div></div>
   </div>
 </div>
 
@@ -584,6 +693,8 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   <div class="user-badge" id="user-badge" style="display:none">
     <div><span id="user-nome">—</span><small id="user-cargo">—</small></div>
     <button class="ubtn" onclick="abrirAprovacoes()">📋 Aprovações</button>
+    <button class="ubtn" onclick="abrirDashboard()">📈 Comercial</button>
+    <button class="ubtn" onclick="abrirDashFin()">💰 Financeiro</button>
     <button class="ubtn" onclick="abrirRelatorios()">📊 Relatórios</button>
     <button class="ubtn" id="btn-adm" onclick="abrirAdm()" style="display:none">⚙️ ADM</button>
     <button class="ubtn" onclick="logout()">Sair</button>
@@ -797,7 +908,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <button class="btn btn-d btn-sm" onclick="gerarOS()">📋 OS</button>
   </div>
   <div style="display:flex;gap:8px;margin-top:9px;justify-content:flex-end;flex-wrap:wrap">
-    <button class="btn btn-o" onclick="limpar()">🗑️ Limpar</button>
+    <button class="btn btn-o" onclick="limpar()">📄 Novo Orçamento</button>
     <button class="btn btn-r" onclick="abrirTipo()">📄 Visualizar PDF</button>
     <button class="btn btn-d" onclick="downloadPDF()">⬇️ Download PDF</button>
   </div>
@@ -1005,7 +1116,7 @@ function renderStatusOrc(){
     if(aprovHist&&aprovHist.length){
       sh.style.display='block';
       var hhtml='';
-      for(var i=0;i<aprovHist.length;i++){var h=aprovHist[i];var diffHtml=(h.diffs&&h.diffs.length)?renderDiffNoHistorico(h.diffs):'';hhtml+='<div class="hist-evt"><div class="hist-ico">'+(h.ico||'•')+'</div><div class="hist-info"><div class="hist-acao">'+h.acao+' — <span style="color:var(--R)">'+h.usuario+'</span></div><div class="hist-det">'+h.cargo+' · '+h.data+(h.obs?' · "'+h.obs+'"':'')+'</div>'+diffHtml+'</div></div>';}
+      for(var i=0;i<aprovHist.length;i++){var h=aprovHist[i];var diffHtml=(h.diffs&&h.diffs.length)?renderDiffNoHistorico(h.diffs,i):'';hhtml+='<div class="hist-evt"><div class="hist-ico">'+(h.ico||'•')+'</div><div class="hist-info"><div class="hist-acao">'+h.acao+' — <span style="color:var(--R)">'+h.usuario+'</span></div><div class="hist-det">'+h.cargo+' · '+h.data+(h.obs?' · "'+h.obs+'"':'')+'</div>'+diffHtml+'</div></div>';}
       hl.innerHTML=hhtml;
     }else{sh.style.display='none';}
   }
@@ -1495,14 +1606,19 @@ function carregar(input){
   fr.readAsText(file);input.value='';
 }
 function limpar(){
-  if(!confirm('Limpar todos os dados?'))return;
+  if(!confirm('Iniciar Novo Orçamento? Todos os dados serão limpos.'))return;
   SECS.forEach(function(s){state[s]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{default:[]}};});
   FORM_IDS.filter(function(id){return ['desc-pct','desc-rs','val-liq','f-pgto','f-svinc'].indexOf(id)<0;}).forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('f-cons').value='';
   document.getElementById('desc-pct').value=0;document.getElementById('desc-rs').value=0;document.getElementById('val-liq').value='';
   document.getElementById('f-pgto').value='50% na contratação;\n50% até 03 dias antes da montagem.';
   ['cep-st','doc-st','cep-ev-st'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent='';});
-  sv('orc-disp','—');driveIdAtual=null;driveNumAtual=null;aprovStatus='rascunho';aprovHist=[];
+  sv('orc-disp','—');
+  driveIdAtual=null;driveNumAtual=null;
+  aprovStatus='rascunho';aprovHist=[];
+  comercialStatus='';comercialHist=[];
+  snapshotAnterior=null;
+  finParcelas=[];finObs='';
   buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
 }
 
@@ -1999,31 +2115,34 @@ function compararSnapshots(ant,atual){
   return diffs;
 }
 
-function renderDiffNoHistorico(diffs){
+function renderDiffNoHistorico(diffs,idx){
   if(!diffs||!diffs.length)return'';
-  var html='<div class="diff-box"><div class="diff-title">📝 Alterações nesta versão</div>';
+  var id='diff-box-'+(idx||0);
+  var n=diffs.length;
+  var itens='';
   diffs.forEach(function(d){
-    var corDe=d.destaque==='aumento'?'#ef9a9a':(d.destaque==='reducao'?'#ef9a9a':'#ef9a9a');
-    var corPara=d.destaque==='aumento'?'#a5d6a7':(d.destaque==='reducao'?'#ef9a9a':'#a5d6a7');
+    var corDe='#ef9a9a';
+    var corPara=d.destaque==='reducao'?'#ef9a9a':'#a5d6a7';
     var bold=d.bold?'font-weight:900;font-size:11px':'';
-    html+='<div class="diff-item" style="'+bold+'">'
-      +'<span class="diff-campo">'+d.campo+':</span> '
-      +'<span class="diff-de" style="color:'+corDe+'">'+d.de+'</span>'
-      +' → <span class="diff-para" style="color:'+corPara+'">'+d.para+'</span>'
-      +'</div>';
+    itens+='<div class="diff-item" style="'+bold+'"><span class="diff-campo">'+d.campo+':</span> <span style="color:'+corDe+'">'+d.de+'</span> &rarr; <span style="color:'+corPara+'">'+d.para+'</span></div>';
   });
-  html+='</div>';
-  return html;
+  return '<div class="diff-box">'
+    +'<div class="diff-title" style="cursor:pointer;display:flex;justify-content:space-between" onclick="diffToggle(\''+id+'\')" title="Clique para ver as alteracoes">'
+    +'<span>&#128221; '+n+' alteracao(oes) nesta versao &mdash; clique para ver</span>'
+    +'<span id="'+id+'-ic">&#9660;</span>'
+    +'</div>'
+    +'<div id="'+id+'" style="display:none">'+itens+'</div>'
+    +'</div>';
 }
 
-var COM_SI={
-  enviada:  {label:'📤 Proposta Enviada', bg:'#1565c0',tx:'#fff'},
-  negociacao:{label:'🤝 Em Negociação',   bg:'#e65100',tx:'#fff'},
-  standby:  {label:'⏸️ Standby',          bg:'#5d4037',tx:'#fff'},
-  ganha:    {label:'🏆 Venda Ganha',      bg:'#2e7d32',tx:'#fff'},
-  perdida:  {label:'❌ Venda Perdida',    bg:'#c62828',tx:'#fff'}
-};
-
+function diffToggle(id){
+  var box=document.getElementById(id);
+  var ic=document.getElementById(id+'-ic');
+  if(!box)return;
+  var aberto=box.style.display!=='none';
+  box.style.display=aberto?'none':'block';
+  if(ic)ic.innerHTML=aberto?'&#9660;':'&#9650;';
+}
 function renderComercial(){
   var panel=document.getElementById('com-panel');
   if(!panel)return;
@@ -3046,6 +3165,472 @@ function relExportarPDF(){
     +'});},600);};'
     +'<\/script></body></html>');
   w.document.close();
+}
+
+// ════════════════════════════════════════════════════════
+//  DASHBOARD
+// ════════════════════════════════════════════════════════
+var _dashDados = [];
+
+async function abrirDashboard(){
+  document.getElementById('dash-ov').classList.add('open');
+  // Período padrão: início do mês vigente até hoje
+  var hoje = new Date();
+  var inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  document.getElementById('dash-de').value = inicioMes.toISOString().split('T')[0];
+  document.getElementById('dash-ate').value = hoje.toISOString().split('T')[0];
+  await dashAtualizar();
+}
+
+async function dashAtualizar(){
+  document.getElementById('dash-sub').textContent = 'Carregando orçamentos do Drive...';
+  document.getElementById('dash-corpo').innerHTML = '<div class="dash-loading">⏳ Buscando dados...</div>';
+  try{
+    var r = await fetch(SCRIPT_URL+'?action=list&q=');
+    var d = await r.json();
+    if(!d.ok) throw new Error(d.erro);
+    var lista = d.lista || [];
+    document.getElementById('dash-sub').textContent = 'Carregando '+lista.length+' orçamentos...';
+    _dashDados = (await fetchComLimite(lista, 5)).filter(Boolean);
+    document.getElementById('dash-sub').textContent = '📦 '+_dashDados.length+' orçamentos carregados';
+    dashRenderizar();
+  }catch(e){
+    document.getElementById('dash-sub').textContent = '⚠️ Erro: '+e.message;
+    document.getElementById('dash-corpo').innerHTML = '<div class="dash-loading" style="color:#ef5350">Erro ao carregar dados: '+e.message+'</div>';
+  }
+}
+
+function dashFiltrar(){
+  var de  = document.getElementById('dash-de').value;
+  var ate = document.getElementById('dash-ate').value;
+  var cons = document.getElementById('dash-cons').value;
+  return _dashDados.filter(function(o){
+    var dt = o.form && o.form['f-data'] || '';
+    if(de  && dt && dt < de)  return false;
+    if(ate && dt && dt > ate) return false;
+    if(cons && (o.form && o.form['f-cons']) !== cons) return false;
+    return true;
+  });
+}
+
+function dashValOrc(o){
+  var bruto = 0;
+  try{
+    ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+      if(o.dados && o.dados.state && o.dados.state[s]){
+        var st2 = o.dados.state[s];
+        Object.keys(st2.rows||{}).forEach(function(aid){
+          (st2.rows[aid]||[]).forEach(function(r){ bruto += rowTot(r); });
+        });
+      }
+    });
+  }catch(e){}
+  return bruto * (1 + IMP);
+}
+
+function dashRenderizar(){
+  var dados = dashFiltrar();
+  var hoje  = new Date().toISOString().split('T')[0];
+  var de    = document.getElementById('dash-de').value;
+  var ate   = document.getElementById('dash-ate').value;
+
+  // ── KPIs gerais ──────────────────────────────────────
+  var total     = dados.length;
+  var aprovados = dados.filter(function(o){ return o.st === 'aprovado'; }).length;
+  var ganhos    = dados.filter(function(o){ return o.dados && o.dados.comercialStatus === 'ganha'; }).length;
+  var perdidos  = dados.filter(function(o){ return o.dados && o.dados.comercialStatus === 'perdida'; }).length;
+  var volume    = dados.reduce(function(t,o){ return t + dashValOrc(o); }, 0);
+  var volGanho  = dados.filter(function(o){ return o.dados && o.dados.comercialStatus === 'ganha'; })
+                       .reduce(function(t,o){ return t + dashValOrc(o); }, 0);
+  var txConv    = total > 0 ? Math.round(ganhos / total * 100) : 0;
+  var txAprov   = total > 0 ? Math.round(aprovados / total * 100) : 0;
+
+  // ── Parcelas financeiras ──────────────────────────────
+  var parcelasAtras = [], parcelasPend = [];
+  _dashDados.forEach(function(o){
+    var fin = (o.dados && o.dados.finParcelas) || [];
+    fin.forEach(function(p){
+      var atrasado = p.status !== 'pago' && p.data && p.data < hoje;
+      if(atrasado) parcelasAtras.push({orc:o, p:p});
+      else if(p.status !== 'pago' && p.data && p.data >= hoje) parcelasPend.push({orc:o, p:p});
+    });
+  });
+  parcelasAtras.sort(function(a,b){ return a.p.data > b.p.data ? 1 : -1; });
+  parcelasPend.sort(function(a,b){  return a.p.data > b.p.data ? 1 : -1; });
+  var totalAtras = parcelasAtras.reduce(function(t,x){ return t + (parseFloat(x.p.valor)||0); }, 0);
+  var totalPend  = parcelasPend.reduce(function(t,x){  return t + (parseFloat(x.p.valor)||0); }, 0);
+
+  // ── Próximos eventos ─────────────────────────────────
+  var proxEvs = _dashDados.filter(function(o){
+    var dt = o.form && o.form['f-dia'] || '';
+    return dt >= hoje;
+  }).sort(function(a,b){
+    return (a.form['f-dia']||'') > (b.form['f-dia']||'') ? 1 : -1;
+  }).slice(0, 6);
+
+  // ── Funil ────────────────────────────────────────────
+  var funil = [
+    {label:'Rascunho',    st:'rascunho',  cor:'#546e7a'},
+    {label:'Em Análise',  st:'analise',   cor:'#1565c0'},
+    {label:'Ap. Gerente', st:'gerencial', cor:'#e65100'},
+    {label:'Ap. Diretoria',st:'diretoria',cor:'#6a1b9a'},
+    {label:'Aprovado',    st:'aprovado',  cor:'#2e7d32'},
+    {label:'Revisão',     st:'revisao',   cor:'#c62828'},
+  ];
+  var maxFunil = Math.max.apply(null, funil.map(function(f){
+    return dados.filter(function(o){ return o.st === f.st; }).length;
+  }).concat([1]));
+
+  var funilHTML = funil.map(function(f){
+    var n = dados.filter(function(o){ return o.st === f.st; }).length;
+    var w = Math.round(n / maxFunil * 100);
+    var vol2 = dados.filter(function(o){ return o.st===f.st; }).reduce(function(t,o){ return t+dashValOrc(o); },0);
+    return '<div class="funil-step">'
+      +'<div class="funil-label">'+f.label+'</div>'
+      +'<div class="funil-bar"><div class="funil-fill" style="width:'+w+'%;background:'+f.cor+'">'+
+        (n>0?'':'')+'</div></div>'
+      +'<div class="funil-val" style="color:'+f.cor+'">'+n+'</div>'
+      +'<div style="min-width:90px;font-size:9px;color:#555;text-align:right">'+fmt(vol2)+'</div>'
+      +'</div>';
+  }).join('');
+
+  // ── Por Consultor ────────────────────────────────────
+  var porCons = {};
+  dados.forEach(function(o){
+    var c = (o.form && o.form['f-cons']) || 'Sem Consultor';
+    if(!porCons[c]) porCons[c] = {qtd:0,ganhos:0,val:0};
+    porCons[c].qtd++;
+    if(o.dados && o.dados.comercialStatus==='ganha'){ porCons[c].ganhos++; porCons[c].val+=dashValOrc(o); }
+  });
+  var consOrdem = Object.keys(porCons).sort(function(a,b){ return porCons[b].val - porCons[a].val; });
+  var maxConsVal = Math.max.apply(null, consOrdem.map(function(c){ return porCons[c].val; }).concat([1]));
+  var consHTML = consOrdem.length ? consOrdem.map(function(c){
+    var pc = porCons[c];
+    var tx = pc.qtd>0 ? Math.round(pc.ganhos/pc.qtd*100) : 0;
+    var w  = Math.round(pc.val / maxConsVal * 100);
+    return '<div class="cons-row">'
+      +'<div class="cons-nome" title="'+c+'">'+c+'</div>'
+      +'<div class="cons-bar"><div class="cons-fill" style="width:'+w+'%"></div></div>'
+      +'<div class="cons-pct" style="color:'+(tx>=50?'#66bb6a':'#ffa726')+'">'+tx+'%</div>'
+      +'<div class="cons-val">'+fmt(pc.val)+'</div>'
+      +'</div>';
+  }).join('') : '<div class="dash-vazio">Sem dados</div>';
+
+  // ── Motivos de Perda ─────────────────────────────────
+  var porMotivo = {};
+  dados.filter(function(o){ return o.dados && o.dados.comercialStatus==='perdida'; }).forEach(function(o){
+    var hist = (o.dados && o.dados.comercialHist) || [];
+    var motivo = 'Não informado';
+    for(var i=hist.length-1;i>=0;i--){ if(hist[i].status==='perdida'&&hist[i].motivo){motivo=hist[i].motivo;break;} }
+    if(!porMotivo[motivo]) porMotivo[motivo]=0;
+    porMotivo[motivo]++;
+  });
+  var motivoOrdem = Object.keys(porMotivo).sort(function(a,b){ return porMotivo[b]-porMotivo[a]; });
+  var maxMot = Math.max.apply(null, motivoOrdem.map(function(m){ return porMotivo[m]; }).concat([1]));
+  var motivoHTML = motivoOrdem.length ? motivoOrdem.map(function(m){
+    var n = porMotivo[m]; var w = Math.round(n/maxMot*100);
+    return '<div class="motivo-row">'
+      +'<div class="motivo-label" title="'+m+'">'+m+'</div>'
+      +'<div class="motivo-bar"><div class="motivo-fill" style="width:'+w+'%"></div></div>'
+      +'<div class="motivo-n">'+n+'</div>'
+      +'</div>';
+  }).join('') : '<div class="dash-vazio">Sem perdas no período 👍</div>';
+
+  // ── Próximos Eventos HTML ─────────────────────────────
+  var SI_CORES3={rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
+  var proxHTML = proxEvs.length ? proxEvs.map(function(o){
+    var f = o.form||{};
+    var dt = f['f-dia']||'';
+    var dias = Math.ceil((new Date(dt+'T12:00:00')-new Date(hoje+'T12:00:00'))/(1000*60*60*24));
+    var diasStr = dias===0?'<b style="color:#ffa726">HOJE</b>':dias<=7?'<span style="color:#ffa726">'+dias+'d</span>':'<span style="color:#888">'+dias+'d</span>';
+    var cor = SI_CORES3[o.st]||'#888';
+    return '<div class="ev-row">'
+      +'<div style="min-width:34px;text-align:center">'+diasStr+'</div>'
+      +'<div style="min-width:80px;color:#888;font-size:9px">'+(dt?fD(dt):'—')+'</div>'
+      +'<div style="flex:1;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+eh(f['f-cliente']||'—')+'</div>'
+      +'<div style="min-width:70px;text-align:right;color:#888;font-size:9px">'+eh(f['f-cons']||'')+'</div>'
+      +'<div style="min-width:60px;text-align:right;font-weight:700;font-size:9px">'+fmt(dashValOrc(o))+'</div>'
+      +'<span style="margin-left:6px;padding:1px 6px;border-radius:8px;font-size:8px;font-weight:800;background:'+cor+'22;color:'+cor+';border:1px solid '+cor+'">'+o.st+'</span>'
+      +'</div>';
+  }).join('') : '<div class="dash-vazio">Nenhum evento próximo cadastrado.</div>';
+
+  // ── Parcelas Atrasadas HTML ───────────────────────────
+  var atrasHTML = parcelasAtras.slice(0,6).length ? parcelasAtras.slice(0,6).map(function(x){
+    var f = x.orc.form||{};
+    return '<div class="fin-row">'
+      +'<div style="flex:1;color:#ef9a9a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+eh(f['f-cliente']||'—')+'</div>'
+      +'<div style="min-width:70px;color:#888;font-size:9px">'+(x.p.data?fD(x.p.data):'—')+'</div>'
+      +'<div style="min-width:65px;text-align:right;font-weight:800;color:#ef5350">'+fmt(parseFloat(x.p.valor)||0)+'</div>'
+      +'</div>';
+  }).join('')+(parcelasAtras.length>6?'<div style="color:#555;font-size:10px;text-align:center;padding:4px">+mais '+(parcelasAtras.length-6)+'</div>':'')
+  : '<div class="dash-vazio" style="color:#66bb6a">✅ Nenhuma parcela atrasada!</div>';
+
+  // ── Volume por mês (sparkline) ────────────────────────
+  var porMes = {};
+  dados.forEach(function(o){
+    var dt = o.form && o.form['f-data']||'';
+    if(!dt) return;
+    var m = dt.substring(0,7);
+    if(!porMes[m]) porMes[m]=0;
+    porMes[m]+=dashValOrc(o);
+  });
+  var meses = Object.keys(porMes).sort();
+  var maxMesVal = Math.max.apply(null, meses.map(function(m){ return porMes[m]; }).concat([1]));
+  var sparkHTML = meses.length ? '<div class="spark">'+meses.map(function(m){
+    var h = Math.max(4, Math.round(porMes[m]/maxMesVal*30));
+    var pts = m.split('-');
+    return '<div class="spark-bar" style="height:'+h+'px" title="'+(pts[1]+'/'+pts[0])+': '+fmt(porMes[m])+'"></div>';
+  }).join('')+'</div>' : '';
+
+  // ── MONTAR DASHBOARD ──────────────────────────────────
+  var html = '';
+
+  // KPIs comerciais (sem dados financeiros)
+  html += '<div class="dash-kpis">'
+    +'<div class="dk verde"><label>Orçamentos</label><span class="dkv">'+total+'</span><span class="dksub">no período</span></div>'
+    +'<div class="dk verde"><label>Vendas Ganhas</label><span class="dkv">'+ganhos+'</span><span class="dksub">conv. '+txConv+'%</span></div>'
+    +'<div class="dk vermelho"><label>Vendas Perdidas</label><span class="dkv">'+perdidos+'</span><span class="dksub">'+(total>0?Math.round(perdidos/total*100):0)+'% do total</span></div>'
+    +'<div class="dk laranja"><label>Volume Orçado</label><span class="dkv" style="font-size:13px">'+fmt(volume)+'</span><span class="dksub">total no período</span></div>'
+    +'<div class="dk ciano"><label>Volume Ganho</label><span class="dkv" style="font-size:13px">'+fmt(volGanho)+'</span><span class="dksub">faturado</span></div>'
+    +'<div class="dk roxo"><label>Em Negociação</label><span class="dkv">'+dados.filter(function(o){return o.dados&&o.dados.comercialStatus==='negociacao';}).length+'</span><span class="dksub">oportunidades</span></div>'
+    +'</div>';
+
+  // Linha 1: Funil + Consultor
+  html += '<div class="dash-row c12">'
+    +'<div class="dash-box"><h3>🔽 Funil de Vendas <span>qtd · volume</span></h3>'+funilHTML+'</div>'
+    +'<div class="dash-box"><h3>👤 Conversão por Consultor <span>% ganhos · volume</span></h3>'+consHTML+'</div>'
+    +'</div>';
+
+  // Linha 2: Motivos perda + Próximos eventos
+  html += '<div class="dash-row c2">'
+    +'<div class="dash-box"><h3>❌ Motivos de Perda</h3>'+motivoHTML+'</div>'
+    +'<div class="dash-box"><h3>🔜 Próximos Eventos <span>dias · cliente · valor</span></h3>'+proxHTML+'</div>'
+    +'</div>';
+
+  // Linha 3: Volume mensal
+  html += '<div class="dash-row">'
+    +'<div class="dash-box"><h3>📊 Volume Orçado por Mês <span>'+de.substring(0,7)+' → '+ate.substring(0,7)+'</span></h3>'
+      +'<div style="font-size:11px;color:#888;margin-bottom:8px">Total orçado no período selecionado</div>'
+      +'<div style="display:flex;align-items:flex-end;gap:6px;height:60px;margin-bottom:6px">'
+      +meses.map(function(m){
+        var h2=Math.max(6,Math.round(porMes[m]/maxMesVal*56));
+        var pts=m.split('-');
+        return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">'
+          +'<div style="font-size:8px;color:#666;font-weight:700">'+fmt(porMes[m]).replace('R$','').trim()+'</div>'
+          +'<div style="width:100%;height:'+h2+'px;background:#c0001a;border-radius:3px 3px 0 0;opacity:.85" title="'+pts[1]+'/'+pts[0]+': '+fmt(porMes[m])+'"></div>'
+          +'<div style="font-size:9px;color:#555">'+pts[1]+'/'+pts[0].substring(2)+'</div>'
+          +'</div>';
+      }).join('')
+      +'</div>'
+    +'</div>'
+    +'</div>';
+
+  document.getElementById('dash-corpo').innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════
+//  DASHBOARD FINANCEIRO
+// ════════════════════════════════════════════════════════
+var _dashFinDados = [];
+
+async function abrirDashFin(){
+  document.getElementById('dashfin-ov').classList.add('open');
+  var hoje = new Date();
+  var inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  document.getElementById('dashfin-de').value = inicioMes.toISOString().split('T')[0];
+  document.getElementById('dashfin-ate').value = hoje.toISOString().split('T')[0];
+  await dashFinAtualizar();
+}
+
+async function dashFinAtualizar(){
+  document.getElementById('dashfin-sub').textContent = 'Carregando dados...';
+  document.getElementById('dashfin-corpo').innerHTML = '<div class="dash-loading">⏳ Buscando dados...</div>';
+  try{
+    var r = await fetch(SCRIPT_URL+'?action=list&q=');
+    var d = await r.json();
+    if(!d.ok) throw new Error(d.erro);
+    var lista = d.lista||[];
+    document.getElementById('dashfin-sub').textContent = 'Carregando '+lista.length+' orçamentos...';
+    _dashFinDados = (await fetchComLimite(lista,5)).filter(Boolean);
+    document.getElementById('dashfin-sub').textContent = '📦 '+_dashFinDados.length+' orçamentos carregados';
+    dashFinRenderizar();
+  }catch(e){
+    document.getElementById('dashfin-sub').textContent = '⚠️ Erro: '+e.message;
+    document.getElementById('dashfin-corpo').innerHTML = '<div class="dash-loading" style="color:#ef5350">'+e.message+'</div>';
+  }
+}
+
+function dashFinRenderizar(){
+  var de     = document.getElementById('dashfin-de').value;
+  var ate    = document.getElementById('dashfin-ate').value;
+  var stFilt = document.getElementById('dashfin-status').value;
+  var hoje   = new Date().toISOString().split('T')[0];
+
+  // Coletar todas as parcelas
+  var todas = [];
+  _dashFinDados.forEach(function(o){
+    var fin = (o.dados && o.dados.finParcelas)||[];
+    fin.forEach(function(p){
+      var atrasado = p.status!=='pago' && p.data && p.data < hoje;
+      var stReal   = p.status==='pago'?'pago':(atrasado?'atrasado':'pendente');
+      todas.push({
+        num:    o.form&&o.form['f-num']||'—',
+        cliente:o.form&&o.form['f-cliente']||'—',
+        cons:   o.form&&o.form['f-cons']||'—',
+        desc:   p.desc||'—',
+        data:   p.data||'',
+        valor:  parseFloat(p.valor)||0,
+        forma:  p.forma||'—',
+        status: stReal
+      });
+    });
+  });
+
+  // Filtrar por data e status
+  var filtradas = todas.filter(function(p){
+    if(de  && p.data && p.data < de)  return false;
+    if(ate && p.data && p.data > ate)  return false;
+    if(stFilt && p.status !== stFilt) return false;
+    return true;
+  });
+
+  // KPIs
+  var totalPago   = todas.filter(function(p){return p.status==='pago';}).reduce(function(t,p){return t+p.valor;},0);
+  var totalPend   = todas.filter(function(p){return p.status==='pendente';}).reduce(function(t,p){return t+p.valor;},0);
+  var totalAtras  = todas.filter(function(p){return p.status==='atrasado';}).reduce(function(t,p){return t+p.valor;},0);
+  var totalGeral  = totalPago+totalPend+totalAtras;
+  var qtdAtras    = todas.filter(function(p){return p.status==='atrasado';}).length;
+  var qtdPend     = todas.filter(function(p){return p.status==='pendente';}).length;
+  // Próximas 7 dias
+  var em7d = new Date(); em7d.setDate(em7d.getDate()+7);
+  var em7dStr = em7d.toISOString().split('T')[0];
+  var vencSemana = todas.filter(function(p){return p.status==='pendente'&&p.data>=hoje&&p.data<=em7dStr;}).reduce(function(t,p){return t+p.valor;},0);
+
+  // Por forma de pagamento
+  var porForma = {};
+  filtradas.filter(function(p){return p.status==='pago';}).forEach(function(p){
+    var f = p.forma||'Não informado';
+    if(!porForma[f])porForma[f]=0;
+    porForma[f]+=p.valor;
+  });
+
+  // Por mês (parcelas pagas)
+  var porMesFin = {};
+  todas.filter(function(p){return p.status==='pago'&&p.data>=de&&p.data<=ate;}).forEach(function(p){
+    var m = p.data.substring(0,7);
+    if(!porMesFin[m])porMesFin[m]=0;
+    porMesFin[m]+=p.valor;
+  });
+  var mesesFin = Object.keys(porMesFin).sort();
+  var maxMesFin = Math.max.apply(null,mesesFin.map(function(m){return porMesFin[m];}).concat([1]));
+
+  // Por consultor (volume ganho = parcelas pagas)
+  var porConsFin = {};
+  filtradas.filter(function(p){return p.status==='pago';}).forEach(function(p){
+    if(!porConsFin[p.cons])porConsFin[p.cons]=0;
+    porConsFin[p.cons]+=p.valor;
+  });
+
+  // Próximos vencimentos
+  var proxVenc = todas.filter(function(p){return p.status==='pendente'&&p.data>=hoje;})
+    .sort(function(a,b){return a.data>b.data?1:-1;}).slice(0,8);
+
+  // Parcelas atrasadas
+  var atrasadas = todas.filter(function(p){return p.status==='atrasado';})
+    .sort(function(a,b){return a.data>b.data?1:-1;}).slice(0,8);
+
+  var ST_COR = {pago:'#66bb6a',pendente:'#ffa726',atrasado:'#ef5350'};
+  var ST_LBL = {pago:'✅ Pago',pendente:'⏳ Pendente',atrasado:'⚠️ Atrasado'};
+
+  var html = '';
+
+  // ── KPIs ─────────────────────────────────────────────
+  html += '<div class="dash-kpis">'
+    +'<div class="dk verde"><label>Total Recebido</label><span class="dkv" style="font-size:13px">'+fmt(totalPago)+'</span><span class="dksub">parcelas pagas</span></div>'
+    +'<div class="dk laranja"><label>A Receber</label><span class="dkv" style="font-size:13px;color:#ffa726">'+fmt(totalPend)+'</span><span class="dksub">'+qtdPend+' parcela(s)</span></div>'
+    +'<div class="dk vermelho"><label>Em Atraso</label><span class="dkv" style="font-size:13px;color:#ef5350">'+fmt(totalAtras)+'</span><span class="dksub">'+qtdAtras+' parcela(s)</span></div>'
+    +'<div class="dk ciano"><label>Vence em 7 dias</label><span class="dkv" style="font-size:13px;color:#80deea">'+fmt(vencSemana)+'</span><span class="dksub">atenção</span></div>'
+    +'<div class="dk roxo"><label>Total Geral</label><span class="dkv" style="font-size:13px">'+fmt(totalGeral)+'</span><span class="dksub">todas as parcelas</span></div>'
+    +'<div class="dk azul"><label>% Recebido</label><span class="dkv">'+(totalGeral>0?Math.round(totalPago/totalGeral*100):0)+'%</span><span class="dksub">do total</span></div>'
+    +'</div>';
+
+  // ── Linha 1: Recebimento mensal + Forma pgto ─────────
+  var formaHTML = Object.keys(porForma).sort(function(a,b){return porForma[b]-porForma[a];}).map(function(f){
+    var v=porForma[f]; var max2=Math.max.apply(null,Object.values(porForma));
+    var w=Math.round(v/max2*100);
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+      +'<div style="min-width:110px;font-size:10px;color:#ccc">'+f+'</div>'
+      +'<div style="flex:1;height:16px;background:#111;border-radius:3px;overflow:hidden">'
+      +'<div style="width:'+w+'%;height:100%;background:#1565c0;border-radius:3px"></div></div>'
+      +'<div style="min-width:90px;text-align:right;font-size:10px;font-weight:700;color:#fff">'+fmt(v)+'</div>'
+      +'</div>';
+  }).join('') || '<div class="dash-vazio">Sem recebimentos no período</div>';
+
+  var barMeses = mesesFin.length ? '<div style="display:flex;align-items:flex-end;gap:5px;height:70px;margin-bottom:6px">'
+    +mesesFin.map(function(m){
+      var h2=Math.max(6,Math.round(porMesFin[m]/maxMesFin*65));
+      var pts=m.split('-');
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">'
+        +'<div style="font-size:8px;color:#666">'+fmt(porMesFin[m]).replace('R$','').trim()+'</div>'
+        +'<div style="width:100%;height:'+h2+'px;background:#2e7d32;border-radius:3px 3px 0 0" title="'+pts[1]+'/'+pts[0]+': '+fmt(porMesFin[m])+'"></div>'
+        +'<div style="font-size:9px;color:#555">'+pts[1]+'/'+pts[0].substring(2)+'</div>'
+        +'</div>';
+    }).join('')+'</div>'
+  : '<div class="dash-vazio">Sem recebimentos no período</div>';
+
+  html += '<div class="dash-row c2">'
+    +'<div class="dash-box"><h3>📊 Recebimentos por Mês</h3>'+barMeses+'</div>'
+    +'<div class="dash-box"><h3>💳 Por Forma de Pagamento <span>parcelas pagas</span></h3>'+formaHTML+'</div>'
+    +'</div>';
+
+  // ── Linha 2: Próximos vencimentos + Atrasados ────────
+  var proxVencHTML = proxVenc.length ? proxVenc.map(function(p){
+    var dias=Math.ceil((new Date(p.data+'T12:00:00')-new Date(hoje+'T12:00:00'))/(1000*60*60*24));
+    var corDias = dias<=3?'#ef5350':dias<=7?'#ffa726':'#888';
+    return '<div class="fin-row">'
+      +'<div style="min-width:36px;text-align:center;font-weight:800;color:'+corDias+'">'+dias+'d</div>'
+      +'<div style="min-width:72px;color:#888;font-size:9px">'+fD(p.data)+'</div>'
+      +'<div style="flex:1;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+eh(p.cliente)+'</div>'
+      +'<div style="min-width:65px;color:#888;font-size:9px;text-align:right">'+eh(p.forma||'—')+'</div>'
+      +'<div style="min-width:80px;text-align:right;font-weight:800;color:#ffa726">'+fmt(p.valor)+'</div>'
+      +'</div>';
+  }).join('') : '<div class="dash-vazio" style="color:#66bb6a">✅ Nenhum vencimento próximo!</div>';
+
+  var atrasadasHTML = atrasadas.length ? atrasadas.map(function(p){
+    var diasAtras = Math.ceil((new Date(hoje+'T12:00:00')-new Date(p.data+'T12:00:00'))/(1000*60*60*24));
+    return '<div class="fin-row">'
+      +'<div style="min-width:46px;text-align:center;font-weight:800;color:#ef5350">'+diasAtras+'d</div>'
+      +'<div style="min-width:72px;color:#888;font-size:9px">'+fD(p.data)+'</div>'
+      +'<div style="flex:1;color:#ef9a9a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+eh(p.cliente)+'</div>'
+      +'<div style="min-width:65px;color:#888;font-size:9px;text-align:right">'+eh(p.cons||'—')+'</div>'
+      +'<div style="min-width:80px;text-align:right;font-weight:800;color:#ef5350">'+fmt(p.valor)+'</div>'
+      +'</div>';
+  }).join('') : '<div class="dash-vazio" style="color:#66bb6a">✅ Nenhuma parcela atrasada!</div>';
+
+  html += '<div class="dash-row c2">'
+    +'<div class="dash-box"><h3>🔜 Próximos Vencimentos <span>dias · cliente · valor</span></h3>'+proxVencHTML+'</div>'
+    +'<div class="dash-box"><h3>⚠️ Parcelas Atrasadas <span style="color:#ef5350">'+fmt(totalAtras)+'</span></h3>'+atrasadasHTML+'</div>'
+    +'</div>';
+
+  // ── Linha 3: Por consultor ───────────────────────────
+  var consFinOrdem = Object.keys(porConsFin).sort(function(a,b){return porConsFin[b]-porConsFin[a];});
+  var maxConsFin = Math.max.apply(null,consFinOrdem.map(function(c){return porConsFin[c];}).concat([1]));
+  var consFinHTML = consFinOrdem.length ? consFinOrdem.map(function(c){
+    var v=porConsFin[c]; var w=Math.round(v/maxConsFin*100);
+    var pct=totalPago>0?Math.round(v/totalPago*100):0;
+    return '<div class="cons-row">'
+      +'<div class="cons-nome">'+eh(c)+'</div>'
+      +'<div class="cons-bar"><div style="width:'+w+'%;height:100%;background:linear-gradient(90deg,#1565c0,#42a5f5);border-radius:3px"></div></div>'
+      +'<div class="cons-pct">'+pct+'%</div>'
+      +'<div class="cons-val">'+fmt(v)+'</div>'
+      +'</div>';
+  }).join('') : '<div class="dash-vazio">Sem recebimentos no período</div>';
+
+  html += '<div class="dash-row">'
+    +'<div class="dash-box"><h3>👤 Recebimentos por Consultor <span>valor recebido no período</span></h3>'+consFinHTML+'</div>'
+    +'</div>';
+
+  document.getElementById('dashfin-corpo').innerHTML = html;
 }
 
 buildTabs();
