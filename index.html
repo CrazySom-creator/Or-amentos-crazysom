@@ -1245,37 +1245,37 @@ function buildPDF(tipo){
     var rows2=state[s].rows[aid]||[];if(!rows2.length)return'';
     var secTotal=rows2.reduce(function(t,r){return t+rTotF(r);},0);
     if(det){
-      var h='<div style="'+PDF_STYLES.psec+'">'+SEC_ICO[s]+' '+SEC_LBL[s]+'</div>'
-        +'<table style="width:100%;border-collapse:collapse;margin-bottom:8px;font-size:11px">'
+      var h='<div class="psec">'+SEC_ICO[s]+' '+SEC_LBL[s]+'</div>'
+        +'<table class="pi">'
         +'<thead><tr>'
-        +'<th style="'+PDF_STYLES.th+';width:30px">Qtd</th>'
-        +'<th style="'+PDF_STYLES.th+'">Descrição</th>'
-        +'<th style="'+PDF_STYLES.thr+';width:90px">Unit.</th>'
-        +'<th style="'+PDF_STYLES.thr+';width:90px">Total</th>'
+        +'<th style="width:30px">Qtd</th>'
+        +'<th>Descrição</th>'
+        +'<th class="r" style="width:90px">Unit.</th>'
+        +'<th class="r" style="width:90px">Total</th>'
         +'</tr></thead><tbody>';
       rows2.forEach(function(r){
         var tot2=rTotF(r);
         var unitVal=r.painel?fmt(r.val*F*(1-descFrac))+'/m²':isPalco(r.name)?'—':fmt(r.val*F*(1-descFrac));
         h+='<tr>'
-          +'<td style="padding:4px 7px;border-bottom:1px solid #eee;font-size:11px">'+String(r.qty).padStart(2,'0')+'</td>'
-          +'<td style="padding:4px 7px;border-bottom:1px solid #eee;font-size:11px">'+buildDesc(r)+'</td>'
-          +'<td style="padding:4px 7px;border-bottom:1px solid #eee;font-size:11px;text-align:right">'+unitVal+'</td>'
-          +'<td style="padding:4px 7px;border-bottom:1px solid #eee;font-size:11px;text-align:right;font-weight:700">'+fmt(tot2)+'</td>'
+          +'<td>'+String(r.qty).padStart(2,'0')+'</td>'
+          +'<td>'+buildDesc(r)+'</td>'
+          +'<td class="r">'+unitVal+'</td>'
+          +'<td class="r">'+fmt(tot2)+'</td>'
           +'</tr>';
       });
-      h+='<tr>'
-        +'<td colspan="3" style="'+PDF_STYLES.strow+';text-align:right;padding:4px 7px">Total '+SEC_LBL[s]+'</td>'
-        +'<td style="'+PDF_STYLES.strowR+';padding:4px 7px">'+fmt(secTotal)+'</td>'
+      h+='<tr class="strow">'
+        +'<td colspan="3" style="text-align:right">Total '+SEC_LBL[s]+'</td>'
+        +'<td class="r">'+fmt(secTotal)+'</td>'
         +'</tr></tbody></table>';
       return h;
     }else{
-      var h2='<div style="'+PDF_STYLES.psec+'">'+SEC_ICO[s]+' '+SEC_LBL[s]+'</div>'
-        +'<table style="width:100%;border-collapse:collapse;margin-bottom:8px;font-size:11px">'
+      var h2='<div class="psec">'+SEC_ICO[s]+' '+SEC_LBL[s]+'</div>'
+        +'<table class="pi">'
         +'<thead><tr>'
-        +'<th style="'+PDF_STYLES.th+';width:30px">Qtd</th>'
-        +'<th style="'+PDF_STYLES.th+'">Descrição</th>'
+        +'<th style="width:30px">Qtd</th>'
+        +'<th>Descrição</th>'
         +'</tr></thead><tbody>';
-      rows2.forEach(function(r){h2+='<tr><td style="padding:4px 7px;border-bottom:1px solid #eee;font-size:11px">'+String(r.qty).padStart(2,'0')+'</td><td style="padding:4px 7px;border-bottom:1px solid #eee;font-size:11px">'+buildDesc(r)+'</td></tr>';});
+      rows2.forEach(function(r){h2+='<tr><td>'+String(r.qty).padStart(2,'0')+'</td><td>'+buildDesc(r)+'</td></tr>';});
       return h2+'</tbody></table>';
     }
   }
@@ -1290,7 +1290,7 @@ function buildPDF(tipo){
       });
       if(!temItens)return;
       // Cabeçalho do ambiente — apenas uma vez
-      corpo+='<div style="'+PDF_STYLES.ambhdr+'">🏢 '+amb.nome+'</div>';
+      corpo+='<div class="ambhdr">🏢 '+amb.nome+'</div>';
       // Todas as seções de todos os IDs deste ambiente
       SECS_PDF.forEach(function(s){
         amb.ids.forEach(function(aid){corpo+=secBlock(s,aid,tipo==='det');});
@@ -1306,11 +1306,11 @@ function buildPDF(tipo){
           }
         });
         if(totalAmb>0){
-          corpo+='<table style="width:100%;border-collapse:collapse;margin:4px 0 14px;border:1px solid #eee;font-size:11px">'
-            +'<thead><tr><th style="'+PDF_STYLES.th+'">Subtotal – '+amb.nome+'</th><th style="'+PDF_STYLES.thr+';width:130px">Valor</th></tr></thead>'
+          corpo+='<table class="pi" style="margin:4px 0 14px">'
+            +'<thead><tr><th>Subtotal – '+amb.nome+'</th><th class="r" style="width:130px">Valor</th></tr></thead>'
             +'<tbody>'+linhasAmb
-            +'<tr><td style="'+PDF_STYLES.strow+';padding:5px 9px;font-weight:800">Total '+amb.nome+'</td>'
-            +'<td style="'+PDF_STYLES.strowR+';padding:5px 9px">'+fmt(totalAmb)+'</td></tr>'
+            +'<tr class="strow"><td style="text-align:right">Total '+amb.nome+'</td>'
+            +'<td class="r">'+fmt(totalAmb)+'</td></tr>'
             +'</tbody></table>';
         }
       }
@@ -1322,10 +1322,10 @@ function buildPDF(tipo){
   var logTot=secTotAll('logistica')*F*(1-descFrac);
   var totalLabel='Valor Total'+(impAtual==='cimp'?' (impostos inclusos)':'');
 
-  var res='<table style="width:100%;border-collapse:collapse;margin-bottom:13px;font-size:11px">'
+  var res='<table class="pres">'
     +'<thead><tr>'
-    +'<th style="'+PDF_STYLES.th+'">Produto / Serviço</th>'
-    +'<th style="'+PDF_STYLES.thr+';width:130px">Valor</th>'
+    +'<th>Produto / Serviço</th>'
+    +'<th class="r" style="width:130px">Valor</th>'
     +'</tr></thead><tbody>';
 
   if(multiAmb2){
@@ -1333,22 +1333,22 @@ function buildPDF(tipo){
       var t2=SECS_PDF.reduce(function(tot,s){
         return tot+amb.ids.reduce(function(tt,aid){return tt+(state[s].rows[aid]||[]).reduce(function(a,r){return a+rTotF(r);},0);},0);
       },0);
-      if(t2>0)res+='<tr><td style="padding:5px 9px;border-bottom:1px solid #eee;font-size:11px">'+amb.nome+'</td><td style="padding:5px 9px;border-bottom:1px solid #eee;font-size:11px;text-align:right;font-weight:700">'+fmt(t2)+'</td></tr>';
+      if(t2>0)res+='<tr><td>'+amb.nome+'</td><td class="r">'+fmt(t2)+'</td></tr>';
     });
   }else{
     [{n:'SONORIZAÇÃO',s:'som'},{n:'VÍDEO',s:'video'},{n:'ILUMINAÇÃO',s:'luz'},{n:'ESTRUTURA',s:'estrutura'},{n:'SERVIÇO',s:'servico'}]
       .filter(function(x){return secTotAll(x.s)>0;})
-      .forEach(function(x){res+='<tr><td style="padding:5px 9px;border-bottom:1px solid #eee;font-size:11px">'+x.n+'</td><td style="padding:5px 9px;border-bottom:1px solid #eee;font-size:11px;text-align:right;font-weight:700">'+fmt(secTotAll(x.s)*F*(1-descFrac))+'</td></tr>';});
+      .forEach(function(x){res+='<tr><td>'+x.n+'</td><td class="r">'+fmt(secTotAll(x.s)*F*(1-descFrac))+'</td></tr>';});
   }
 
-  if(logTot>0)res+='<tr><td style="padding:5px 9px;border-bottom:1px solid #eee;font-size:11px">🚚 LOGÍSTICA</td><td style="padding:5px 9px;border-bottom:1px solid #eee;font-size:11px;text-align:right;font-weight:700">'+fmt(logTot)+'</td></tr>';
+  if(logTot>0)res+='<tr><td>🚚 LOGÍSTICA</td><td class="r">'+fmt(logTot)+'</td></tr>';
 
   var difDesc=impAtual==='cimp'?(cImp-totalFinal):(bruto-totalFinal);
-  if(difDesc>0.01)res+='<tr style="background:#fff5f5;-webkit-print-color-adjust:exact;print-color-adjust:exact"><td style="padding:5px 9px;text-align:right;color:#c0001a;font-weight:800;font-size:11px">Desconto</td><td style="padding:5px 9px;text-align:right;color:#c0001a;font-weight:800;font-size:11px">– '+fmt(difDesc)+'</td></tr>';
+  if(difDesc>0.01)res+='<tr class="drow2"><td style="text-align:right">Desconto</td><td class="r">– '+fmt(difDesc)+'</td></tr>';
 
-  res+='<tr style="background:#c0001a;-webkit-print-color-adjust:exact;print-color-adjust:exact">'
-    +'<td style="padding:7px 9px;color:#fff;font-weight:900;font-size:13px">'+totalLabel+'</td>'
-    +'<td style="padding:7px 9px;color:#fff;font-weight:900;font-size:13px;text-align:right">'+fmt(totalFinal)+'</td>'
+  res+='<tr class="lrow">'
+    +'<td>'+totalLabel+'</td>'
+    +'<td class="r">'+fmt(totalFinal)+'</td>'
     +'</tr></tbody></table>';
 
   var pgto='<div class="pgto-pdf">'
@@ -1358,28 +1358,50 @@ function buildPDF(tipo){
 
   var foot='<div class="pfooter"><span>Crazy Som – CNPJ: 10.909.827/0001-76</span><span>Pág. 1</span></div>';
 
-  return '<div class="pdf-page">'+hdr(true)+blocos+corpo+res+pgto+foot+'</div>';
+  return '<div id="pdf-wrap"><div class="pdf-page">'+hdr(true)+blocos+corpo+res+pgto+foot+'</div></div>';
 }
 
 function getCSSImpressao(){
-  return '@page{size:A4;margin:10mm 10mm 10mm 10mm}'
-    +'*{box-sizing:border-box;margin:0;padding:0;font-family:\'Segoe UI\',Arial,sans-serif}'
+  return '@page{size:A4 portrait;margin:8mm 10mm 8mm 10mm}'
+    +'*{box-sizing:border-box;margin:0;padding:0;font-family:\'Segoe UI\',Arial,sans-serif;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}'
     +'body{background:#fff}'
-    +'.pdf-page{background:#fff;width:100%}'
+    +'.pdf-page{background:#fff;width:100%;font-family:\'Segoe UI\',Arial,sans-serif}'
+    +'table{border-collapse:collapse;width:100%}'
+    +'thead{display:table-header-group}'
     +'.ph{display:flex;align-items:flex-start;padding-bottom:9px;border-bottom:2px solid #ddd;margin-bottom:11px}'
     +'.ph-i{flex:1}'
     +'.ph-i p{font-size:11px;color:#444;line-height:1.8;margin-top:2px}'
     +'.ph-r{text-align:right;min-width:145px}'
-    +'.pd{font-size:11px;color:#777}.pn{font-size:17px;font-weight:900;color:#111}.pl{font-size:11px;color:#888;margin-top:3px}'
+    +'.pd{font-size:11px;color:#777}'
+    +'.pl{font-size:11px;color:#888;margin-top:3px}'
+    +'.pn{font-size:17px;font-weight:900;color:#111}'
     +'.vbox{border:1px solid #ccc;border-radius:3px;padding:4px 9px;margin-top:4px;display:inline-block;text-align:center}'
-    +'.vl{font-size:11px;color:#999;text-transform:uppercase}.vd{font-size:11px;font-weight:800;color:#111}'
-    +'.clibox{border:1px solid #ddd;border-radius:3px;padding:7px 11px;margin-bottom:8px;background:#fafafa}'
+    +'.vl{font-size:11px;color:#999;text-transform:uppercase}'
+    +'.vd{font-size:11px;font-weight:800;color:#111}'
+    +'.clibox{border:1px solid #ddd;border-radius:3px;padding:7px 11px;margin-bottom:8px;background:#fafafa;page-break-inside:avoid}'
     +'.clibox .cn{font-size:13px;font-weight:800;color:#111;margin-bottom:2px}'
     +'.clibox .cs{font-size:11px;color:#555;line-height:1.7}'
-    +'.evpbox{border:1px solid #ddd;border-left:3px solid #c0001a;border-radius:3px;padding:7px 11px;margin-bottom:9px;background:#fafafa;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'.evpbox{border:1px solid #ddd;border-left:3px solid #c0001a;border-radius:3px;padding:7px 11px;margin-bottom:9px;background:#fafafa;page-break-inside:avoid}'
     +'.evpbox .en{font-size:12px;font-weight:800;color:#c0001a;margin-bottom:2px}'
     +'.evpbox .es{font-size:11px;color:#555;line-height:1.7}'
-    +'.pgto-pdf{border:1px solid #ddd;border-radius:3px;padding:7px 11px;font-size:11px;color:#333;line-height:1.8}'
+    +'.psec{background:#ececec;color:#333;padding:4px 9px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;border-radius:2px 2px 0 0;border-left:3px solid #c0001a;page-break-after:avoid}'
+    +'.ambhdr{background:#e2e2e2;color:#333;padding:5px 9px;font-size:12px;font-weight:800;text-transform:uppercase;border-radius:2px;margin:10px 0 4px;border-left:3px solid #aaa;page-break-after:avoid}'
+    +'table.pi{width:100%;border-collapse:collapse;margin-bottom:8px;font-size:11px;page-break-inside:auto}'
+    +'table.pi th{background:#e8e8e8;color:#444;padding:4px 7px;text-align:left;font-size:11px;text-transform:uppercase}'
+    +'table.pi th.r{text-align:right}'
+    +'table.pi td{padding:4px 7px;border-bottom:1px solid #eee;vertical-align:top;font-size:11px}'
+    +'table.pi td.r{text-align:right;font-weight:700}'
+    +'table.pi tr:nth-child(even) td{background:#f9f9f9}'
+    +'table.pi .strow td{background:#fff0f0;font-weight:800;font-size:11px}'
+    +'table.pi .strow td.r{color:#c0001a}'
+    +'table.pres{width:100%;border-collapse:collapse;margin-bottom:13px;font-size:11px}'
+    +'table.pres th{background:#e8e8e8;color:#444;padding:5px 9px;font-size:11px;text-transform:uppercase}'
+    +'table.pres th.r{text-align:right}'
+    +'table.pres td{padding:5px 9px;border-bottom:1px solid #eee;font-size:11px}'
+    +'table.pres td.r{text-align:right;font-weight:700}'
+    +'table.pres .drow2 td{color:#c0001a;font-weight:800;background:#fff5f5}'
+    +'table.pres .lrow td{background:#fff0f0;color:#c0001a;font-weight:900;font-size:13px}'
+    +'.pgto-pdf{border:1px solid #ddd;border-radius:3px;padding:7px 11px;font-size:11px;color:#333;line-height:1.8;page-break-inside:avoid}'
     +'.pgto-pdf .pt{font-weight:800;font-size:11px;text-transform:uppercase;margin-bottom:2px}'
     +'.pgto-pdf .ob{margin-top:5px;color:#666;font-style:italic;border-top:1px dashed #ddd;padding-top:4px}'
     +'.pfooter{display:flex;justify-content:space-between;border-top:1px solid #e0e0e0;padding-top:3px;margin-top:14px}'
@@ -1408,26 +1430,43 @@ function downloadPDF(){
   var cli=(gv('f-cliente')||'cliente').replace(/[^a-zA-Z0-9À-ÿ\s]/g,'').trim();
   var nomeArq=num+' - '+cli;
   var html=buildPDF(tipoAtual);
-  var w=window.open('','_blank');
-  if(!w){alert('⚠️ Pop-up bloqueado! Permita pop-ups para este site.');return;}
+  var css=getCSSImpressao();
+  // A4 = 210mm. A 96dpi: 794px. Margens 15mm cada lado = 30mm total = ~113px.
+  // Área útil = 794 - 113 = 681px
+  var areaUtil=719;
+  var w=window.open('','_blank','width='+areaUtil+',height=900,scrollbars=yes');
+  if(!w){alert('Pop-up bloqueado! Permita pop-ups para este site.');return;}
   w.document.open();
-  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+nomeArq+'</title>'
-    +'<style>'+getCSSImpressao()+'</style>'
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Gerando PDF...</title>'
+    +'<meta name="viewport" content="width='+areaUtil+'">'
+    +'<style>'+css
+    +'html,body{margin:0;padding:0;background:#fff;width:'+areaUtil+'px;overflow-x:hidden}'
+    +'#pw{width:'+areaUtil+'px;overflow:hidden}'
+    +'.pdf-page{width:'+areaUtil+'px!important;overflow:hidden}'
+    +'table{table-layout:fixed;word-break:break-word}'
+    +'#st{position:fixed;top:0;left:0;right:0;background:#c0001a;color:#fff;text-align:center;padding:12px;font-family:Arial;font-size:13px;font-weight:bold;z-index:9999}'
+    +'</style>'
     +'<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>'
     +'</head><body>'
-    +'<div id="conteudo">'+html+'</div>'
+    +'<div id="st">Gerando PDF, aguarde...</div>'
+    +'<div id="pw" style="margin-top:44px">'+html+'</div>'
     +'<script>'
     +'window.onload=function(){'
+    +'setTimeout(function(){'
+    +'var pw=document.getElementById("pw");'
     +'var opt={'
-    +'margin:[10,10,10,10],'
+    +'margin:[8,10,8,10],'
     +'filename:"'+nomeArq+'.pdf",'
-    +'image:{type:"jpeg",quality:0.98},'
-    +'html2canvas:{scale:2,useCORS:true,letterRendering:true},'
-    +'jsPDF:{unit:"mm",format:"a4",orientation:"portrait"}'
+    +'image:{type:"jpeg",quality:1},'
+    +'html2canvas:{scale:2,useCORS:true,logging:false,backgroundColor:"#ffffff",windowWidth:'+areaUtil+',width:'+areaUtil+'},'
+    +'jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},'
+    +'pagebreak:{mode:"avoid-all"}'
     +'};'
-    +'html2pdf().set(opt).from(document.getElementById("conteudo")).save()'
-    +'.then(function(){setTimeout(function(){window.close();},1500);});'
-    +'};'
+    +'html2pdf().set(opt).from(pw).save().then(function(){'
+    +'document.getElementById("st").style.background="#2e7d32";'
+    +'document.getElementById("st").textContent="PDF salvo na pasta Downloads! Pode fechar esta janela.";'
+    +'});'
+    +'},800);};'
     +'<\/script>'
     +'</body></html>');
   w.document.close();
