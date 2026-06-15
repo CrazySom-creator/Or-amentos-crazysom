@@ -1553,6 +1553,7 @@ async function driveListar(){
     var d=await r.json();if(!d.ok)throw new Error(d.erro);
     var lista=d.lista||[];
     if(!lista.length){el.innerHTML='<div class="drive-item" style="color:#aaa">Nenhum resultado.</div>';return;}
+    var podeDel=usuarioAtual&&(PODE_EXCLUIR.includes(usuarioAtual.nivel)||usuarioAtual.id==='fabiano.santos');
     el.innerHTML=lista.map(function(x){
       var solPend=solExclusao.some(function(s){return s.id===x.id&&s.status==='pendente';});
       var badge=solPend?'<span style="background:#e65100;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;margin-left:5px">⏳ EXCL. PENDENTE</span>':'';
@@ -1560,8 +1561,12 @@ async function driveListar(){
         +'<div class="di-nome" style="color:#e0e0e0">📄 '+x.nome+badge+'</div>'
         +'<div class="di-data" style="color:#888">'+x.modificado+'</div>'
         +'<button class="btn-dl" onclick="driveCarregar(\''+x.id+'\',\''+eh(x.nome)+'\')">📂 Abrir</button>'
-        +(solPend?'<button class="btn-ddel" style="opacity:.4;cursor:not-allowed" title="Aguardando aprovação de exclusão">🔒</button>'
-          :'<button class="btn-ddel" onclick="driveDeletar(\''+x.id+'\',\''+eh(x.nome)+'\')" title="Excluir">🗑️</button>')
+        +(solPend
+          ?'<button class="btn-ddel" style="opacity:.4;cursor:not-allowed" title="Aguardando aprovação de exclusão">🔒</button>'
+          :(podeDel
+            ?'<button class="btn-ddel" onclick="driveDeletar(\''+x.id+'\',\''+eh(x.nome)+'\')" title="Excluir definitivamente">🗑️</button>'
+            :'<button class="btn-ddel" onclick="driveDeletar(\''+x.id+'\',\''+eh(x.nome)+'\')" title="Solicitar exclusão" style="opacity:.6">📤</button>'
+          ))
         +'</div>';
     }).join('');
   }catch(e){el.innerHTML='<div class="drive-item" style="color:#c0001a">⚠️ Erro ao conectar</div>';driveStatus('Erro: '+e.message,'err');}
@@ -1592,14 +1597,15 @@ async function driveCarregar(id,nome){
   }catch(e){driveStatus('Erro: '+e.message,'err');}
   finally{setTimeout(function(){_carregandoOrc=false;},400);}
 }
-var PODE_EXCLUIR=['adm','gerente','diretor'];
+var PODE_EXCLUIR=['gerente','diretor']; // adm genérico NÃO pode — só Fabiano pelo ID
 
 async function driveDeletar(id,nome){
   if(!usuarioAtual)return;
   var nivel=usuarioAtual.nivel;
   var isFabiano=usuarioAtual.id==='fabiano.santos';
-  // Quem pode excluir diretamente: adm(fabiano), gerente, diretor
-  if(PODE_EXCLUIR.includes(nivel)||isFabiano){
+  // Quem pode excluir diretamente: gerente, diretor, ou Fabiano especificamente
+  var temPermissao=PODE_EXCLUIR.includes(nivel)||isFabiano;
+  if(temPermissao){
     if(!confirm('Excluir "'+nome+'"? Esta ação não pode ser desfeita.'))return;
     driveStatus('⏳ Excluindo...','');
     try{
