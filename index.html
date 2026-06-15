@@ -382,6 +382,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <h2>⚙️ Gerenciar Usuários</h2>
     <p class="sub">Edite login, senha e nível de acesso</p>
     <div id="adm-list"></div>
+<div id="adm-excl" style="margin-top:16px"></div>
     <div style="display:flex;gap:8px;margin-top:14px;justify-content:space-between">
       <button class="btn btn-g btn-sm" onclick="admNovo()">+ Novo Usuário</button>
       <button class="btn btn-o btn-sm" onclick="document.getElementById('adm-ov').classList.remove('open')">Fechar</button>
@@ -950,6 +951,7 @@ var aprovHist=[];
 var comercialStatus='';
 var comercialHist=[];
 var snapshotAnterior=null;
+var solExclusao=[]; // fila de solicitações de exclusão pendentes/aprovadas
 var finParcelas=[];
 var finObs='';
 var driveIdAtual=null;
@@ -1179,7 +1181,7 @@ function aprovAcaoInline(novo){
   if(driveIdAtual){var num=gv('f-num')||'SN',cli=gv('f-cliente')||'SemCliente',dt=gv('f-data')||new Date().toISOString().split('T')[0];fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})}).catch(function(){});driveStatus('⏳ Salvando...','');}
 }
 
-function abrirAdm(){renderAdmList();document.getElementById('adm-ov').classList.add('open');}
+function abrirAdm(){renderAdmList();renderAdmExclusoes();document.getElementById('adm-ov').classList.add('open');}
 function renderAdmList(){
   document.getElementById('adm-list').innerHTML=USUARIOS.map(function(u,i){
     return '<div class="adm-row"><div class="adm-info"><div class="adm-nome">'+u.nome+'</div><div class="adm-id">'+u.id+'</div></div>'
@@ -1551,7 +1553,17 @@ async function driveListar(){
     var d=await r.json();if(!d.ok)throw new Error(d.erro);
     var lista=d.lista||[];
     if(!lista.length){el.innerHTML='<div class="drive-item" style="color:#aaa">Nenhum resultado.</div>';return;}
-    el.innerHTML=lista.map(function(x){return '<div class="drive-item" style="background:#111;border-bottom:1px solid #2a2a2a"><div class="di-nome" style="color:#e0e0e0">📄 '+x.nome+'</div><div class="di-data" style="color:#888">'+x.modificado+'</div><button class="btn-dl" onclick="driveCarregar(\''+x.id+'\',\''+eh(x.nome)+'\')">📂 Abrir</button><button class="btn-ddel" onclick="driveDeletar(\''+x.id+'\',\''+eh(x.nome)+'\')" title="Excluir">🗑️</button></div>';}).join('');
+    el.innerHTML=lista.map(function(x){
+      var solPend=solExclusao.some(function(s){return s.id===x.id&&s.status==='pendente';});
+      var badge=solPend?'<span style="background:#e65100;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;margin-left:5px">⏳ EXCL. PENDENTE</span>':'';
+      return '<div class="drive-item" style="background:#111;border-bottom:1px solid #2a2a2a">'
+        +'<div class="di-nome" style="color:#e0e0e0">📄 '+x.nome+badge+'</div>'
+        +'<div class="di-data" style="color:#888">'+x.modificado+'</div>'
+        +'<button class="btn-dl" onclick="driveCarregar(\''+x.id+'\',\''+eh(x.nome)+'\')">📂 Abrir</button>'
+        +(solPend?'<button class="btn-ddel" style="opacity:.4;cursor:not-allowed" title="Aguardando aprovação de exclusão">🔒</button>'
+          :'<button class="btn-ddel" onclick="driveDeletar(\''+x.id+'\',\''+eh(x.nome)+'\')" title="Excluir">🗑️</button>')
+        +'</div>';
+    }).join('');
   }catch(e){el.innerHTML='<div class="drive-item" style="color:#c0001a">⚠️ Erro ao conectar</div>';driveStatus('Erro: '+e.message,'err');}
 }
 async function driveSalvar(){
@@ -1580,10 +1592,45 @@ async function driveCarregar(id,nome){
   }catch(e){driveStatus('Erro: '+e.message,'err');}
   finally{setTimeout(function(){_carregandoOrc=false;},400);}
 }
+var PODE_EXCLUIR=['adm','gerente','diretor'];
+
 async function driveDeletar(id,nome){
-  if(!confirm('Excluir "'+nome+'"?'))return;driveStatus('⏳ Excluindo...','');
-  try{var r=await fetch(SCRIPT_URL+'?action=delete&id='+id);var d=await r.json();if(!d.ok)throw new Error(d.erro);if(driveIdAtual===id){driveIdAtual=null;driveNumAtual=null;}driveStatus('🗑️ Excluído','ok');driveListar();}
-  catch(e){driveStatus('Erro: '+e.message,'err');}
+  if(!usuarioAtual)return;
+  var nivel=usuarioAtual.nivel;
+  var isFabiano=usuarioAtual.id==='fabiano.santos';
+  // Quem pode excluir diretamente: adm(fabiano), gerente, diretor
+  if(PODE_EXCLUIR.includes(nivel)||isFabiano){
+    if(!confirm('Excluir "'+nome+'"? Esta ação não pode ser desfeita.'))return;
+    driveStatus('⏳ Excluindo...','');
+    try{
+      var r=await fetch(SCRIPT_URL+'?action=delete&id='+id);
+      var d=await r.json();
+      if(!d.ok)throw new Error(d.erro);
+      if(driveIdAtual===id){driveIdAtual=null;driveNumAtual=null;}
+      // Remover da fila se havia solicitação pendente
+      solExclusao=solExclusao.filter(function(s){return s.id!==id;});
+      driveStatus('🗑️ Excluído com sucesso','ok');
+      driveListar();
+    }catch(e){driveStatus('Erro: '+e.message,'err');}
+  } else {
+    // Sem permissão: criar solicitação
+    if(solExclusao.some(function(s){return s.id===id&&s.status==='pendente';})){
+      alert('⚠️ Já existe uma solicitação de exclusão pendente para este orçamento.');
+      return;
+    }
+    if(!confirm('Você não tem permissão para excluir diretamente.\n\nDeseja enviar uma solicitação de exclusão para aprovação?'))return;
+    solExclusao.push({
+      id:id,
+      nome:nome,
+      solicitante:usuarioAtual.nome,
+      cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,
+      data:new Date().toLocaleString('pt-BR'),
+      status:'pendente'
+    });
+    driveStatus('📤 Solicitação de exclusão enviada para aprovação','ok');
+    driveListar();
+    alert('✅ Solicitação enviada! Um gerente, diretor ou Fabiano deverá aprovar a exclusão em "⚙️ ADM → Exclusões".');
+  }
 }
 
 var FORM_IDS=['f-num','f-data','f-val','f-cons','f-cliente','f-doc','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dd','f-hd','f-pub','f-obs','f-obs-os','f-pgto','f-svinc','desc-pct','desc-rs','val-liq'];
@@ -2145,6 +2192,14 @@ function diffToggle(id){
   box.style.display=aberto?'none':'block';
   if(ic)ic.innerHTML=aberto?'&#9660;':'&#9650;';
 }
+var COM_SI={
+  enviada:  {label:'📤 Proposta Enviada', bg:'#1565c0', tx:'#fff'},
+  negociacao:{label:'🤝 Em Negociação',   bg:'#e65100', tx:'#fff'},
+  standby:  {label:'⏸️ Standby',          bg:'#5d4037', tx:'#fff'},
+  ganha:    {label:'🏆 Venda Ganha',      bg:'#2e7d32', tx:'#fff'},
+  perdida:  {label:'❌ Venda Perdida',    bg:'#c62828', tx:'#fff'}
+};
+
 function renderComercial(){
   var panel=document.getElementById('com-panel');
   if(!panel)return;
@@ -3633,6 +3688,101 @@ function dashFinRenderizar(){
     +'</div>';
 
   document.getElementById('dashfin-corpo').innerHTML = html;
+}
+
+function renderAdmExclusoes(){
+  var el=document.getElementById('adm-excl');
+  if(!el)return;
+  var nivel=usuarioAtual?usuarioAtual.nivel:'';
+  var isFabiano=usuarioAtual&&usuarioAtual.id==='fabiano.santos';
+  var podever=PODE_EXCLUIR.includes(nivel)||isFabiano;
+  if(!podever){el.innerHTML='';return;}
+
+  var pendentes=solExclusao.filter(function(s){return s.status==='pendente';});
+  var aprovadas=solExclusao.filter(function(s){return s.status==='aprovado';});
+  var rejeitadas=solExclusao.filter(function(s){return s.status==='rejeitado';});
+
+  function cardExcl(s,idx){
+    var isPend=s.status==='pendente';
+    var corStatus=isPend?'#e65100':s.status==='aprovado'?'#2e7d32':'#c62828';
+    var labelStatus=isPend?'⏳ Pendente':s.status==='aprovado'?'✅ Aprovado':'❌ Rejeitado';
+    var btns=isPend
+      ?'<button onclick="aprovarExclusao('+idx+')" style="padding:5px 12px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;margin-right:5px">🗑️ Aprovar Exclusão</button>'
+       +'<button onclick="rejeitarExclusao('+idx+')" style="padding:5px 12px;background:#333;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer">✕ Rejeitar</button>'
+      :'';
+    return '<div style="background:#0d0d0d;border:1px solid #2a2a2a;border-left:3px solid '+corStatus+';border-radius:5px;padding:9px 12px;margin-bottom:7px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px">'
+      +'<div><div style="font-size:11px;color:#fff;font-weight:700">📄 '+s.nome+'</div>'
+      +'<div style="font-size:10px;color:#888;margin-top:2px">Solicitado por: <b style="color:#ccc">'+s.solicitante+'</b> ('+s.cargo+') · '+s.data+'</div>'
+      +(s.aprovadoPor?'<div style="font-size:10px;color:#888">'+labelStatus+' por: <b style="color:#ccc">'+s.aprovadoPor+'</b> · '+s.dataAcao+'</div>':'')
+      +'</div>'
+      +'<span style="padding:2px 8px;border-radius:10px;font-size:9px;font-weight:800;background:'+corStatus+'22;color:'+corStatus+';border:1px solid '+corStatus+'">'+labelStatus+'</span>'
+      +'</div>'
+      +(btns?'<div>'+btns+'</div>':'')
+      +'</div>';
+  }
+
+  var html='<div style="border-top:1px solid #2a2a2a;padding-top:14px">'
+    +'<div style="font-size:10px;color:#e65100;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:10px">🗑️ Solicitações de Exclusão</div>';
+
+  if(!solExclusao.length){
+    html+='<div style="color:#555;font-size:11px;padding:10px">Nenhuma solicitação de exclusão.</div>';
+  } else {
+    if(pendentes.length){
+      html+='<div style="font-size:10px;color:#e65100;font-weight:700;margin-bottom:6px">⏳ Pendentes ('+pendentes.length+')</div>';
+      pendentes.forEach(function(s){
+        var idx=solExclusao.indexOf(s);
+        html+=cardExcl(s,idx);
+      });
+    }
+    if(aprovadas.length){
+      html+='<div style="font-size:10px;color:#2e7d32;font-weight:700;margin:10px 0 6px">✅ Aprovadas ('+aprovadas.length+')</div>';
+      aprovadas.forEach(function(s){
+        var idx=solExclusao.indexOf(s);
+        html+=cardExcl(s,idx);
+      });
+    }
+    if(rejeitadas.length){
+      html+='<div style="font-size:10px;color:#c62828;font-weight:700;margin:10px 0 6px">❌ Rejeitadas ('+rejeitadas.length+')</div>';
+      rejeitadas.forEach(function(s){
+        var idx=solExclusao.indexOf(s);
+        html+=cardExcl(s,idx);
+      });
+    }
+  }
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+async function aprovarExclusao(idx){
+  var sol=solExclusao[idx];
+  if(!sol)return;
+  if(!confirm('Confirmar exclusão de "'+sol.nome+'"? Esta ação não pode ser desfeita.'))return;
+  driveStatus('⏳ Excluindo...','');
+  try{
+    var r=await fetch(SCRIPT_URL+'?action=delete&id='+sol.id);
+    var d=await r.json();
+    if(!d.ok)throw new Error(d.erro);
+    sol.status='aprovado';
+    sol.aprovadoPor=usuarioAtual.nome;
+    sol.dataAcao=new Date().toLocaleString('pt-BR');
+    if(driveIdAtual===sol.id){driveIdAtual=null;driveNumAtual=null;}
+    driveStatus('🗑️ Exclusão aprovada e executada','ok');
+    renderAdmExclusoes();
+    driveListar();
+  }catch(e){driveStatus('Erro: '+e.message,'err');}
+}
+
+function rejeitarExclusao(idx){
+  var sol=solExclusao[idx];
+  if(!sol)return;
+  if(!confirm('Rejeitar solicitação de exclusão de "'+sol.nome+'"?'))return;
+  sol.status='rejeitado';
+  sol.aprovadoPor=usuarioAtual.nome;
+  sol.dataAcao=new Date().toLocaleString('pt-BR');
+  renderAdmExclusoes();
+  driveListar();
+  driveStatus('✅ Solicitação rejeitada','ok');
 }
 
 buildTabs();
