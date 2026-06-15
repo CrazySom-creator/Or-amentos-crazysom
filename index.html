@@ -896,10 +896,21 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <div style="font-size:10px;color:#aaa;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:10px">☁️ Orçamentos – Google Drive</div>
     <div class="drive-search">
       <input id="drive-q" placeholder="🔍 Buscar por número, cliente ou data...">
+      <select id="drive-filtro-st" style="background:#111;border:1px solid #333;border-radius:4px;color:#aaa;padding:4px 7px;font-size:11px">
+        <option value="">Todos os status</option>
+        <option value="rascunho">Rascunho</option>
+        <option value="analise">Em Análise</option>
+        <option value="gerencial">Ap. Gerencial</option>
+        <option value="diretoria">Ap. Diretoria</option>
+        <option value="aprovado">Aprovado</option>
+        <option value="revisao">Revisão</option>
+      </select>
       <button class="btn btn-b btn-sm" onclick="driveListar()">🔍 Localizar</button>
       <button class="btn btn-g btn-sm" onclick="driveSalvar()">☁️ Salvar no Drive</button>
+      <button class="btn btn-sm" onclick="toggleExcluidos()" id="btn-excl-hist" style="background:#3e0000;color:#ef9a9a;border:1px solid #c62828">🗑️ Excluídos</button>
     </div>
     <div id="drive-list" class="drive-list" style="display:none"></div>
+    <div id="drive-excl-hist" style="display:none;margin-top:8px;border:1px solid #3e0000;border-radius:4px;background:#1a0000;max-height:220px;overflow-y:auto"></div>
     <div id="drive-status" class="drive-status"></div>
   </div>
 
@@ -952,6 +963,7 @@ var comercialStatus='';
 var comercialHist=[];
 var snapshotAnterior=null;
 var solExclusao=[]; // fila de solicitações de exclusão pendentes/aprovadas
+var excluídosHist=[]; // registro local de orçamentos excluídos
 var finParcelas=[];
 var finObs='';
 var driveIdAtual=null;
@@ -1091,6 +1103,7 @@ function doLogin(){
   if(!u){err.textContent='❌ Usuário "'+uid+'" não encontrado.';document.getElementById('l-pass').value='';return;}
   if(u.senha!==hs(pwd)){err.textContent='❌ Senha incorreta.';document.getElementById('l-pass').value='';document.getElementById('l-pass').focus();return;}
   usuarioAtual=u;aprovStatus='rascunho';aprovHist=[];
+  carregarExcluidosDrive();
   document.getElementById('login-ov').style.display='none';
   document.getElementById('user-badge').style.display='flex';
   document.getElementById('user-nome').textContent=u.nome;
@@ -1524,7 +1537,7 @@ function calc(){
   var srv=secTotAll('servico'),log=secTotAll('logistica');
   var dsi=safe(cImp>0?bruto*(dv/cImp):0);
   var msd=safe(bruto-dsi-srv-log-xc),msdP=safe(bruto>0?msd/bruto*100:0);
-  var mcd=safe(bruto-imp-dsi-srv-log-xc),mcdP=safe(cImp>0?mcd/cImp*100:0);
+  var mcd=safe(cImp-imp-dsi-srv-log-xc),mcdP=safe(cImp>0?mcd/cImp*100:0);
   var vl=parseFloat(gv('val-liq'))||0,total=safe(vl>0?vl:vdci);
   sv('r-bruto',fmt(bruto));sv('r-imp',fmt(imp));sv('r-cimp',fmt(cImp));
   sv('r-dv','-'+fmt(dv));sv('r-vdsi',fmt(vdsi));sv('r-vdci',fmt(vdci));sv('r-total',fmt(total));
@@ -1553,7 +1566,35 @@ async function driveListar(){
     var d=await r.json();if(!d.ok)throw new Error(d.erro);
     var lista=d.lista||[];
     if(!lista.length){el.innerHTML='<div class="drive-item" style="color:#aaa">Nenhum resultado.</div>';return;}
+    // Carregar dados de cada arquivo para aplicar filtro de status
+    var filtroSt=(document.getElementById('drive-filtro-st')||{}).value||'';
     var podeDel=usuarioAtual&&(PODE_EXCLUIR.includes(usuarioAtual.nivel)||usuarioAtual.id==='fabiano.santos');
+    // Se há filtro de status, carregar dados para filtrar
+    if(filtroSt){
+      el.innerHTML='<div class="drive-item" style="color:#888">⏳ Filtrando por status...</div>';
+      fetchComLimite(lista,5).then(function(validos){
+        var filtrados=validos.filter(function(x){return x&&x.st===filtroSt;});
+        if(!filtrados.length){el.innerHTML='<div class="drive-item" style="color:#aaa">Nenhum resultado com este status.</div>';return;}
+        el.innerHTML=filtrados.map(function(x){
+          var solPend=solExclusao.some(function(s){return s.id===x.driveId&&s.status==='pendente';});
+          var SI_COR2={rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
+          var cor=SI_COR2[x.st]||'#555';
+          var badge=solPend?'<span style="background:#e65100;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;margin-left:5px">⏳ EXCL. PENDENTE</span>':'';
+          var stBadge='<span style="background:'+cor+'22;color:'+cor+';border:1px solid '+cor+';font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px">'+x.st+'</span>';
+          return '<div class="drive-item" style="background:#111;border-bottom:1px solid #2a2a2a">'
+            +'<div class="di-nome" style="color:#e0e0e0">📄 '+x.nome+stBadge+badge+'</div>'
+            +'<div class="di-data" style="color:#888">'+x.modificado+'</div>'
+            +'<button class="btn-dl" onclick="driveCarregar(\''+x.driveId+'\',\''+eh(x.nome)+'\')" >📂 Abrir</button>'
+            +(solPend
+              ?'<button class="btn-ddel" style="opacity:.4;cursor:not-allowed" title="Aguardando aprovação">🔒</button>'
+              :(podeDel
+                ?'<button class="btn-ddel" onclick="driveDeletar(\''+x.driveId+'\',\''+eh(x.nome)+'\')" title="Excluir">🗑️</button>'
+                :'<button class="btn-ddel" onclick="driveDeletar(\''+x.driveId+'\',\''+eh(x.nome)+'\')" title="Solicitar exclusão" style="opacity:.6">📤</button>'))
+            +'</div>';
+        }).join('');
+      });
+      return;
+    }
     el.innerHTML=lista.map(function(x){
       var solPend=solExclusao.some(function(s){return s.id===x.id&&s.status==='pendente';});
       var badge=solPend?'<span style="background:#e65100;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;margin-left:5px">⏳ EXCL. PENDENTE</span>':'';
@@ -1613,8 +1654,18 @@ async function driveDeletar(id,nome){
       var d=await r.json();
       if(!d.ok)throw new Error(d.erro);
       if(driveIdAtual===id){driveIdAtual=null;driveNumAtual=null;}
-      // Remover da fila se havia solicitação pendente
+      // Registrar no histórico de excluídos
+      excluídosHist.unshift({
+        id:id, nome:nome,
+        excluidoPor:usuarioAtual?usuarioAtual.nome:'—',
+        cargo:usuarioAtual?(NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel):'—',
+        data:new Date().toLocaleString('pt-BR')
+      });
+      // Remover da fila de solicitações pendentes
       solExclusao=solExclusao.filter(function(s){return s.id!==id;});
+      driveStatus('🗑️ Excluído — salvando histórico...','');
+      renderExcluidosHist();
+      await salvarExcluidosDrive();
       driveStatus('🗑️ Excluído com sucesso','ok');
       driveListar();
     }catch(e){driveStatus('Erro: '+e.message,'err');}
@@ -3773,8 +3824,19 @@ async function aprovarExclusao(idx){
     sol.aprovadoPor=usuarioAtual.nome;
     sol.dataAcao=new Date().toLocaleString('pt-BR');
     if(driveIdAtual===sol.id){driveIdAtual=null;driveNumAtual=null;}
-    driveStatus('🗑️ Exclusão aprovada e executada','ok');
+    // Registrar no histórico de excluídos
+    excluídosHist.unshift({
+      id:sol.id, nome:sol.nome,
+      excluidoPor:usuarioAtual.nome,
+      cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,
+      solicitante:sol.solicitante,
+      data:new Date().toLocaleString('pt-BR')
+    });
+    driveStatus('🗑️ Excluído — salvando histórico...','');
     renderAdmExclusoes();
+    renderExcluidosHist();
+    await salvarExcluidosDrive();
+    driveStatus('🗑️ Exclusão aprovada e registrada','ok');
     driveListar();
   }catch(e){driveStatus('Erro: '+e.message,'err');}
 }
@@ -3789,6 +3851,108 @@ function rejeitarExclusao(idx){
   renderAdmExclusoes();
   driveListar();
   driveStatus('✅ Solicitação rejeitada','ok');
+}
+
+function toggleExcluidos(){
+  var el=document.getElementById('drive-excl-hist');
+  var btn=document.getElementById('btn-excl-hist');
+  if(!el)return;
+  var aberto=el.style.display!=='none';
+  if(aberto){
+    el.style.display='none';
+    btn.style.background='#3e0000';
+  }else{
+    renderExcluidosHist();
+    el.style.display='block';
+    btn.style.background='#c62828';
+    // Fechar lista principal ao abrir excluídos
+    var dl=document.getElementById('drive-list');
+    if(dl)dl.style.display='none';
+  }
+}
+
+function renderExcluidosHist(){
+  var el=document.getElementById('drive-excl-hist');
+  if(!el)return;
+  if(!excluídosHist.length){
+    el.innerHTML='<div style="padding:12px;color:#666;font-size:11px;text-align:center">Nenhum orçamento excluído registrado.</div>';
+    return;
+  }
+  var header='<div style="padding:7px 10px;background:#2a0000;border-bottom:1px solid #3e0000;font-size:10px;color:#ef9a9a;font-weight:800;text-transform:uppercase;letter-spacing:1px;display:flex;justify-content:space-between">'
+    +'<span>🗑️ Orçamentos Excluídos ('+excluídosHist.length+')</span>'
+    +'</div>';
+  var rows=excluídosHist.slice().reverse().map(function(x){
+    return '<div style="padding:7px 10px;border-bottom:1px solid #2a0000;display:flex;align-items:center;gap:8px">'
+      +'<div style="flex:1">'
+      +'<div style="font-size:11px;color:#ef9a9a;text-decoration:line-through">'+eh(x.nome)+'</div>'
+      +'<div style="font-size:10px;color:#666;margin-top:2px">'
+      +'Por: <b style="color:#aaa">'+x.excluidoPor+'</b>'
+      +(x.solicitante&&x.solicitante!==x.excluidoPor?' · Solicitado por: <b style="color:#aaa">'+x.solicitante+'</b>':'')
+      +' · '+x.data+'</div>'
+      +'</div>'
+      +'<span style="background:#3e0000;color:#ef5350;font-size:9px;font-weight:800;padding:2px 7px;border-radius:3px;white-space:nowrap">🗑️ excluído</span>'
+      +'</div>';
+  }).join('');
+  el.innerHTML=header+rows;
+}
+
+// ID do arquivo de histórico de excluídos — persistido no localStorage do browser
+var _exclHistDriveId = null;
+
+function _loadExclId(){
+  try{return localStorage.getItem('crazysom_excl_hist_id');}catch(e){return null;}
+}
+function _saveExclId(id){
+  try{localStorage.setItem('crazysom_excl_hist_id',id);}catch(e){}
+}
+
+async function carregarExcluidosDrive(){
+  try{
+    // Tentar pegar o ID salvo localmente primeiro
+    var id=_exclHistDriveId||_loadExclId();
+    if(!id){
+      // Nunca criou — lista vazia por enquanto
+      return;
+    }
+    _exclHistDriveId=id;
+    var r=await fetch(SCRIPT_URL+'?action=load&id='+id);
+    var d=await r.json();
+    if(!d.ok||!d.dados){
+      // Arquivo pode ter sido deletado — limpar ID salvo
+      _exclHistDriveId=null;
+      _saveExclId('');
+      return;
+    }
+    var salvos=(d.dados.lista)||[];
+    // Mesclar sem duplicatas
+    var existentes=new Set(excluídosHist.map(function(x){return x.id+'|'+x.data;}));
+    salvos.forEach(function(x){
+      if(!existentes.has(x.id+'|'+x.data))excluídosHist.push(x);
+    });
+    // Ordenar mais recente primeiro
+    excluídosHist.sort(function(a,b){return a.data<b.data?1:-1;});
+    renderExcluidosHist();
+  }catch(e){console.warn('carregarExcluidosDrive:',e);}
+}
+
+async function salvarExcluidosDrive(){
+  try{
+    var id=_exclHistDriveId||_loadExclId()||null;
+    var body={
+      action:'save',
+      id:id,
+      numero:'_excluidos_crazysom',
+      cliente:'HISTORICO_EXCLUSOES',
+      data:'',
+      dados:{lista:excluídosHist}
+    };
+    var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify(body)});
+    var d=await r.json();
+    if(d.ok&&d.id){
+      _exclHistDriveId=d.id;
+      _saveExclId(d.id); // Salvar ID no localStorage para próximas sessões
+    }
+  }catch(e){console.warn('salvarExcluidosDrive:',e);}
 }
 
 buildTabs();
