@@ -371,6 +371,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <div class="modal-tabs">
       <div class="modal-tab active" id="tab-pend" onclick="mudarAbaAprov('pend')">⏳ Pendentes</div>
       <div class="modal-tab" id="tab-aprov" onclick="mudarAbaAprov('aprov')">✅ Aprovados</div>
+      <div class="modal-tab" id="tab-excl" onclick="mudarAbaAprov('excl')">🗑️ Exclusões <span id="excl-badge" style="background:#c0001a;color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;margin-left:3px;display:none">0</span></div>
     </div>
     <div id="aprov-lista"><div style="text-align:center;padding:30px;color:#666;font-size:12px">Clique em uma aba para carregar</div></div>
     <div style="margin-top:16px;text-align:right"><button class="btn btn-o btn-sm" onclick="document.getElementById('aprov-ov').classList.remove('open')">Fechar</button></div>
@@ -693,7 +694,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   <div class="orc-n"><small>Nº Orçamento</small><b id="orc-disp">—</b></div>
   <div class="user-badge" id="user-badge" style="display:none">
     <div><span id="user-nome">—</span><small id="user-cargo">—</small></div>
-    <button class="ubtn" onclick="abrirAprovacoes()">📋 Aprovações</button>
+    <button class="ubtn" id="btn-aprovacoes" onclick="abrirAprovacoes()">📋 Aprovações</button>
     <button class="ubtn" onclick="abrirDashboard()">📈 Comercial</button>
     <button class="ubtn" onclick="abrirDashFin()">💰 Financeiro</button>
     <button class="ubtn" onclick="abrirRelatorios()">📊 Relatórios</button>
@@ -1105,6 +1106,7 @@ function doLogin(){
   if(u.senha!==hs(pwd)){err.textContent='❌ Senha incorreta.';document.getElementById('l-pass').value='';document.getElementById('l-pass').focus();return;}
   usuarioAtual=u;aprovStatus='rascunho';aprovHist=[];
   carregarExcluidosDrive();
+  carregarSolExclusaoDrive();
   document.getElementById('login-ov').style.display='none';
   document.getElementById('user-badge').style.display='flex';
   document.getElementById('user-nome').textContent=u.nome;
@@ -1212,11 +1214,50 @@ function admSalvar(i){var nome=document.getElementById('an'+i).value.trim();var 
 function admDel(i){if(!confirm('Excluir "'+USUARIOS[i].nome+'"?'))return;USUARIOS.splice(i,1);renderAdmList();}
 function admNovo(){USUARIOS.push({id:'novo.usuario',nome:'Novo Usuário',nivel:'consultor',senha:hs('crazy@2026')});renderAdmList();document.getElementById('adm-list').lastElementChild.scrollIntoView({behavior:'smooth'});}
 
-function abrirAprovacoes(){document.getElementById('aprov-ov').classList.add('open');mudarAbaAprov(abaAprovAtual);}
+function abrirAprovacoes(){
+  document.getElementById('aprov-ov').classList.add('open');
+  carregarSolExclusaoDrive().then(function(){
+    atualizarBadgeExclusoes();
+    if(abaAprovAtual==='excl'){renderExclusivoModal();}
+  });
+  mudarAbaAprov(abaAprovAtual);
+}
+function atualizarBadgeExclusoes(){
+  var pend=solExclusao.filter(function(s){return s.status==='pendente';}).length;
+  // Badge na aba Exclusões dentro do modal
+  var badge=document.getElementById('excl-badge');
+  if(badge){badge.textContent=pend;badge.style.display=pend>0?'inline':'none';}
+  // Badge no botão Aprovações no header (mostra pendentes de aprovação + exclusões)
+  var btnAprov=document.getElementById('btn-aprovacoes');
+  if(btnAprov){
+    // Contar pendentes de aprovação do Drive (já carregados em _listaAprov)
+    btnAprov.textContent='';
+    var spanTxt=document.createElement('span');
+    spanTxt.textContent='📋 Aprovações';
+    btnAprov.appendChild(spanTxt);
+    if(pend>0){
+      var b=document.createElement('span');
+      b.style.cssText='background:#ff5722;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:8px;margin-left:5px;vertical-align:middle';
+      b.textContent=pend+' excl';
+      btnAprov.appendChild(b);
+    }
+  }
+}
 function mudarAbaAprov(aba){
   abaAprovAtual=aba;
   document.getElementById('tab-pend').classList.toggle('active',aba==='pend');
   document.getElementById('tab-aprov').classList.toggle('active',aba==='aprov');
+  var tabExcl=document.getElementById('tab-excl');
+  if(tabExcl)tabExcl.classList.toggle('active',aba==='excl');
+  if(aba==='excl'){
+    var lista=document.getElementById('aprov-lista');
+    if(lista)lista.innerHTML='<div style="text-align:center;padding:20px;color:#888;font-size:12px">⏳ Carregando solicitações...</div>';
+    carregarSolExclusaoDrive().then(function(){
+      atualizarBadgeExclusoes();
+      renderExclusivoModal();
+    });
+    return;
+  }
   carregarListaAprov(aba);
 }
 
@@ -1240,6 +1281,8 @@ async function carregarListaAprov(aba){
     var r=await fetch(SCRIPT_URL+'?action=list&q=');var d=await r.json();
     if(!d.ok)throw new Error(d.erro||'Erro ao listar');
     var itens=d.lista||[];
+    // Filtrar arquivos internos do sistema
+    itens=itens.filter(function(x){return !['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'].some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});});
     if(!itens.length){lista.innerHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">Nenhum orçamento no Drive.</div>';return;}
     lista.innerHTML='<div style="text-align:center;padding:20px;color:#888;font-size:12px">⏳ Carregando '+itens.length+' orçamento(s)...</div>';
     var validos=await fetchComLimite(itens,5);
@@ -1590,6 +1633,10 @@ async function driveListar(){
     var r=await fetch(SCRIPT_URL+'?action=list&q='+encodeURIComponent(q));
     var d=await r.json();if(!d.ok)throw new Error(d.erro);
     var lista=d.lista||[];
+    // Filtrar arquivos internos do sistema (não devem aparecer na lista)
+    var NOMES_INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'];
+    function ehArquivoInterno(nome){return NOMES_INTERNOS.some(function(n){return nome&&nome.indexOf(n)>=0;});}
+    lista=lista.filter(function(x){return !ehArquivoInterno(x.nome);});
     if(!lista.length){el.innerHTML='<div class="drive-item" style="color:#aaa">Nenhum resultado.</div>';return;}
     // Carregar dados de cada arquivo para aplicar filtro de status
     var filtroSt=(document.getElementById('drive-filtro-st')||{}).value||'';
@@ -1701,6 +1748,7 @@ async function driveDeletar(id,nome){
       return;
     }
     if(!confirm('Você não tem permissão para excluir diretamente.\n\nDeseja enviar uma solicitação de exclusão para aprovação?'))return;
+    driveStatus('⏳ Enviando solicitação...','');
     solExclusao.push({
       id:id,
       nome:nome,
@@ -1709,9 +1757,17 @@ async function driveDeletar(id,nome){
       data:new Date().toLocaleString('pt-BR'),
       status:'pendente'
     });
-    driveStatus('📤 Solicitação de exclusão enviada para aprovação','ok');
-    driveListar();
-    alert('✅ Solicitação enviada! Um gerente, diretor ou Fabiano deverá aprovar a exclusão em "⚙️ ADM → Exclusões".');
+    try{
+      await salvarSolExclusaoDrive();
+      atualizarBadgeExclusoes();
+      driveStatus('📤 Solicitação enviada para aprovação','ok');
+      driveListar();
+      alert('✅ Solicitação enviada! O gerente/diretor verá em "📋 Aprovações → 🗑️ Exclusões".');
+    }catch(e){
+      solExclusao.pop();
+      driveStatus('⚠️ Falha ao enviar: '+e.message,'err');
+      alert('⚠️ Erro ao salvar solicitação:\n\n'+e.message+'\n\nTente novamente ou avise o Fabiano.');
+    }
   }
 }
 
@@ -4059,12 +4115,64 @@ function renderExcluidosHist(){
 
 // ID do arquivo de histórico de excluídos — persistido no localStorage do browser
 var _exclHistDriveId = null;
+var _solExclDriveId = null; // ID do arquivo de solicitações de exclusão no Drive
 
 function _loadExclId(){
   try{return localStorage.getItem('crazysom_excl_hist_id');}catch(e){return null;}
 }
 function _saveExclId(id){
   try{localStorage.setItem('crazysom_excl_hist_id',id);}catch(e){}
+}
+
+function _loadSolId(){try{return localStorage.getItem('crazysom_sol_excl_id');}catch(e){return null;}}
+function _saveSolId(id){try{localStorage.setItem('crazysom_sol_excl_id',id);}catch(e){}}
+
+async function carregarSolExclusaoDrive(){
+  try{
+    var id=_solExclDriveId||_loadSolId()||null;
+    if(id){
+      var r=await fetch(SCRIPT_URL+'?action=load&id='+id);
+      var d=await r.json();
+      if(d.ok&&d.dados){
+        solExclusao=(d.dados.lista)||[];
+        atualizarBadgeExclusoes();
+        return;
+      }
+      _solExclDriveId=null;_saveSolId('');id=null;
+    }
+    // Sem ID: listar todos e achar pelo nome
+    var rl=await fetch(SCRIPT_URL+'?action=list&q=');
+    var dl=await rl.json();
+    if(dl.ok&&dl.lista&&dl.lista.length){
+      var encontrado=null;
+      for(var i=0;i<dl.lista.length;i++){
+        var item=dl.lista[i];
+        if(item.nome&&(item.nome.indexOf('SOLEXCL')>=0||item.nome.indexOf('_sol_exclusao')>=0||item.nome.indexOf('SOL_EXCLUSAO')>=0||item.nome.indexOf('SolExclusao')>=0)){
+          encontrado=item;break;
+        }
+      }
+      if(encontrado){
+        id=encontrado.id;
+        _solExclDriveId=id;_saveSolId(id);
+        var r2=await fetch(SCRIPT_URL+'?action=load&id='+id);
+        var d2=await r2.json();
+        if(d2.ok&&d2.dados){
+          solExclusao=(d2.dados.lista)||[];
+          atualizarBadgeExclusoes();
+        }
+      }
+    }
+  }catch(e){console.warn('carregarSolExclusaoDrive:',e);}
+}
+
+async function salvarSolExclusaoDrive(){
+  var id=_solExclDriveId||_loadSolId()||null;
+  var body={action:'save',id:id,numero:'SOLEXCL',cliente:'CrazySom SolExclusao',data:'2099-01-01',dados:{lista:solExclusao}};
+  var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify(body)});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  var d=await r.json();
+  if(!d.ok) throw new Error(d.erro||'Erro desconhecido no servidor');
+  if(d.id){_solExclDriveId=d.id;_saveSolId(d.id);}
 }
 
 async function carregarExcluidosDrive(){
@@ -4115,6 +4223,102 @@ async function salvarExcluidosDrive(){
     }
   }catch(e){console.warn('salvarExcluidosDrive:',e);}
 }
+
+function renderExclusivoModal(){
+  var lista=document.getElementById('aprov-lista');
+  if(!lista)return;
+  var nivel=usuarioAtual?usuarioAtual.nivel:'';
+  var isFabiano=usuarioAtual&&usuarioAtual.id==='fabiano.santos';
+  var podever=PODE_EXCLUIR.includes(nivel)||isFabiano;
+  var pendentes=solExclusao.filter(function(s){return s.status==='pendente';});
+  var aprovadas=solExclusao.filter(function(s){return s.status==='aprovado';});
+  var rejeitadas=solExclusao.filter(function(s){return s.status==='rejeitado';});
+
+  if(!solExclusao.length){
+    lista.innerHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">Nenhuma solicitação de exclusão registrada.</div>';
+    return;
+  }
+
+  function cardExclModal(s,idx){
+    var isPend=s.status==='pendente';
+    var corSt=isPend?'#e65100':s.status==='aprovado'?'#2e7d32':'#c62828';
+    var lblSt=isPend?'⏳ Pendente':s.status==='aprovado'?'✅ Aprovado':'❌ Rejeitado';
+    var btns='';
+    if(isPend&&podever){
+      btns='<div style="display:flex;gap:7px;margin-top:8px">'
+        +'<button onclick="aprovarExclusaoModal('+idx+')" style="padding:6px 14px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">🗑️ Aprovar Exclusão</button>'
+        +'<button onclick="rejeitarExclusaoModal('+idx+')" style="padding:6px 12px;background:#333;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer">✕ Rejeitar</button>'
+        +'</div>';
+    } else if(isPend&&!podever){
+      btns='<div style="margin-top:6px;font-size:10px;color:#666;font-style:italic">Aguardando aprovação de gerente, diretor ou Fabiano</div>';
+    }
+    return '<div style="background:#0d0d0d;border:1px solid #2a2a2a;border-left:3px solid '+corSt+';border-radius:5px;padding:10px 13px;margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start">'
+      +'<div>'
+      +'<div style="font-size:12px;color:#fff;font-weight:700;margin-bottom:3px">📄 '+eh(s.nome)+'</div>'
+      +'<div style="font-size:10px;color:#888">Solicitado por: <b style="color:#ccc">'+eh(s.solicitante)+'</b> ('+eh(s.cargo)+') · '+eh(s.data)+'</div>'
+      +(s.aprovadoPor?'<div style="font-size:10px;color:#888;margin-top:2px">'+lblSt+' por: <b style="color:#ccc">'+eh(s.aprovadoPor)+'</b> · '+eh(s.dataAcao)+'</div>':'')
+      +'</div>'
+      +'<span style="padding:3px 9px;border-radius:10px;font-size:9px;font-weight:800;background:'+corSt+'22;color:'+corSt+';border:1px solid '+corSt+'">'+lblSt+'</span>'
+      +'</div>'
+      +btns
+      +'</div>';
+  }
+
+  var html='';
+  if(pendentes.length){
+    html+='<div style="font-size:10px;color:#e65100;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">⏳ Pendentes ('+pendentes.length+')</div>';
+    pendentes.forEach(function(s){var idx=solExclusao.indexOf(s);html+=cardExclModal(s,idx);});
+  }
+  if(aprovadas.length){
+    html+='<div style="font-size:10px;color:#2e7d32;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin:12px 0 8px">✅ Aprovadas ('+aprovadas.length+')</div>';
+    aprovadas.forEach(function(s){var idx=solExclusao.indexOf(s);html+=cardExclModal(s,idx);});
+  }
+  if(rejeitadas.length){
+    html+='<div style="font-size:10px;color:#c62828;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin:12px 0 8px">❌ Rejeitadas ('+rejeitadas.length+')</div>';
+    rejeitadas.forEach(function(s){var idx=solExclusao.indexOf(s);html+=cardExclModal(s,idx);});
+  }
+  lista.innerHTML=html;
+}
+
+async function aprovarExclusaoModal(idx){
+  var sol=solExclusao[idx];
+  if(!sol)return;
+  if(!confirm('Confirmar exclusão de "'+sol.nome+'"? Esta ação não pode ser desfeita.'))return;
+  driveStatus('⏳ Excluindo...','');
+  try{
+    var r=await fetch(SCRIPT_URL+'?action=delete&id='+sol.id);
+    var d=await r.json();
+    if(!d.ok)throw new Error(d.erro);
+    sol.status='aprovado';
+    sol.aprovadoPor=usuarioAtual.nome;
+    sol.dataAcao=new Date().toLocaleString('pt-BR');
+    if(driveIdAtual===sol.id){driveIdAtual=null;driveNumAtual=null;}
+    excluídosHist.unshift({id:sol.id,nome:sol.nome,excluidoPor:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,solicitante:sol.solicitante,data:new Date().toLocaleString('pt-BR')});
+    await salvarExcluidosDrive();
+    driveStatus('🗑️ Exclusão aprovada','ok');
+    atualizarBadgeExclusoes();
+    renderExclusivoModal();
+    renderAdmExclusoes();
+    driveListar();
+  }catch(e){driveStatus('Erro: '+e.message,'err');}
+}
+
+function rejeitarExclusaoModal(idx){
+  var sol=solExclusao[idx];
+  if(!sol)return;
+  if(!confirm('Rejeitar solicitação de exclusão de "'+sol.nome+'"?'))return;
+  sol.status='rejeitado';
+  sol.aprovadoPor=usuarioAtual.nome;
+  sol.dataAcao=new Date().toLocaleString('pt-BR');
+  salvarSolExclusaoDrive();
+  atualizarBadgeExclusoes();
+  renderExclusivoModal();
+  renderAdmExclusoes();
+  driveListar();
+  driveStatus('✅ Solicitação rejeitada','ok');
+}
+
 
 buildTabs();
 document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
