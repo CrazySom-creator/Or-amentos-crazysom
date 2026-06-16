@@ -4140,10 +4140,12 @@ async function carregarSolExclusaoDrive(){
       }
       _solExclDriveId=null;_saveSolId('');id=null;
     }
-    // Sem ID: listar todos e achar pelo nome
+    // Sem ID válido: listar todos e achar pelo nome
     var rl=await fetch(SCRIPT_URL+'?action=list&q=');
     var dl=await rl.json();
     if(dl.ok&&dl.lista&&dl.lista.length){
+      // Guardar lista completa para diagnóstico
+      window._driveListaDiag=dl.lista.map(function(x){return x.nome;});
       var encontrado=null;
       for(var i=0;i<dl.lista.length;i++){
         var item=dl.lista[i];
@@ -4167,7 +4169,7 @@ async function carregarSolExclusaoDrive(){
 
 async function salvarSolExclusaoDrive(){
   var id=_solExclDriveId||_loadSolId()||null;
-  var body={action:'save',id:id,numero:'SOLEXCL',cliente:'CrazySom SolExclusao',data:'2099-01-01',dados:{lista:solExclusao}};
+  var body={action:'save',id:id,numero:'SOLEXCL',cliente:'CrazySom SolExclusao',data:'2026-01-01',dados:{lista:solExclusao}};
   var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify(body)});
   if(!r.ok) throw new Error('HTTP '+r.status);
   var d=await r.json();
@@ -4235,7 +4237,19 @@ function renderExclusivoModal(){
   var rejeitadas=solExclusao.filter(function(s){return s.status==='rejeitado';});
 
   if(!solExclusao.length){
-    lista.innerHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">Nenhuma solicitação de exclusão registrada.</div>';
+    var diagHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">Nenhuma solicitação de exclusão registrada.</div>';
+    // Diagnóstico para administrador
+    var isFab=usuarioAtual&&usuarioAtual.id==='fabiano.santos';
+    if(isFab&&window._driveListaDiag){
+      diagHTML+='<div style="background:#1a0d00;border:1px solid #ff9800;border-radius:5px;padding:10px 13px;margin-top:8px;font-size:10px;color:#ff9800">'
+        +'<div style="font-weight:800;margin-bottom:5px">🔍 DIAGNÓSTICO — arquivos no Drive ('+window._driveListaDiag.length+'):</div>'
+        +'<div style="color:#aaa;max-height:120px;overflow-y:auto">'+window._driveListaDiag.map(function(n){return '<div>'+n+'</div>';}).join('')+'</div>'
+        +'<div style="margin-top:6px;color:#ff9800">Arquivo esperado deve conter: <b>SOLEXCL</b></div>'
+        +'</div>';
+    } else if(isFab){
+      diagHTML+='<div style="background:#1a0d00;border:1px solid #ff9800;border-radius:5px;padding:8px 13px;margin-top:8px;font-size:10px;color:#ff9800">🔍 ID salvo: '+((_solExclDriveId||_loadSolId())||'nenhum')+'</div>';
+    }
+    lista.innerHTML=diagHTML;
     return;
   }
 
