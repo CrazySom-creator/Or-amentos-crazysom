@@ -769,7 +769,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   <div class="g3">
     <div><label>Público Estimado</label><input type="number" id="f-pub" placeholder="500" oninput="marcarAlterado()"></div>
     <div style="grid-column:span 2"><label>Observações Gerais</label><textarea id="f-obs" style="background:#fffde7;border-color:#ffe082;min-height:52px" placeholder="Detalhes, restrições, motivo de revisão..." oninput="marcarAlterado()"></textarea></div>
-    <div style="grid-column:span 2"><label style="display:flex;align-items:center;gap:6px">🔧 Observações da OS <span style="background:#c0001a;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;letter-spacing:.5px">SOMENTE PARA MONTAGEM</span></label><textarea id="f-obs-os" style="background:#1a0a00;border:1px solid #c0001a;color:#ffcc80;min-height:60px;margin-top:3px" placeholder="Informações internas para o time de montagem: particularidades do local, contato no evento, cuidados especiais com equipamentos, sequência de montagem..." oninput="marcarAlterado()"></textarea><span style="font-size:10px;color:#888;margin-top:2px;display:block">⚠️ Este campo aparece apenas na OS — não é exibido no orçamento do cliente.</span></div>
+    <div style="grid-column:span 2"><label style="display:flex;align-items:center;gap:6px">🔧 Observações da OS <span style="background:#c0001a;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;letter-spacing:.5px">SOMENTE PARA MONTAGEM</span></label><textarea id="f-obs-os" style="background:#2d2d2d;border:1px solid #3a3a3a;color:#ccc;min-height:60px;margin-top:3px" placeholder="Informações internas para o time de montagem: particularidades do local, contato no evento, cuidados especiais com equipamentos, sequência de montagem..." oninput="marcarAlterado()"></textarea><span style="font-size:10px;color:#888;margin-top:2px;display:block">⚠️ Este campo aparece apenas na OS — não é exibido no orçamento do cliente.</span></div>
   </div>
 </div>
 
@@ -963,6 +963,7 @@ var comercialStatus='';
 var comercialHist=[];
 var snapshotAnterior=null;
 var solExclusao=[]; // fila de solicitações de exclusão pendentes/aprovadas
+var _bvStorage=0; // valor BV persistido entre re-renders do painel
 var excluídosHist=[]; // registro local de orçamentos excluídos
 var finParcelas=[];
 var finObs='';
@@ -993,7 +994,7 @@ function getPx(n){var k=Object.keys(PX).find(function(k){return n&&n.includes(k)
 var ELEV=[{l:'20cm',v:100},{l:'30cm',v:100},{l:'40cm',v:100},{l:'60cm',v:100},{l:'80cm',v:100},{l:'100cm',v:100}];
 function isPalco(n){return n&&n.trim().toLowerCase()==='palco';}
 function calcPalco(r){var a=r.larg*r.prof,np=Math.ceil(a/2),vp=r.elObj?r.elObj.v:100;var tc=r.carp&&r.carpT?a*(r.carpT==='novo'?40:25):0;return{area:a,np:np,tc:tc,total:np*vp+tc};}
-var OCULT=['Montagem','Desmontagem','Frete','Almoço/Janta','Combustível','Hotel','Pedágio','Projeto','Carregadores'];
+var OCULT=['Montagem','Desmontagem','Frete','Almoço/Janta','Combustível','Hotel','Pedágio','Projeto','Carregadores','BV Produtora','Bônus de Venda'];
 function isOcult(n){return OCULT.some(function(o){return n&&n.toLowerCase().includes(o.toLowerCase());});}
 
 function fmtN(v){return Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -1361,8 +1362,21 @@ function buildSecPane(s){
   var pane=document.getElementById('spane-'+s);if(!pane)return;
   var info='';
   if(s==='logistica')info='<div style="background:#e8f4fd;border:1px solid #90caf9;border-radius:4px;padding:7px 11px;font-size:10px;color:#1565c0;margin-bottom:7px"><b>🚚 Logística</b> — No PDF aparece como linha única com o valor total.</div>';
+
   if(s==='extra')info='<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:4px;padding:7px 11px;font-size:10px;color:#7a5a00;margin-bottom:7px"><b>💰 Custos Extra</b> — Uso interno. Não aparece no PDF do cliente.</div>';
-  pane.innerHTML=info+'<div class="amb-bar" id="ambbar-'+s+'"></div><div id="ambcontent-'+s+'"></div>';
+
+  var bvHtml=s==='servico'?'<div id="bv-box" style="background:#2d2d2d;border:1px solid #3a3a3a;border-radius:4px;padding:6px 10px;margin-top:8px;display:flex;align-items:center;gap:8px">'
+    +'<span style="font-size:10px;color:#555;white-space:nowrap">🎁 BV Produtora</span>'
+    +'<input type="text" id="f-bv" inputmode="decimal" placeholder="R$ 0,00" '
+    +'style="max-width:140px;background:#2a2a2a;border:1px solid #444;color:#ddd;font-size:12px;padding:4px 9px;border-radius:3px" '
+    +'oninput="var v=parseFloat(this.value.replace(/[^0-9,]/g,\'\').replace(\',\',\'.\'))||0;_bvStorage=v;calc();marcarAlterado()" '
+    +'onfocus="if(this.value===\'R$ 0,00\'||this.value===\'\')this.value=\'\';" '
+    +'onblur="this.value=_bvStorage>0?\'R$ \'+_bvStorage.toFixed(2).replace(\'.\',\',\'): \'R$ 0,00\'">'
+    +'<span style="font-size:10px;color:#444">uso interno — não aparece no PDF</span>'
+    +'</div>':'';
+  pane.innerHTML=info+'<div class="amb-bar" id="ambbar-'+s+'"></div><div id="ambcontent-'+s+'"></div>'+bvHtml;
+  // Restaurar valor do BV da variável _bvStorage
+  if(s==='servico'){var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value=_bvStorage>0?'R$ '+_bvStorage.toFixed(2).replace('.',','):'R$ 0,00';}
   if(s==='logistica'){pane.innerHTML+='<div style="margin-top:11px"><label>Serviços inclusos no PDF (um por linha)</label><textarea id="f-svinc" style="margin-top:4px;background:#f0f7ff;border-color:#90caf9;min-height:60px" oninput="marcarAlterado()"></textarea></div>';setTimeout(function(){var ta=document.getElementById('f-svinc');if(ta&&!ta.value)ta.value='Montagem\nDesmontagem\nTransporte';},10);}
   renderAmbBar(s);renderAmbContent(s);
 }
@@ -1501,7 +1515,13 @@ function renderRows(s){
     else{subEl.style.display='none';}
   }
   if(s==='extra'){var custoT=rows.reduce(function(t,r){return t+r.qty*r.val*r.diaria;},0);var cobT=rows.reduce(function(t,r){return t+r.qty*r.val*r.diaria*(1+r.marg/100);},0);sv('tot-extra',fmt(custoT));sv('tot-extra-cob',fmt(cobT));}
-  else{var tEl=document.getElementById('tot-'+s),tiEl=document.getElementById('tot-'+s+'-imp');if(tEl)tEl.textContent=fmt(totAll);if(tiEl)tiEl.textContent=fmt(totAll*(1+IMP));}
+  else{
+    var bvAdd=s==='servico'?_bvStorage:0;
+    var totDisp=totAll+bvAdd;
+    var tEl=document.getElementById('tot-'+s),tiEl=document.getElementById('tot-'+s+'-imp');
+    if(tEl)tEl.textContent=fmt(totDisp);
+    if(tiEl)tiEl.textContent=fmt(totDisp*(1+IMP));
+  }
 }
 
 function updRow(s,aid,id,field,val){
@@ -1527,14 +1547,19 @@ function syncDesc(from){
 }
 function calc(){
   var MAIN=['som','video','luz','estrutura','servico','logistica'];
-  MAIN.forEach(function(s){sv('r-'+s,fmt(secTotAll(s)));});
-  var bruto=MAIN.reduce(function(t,s){return t+secTotAll(s);},0);
+  var _bvVal=_bvStorage||parseFloat(gv('f-bv'))||0;
+  MAIN.forEach(function(s){
+    var tot=secTotAll(s)+(s==='servico'?_bvVal:0);
+    sv('r-'+s,fmt(tot));
+  });
+  var bruto=MAIN.reduce(function(t,s){return t+secTotAll(s);},0)+_bvVal;
   var imp=bruto*IMP,cImp=bruto+imp;
   var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
   var dv=safe(drs>0?drs:cImp*(dpct/100));
   var vdsi=safe(cImp>0?bruto-bruto*(dv/cImp):bruto),vdci=safe(cImp-dv);
   var xc=safe(Object.values(state.extra.rows).reduce(function(t,arr){return t+arr.reduce(function(a,r){return a+r.qty*r.val*r.diaria;},0);},0));
-  var srv=secTotAll('servico'),log=secTotAll('logistica');
+  var bvVal=_bvVal;
+  var srv=secTotAll('servico')+bvVal,log=secTotAll('logistica');
   var dsi=safe(cImp>0?bruto*(dv/cImp):0);
   var msd=safe(bruto-dsi-srv-log-xc),msdP=safe(bruto>0?msd/bruto*100:0);
   var mcd=safe(cImp-imp-dsi-srv-log-xc),mcdP=safe(cImp>0?mcd/cImp*100:0);
@@ -1631,7 +1656,7 @@ async function driveCarregar(id,nome){
     var dados=d.dados;
     if(dados.state){SECS.forEach(function(s){if(dados.state[s]){state[s].ambientes=dados.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=dados.state[s].ambAtiva||'default';state[s].rows=dados.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
     if(dados.form)setForm(dados.form);
-    aprovStatus=dados.aprovStatus||'rascunho';aprovHist=dados.aprovHist||[];comercialStatus=dados.comercialStatus||'';comercialHist=dados.comercialHist||[];snapshotAnterior=dados.snapshotAnterior||null;finParcelas=dados.finParcelas||[];finObs=dados.finObs||'';
+    aprovStatus=dados.aprovStatus||'rascunho';aprovHist=dados.aprovHist||[];comercialStatus=dados.comercialStatus||'';comercialHist=dados.comercialHist||[];snapshotAnterior=dados.snapshotAnterior||null;finParcelas=dados.finParcelas||[];finObs=dados.finObs||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
     driveIdAtual=id;driveNumAtual=dados.form&&dados.form['f-num']?dados.form['f-num']:null;
     buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
     driveStatus('✅ Carregado: '+nome,'ok');
@@ -1690,8 +1715,8 @@ async function driveDeletar(id,nome){
   }
 }
 
-var FORM_IDS=['f-num','f-data','f-val','f-cons','f-cliente','f-doc','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dd','f-hd','f-pub','f-obs','f-obs-os','f-pgto','f-svinc','desc-pct','desc-rs','val-liq'];
-function getForm(){var o={};FORM_IDS.forEach(function(id){var e=document.getElementById(id);if(e)o[id]=e.value;});return o;}
+var FORM_IDS=['f-num','f-data','f-val','f-cons','f-cliente','f-doc','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dd','f-hd','f-pub','f-obs','f-obs-os','f-pgto','f-svinc','desc-pct','desc-rs','val-liq','f-bv'];
+function getForm(){var o={};FORM_IDS.forEach(function(id){var e=document.getElementById(id);if(e)o[id]=e.value;});if((!o['f-bv']||o['f-bv']==='0')&&_bvStorage>0)o['f-bv']=String(_bvStorage);return o;}
 function setForm(f){Object.keys(f).forEach(function(id){var e=document.getElementById(id);if(e)e.value=f[id];});sv('orc-disp',f['f-num']||'—');}
 function salvar(){var blob=new Blob([JSON.stringify({form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs},null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(gv('f-num')||'orc')+' - '+(gv('f-cliente')||'cliente')+'.json';a.click();URL.revokeObjectURL(a.href);}
 function carregar(input){
@@ -1715,7 +1740,7 @@ function limpar(){
   SECS.forEach(function(s){state[s]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{default:[]}};});
   FORM_IDS.filter(function(id){return ['desc-pct','desc-rs','val-liq','f-pgto','f-svinc'].indexOf(id)<0;}).forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('f-cons').value='';
-  document.getElementById('desc-pct').value=0;document.getElementById('desc-rs').value=0;document.getElementById('val-liq').value='';
+  document.getElementById('desc-pct').value=0;document.getElementById('desc-rs').value=0;document.getElementById('val-liq').value='';_bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value='';
   document.getElementById('f-pgto').value='50% na contratação;\n50% até 03 dias antes da montagem.';
   ['cep-st','doc-st','cep-ev-st'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent='';});
   sv('orc-disp','—');
@@ -1754,7 +1779,8 @@ function buildPDF(tipo){
   var SECS_PDF=['som','video','luz','estrutura','servico'];
   var F=pdfFator();
   var orcN=gv('f-num')||'—',dataorc=gv('f-data')?fD(gv('f-data')):new Date().toLocaleDateString('pt-BR');
-  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
+  var bvBruto=_bvStorage||parseFloat(gv('f-bv'))||0;
+  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+bvBruto;
   var imp=bruto*IMP,cImp=bruto+imp;
   var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
   var dv=drs>0?drs:cImp*(dpct/100);
@@ -1814,7 +1840,7 @@ function buildPDF(tipo){
 
   function secBlock(s,aid,det){
     if(s==='logistica')return'';
-    var rows2=state[s].rows[aid]||[];if(!rows2.length)return'';
+    var rows2=(state[s].rows[aid]||[]).filter(function(r){return !isOcult(r.name);});if(!rows2.length)return'';
     var secTotal=rows2.reduce(function(t,r){return t+rTotF(r);},0);
     if(det){
       var h='<div class="psec">'+SEC_ICO[s]+' '+SEC_LBL[s]+'</div>'
@@ -1891,6 +1917,7 @@ function buildPDF(tipo){
     SECS_PDF.forEach(function(s){corpo+=secBlock(s,'default',tipo==='det');});
   }
 
+  var bvTot=(_bvStorage||parseFloat(gv('f-bv'))||0)*F*(1-descFrac);
   var logTot=secTotAll('logistica')*F*(1-descFrac);
   var totalLabel='Valor Total'+(impAtual==='cimp'?' (impostos inclusos)':'');
 
@@ -1910,7 +1937,11 @@ function buildPDF(tipo){
   }else{
     [{n:'SONORIZAÇÃO',s:'som'},{n:'VÍDEO',s:'video'},{n:'ILUMINAÇÃO',s:'luz'},{n:'ESTRUTURA',s:'estrutura'},{n:'SERVIÇO',s:'servico'}]
       .filter(function(x){return secTotAll(x.s)>0;})
-      .forEach(function(x){res+='<tr><td>'+x.n+'</td><td class="r">'+fmt(secTotAll(x.s)*F*(1-descFrac))+'</td></tr>';});
+      .forEach(function(x){
+        var vSec=secTotAll(x.s)*F*(1-descFrac);
+        if(x.s==='servico')vSec+=bvTot; // adicionar BV ao total de serviço interno
+        res+='<tr><td>'+x.n+'</td><td class="r">'+fmt(vSec)+'</td></tr>';
+      });
   }
 
   if(logTot>0)res+='<tr><td>🚚 LOGÍSTICA</td><td class="r">'+fmt(logTot)+'</td></tr>';
@@ -1922,8 +1953,9 @@ function buildPDF(tipo){
     });
   }
 
-  var difDesc=impAtual==='cimp'?(cImp-totalFinal):(bruto-totalFinal);
-  if(difDesc>0.01)res+='<tr class="drow2"><td style="text-align:right">Desconto</td><td class="r">– '+fmt(difDesc)+'</td></tr>';
+  // Mostrar desconto APENAS se há desconto real preenchido (não arredondamento de val-liq)
+  var difDesc=dv>0.01?(impAtual==='cimp'?(cImp-totalFinal):(bruto-totalFinal)):0;
+  if(dv>0.01&&difDesc>0.01)res+='<tr class="drow2"><td style="text-align:right">Desconto</td><td class="r">– '+fmt(difDesc)+'</td></tr>';
 
   res+='<tr class="lrow">'
     +'<td>'+totalLabel+'</td>'
