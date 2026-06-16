@@ -3343,209 +3343,338 @@ function dashValOrc(o){
 }
 
 function dashRenderizar(){
-  var dados = dashFiltrar();
-  var hoje  = new Date().toISOString().split('T')[0];
-  var de    = document.getElementById('dash-de').value;
-  var ate   = document.getElementById('dash-ate').value;
+  var dados   = dashFiltrar();
+  var todos   = _dashDados; // todos (sem filtro de data) para análise de elaboração
+  var hoje    = new Date().toISOString().split('T')[0];
+  var de      = document.getElementById('dash-de').value;
+  var ate     = document.getElementById('dash-ate').value;
 
-  // ── KPIs gerais ──────────────────────────────────────
-  var total     = dados.length;
-  var aprovados = dados.filter(function(o){ return o.st === 'aprovado'; }).length;
-  var ganhos    = dados.filter(function(o){ return o.dados && o.dados.comercialStatus === 'ganha'; }).length;
-  var perdidos  = dados.filter(function(o){ return o.dados && o.dados.comercialStatus === 'perdida'; }).length;
-  var volume    = dados.reduce(function(t,o){ return t + dashValOrc(o); }, 0);
-  var volGanho  = dados.filter(function(o){ return o.dados && o.dados.comercialStatus === 'ganha'; })
-                       .reduce(function(t,o){ return t + dashValOrc(o); }, 0);
-  var txConv    = total > 0 ? Math.round(ganhos / total * 100) : 0;
-  var txAprov   = total > 0 ? Math.round(aprovados / total * 100) : 0;
+  // ════════════════════════════════════════════════════════
+  //  HELPERS
+  // ════════════════════════════════════════════════════════
+  var SI_COR  = {rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
+  var SI_LBL  = {rascunho:'Rascunho',analise:'Em Análise',gerencial:'Ap. Gerente',diretoria:'Ap. Diretoria',aprovado:'Aprovado',revisao:'Revisão'};
+  var COM_COR = {enviada:'#1565c0',negociacao:'#e65100',standby:'#5d4037',ganha:'#2e7d32',perdida:'#c62828'};
+  var COM_LBL = {enviada:'📤 Proposta Enviada',negociacao:'🤝 Em Negociação',standby:'⏸️ Standby',ganha:'🏆 Venda Ganha',perdida:'❌ Venda Perdida'};
 
-  // ── Parcelas financeiras ──────────────────────────────
-  var parcelasAtras = [], parcelasPend = [];
-  _dashDados.forEach(function(o){
-    var fin = (o.dados && o.dados.finParcelas) || [];
-    fin.forEach(function(p){
-      var atrasado = p.status !== 'pago' && p.data && p.data < hoje;
-      if(atrasado) parcelasAtras.push({orc:o, p:p});
-      else if(p.status !== 'pago' && p.data && p.data >= hoje) parcelasPend.push({orc:o, p:p});
-    });
-  });
-  parcelasAtras.sort(function(a,b){ return a.p.data > b.p.data ? 1 : -1; });
-  parcelasPend.sort(function(a,b){  return a.p.data > b.p.data ? 1 : -1; });
-  var totalAtras = parcelasAtras.reduce(function(t,x){ return t + (parseFloat(x.p.valor)||0); }, 0);
-  var totalPend  = parcelasPend.reduce(function(t,x){  return t + (parseFloat(x.p.valor)||0); }, 0);
+  function diasAtras(dt){
+    if(!dt)return null;
+    return Math.floor((new Date(hoje+'T12:00:00')-new Date(dt+'T12:00:00'))/(1000*60*60*24));
+  }
 
-  // ── Próximos eventos ─────────────────────────────────
-  var proxEvs = _dashDados.filter(function(o){
-    var dt = o.form && o.form['f-dia'] || '';
-    return dt >= hoje;
-  }).sort(function(a,b){
-    return (a.form['f-dia']||'') > (b.form['f-dia']||'') ? 1 : -1;
-  }).slice(0, 6);
+  // Mini-lista para drill-down
+  function miniLista(lista, titulo){
+    if(!lista.length) return '<div class="dash-vazio">Nenhum orçamento.</div>';
+    return '<div style="max-height:320px;overflow-y:auto">'
+      +'<div style="font-size:10px;color:#888;font-weight:700;text-transform:uppercase;padding:6px 10px;background:#0d0d0d;border-bottom:1px solid #1a1a1a">'+titulo+' ('+lista.length+')</div>'
+      +lista.map(function(o){
+        var f=o.form||{};
+        var val=dashValOrc(o);
+        var cs=o.dados&&o.dados.comercialStatus||'';
+        var cor=SI_COR[o.st]||'#555';
+        var dias=o.form&&o.form['f-data']?diasAtras(o.form['f-data']):null;
+        return '<div style="padding:7px 10px;border-bottom:1px solid #111;display:flex;align-items:center;gap:8px">'
+          +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:11px;color:#ddd;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+          +'<div style="font-size:10px;color:#666;margin-top:1px">'
+          +eh(f['f-num']||'')+(f['f-data']?' · '+fD(f['f-data']):'')+(f['f-cons']?' · '+f['f-cons']:'')
+          +(dias!==null?' · <span style="color:'+(dias>30?'#ef5350':dias>15?'#ffa726':'#888')+'">'+dias+'d</span>':'')
+          +'</div></div>'
+          +(cs?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+(COM_COR[cs]||'#333')+'33;color:'+(COM_COR[cs]||'#888')+';border:1px solid '+(COM_COR[cs]||'#333')+';white-space:nowrap">'+(COM_LBL[cs]||cs)+'</span>':'')
+          +'<span style="font-size:10px;font-weight:800;color:#fff;white-space:nowrap;min-width:80px;text-align:right">'+fmt(val)+'</span>'
+          +'<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:'+cor+'22;color:'+cor+';border:1px solid '+cor+';white-space:nowrap">'+(SI_LBL[o.st]||o.st)+'</span>'
+          +'</div>';
+      }).join('')
+      +'</div>';
+  }
 
-  // ── Funil ────────────────────────────────────────────
-  var funil = [
-    {label:'Rascunho',    st:'rascunho',  cor:'#546e7a'},
-    {label:'Em Análise',  st:'analise',   cor:'#1565c0'},
-    {label:'Ap. Gerente', st:'gerencial', cor:'#e65100'},
-    {label:'Ap. Diretoria',st:'diretoria',cor:'#6a1b9a'},
-    {label:'Aprovado',    st:'aprovado',  cor:'#2e7d32'},
-    {label:'Revisão',     st:'revisao',   cor:'#c62828'},
+  // Card clicável que abre drill-down
+  function cardDrill(id,classe,label,val,sub,lista,titulo){
+    return '<div class="dk '+classe+'" style="cursor:pointer" onclick="dashDrill(\''+id+'\',\''+encodeURIComponent(titulo)+'\')" id="dk-'+id+'">'
+      +'<label>'+label+'</label>'
+      +'<span class="dkv">'+val+'</span>'
+      +'<span class="dksub">'+sub+'</span>'
+      +'</div>';
+  }
+
+  // ════════════════════════════════════════════════════════
+  //  SEÇÃO 1 — ELABORAÇÃO DE ORÇAMENTOS
+  // ════════════════════════════════════════════════════════
+  var totalOrc   = dados.length;
+  var aprov      = dados.filter(function(o){return o.st==='aprovado';});
+  var pendentes  = dados.filter(function(o){return o.st!=='aprovado';});
+  var revQtd     = dados.filter(function(o){return o.st==='revisao';}).length;
+  var analQtd    = dados.filter(function(o){return o.st==='analise';}).length;
+  var rascQtd    = dados.filter(function(o){return o.st==='rascunho';}).length;
+  var volTotal   = dados.reduce(function(t,o){return t+dashValOrc(o);},0);
+  var volAprov   = aprov.reduce(function(t,o){return t+dashValOrc(o);},0);
+  var volPend    = pendentes.reduce(function(t,o){return t+dashValOrc(o);},0);
+
+  // Parados (não aprovados) — calcular dias desde a última atualização
+  var paradosList = pendentes.map(function(o){
+    var dt = o.form&&o.form['f-data']||'';
+    var d = dt?diasAtras(dt):null;
+    return Object.assign({},o,{_dias:d});
+  }).filter(function(o){return o._dias!==null;}).sort(function(a,b){return b._dias-a._dias;});
+  var maxDias = paradosList.length?paradosList[0]._dias:0;
+
+  // Guardar listas para drill-down
+  window._dashListas = window._dashListas||{};
+  window._dashListas['total']     = dados;
+  window._dashListas['aprovados'] = aprov;
+  window._dashListas['pendentes'] = pendentes;
+  window._dashListas['parados']   = paradosList;
+
+  var kpi1 = '<div class="dash-kpis">'
+    +'<div class="dk verde" style="cursor:pointer" onclick="dashDrill(\'total\',\'Todos+os+Or%C3%A7amentos\')">'
+      +'<label>Total de Orçamentos</label><span class="dkv">'+totalOrc+'</span><span class="dksub">'+fmt(volTotal)+'</span></div>'
+    +'<div class="dk verde" style="cursor:pointer" onclick="dashDrill(\'aprovados\',\'Aprovados\')">'
+      +'<label>✅ Aprovados</label><span class="dkv">'+aprov.length+'</span><span class="dksub">'+fmt(volAprov)+'</span></div>'
+    +'<div class="dk laranja" style="cursor:pointer" onclick="dashDrill(\'pendentes\',\'Pendentes+de+Aprova%C3%A7%C3%A3o\')">'
+      +'<label>⏳ Pendentes Aprovação</label><span class="dkv">'+pendentes.length+'</span><span class="dksub">'+fmt(volPend)+'</span></div>'
+    +'<div class="dk vermelho" style="cursor:pointer" onclick="dashDrill(\'parados\',\'Parados+sem+Aprova%C3%A7%C3%A3o\')">'
+      +'<label>⏸️ Parado há mais</label><span class="dkv">'+(maxDias||0)+'d</span><span class="dksub">maior parado</span></div>'
+    +'<div class="dk azul" style="cursor:pointer" onclick="dashDrill(\'revisao\',\'Em+Revis%C3%A3o\')">'
+      +'<label>🔄 Em Revisão</label><span class="dkv">'+revQtd+'</span><span class="dksub">aguardando ajuste</span></div>'
+    +'<div class="dk ciano" style="cursor:pointer" onclick="dashDrill(\'analise\',\'Em+An%C3%A1lise\')">'
+      +'<label>🔍 Em Análise</label><span class="dkv">'+analQtd+'</span><span class="dksub">aguardando aprovação</span></div>'
+    +'</div>';
+
+  // Funil de elaboração (status interno)
+  var funilElabSteps = [
+    {label:'Rascunho',       st:'rascunho',   cor:'#546e7a'},
+    {label:'Em Análise',     st:'analise',    cor:'#1565c0'},
+    {label:'Ap. Gerente',    st:'gerencial',  cor:'#e65100'},
+    {label:'Ap. Diretoria',  st:'diretoria',  cor:'#6a1b9a'},
+    {label:'Aprovado',       st:'aprovado',   cor:'#2e7d32'},
+    {label:'Revisão',        st:'revisao',    cor:'#c62828'}
   ];
-  var maxFunil = Math.max.apply(null, funil.map(function(f){
-    return dados.filter(function(o){ return o.st === f.st; }).length;
+  var maxElabN = Math.max.apply(null, funilElabSteps.map(function(f){
+    return dados.filter(function(o){return o.st===f.st;}).length;
   }).concat([1]));
-
-  var funilHTML = funil.map(function(f){
-    var n = dados.filter(function(o){ return o.st === f.st; }).length;
-    var w = Math.round(n / maxFunil * 100);
-    var vol2 = dados.filter(function(o){ return o.st===f.st; }).reduce(function(t,o){ return t+dashValOrc(o); },0);
-    return '<div class="funil-step">'
+  var funilElabHTML = funilElabSteps.map(function(f){
+    var lista2=dados.filter(function(o){return o.st===f.st;});
+    var n=lista2.length, vol2=lista2.reduce(function(t,o){return t+dashValOrc(o);},0);
+    var w=Math.round(n/maxElabN*100);
+    window._dashListas['elab_'+f.st]=lista2;
+    return '<div class="funil-step" style="cursor:pointer" onclick="dashDrill(\'elab_'+f.st+'\',\''+encodeURIComponent(f.label)+'\')">'
       +'<div class="funil-label">'+f.label+'</div>'
-      +'<div class="funil-bar"><div class="funil-fill" style="width:'+w+'%;background:'+f.cor+'">'+
-        (n>0?'':'')+'</div></div>'
+      +'<div class="funil-bar"><div class="funil-fill" style="width:'+w+'%;background:'+f.cor+'"></div></div>'
       +'<div class="funil-val" style="color:'+f.cor+'">'+n+'</div>'
       +'<div style="min-width:90px;font-size:9px;color:#555;text-align:right">'+fmt(vol2)+'</div>'
       +'</div>';
   }).join('');
 
-  // ── Por Consultor ────────────────────────────────────
-  var porCons = {};
-  dados.forEach(function(o){
-    var c = (o.form && o.form['f-cons']) || 'Sem Consultor';
-    if(!porCons[c]) porCons[c] = {qtd:0,ganhos:0,val:0};
-    porCons[c].qtd++;
-    if(o.dados && o.dados.comercialStatus==='ganha'){ porCons[c].ganhos++; porCons[c].val+=dashValOrc(o); }
+  // Parados — barras por tempo
+  var paradosBandas = [
+    {label:'> 30 dias',min:30,max:9999,cor:'#c62828'},
+    {label:'15–30 dias',min:15,max:30,cor:'#e65100'},
+    {label:'7–15 dias', min:7, max:15,cor:'#ffa726'},
+    {label:'< 7 dias',  min:0, max:7, cor:'#2e7d32'}
+  ];
+  var paradosHTML = paradosBandas.map(function(b){
+    var lista2=paradosList.filter(function(o){return o._dias>=b.min&&o._dias<b.max;});
+    window._dashListas['parado_'+b.min]=lista2;
+    if(!lista2.length)return'';
+    return '<div class="funil-step" style="cursor:pointer" onclick="dashDrill(\'parado_'+b.min+'\',\''+encodeURIComponent('Parados '+b.label)+'\')">'
+      +'<div class="funil-label" style="color:'+b.cor+'">'+b.label+'</div>'
+      +'<div class="funil-bar"><div class="funil-fill" style="width:'+Math.round(lista2.length/Math.max(paradosList.length,1)*100)+'%;background:'+b.cor+'"></div></div>'
+      +'<div class="funil-val" style="color:'+b.cor+'">'+lista2.length+'</div>'
+      +'<div style="min-width:90px;font-size:9px;color:#555;text-align:right">'+lista2.reduce(function(t,o){return t+dashValOrc(o);},0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,'.').replace(/\.(\d{2})$/,',$1')+'</div>'
+      +'</div>';
+  }).join('') || '<div class="dash-vazio" style="color:#66bb6a">✅ Nenhum orçamento parado!</div>';
+
+  var secElaboracao = '<div style="margin-bottom:6px">'
+    +'<div style="font-size:11px;color:#c0001a;font-weight:900;text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid #c0001a;padding-bottom:4px;margin-bottom:10px">📋 Elaboração de Orçamentos</div>'
+    +kpi1
+    +'<div class="dash-row c2" style="margin-top:10px">'
+    +'<div class="dash-box"><h3>📊 Status de Aprovação <span>clique para detalhar</span></h3>'+funilElabHTML+'</div>'
+    +'<div class="dash-box"><h3>⏸️ Tempo sem Aprovação <span>orçamentos pendentes</span></h3>'+paradosHTML+'</div>'
+    +'</div></div>';
+
+  // ════════════════════════════════════════════════════════
+  //  SEÇÃO 2 — DESEMPENHO COMERCIAL (FUNIL DE VENDAS)
+  // ════════════════════════════════════════════════════════
+  // Só orçamentos que estão NO funil comercial (têm status comercial definido)
+  var comFunil = [
+    {key:'enviada',   label:'📤 Proposta Enviada', cor:'#1565c0'},
+    {key:'negociacao',label:'🤝 Em Negociação',    cor:'#e65100'},
+    {key:'standby',   label:'⏸️ Standby',           cor:'#5d4037'},
+    {key:'ganha',     label:'🏆 Venda Ganha',      cor:'#2e7d32'},
+    {key:'perdida',   label:'❌ Venda Perdida',    cor:'#c62828'}
+  ];
+
+  var totalComQtd=0, totalComVal=0;
+  comFunil.forEach(function(f){
+    var lista2=dados.filter(function(o){return o.dados&&o.dados.comercialStatus===f.key;});
+    totalComQtd+=lista2.length;
+    totalComVal+=lista2.reduce(function(t,o){return t+dashValOrc(o);},0);
+    window._dashListas['com_'+f.key]=lista2;
   });
-  var consOrdem = Object.keys(porCons).sort(function(a,b){ return porCons[b].val - porCons[a].val; });
-  var maxConsVal = Math.max.apply(null, consOrdem.map(function(c){ return porCons[c].val; }).concat([1]));
-  var consHTML = consOrdem.length ? consOrdem.map(function(c){
-    var pc = porCons[c];
-    var tx = pc.qtd>0 ? Math.round(pc.ganhos/pc.qtd*100) : 0;
-    var w  = Math.round(pc.val / maxConsVal * 100);
-    return '<div class="cons-row">'
+
+  var ganhos2    = window._dashListas['com_ganha']||[];
+  var perdidos2  = window._dashListas['com_perdida']||[];
+  var enviados2  = dados.filter(function(o){var cs=o.dados&&o.dados.comercialStatus||'';return ['enviada','negociacao','standby','ganha','perdida'].includes(cs);});
+  window._dashListas['com_enviados']=enviados2;
+
+  var ganhoQtd   = ganhos2.length;
+  var perdidoQtd = perdidos2.length;
+  var ganhoVal   = ganhos2.reduce(function(t,o){return t+dashValOrc(o);},0);
+  var perdidoVal = perdidos2.reduce(function(t,o){return t+dashValOrc(o);},0);
+  var envQtd     = enviados2.length;
+  var envVal     = enviados2.reduce(function(t,o){return t+dashValOrc(o);},0);
+
+  // Taxa de conversão por quantidade
+  var txQtd = envQtd>0?Math.round(ganhoQtd/envQtd*100):0;
+  // Taxa de conversão por valor
+  var txVal = envVal>0?Math.round(ganhoVal/envVal*100):0;
+
+  var maxComN = Math.max.apply(null,comFunil.map(function(f){return (window._dashListas['com_'+f.key]||[]).length;}).concat([1]));
+  var maxComV = Math.max.apply(null,comFunil.map(function(f){return (window._dashListas['com_'+f.key]||[]).reduce(function(t,o){return t+dashValOrc(o);},0);}).concat([1]));
+
+  var comFunilHTML = comFunil.map(function(f){
+    var lista2=window._dashListas['com_'+f.key]||[];
+    var n=lista2.length;
+    var v=lista2.reduce(function(t,o){return t+dashValOrc(o);},0);
+    var wN=Math.round(n/maxComN*100);
+    var wV=Math.round(v/maxComV*100);
+    return '<div style="margin-bottom:8px;cursor:pointer" onclick="dashDrill(\'com_'+f.key+'\',\''+encodeURIComponent(f.label)+'\')">'
+      +'<div style="display:flex;justify-content:space-between;margin-bottom:3px">'
+      +'<span style="font-size:10px;color:'+f.cor+';font-weight:700">'+f.label+'</span>'
+      +'<span style="font-size:10px;color:#888">'+n+' orc. · '+fmt(v)+'</span>'
+      +'</div>'
+      +'<div style="display:flex;gap:4px;align-items:center">'
+      +'<div style="flex:1;height:10px;background:#111;border-radius:2px;overflow:hidden">'
+      +'<div style="width:'+wN+'%;height:100%;background:'+f.cor+';border-radius:2px;opacity:.9"></div></div>'
+      +'<span style="font-size:9px;color:#555;min-width:28px;text-align:right">'+n+'</span>'
+      +'</div>'
+      +'<div style="display:flex;gap:4px;align-items:center;margin-top:2px">'
+      +'<div style="flex:1;height:6px;background:#111;border-radius:2px;overflow:hidden">'
+      +'<div style="width:'+wV+'%;height:100%;background:'+f.cor+';border-radius:2px;opacity:.5"></div></div>'
+      +'<span style="font-size:9px;color:#555;min-width:28px;text-align:right">R$</span>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+
+  // Conversão por consultor
+  var porCons2={};
+  dados.forEach(function(o){
+    var c=(o.form&&o.form['f-cons'])||'Sem Consultor';
+    var cs=o.dados&&o.dados.comercialStatus||'';
+    if(!porCons2[c])porCons2[c]={qtd:0,env:0,ganhos:0,perdidos:0,valEnv:0,valGanho:0};
+    var pc=porCons2[c];
+    pc.qtd++;
+    if(['enviada','negociacao','standby','ganha','perdida'].includes(cs)){pc.env++;pc.valEnv+=dashValOrc(o);}
+    if(cs==='ganha'){pc.ganhos++;pc.valGanho+=dashValOrc(o);}
+    if(cs==='perdida')pc.perdidos++;
+  });
+  var consOrdem2=Object.keys(porCons2).sort(function(a,b){return porCons2[b].valGanho-porCons2[a].valGanho;});
+
+  var consHTML2=consOrdem2.map(function(c){
+    var pc=porCons2[c];
+    var txQ=pc.env>0?Math.round(pc.ganhos/pc.env*100):0;
+    var txV=pc.valEnv>0?Math.round(pc.valGanho/pc.valEnv*100):0;
+    var cor=txQ>=50?'#66bb6a':txQ>=25?'#ffa726':'#ef5350';
+    window._dashListas['cons_'+c]=dados.filter(function(o){return (o.form&&o.form['f-cons'])===c;});
+    return '<div class="cons-row" style="cursor:pointer" onclick="dashDrill(\'cons_'+encodeURIComponent(c)+'\',\''+encodeURIComponent(c)+'\')">'
       +'<div class="cons-nome" title="'+c+'">'+c+'</div>'
-      +'<div class="cons-bar"><div class="cons-fill" style="width:'+w+'%"></div></div>'
-      +'<div class="cons-pct" style="color:'+(tx>=50?'#66bb6a':'#ffa726')+'">'+tx+'%</div>'
-      +'<div class="cons-val">'+fmt(pc.val)+'</div>'
+      +'<div style="flex:1;display:flex;flex-direction:column;gap:2px">'
+      +'<div style="height:10px;background:#111;border-radius:2px;overflow:hidden">'
+      +'<div style="width:'+Math.round(pc.valGanho/Math.max(1,Math.max.apply(null,consOrdem2.map(function(x){return porCons2[x].valGanho;})))*100)+'%;height:100%;background:linear-gradient(90deg,#c0001a,#ff5555);border-radius:2px"></div></div>'
+      +'</div>'
+      +'<div style="display:flex;flex-direction:column;align-items:flex-end;min-width:70px">'
+      +'<span style="font-size:10px;font-weight:800;color:'+cor+'">Qtd: '+txQ+'%</span>'
+      +'<span style="font-size:9px;color:#666">Val: '+txV+'%</span>'
+      +'</div>'
+      +'<div class="cons-val">'+fmt(pc.valGanho)+'</div>'
       +'</div>';
-  }).join('') : '<div class="dash-vazio">Sem dados</div>';
+  }).join('') || '<div class="dash-vazio">Sem dados comerciais</div>';
 
-  // ── Motivos de Perda ─────────────────────────────────
-  var porMotivo = {};
-  dados.filter(function(o){ return o.dados && o.dados.comercialStatus==='perdida'; }).forEach(function(o){
-    var hist = (o.dados && o.dados.comercialHist) || [];
-    var motivo = 'Não informado';
-    for(var i=hist.length-1;i>=0;i--){ if(hist[i].status==='perdida'&&hist[i].motivo){motivo=hist[i].motivo;break;} }
-    if(!porMotivo[motivo]) porMotivo[motivo]=0;
-    porMotivo[motivo]++;
-  });
-  var motivoOrdem = Object.keys(porMotivo).sort(function(a,b){ return porMotivo[b]-porMotivo[a]; });
-  var maxMot = Math.max.apply(null, motivoOrdem.map(function(m){ return porMotivo[m]; }).concat([1]));
-  var motivoHTML = motivoOrdem.length ? motivoOrdem.map(function(m){
-    var n = porMotivo[m]; var w = Math.round(n/maxMot*100);
-    return '<div class="motivo-row">'
-      +'<div class="motivo-label" title="'+m+'">'+m+'</div>'
-      +'<div class="motivo-bar"><div class="motivo-fill" style="width:'+w+'%"></div></div>'
-      +'<div class="motivo-n">'+n+'</div>'
-      +'</div>';
-  }).join('') : '<div class="dash-vazio">Sem perdas no período 👍</div>';
-
-  // ── Próximos Eventos HTML ─────────────────────────────
-  var SI_CORES3={rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
-  var proxHTML = proxEvs.length ? proxEvs.map(function(o){
-    var f = o.form||{};
-    var dt = f['f-dia']||'';
-    var dias = Math.ceil((new Date(dt+'T12:00:00')-new Date(hoje+'T12:00:00'))/(1000*60*60*24));
-    var diasStr = dias===0?'<b style="color:#ffa726">HOJE</b>':dias<=7?'<span style="color:#ffa726">'+dias+'d</span>':'<span style="color:#888">'+dias+'d</span>';
-    var cor = SI_CORES3[o.st]||'#888';
-    return '<div class="ev-row">'
-      +'<div style="min-width:34px;text-align:center">'+diasStr+'</div>'
-      +'<div style="min-width:80px;color:#888;font-size:9px">'+(dt?fD(dt):'—')+'</div>'
-      +'<div style="flex:1;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+eh(f['f-cliente']||'—')+'</div>'
-      +'<div style="min-width:70px;text-align:right;color:#888;font-size:9px">'+eh(f['f-cons']||'')+'</div>'
-      +'<div style="min-width:60px;text-align:right;font-weight:700;font-size:9px">'+fmt(dashValOrc(o))+'</div>'
-      +'<span style="margin-left:6px;padding:1px 6px;border-radius:8px;font-size:8px;font-weight:800;background:'+cor+'22;color:'+cor+';border:1px solid '+cor+'">'+o.st+'</span>'
-      +'</div>';
-  }).join('') : '<div class="dash-vazio">Nenhum evento próximo cadastrado.</div>';
-
-  // ── Parcelas Atrasadas HTML ───────────────────────────
-  var atrasHTML = parcelasAtras.slice(0,6).length ? parcelasAtras.slice(0,6).map(function(x){
-    var f = x.orc.form||{};
-    return '<div class="fin-row">'
-      +'<div style="flex:1;color:#ef9a9a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+eh(f['f-cliente']||'—')+'</div>'
-      +'<div style="min-width:70px;color:#888;font-size:9px">'+(x.p.data?fD(x.p.data):'—')+'</div>'
-      +'<div style="min-width:65px;text-align:right;font-weight:800;color:#ef5350">'+fmt(parseFloat(x.p.valor)||0)+'</div>'
-      +'</div>';
-  }).join('')+(parcelasAtras.length>6?'<div style="color:#555;font-size:10px;text-align:center;padding:4px">+mais '+(parcelasAtras.length-6)+'</div>':'')
-  : '<div class="dash-vazio" style="color:#66bb6a">✅ Nenhuma parcela atrasada!</div>';
-
-  // ── Volume por mês (sparkline) ────────────────────────
-  var porMes = {};
-  dados.forEach(function(o){
-    var dt = o.form && o.form['f-data']||'';
-    if(!dt) return;
-    var m = dt.substring(0,7);
-    if(!porMes[m]) porMes[m]=0;
-    porMes[m]+=dashValOrc(o);
-  });
-  var meses = Object.keys(porMes).sort();
-  var maxMesVal = Math.max.apply(null, meses.map(function(m){ return porMes[m]; }).concat([1]));
-  var sparkHTML = meses.length ? '<div class="spark">'+meses.map(function(m){
-    var h = Math.max(4, Math.round(porMes[m]/maxMesVal*30));
-    var pts = m.split('-');
-    return '<div class="spark-bar" style="height:'+h+'px" title="'+(pts[1]+'/'+pts[0])+': '+fmt(porMes[m])+'"></div>';
-  }).join('')+'</div>' : '';
-
-  // ── MONTAR DASHBOARD ──────────────────────────────────
-  var html = '';
-
-  // KPIs comerciais (sem dados financeiros)
-  html += '<div class="dash-kpis">'
-    +'<div class="dk verde"><label>Orçamentos</label><span class="dkv">'+total+'</span><span class="dksub">no período</span></div>'
-    +'<div class="dk verde"><label>Vendas Ganhas</label><span class="dkv">'+ganhos+'</span><span class="dksub">conv. '+txConv+'%</span></div>'
-    +'<div class="dk vermelho"><label>Vendas Perdidas</label><span class="dkv">'+perdidos+'</span><span class="dksub">'+(total>0?Math.round(perdidos/total*100):0)+'% do total</span></div>'
-    +'<div class="dk laranja"><label>Volume Orçado</label><span class="dkv" style="font-size:13px">'+fmt(volume)+'</span><span class="dksub">total no período</span></div>'
-    +'<div class="dk ciano"><label>Volume Ganho</label><span class="dkv" style="font-size:13px">'+fmt(volGanho)+'</span><span class="dksub">faturado</span></div>'
-    +'<div class="dk roxo"><label>Em Negociação</label><span class="dkv">'+dados.filter(function(o){return o.dados&&o.dados.comercialStatus==='negociacao';}).length+'</span><span class="dksub">oportunidades</span></div>'
+  var kpi2 = '<div class="dash-kpis">'
+    +'<div class="dk verde" style="cursor:pointer" onclick="dashDrill(\'com_ganha\',\'Vendas+Ganhas\')">'
+      +'<label>🏆 Vendas Ganhas</label><span class="dkv">'+ganhoQtd+'</span><span class="dksub">'+fmt(ganhoVal)+'</span></div>'
+    +'<div class="dk vermelho" style="cursor:pointer" onclick="dashDrill(\'com_perdida\',\'Vendas+Perdidas\')">'
+      +'<label>❌ Vendas Perdidas</label><span class="dkv">'+perdidoQtd+'</span><span class="dksub">'+fmt(perdidoVal)+'</span></div>'
+    +'<div class="dk azul" style="cursor:pointer" onclick="dashDrill(\'com_enviados\',\'Propostas+Enviadas\')">'
+      +'<label>📤 Propostas no Funil</label><span class="dkv">'+envQtd+'</span><span class="dksub">'+fmt(envVal)+'</span></div>'
+    +'<div class="dk laranja">'
+      +'<label>📊 Conversão Qtd</label><span class="dkv">'+txQtd+'%</span><span class="dksub">ganhos/propostas</span></div>'
+    +'<div class="dk ciano">'
+      +'<label>💰 Conversão Valor</label><span class="dkv">'+txVal+'%</span><span class="dksub">R$ ganho/proposta</span></div>'
     +'</div>';
 
-  // Linha 1: Funil + Consultor
-  html += '<div class="dash-row c12">'
-    +'<div class="dash-box"><h3>🔽 Funil de Vendas <span>qtd · volume</span></h3>'+funilHTML+'</div>'
-    +'<div class="dash-box"><h3>👤 Conversão por Consultor <span>% ganhos · volume</span></h3>'+consHTML+'</div>'
+  var secComercial = '<div style="margin-bottom:6px;margin-top:16px">'
+    +'<div style="font-size:11px;color:#c0001a;font-weight:900;text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid #c0001a;padding-bottom:4px;margin-bottom:10px">📈 Desempenho Comercial</div>'
+    +kpi2
+    +'<div class="dash-row c2" style="margin-top:10px">'
+    +'<div class="dash-box"><h3>🔽 Funil de Vendas <span>barra superior = qtd · inferior = valor</span></h3>'+comFunilHTML+'</div>'
+    +'<div class="dash-box"><h3>👤 Conversão por Consultor <span>qtd% · valor%</span></h3>'+consHTML2+'</div>'
+    +'</div></div>';
+
+  // ── Drill-down panel (oculto por padrão) ────────────────
+  var drillPanel = '<div id="dash-drill" style="display:none;margin-top:12px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:6px 6px 0 0;padding:8px 12px">'
+    +'<span id="dash-drill-titulo" style="font-size:11px;color:#fff;font-weight:700"></span>'
+    +'<button onclick="document.getElementById(\'dash-drill\').style.display=\'none\'" style="background:none;border:none;color:#888;cursor:pointer;font-size:14px">✕</button>'
+    +'</div>'
+    +'<div id="dash-drill-corpo" style="border:1px solid #2a2a2a;border-top:none;border-radius:0 0 6px 6px"></div>'
     +'</div>';
 
-  // Linha 2: Motivos perda + Próximos eventos
-  html += '<div class="dash-row c2">'
-    +'<div class="dash-box"><h3>❌ Motivos de Perda</h3>'+motivoHTML+'</div>'
-    +'<div class="dash-box"><h3>🔜 Próximos Eventos <span>dias · cliente · valor</span></h3>'+proxHTML+'</div>'
-    +'</div>';
+  document.getElementById('dash-corpo').innerHTML = secElaboracao + secComercial + drillPanel;
+}
 
-  // Linha 3: Volume mensal
-  html += '<div class="dash-row">'
-    +'<div class="dash-box"><h3>📊 Volume Orçado por Mês <span>'+de.substring(0,7)+' → '+ate.substring(0,7)+'</span></h3>'
-      +'<div style="font-size:11px;color:#888;margin-bottom:8px">Total orçado no período selecionado</div>'
-      +'<div style="display:flex;align-items:flex-end;gap:6px;height:60px;margin-bottom:6px">'
-      +meses.map(function(m){
-        var h2=Math.max(6,Math.round(porMes[m]/maxMesVal*56));
-        var pts=m.split('-');
-        return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">'
-          +'<div style="font-size:8px;color:#666;font-weight:700">'+fmt(porMes[m]).replace('R$','').trim()+'</div>'
-          +'<div style="width:100%;height:'+h2+'px;background:#c0001a;border-radius:3px 3px 0 0;opacity:.85" title="'+pts[1]+'/'+pts[0]+': '+fmt(porMes[m])+'"></div>'
-          +'<div style="font-size:9px;color:#555">'+pts[1]+'/'+pts[0].substring(2)+'</div>'
+function dashDrill(key, tituloEnc){
+  var titulo = decodeURIComponent(tituloEnc);
+  var lista  = (window._dashListas&&window._dashListas[key])||[];
+  // Para cons_ precisamos decodificar a chave
+  if(key.startsWith('cons_')){
+    var consKey=decodeURIComponent(key.replace('cons_',''));
+    lista=(window._dashListas&&window._dashListas['cons_'+consKey])||[];
+  }
+  var panel = document.getElementById('dash-drill');
+  var corpo = document.getElementById('dash-drill-corpo');
+  var tit   = document.getElementById('dash-drill-titulo');
+  if(!panel)return;
+  tit.textContent = titulo + ' ('+lista.length+')';
+  // Mini lista
+  if(!lista.length){
+    corpo.innerHTML='<div class="dash-vazio" style="padding:16px">Nenhum orçamento nesta categoria.</div>';
+  }else{
+    var SI_COR2={rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
+    var SI_LBL2={rascunho:'Rascunho',analise:'Em Análise',gerencial:'Ap. Gerente',diretoria:'Ap. Diretoria',aprovado:'Aprovado',revisao:'Revisão'};
+    var COM_COR2={enviada:'#1565c0',negociacao:'#e65100',standby:'#5d4037',ganha:'#2e7d32',perdida:'#c62828'};
+    var COM_LBL2={enviada:'Prop. Enviada',negociacao:'Em Negociação',standby:'Standby',ganha:'🏆 Ganha',perdida:'❌ Perdida'};
+    var hoje2=new Date().toISOString().split('T')[0];
+    corpo.innerHTML='<div style="max-height:300px;overflow-y:auto">'
+      +lista.map(function(o){
+        var f=o.form||{};
+        var val=dashValOrc(o);
+        var cs=o.dados&&o.dados.comercialStatus||'';
+        var cor=SI_COR2[o.st]||'#555';
+        var dt=f['f-data']||'';
+        var dias=dt?Math.floor((new Date(hoje2+'T12:00:00')-new Date(dt+'T12:00:00'))/(1000*60*60*24)):null;
+        return '<div style="padding:8px 12px;border-bottom:1px solid #111;display:flex;align-items:center;gap:8px">'
+          +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:11px;color:#fff;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+          +'<div style="font-size:10px;color:#666;margin-top:2px">'
+          +eh(f['f-num']||'—')+(dt?' · '+fD(dt):'')+(f['f-cons']?' · '+f['f-cons']:'')
+          +(dias!==null?' · <span style="color:'+(dias>30?'#ef5350':dias>15?'#ffa726':'#888')+'">'+dias+'d</span>':'')
+          +'</div></div>'
+          +(cs?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+(COM_COR2[cs]||'#333')+'33;color:'+(COM_COR2[cs]||'#888')+';white-space:nowrap">'+(COM_LBL2[cs]||cs)+'</span>':'')
+          +'<span style="font-size:11px;font-weight:800;color:#fff;white-space:nowrap;min-width:85px;text-align:right">'+fmt(val)+'</span>'
+          +'<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:'+cor+'22;color:'+cor+';white-space:nowrap">'+(SI_LBL2[o.st]||o.st)+'</span>'
           +'</div>';
       }).join('')
       +'</div>'
-    +'</div>'
-    +'</div>';
-
-  document.getElementById('dash-corpo').innerHTML = html;
+      +'<div style="padding:7px 12px;background:#0d0d0d;border-top:1px solid #1a1a1a;font-size:10px;color:#888;display:flex;justify-content:space-between">'
+      +'<span>'+lista.length+' orçamento(s)</span>'
+      +'<span style="color:#fff;font-weight:800">'+fmt(lista.reduce(function(t,o){return t+dashValOrc(o);},0))+'</span>'
+      +'</div>';
+  }
+  panel.style.display='block';
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
-// ════════════════════════════════════════════════════════
-//  DASHBOARD FINANCEIRO
-// ════════════════════════════════════════════════════════
-var _dashFinDados = [];
 
 async function abrirDashFin(){
   document.getElementById('dashfin-ov').classList.add('open');
