@@ -1742,31 +1742,42 @@ async function driveDeletar(id,nome){
       driveListar();
     }catch(e){driveStatus('Erro: '+e.message,'err');}
   } else {
-    // Sem permissão: criar solicitação
+    // Sem permissão: criar solicitação gravada DENTRO do próprio orçamento no Drive
     if(solExclusao.some(function(s){return s.id===id&&s.status==='pendente';})){
       alert('⚠️ Já existe uma solicitação de exclusão pendente para este orçamento.');
       return;
     }
-    if(!confirm('Você não tem permissão para excluir diretamente.\n\nDeseja enviar uma solicitação de exclusão para aprovação?'))return;
+    if(!confirm('Você não tem permissão para excluir diretamente.\n\nDeseja enviar uma solicitação de exclusão para aprovação do gerente?'))return;
     driveStatus('⏳ Enviando solicitação...','');
-    solExclusao.push({
-      id:id,
-      nome:nome,
-      solicitante:usuarioAtual.nome,
-      cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,
-      data:new Date().toLocaleString('pt-BR'),
-      status:'pendente'
-    });
     try{
-      await salvarSolExclusaoDrive();
+      // 1. Carregar o orçamento atual do Drive
+      var rLoad=await fetch(SCRIPT_URL+'?action=load&id='+id);
+      var dLoad=await rLoad.json();
+      if(!dLoad.ok) throw new Error('Não foi possível carregar o orçamento: '+(dLoad.erro||''));
+      var dadosOrc=dLoad.dados||{};
+      // 2. Adicionar a solicitação de exclusão dentro dos dados do orçamento
+      dadosOrc.solExclusao={
+        status:'pendente',
+        solicitante:usuarioAtual.nome,
+        cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,
+        data:new Date().toLocaleString('pt-BR')
+      };
+      // 3. Re-salvar o orçamento com a solicitação embutida
+      var numOrc=dadosOrc.form&&dadosOrc.form['f-num']?dadosOrc.form['f-num']:'SN';
+      var cliOrc=dadosOrc.form&&dadosOrc.form['f-cliente']?dadosOrc.form['f-cliente']:'SemCliente';
+      var dtOrc=dadosOrc.form&&dadosOrc.form['f-data']?dadosOrc.form['f-data']:new Date().toISOString().split('T')[0];
+      var rSave=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:id,numero:numOrc,cliente:cliOrc,data:dtOrc,dados:dadosOrc})});
+      var dSave=await rSave.json();
+      if(!dSave.ok) throw new Error('Não foi possível salvar a solicitação: '+(dSave.erro||''));
+      // 4. Atualizar memória local
+      solExclusao.push({id:id,nome:nome,solicitante:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),status:'pendente'});
       atualizarBadgeExclusoes();
       driveStatus('📤 Solicitação enviada para aprovação','ok');
       driveListar();
       alert('✅ Solicitação enviada! O gerente/diretor verá em "📋 Aprovações → 🗑️ Exclusões".');
     }catch(e){
-      solExclusao.pop();
-      driveStatus('⚠️ Falha ao enviar: '+e.message,'err');
-      alert('⚠️ Erro ao salvar solicitação:\n\n'+e.message+'\n\nTente novamente ou avise o Fabiano.');
+      driveStatus('⚠️ Falha: '+e.message,'err');
+      alert('⚠️ Erro ao enviar solicitação:\n\n'+e.message+'\n\nTente novamente ou avise o Fabiano.');
     }
   }
 }
@@ -4129,41 +4140,54 @@ function _saveSolId(id){try{localStorage.setItem('crazysom_sol_excl_id',id);}cat
 
 async function carregarSolExclusaoDrive(){
   try{
-    var id=_solExclDriveId||_loadSolId()||null;
-    if(id){
-      var r=await fetch(SCRIPT_URL+'?action=load&id='+id);
-      var d=await r.json();
-      if(d.ok&&d.dados){
-        solExclusao=(d.dados.lista)||[];
-        atualizarBadgeExclusoes();
-        return;
-      }
-      _solExclDriveId=null;_saveSolId('');id=null;
-    }
-    // Sem ID válido: listar todos e achar pelo nome
+    // Listar todos os orçamentos e varrer procurando solExclusao embutida
     var rl=await fetch(SCRIPT_URL+'?action=list&q=');
     var dl=await rl.json();
-    if(dl.ok&&dl.lista&&dl.lista.length){
-      // Guardar lista completa para diagnóstico
-      window._driveListaDiag=dl.lista.map(function(x){return x.nome;});
-      var encontrado=null;
-      for(var i=0;i<dl.lista.length;i++){
-        var item=dl.lista[i];
-        if(item.nome&&(item.nome.indexOf('SOLEXCL')>=0||item.nome.indexOf('_sol_exclusao')>=0||item.nome.indexOf('SOL_EXCLUSAO')>=0||item.nome.indexOf('SolExclusao')>=0)){
-          encontrado=item;break;
-        }
-      }
-      if(encontrado){
-        id=encontrado.id;
-        _solExclDriveId=id;_saveSolId(id);
-        var r2=await fetch(SCRIPT_URL+'?action=load&id='+id);
-        var d2=await r2.json();
-        if(d2.ok&&d2.dados){
-          solExclusao=(d2.dados.lista)||[];
-          atualizarBadgeExclusoes();
-        }
-      }
+    if(!dl.ok||!dl.lista||!dl.lista.length) return;
+    // Filtrar arquivos internos do sistema
+    var itens=dl.lista.filter(function(x){
+      return !['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'].some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
+    });
+    // Varrer em paralelo (lotes de 5) procurando solExclusao pendente
+    var encontradas=[];
+    for(var i=0;i<itens.length;i+=5){
+      var lote=itens.slice(i,i+5);
+      var resultados=await Promise.all(lote.map(async function(item){
+        try{
+          var r=await fetch(SCRIPT_URL+'?action=load&id='+item.id);
+          var d=await r.json();
+          if(d.ok&&d.dados&&d.dados.solExclusao&&d.dados.solExclusao.status==='pendente'){
+            return {
+              id:item.id,
+              nome:item.nome,
+              solicitante:d.dados.solExclusao.solicitante||'—',
+              cargo:d.dados.solExclusao.cargo||'—',
+              data:d.dados.solExclusao.data||'—',
+              status:'pendente',
+              _dados:d.dados
+            };
+          }
+          // Também pegar aprovadas/rejeitadas ainda marcadas
+          if(d.ok&&d.dados&&d.dados.solExclusao&&d.dados.solExclusao.status&&d.dados.solExclusao.status!=='pendente'){
+            return {
+              id:item.id,
+              nome:item.nome,
+              solicitante:d.dados.solExclusao.solicitante||'—',
+              cargo:d.dados.solExclusao.cargo||'—',
+              data:d.dados.solExclusao.data||'—',
+              status:d.dados.solExclusao.status,
+              aprovadoPor:d.dados.solExclusao.aprovadoPor,
+              dataAcao:d.dados.solExclusao.dataAcao,
+              _dados:d.dados
+            };
+          }
+        }catch(e){}
+        return null;
+      }));
+      resultados.forEach(function(x){if(x)encontradas.push(x);});
     }
+    solExclusao=encontradas;
+    atualizarBadgeExclusoes();
   }catch(e){console.warn('carregarSolExclusaoDrive:',e);}
 }
 
@@ -4237,19 +4261,7 @@ function renderExclusivoModal(){
   var rejeitadas=solExclusao.filter(function(s){return s.status==='rejeitado';});
 
   if(!solExclusao.length){
-    var diagHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">Nenhuma solicitação de exclusão registrada.</div>';
-    // Diagnóstico para administrador
-    var isFab=usuarioAtual&&usuarioAtual.id==='fabiano.santos';
-    if(isFab&&window._driveListaDiag){
-      diagHTML+='<div style="background:#1a0d00;border:1px solid #ff9800;border-radius:5px;padding:10px 13px;margin-top:8px;font-size:10px;color:#ff9800">'
-        +'<div style="font-weight:800;margin-bottom:5px">🔍 DIAGNÓSTICO — arquivos no Drive ('+window._driveListaDiag.length+'):</div>'
-        +'<div style="color:#aaa;max-height:120px;overflow-y:auto">'+window._driveListaDiag.map(function(n){return '<div>'+n+'</div>';}).join('')+'</div>'
-        +'<div style="margin-top:6px;color:#ff9800">Arquivo esperado deve conter: <b>SOLEXCL</b></div>'
-        +'</div>';
-    } else if(isFab){
-      diagHTML+='<div style="background:#1a0d00;border:1px solid #ff9800;border-radius:5px;padding:8px 13px;margin-top:8px;font-size:10px;color:#ff9800">🔍 ID salvo: '+((_solExclDriveId||_loadSolId())||'nenhum')+'</div>';
-    }
-    lista.innerHTML=diagHTML;
+    lista.innerHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">Nenhuma solicitação de exclusão registrada.</div>';
     return;
   }
 
@@ -4304,11 +4316,9 @@ async function aprovarExclusaoModal(idx){
     var r=await fetch(SCRIPT_URL+'?action=delete&id='+sol.id);
     var d=await r.json();
     if(!d.ok)throw new Error(d.erro);
-    sol.status='aprovado';
-    sol.aprovadoPor=usuarioAtual.nome;
-    sol.dataAcao=new Date().toLocaleString('pt-BR');
     if(driveIdAtual===sol.id){driveIdAtual=null;driveNumAtual=null;}
     excluídosHist.unshift({id:sol.id,nome:sol.nome,excluidoPor:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,solicitante:sol.solicitante,data:new Date().toLocaleString('pt-BR')});
+    solExclusao.splice(idx,1);
     await salvarExcluidosDrive();
     driveStatus('🗑️ Exclusão aprovada','ok');
     atualizarBadgeExclusoes();
@@ -4318,19 +4328,37 @@ async function aprovarExclusaoModal(idx){
   }catch(e){driveStatus('Erro: '+e.message,'err');}
 }
 
-function rejeitarExclusaoModal(idx){
+async function rejeitarExclusaoModal(idx){
   var sol=solExclusao[idx];
   if(!sol)return;
   if(!confirm('Rejeitar solicitação de exclusão de "'+sol.nome+'"?'))return;
-  sol.status='rejeitado';
-  sol.aprovadoPor=usuarioAtual.nome;
-  sol.dataAcao=new Date().toLocaleString('pt-BR');
-  salvarSolExclusaoDrive();
-  atualizarBadgeExclusoes();
-  renderExclusivoModal();
-  renderAdmExclusoes();
-  driveListar();
-  driveStatus('✅ Solicitação rejeitada','ok');
+  driveStatus('⏳ Rejeitando...','');
+  try{
+    // Carregar o orçamento e remover a marcação de solExclusao
+    var r=await fetch(SCRIPT_URL+'?action=load&id='+sol.id);
+    var d=await r.json();
+    if(d.ok&&d.dados){
+      var dados=d.dados;
+      dados.solExclusao={
+        status:'rejeitado',
+        solicitante:sol.solicitante,
+        cargo:sol.cargo,
+        data:sol.data,
+        aprovadoPor:usuarioAtual.nome,
+        dataAcao:new Date().toLocaleString('pt-BR')
+      };
+      var numOrc=dados.form&&dados.form['f-num']?dados.form['f-num']:'SN';
+      var cliOrc=dados.form&&dados.form['f-cliente']?dados.form['f-cliente']:'SemCliente';
+      var dtOrc=dados.form&&dados.form['f-data']?dados.form['f-data']:new Date().toISOString().split('T')[0];
+      await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:sol.id,numero:numOrc,cliente:cliOrc,data:dtOrc,dados:dados})});
+    }
+    solExclusao.splice(idx,1);
+    atualizarBadgeExclusoes();
+    renderExclusivoModal();
+    renderAdmExclusoes();
+    driveListar();
+    driveStatus('✅ Solicitação rejeitada','ok');
+  }catch(e){driveStatus('Erro ao rejeitar: '+e.message,'err');}
 }
 
 
