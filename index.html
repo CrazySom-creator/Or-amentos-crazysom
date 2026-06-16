@@ -4147,24 +4147,37 @@ async function carregarSolExclusaoDrive(){
       return !['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'].some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
     });
     var encontradas=[];
+    var paraLimpar=[];
     for(var i=0;i<itens.length;i+=5){
       var lote=itens.slice(i,i+5);
       var resultados=await Promise.all(lote.map(async function(item){
         try{
           var r=await fetch(SCRIPT_URL+'?action=load&id='+item.id);
           var d=await r.json();
-          if(d.ok&&d.dados&&d.dados.solExclusao&&d.dados.solExclusao.status==='pendente'){
-            console.log('[EXCL] PENDENTE:', item.nome, JSON.stringify(d.dados.solExclusao));
-            return {id:item.id,nome:item.nome,solicitante:d.dados.solExclusao.solicitante||'—',cargo:d.dados.solExclusao.cargo||'—',data:d.dados.solExclusao.data||'—',status:'pendente'};
+          if(!d.ok||!d.dados) return null;
+          var se=d.dados.solExclusao;
+          if(se&&se.status==='pendente'){
+            return {id:item.id,nome:item.nome,solicitante:se.solicitante||'—',cargo:se.cargo||'—',data:se.data||'—',status:'pendente'};
           }
-          if(d.ok&&d.dados&&d.dados.solExclusao){
-            console.log('[EXCL] nao-pendente:', item.nome, JSON.stringify(d.dados.solExclusao));
+          // Campo solExclusao existe mas NÃO é pendente — residuo, limpar automaticamente
+          if(se){
+            paraLimpar.push({id:item.id,dados:d.dados,nome:item.nome});
           }
-        }catch(e){console.warn('[EXCL] erro:',item.nome,e);}
+        }catch(e){}
         return null;
       }));
       resultados.forEach(function(x){if(x)encontradas.push(x);});
     }
+    // Limpar resíduos em background (sem bloquear)
+    paraLimpar.forEach(function(item){
+      try{
+        item.dados.solExclusao=null;
+        var num=item.dados.form&&item.dados.form['f-num']?item.dados.form['f-num']:'SN';
+        var cli=item.dados.form&&item.dados.form['f-cliente']?item.dados.form['f-cliente']:'SemCliente';
+        var dt=item.dados.form&&item.dados.form['f-data']?item.dados.form['f-data']:new Date().toISOString().split('T')[0];
+        fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:item.id,numero:num,cliente:cli,data:dt,dados:item.dados})});
+      }catch(e){}
+    });
     solExclusao=encontradas;
     atualizarBadgeExclusoes();
   }catch(e){console.warn('carregarSolExclusaoDrive:',e);}
@@ -4275,15 +4288,7 @@ function renderExclusivoModal(){
     html+='<div style="font-size:10px;color:#e65100;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">⏳ Pendentes ('+pendentes.length+')</div>';
     pendentes.forEach(function(s){var idx=solExclusao.indexOf(s);html+=cardExclModal(s,idx);});
   }
-  if(aprovadas.length){
-    html+='<div style="font-size:10px;color:#2e7d32;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin:12px 0 8px">✅ Aprovadas ('+aprovadas.length+')</div>';
-    aprovadas.forEach(function(s){var idx=solExclusao.indexOf(s);html+=cardExclModal(s,idx);});
-  }
-  if(rejeitadas.length){
-    html+='<div style="font-size:10px;color:#c62828;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin:12px 0 8px">❌ Rejeitadas ('+rejeitadas.length+')</div>';
-    rejeitadas.forEach(function(s){var idx=solExclusao.indexOf(s);html+=cardExclModal(s,idx);});
-  }
-  lista.innerHTML=html;
+  lista.innerHTML=html||'<div style="text-align:center;padding:20px;color:#555;font-size:12px">✅ Nenhuma solicitação pendente.</div>';
 }
 
 async function aprovarExclusaoModal(idx){
