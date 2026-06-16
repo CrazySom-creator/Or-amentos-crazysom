@@ -4153,18 +4153,14 @@ async function carregarSolExclusaoDrive(){
         try{
           var r=await fetch(SCRIPT_URL+'?action=load&id='+item.id);
           var d=await r.json();
-          // SÓ retornar se status for estritamente 'pendente'
           if(d.ok&&d.dados&&d.dados.solExclusao&&d.dados.solExclusao.status==='pendente'){
-            return {
-              id:item.id,
-              nome:item.nome,
-              solicitante:d.dados.solExclusao.solicitante||'—',
-              cargo:d.dados.solExclusao.cargo||'—',
-              data:d.dados.solExclusao.data||'—',
-              status:'pendente'
-            };
+            console.log('[EXCL] PENDENTE:', item.nome, JSON.stringify(d.dados.solExclusao));
+            return {id:item.id,nome:item.nome,solicitante:d.dados.solExclusao.solicitante||'—',cargo:d.dados.solExclusao.cargo||'—',data:d.dados.solExclusao.data||'—',status:'pendente'};
           }
-        }catch(e){}
+          if(d.ok&&d.dados&&d.dados.solExclusao){
+            console.log('[EXCL] nao-pendente:', item.nome, JSON.stringify(d.dados.solExclusao));
+          }
+        }catch(e){console.warn('[EXCL] erro:',item.nome,e);}
         return null;
       }));
       resultados.forEach(function(x){if(x)encontradas.push(x);});
