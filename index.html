@@ -4140,15 +4140,12 @@ function _saveSolId(id){try{localStorage.setItem('crazysom_sol_excl_id',id);}cat
 
 async function carregarSolExclusaoDrive(){
   try{
-    // Listar todos os orçamentos e varrer procurando solExclusao embutida
     var rl=await fetch(SCRIPT_URL+'?action=list&q=');
     var dl=await rl.json();
     if(!dl.ok||!dl.lista||!dl.lista.length) return;
-    // Filtrar arquivos internos do sistema
     var itens=dl.lista.filter(function(x){
       return !['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'].some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
     });
-    // Varrer em paralelo (lotes de 5) procurando solExclusao pendente
     var encontradas=[];
     for(var i=0;i<itens.length;i+=5){
       var lote=itens.slice(i,i+5);
@@ -4156,6 +4153,7 @@ async function carregarSolExclusaoDrive(){
         try{
           var r=await fetch(SCRIPT_URL+'?action=load&id='+item.id);
           var d=await r.json();
+          // SÓ retornar se status for estritamente 'pendente'
           if(d.ok&&d.dados&&d.dados.solExclusao&&d.dados.solExclusao.status==='pendente'){
             return {
               id:item.id,
@@ -4163,22 +4161,7 @@ async function carregarSolExclusaoDrive(){
               solicitante:d.dados.solExclusao.solicitante||'—',
               cargo:d.dados.solExclusao.cargo||'—',
               data:d.dados.solExclusao.data||'—',
-              status:'pendente',
-              _dados:d.dados
-            };
-          }
-          // Também pegar aprovadas/rejeitadas ainda marcadas
-          if(d.ok&&d.dados&&d.dados.solExclusao&&d.dados.solExclusao.status&&d.dados.solExclusao.status!=='pendente'){
-            return {
-              id:item.id,
-              nome:item.nome,
-              solicitante:d.dados.solExclusao.solicitante||'—',
-              cargo:d.dados.solExclusao.cargo||'—',
-              data:d.dados.solExclusao.data||'—',
-              status:d.dados.solExclusao.status,
-              aprovadoPor:d.dados.solExclusao.aprovadoPor,
-              dataAcao:d.dados.solExclusao.dataAcao,
-              _dados:d.dados
+              status:'pendente'
             };
           }
         }catch(e){}
@@ -4313,6 +4296,20 @@ async function aprovarExclusaoModal(idx){
   if(!confirm('Confirmar exclusão de "'+sol.nome+'"? Esta ação não pode ser desfeita.'))return;
   driveStatus('⏳ Excluindo...','');
   try{
+    // 1. Primeiro limpar o campo solExclusao do arquivo (proteção caso o delete falhe)
+    try{
+      var rL=await fetch(SCRIPT_URL+'?action=load&id='+sol.id);
+      var dL=await rL.json();
+      if(dL.ok&&dL.dados){
+        var dadosL=dL.dados;
+        dadosL.solExclusao=null;
+        var numL=dadosL.form&&dadosL.form['f-num']?dadosL.form['f-num']:'SN';
+        var cliL=dadosL.form&&dadosL.form['f-cliente']?dadosL.form['f-cliente']:'SemCliente';
+        var dtL=dadosL.form&&dadosL.form['f-data']?dadosL.form['f-data']:new Date().toISOString().split('T')[0];
+        await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:sol.id,numero:numL,cliente:cliL,data:dtL,dados:dadosL})});
+      }
+    }catch(e2){}
+    // 2. Deletar o arquivo
     var r=await fetch(SCRIPT_URL+'?action=delete&id='+sol.id);
     var d=await r.json();
     if(!d.ok)throw new Error(d.erro);
@@ -4339,14 +4336,7 @@ async function rejeitarExclusaoModal(idx){
     var d=await r.json();
     if(d.ok&&d.dados){
       var dados=d.dados;
-      dados.solExclusao={
-        status:'rejeitado',
-        solicitante:sol.solicitante,
-        cargo:sol.cargo,
-        data:sol.data,
-        aprovadoPor:usuarioAtual.nome,
-        dataAcao:new Date().toLocaleString('pt-BR')
-      };
+      dados.solExclusao = null;
       var numOrc=dados.form&&dados.form['f-num']?dados.form['f-num']:'SN';
       var cliOrc=dados.form&&dados.form['f-cliente']?dados.form['f-cliente']:'SemCliente';
       var dtOrc=dados.form&&dados.form['f-data']?dados.form['f-data']:new Date().toISOString().split('T')[0];
