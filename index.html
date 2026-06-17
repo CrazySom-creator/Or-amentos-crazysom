@@ -420,6 +420,35 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   </div>
 </div>
 
+<div class="ov" id="dash-elab-ov">
+  <div class="modal-box dash-modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div>
+        <h2 style="margin-bottom:2px">📋 Elaboração de Orçamentos</h2>
+        <p class="sub" id="dash-elab-sub" style="margin:0">Carregando dados...</p>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center">
+        <button class="btn btn-r btn-sm" onclick="dashElabAtualizar()">🔄 Atualizar</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('dash-elab-ov').classList.remove('open')">✕</button>
+      </div>
+    </div>
+    <div class="dash-filtros">
+      <div><label>De</label><input type="date" id="dash-elab-de"></div>
+      <div><label>Até</label><input type="date" id="dash-elab-ate"></div>
+      <div><label>Consultor</label>
+        <select id="dash-elab-cons">
+          <option value="">Todos</option>
+          <option>Fabiano Santos</option><option>Giovana Borges</option>
+          <option>Jéssica Elisandra</option><option>Rafael Oliveira</option>
+          <option>Jefferson</option><option>Wagner Wolff</option>
+        </select>
+      </div>
+      <div><button class="btn btn-r btn-sm" onclick="dashElabRenderizar()">📊 Aplicar</button></div>
+    </div>
+    <div id="dash-elab-corpo"><div class="dash-loading">⏳ Carregando orçamentos do Drive...</div></div>
+  </div>
+</div>
+
 <div class="ov" id="dash-ov">
   <div class="modal-box dash-modal">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -442,17 +471,6 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
           <option>Fabiano Santos</option><option>Giovana Borges</option>
           <option>Jéssica Elisandra</option><option>Rafael Oliveira</option>
           <option>Jefferson</option><option>Wagner Wolff</option>
-        </select>
-      </div>
-      <div><label>Etapa do Funil</label>
-        <select id="dash-funil">
-          <option value="">Todas as Etapas</option>
-          <option value="enviada">📤 Proposta Enviada</option>
-          <option value="negociacao">🤝 Em Negociação</option>
-          <option value="standby">⏸️ Standby</option>
-          <option value="ganha">🏆 Venda Ganha</option>
-          <option value="perdida">❌ Venda Perdida</option>
-          <option value="__sem_etapa__">⚠️ Aprovados sem Etapa</option>
         </select>
       </div>
       <div><button class="btn btn-r btn-sm" onclick="dashRenderizar()">📊 Aplicar</button></div>
@@ -706,6 +724,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   <div class="user-badge" id="user-badge" style="display:none">
     <div><span id="user-nome">—</span><small id="user-cargo">—</small></div>
     <button class="ubtn" id="btn-aprovacoes" onclick="abrirAprovacoes()">📋 Aprovações</button>
+    <button class="ubtn" onclick="abrirDashElab()">📋 Elaboração</button>
     <button class="ubtn" onclick="abrirDashboard()">📈 Comercial</button>
     <button class="ubtn" onclick="abrirDashFin()">💰 Financeiro</button>
     <button class="ubtn" onclick="abrirRelatorios()">📊 Relatórios</button>
@@ -3829,112 +3848,119 @@ function dashValOrc(o){
   return bruto * (1 + IMP);
 }
 
-function dashRenderizar(){
-  var dados   = dashFiltrar();
-  var todos   = _dashDados; // todos (sem filtro de data) para análise de elaboração
-  var hoje    = new Date().toISOString().split('T')[0];
-  var de      = document.getElementById('dash-de').value;
-  var ate     = document.getElementById('dash-ate').value;
+async function abrirDashElab(){
+  document.getElementById('dash-elab-ov').classList.add('open');
+  // Preencher filtro com mês vigente (01/mm/yyyy até hoje)
+  var hoje2=new Date();
+  var anoM=hoje2.getFullYear();
+  var mesM=String(hoje2.getMonth()+1).padStart(2,'0');
+  var diaM=String(hoje2.getDate()).padStart(2,'0');
+  var inicioMes=anoM+'-'+mesM+'-01';
+  var fimHoje=anoM+'-'+mesM+'-'+diaM;
+  var elDe=document.getElementById('dash-elab-de');
+  var elAte=document.getElementById('dash-elab-ate');
+  if(elDe&&!elDe.value) elDe.value=inicioMes;
+  if(elAte&&!elAte.value) elAte.value=fimHoje;
+  if(!_dashDados.length) await dashCarregarDados();
+  dashElabRenderizar();
+}
 
-  // ════════════════════════════════════════════════════════
-  //  HELPERS
-  // ════════════════════════════════════════════════════════
-  var SI_COR  = {rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
-  var SI_LBL  = {rascunho:'Rascunho',analise:'Em Análise',gerencial:'Ap. Gerente',diretoria:'Ap. Diretoria',aprovado:'Aprovado',revisao:'Revisão'};
-  var COM_COR = {enviada:'#1565c0',negociacao:'#e65100',standby:'#5d4037',ganha:'#2e7d32',perdida:'#c62828'};
-  var COM_LBL = {enviada:'📤 Proposta Enviada',negociacao:'🤝 Em Negociação',standby:'⏸️ Standby',ganha:'🏆 Venda Ganha',perdida:'❌ Venda Perdida'};
+async function dashElabAtualizar(){
+  _dashDados=[];
+  document.getElementById('dash-elab-corpo').innerHTML='<div class="dash-loading">⏳ Carregando orçamentos do Drive...</div>';
+  await dashCarregarDados();
+  dashElabRenderizar();
+}
 
-  function diasAtras(dt){
-    if(!dt)return null;
-    return Math.floor((new Date(hoje+'T12:00:00')-new Date(dt+'T12:00:00'))/(1000*60*60*24));
-  }
+function dashElabFiltrar(){
+  var de   = document.getElementById('dash-elab-de').value;
+  var ate  = document.getElementById('dash-elab-ate').value;
+  var cons = document.getElementById('dash-elab-cons').value;
+  return _dashDados.filter(function(o){
+    var dt = o.form&&o.form['f-data']||'';
+    if(de  && dt && dt < de)  return false;
+    if(ate && dt && dt > ate) return false;
+    if(cons && (o.form&&o.form['f-cons']) !== cons) return false;
+    return true;
+  });
+}
 
-  // Mini-lista para drill-down
-  function miniLista(lista, titulo){
+function dashElabRenderizar(){
+  var dados  = dashElabFiltrar();
+  var hoje   = new Date().toISOString().split('T')[0];
+  var de     = document.getElementById('dash-elab-de').value;
+  var ate    = document.getElementById('dash-elab-ate').value;
+  var total  = _dashDados.length;
+  document.getElementById('dash-elab-sub').textContent = total+' orçamentos carregados'+(de||ate?' (filtrado)':'');
+
+  var SI_COR = {rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
+  var SI_LBL = {rascunho:'Rascunho',analise:'Em Análise',gerencial:'Ap. Gerente',diretoria:'Ap. Diretoria',aprovado:'Validado',revisao:'Revisão'};
+
+  function diasAtras(dt){ if(!dt)return null; return Math.floor((new Date(hoje+'T12:00:00')-new Date(dt+'T12:00:00'))/(1000*60*60*24)); }
+
+  function miniLista(lista,titulo){
     if(!lista.length) return '<div class="dash-vazio">Nenhum orçamento.</div>';
+    var COM_COR2={enviada:'#1565c0',negociacao:'#e65100',standby:'#5d4037',ganha:'#2e7d32',perdida:'#c62828'};
+    var COM_LBL2={enviada:'📤 Proposta Enviada',negociacao:'🤝 Em Negociação',standby:'⏸️ Standby',ganha:'🏆 Venda Ganha',perdida:'❌ Venda Perdida'};
     return '<div style="max-height:320px;overflow-y:auto">'
       +'<div style="font-size:10px;color:#888;font-weight:700;text-transform:uppercase;padding:6px 10px;background:#0d0d0d;border-bottom:1px solid #1a1a1a">'+titulo+' ('+lista.length+')</div>'
       +lista.map(function(o){
-        var f=o.form||{};
-        var val=dashValOrc(o);
-        var cs=o.dados&&o.dados.comercialStatus||'';
-        var cor=SI_COR[o.st]||'#555';
-        var dias=o.form&&o.form['f-data']?diasAtras(o.form['f-data']):null;
+        var f=o.form||{};var val=dashValOrc(o);var cs=o.dados&&o.dados.comercialStatus||'';
+        var cor=SI_COR[o.st]||'#555';var dias=f['f-data']?diasAtras(f['f-data']):null;
         return '<div style="padding:7px 10px;border-bottom:1px solid #111;display:flex;align-items:center;gap:8px">'
-          +'<div style="flex:1;min-width:0">'
-          +'<div style="font-size:11px;color:#ddd;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
-          +'<div style="font-size:10px;color:#666;margin-top:1px">'
-          +eh(f['f-num']||'')+(f['f-data']?' · '+fD(f['f-data']):'')+(f['f-cons']?' · '+f['f-cons']:'')
-          +(dias!==null?' · <span style="color:'+(dias>30?'#ef5350':dias>15?'#ffa726':'#888')+'">'+dias+'d</span>':'')
-          +'</div></div>'
-          +(cs?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+(COM_COR[cs]||'#333')+'33;color:'+(COM_COR[cs]||'#888')+';border:1px solid '+(COM_COR[cs]||'#333')+';white-space:nowrap">'+(COM_LBL[cs]||cs)+'</span>':'')
+          +'<div style="flex:1;min-width:0"><div style="font-size:11px;color:#ddd;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+          +'<div style="font-size:10px;color:#666;margin-top:1px">'+eh(f['f-num']||'')+(f['f-data']?' · '+fD(f['f-data']):'')+(f['f-cons']?' · '+f['f-cons']:'')+(dias!==null?' · <span style="color:'+(dias>30?'#ef5350':dias>15?'#ffa726':'#888')+'">'+dias+'d</span>':'')+'</div></div>'
+          +(cs?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+(COM_COR2[cs]||'#333')+'33;color:'+(COM_COR2[cs]||'#888')+';border:1px solid '+(COM_COR2[cs]||'#333')+';white-space:nowrap">'+(COM_LBL2[cs]||cs)+'</span>':'')
           +'<span style="font-size:10px;font-weight:800;color:#fff;white-space:nowrap;min-width:80px;text-align:right">'+fmt(val)+'</span>'
           +'<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:'+cor+'22;color:'+cor+';border:1px solid '+cor+';white-space:nowrap">'+(SI_LBL[o.st]||o.st)+'</span>'
           +'</div>';
-      }).join('')
-      +'</div>';
+      }).join('')+'</div>';
   }
 
-  // Card clicável que abre drill-down
-  function cardDrill(id,classe,label,val,sub,lista,titulo){
-    return '<div class="dk '+classe+'" style="cursor:pointer" onclick="dashDrill(\''+id+'\',\''+encodeURIComponent(titulo)+'\')" id="dk-'+id+'">'
-      +'<label>'+label+'</label>'
-      +'<span class="dkv">'+val+'</span>'
-      +'<span class="dksub">'+sub+'</span>'
-      +'</div>';
-  }
+  window._dashElabListas = window._dashElabListas||{};
 
-  // ════════════════════════════════════════════════════════
-  //  SEÇÃO 1 — ELABORAÇÃO DE ORÇAMENTOS
-  // ════════════════════════════════════════════════════════
   var totalOrc   = dados.length;
   var aprov      = dados.filter(function(o){return o.st==='aprovado';});
   var pendentes  = dados.filter(function(o){return o.st!=='aprovado';});
   var revQtd     = dados.filter(function(o){return o.st==='revisao';}).length;
   var analQtd    = dados.filter(function(o){return o.st==='analise';}).length;
-  var rascQtd    = dados.filter(function(o){return o.st==='rascunho';}).length;
   var volTotal   = dados.reduce(function(t,o){return t+dashValOrc(o);},0);
   var volAprov   = aprov.reduce(function(t,o){return t+dashValOrc(o);},0);
   var volPend    = pendentes.reduce(function(t,o){return t+dashValOrc(o);},0);
 
-  // Parados (não aprovados) — calcular dias desde a última atualização
   var paradosList = pendentes.map(function(o){
-    var dt = o.form&&o.form['f-data']||'';
-    var d = dt?diasAtras(dt):null;
+    var dt=o.form&&o.form['f-data']||'';var d=dt?diasAtras(dt):null;
     return Object.assign({},o,{_dias:d});
   }).filter(function(o){return o._dias!==null;}).sort(function(a,b){return b._dias-a._dias;});
   var maxDias = paradosList.length?paradosList[0]._dias:0;
 
-  // Guardar listas para drill-down
-  window._dashListas = window._dashListas||{};
-  window._dashListas['total']     = dados;
-  window._dashListas['aprovados'] = aprov;
-  window._dashListas['pendentes'] = pendentes;
-  window._dashListas['parados']   = paradosList;
+  window._dashElabListas['total']    = dados;
+  window._dashElabListas['validados']= aprov;
+  window._dashElabListas['pendentes']= pendentes;
+  window._dashElabListas['parados']  = paradosList;
 
   var kpi1 = '<div class="dash-kpis">'
-    +'<div class="dk verde" style="cursor:pointer" onclick="dashDrill(\'total\',\'Todos+os+Or%C3%A7amentos\')">'
+    +'<div class="dk verde" style="cursor:pointer" onclick="dashElabDrill(\'total\',\'Todos os Orçamentos\')">'
       +'<label>Total de Orçamentos</label><span class="dkv">'+totalOrc+'</span><span class="dksub">'+fmt(volTotal)+'</span></div>'
-    +'<div class="dk verde" style="cursor:pointer" onclick="dashDrill(\'aprovados\',\'Aprovados\')">'
-      +'<label>✅ Aprovados</label><span class="dkv">'+aprov.length+'</span><span class="dksub">'+fmt(volAprov)+'</span></div>'
-    +'<div class="dk laranja" style="cursor:pointer" onclick="dashDrill(\'pendentes\',\'Pendentes+de+Aprova%C3%A7%C3%A3o\')">'
+    +'<div class="dk verde" style="cursor:pointer" onclick="dashElabDrill(\'validados\',\'Validados\')">'
+      +'<label>✅ Validados</label><span class="dkv">'+aprov.length+'</span><span class="dksub">'+fmt(volAprov)+'</span></div>'
+    +'<div class="dk laranja" style="cursor:pointer" onclick="dashElabDrill(\'pendentes\',\'Pendentes de Aprovação\')">'
       +'<label>⏳ Pendentes Aprovação</label><span class="dkv">'+pendentes.length+'</span><span class="dksub">'+fmt(volPend)+'</span></div>'
-    +'<div class="dk vermelho" style="cursor:pointer" onclick="dashDrill(\'parados\',\'Parados+sem+Aprova%C3%A7%C3%A3o\')">'
+    +'<div class="dk vermelho" style="cursor:pointer" onclick="dashElabDrill(\'parados\',\'Parados sem Aprovação\')">'
       +'<label>⏸️ Parado há mais</label><span class="dkv">'+(maxDias||0)+'d</span><span class="dksub">maior parado</span></div>'
-    +'<div class="dk azul" style="cursor:pointer" onclick="dashDrill(\'revisao\',\'Em+Revis%C3%A3o\')">'
+    +'<div class="dk azul" style="cursor:pointer" onclick="dashElabDrill(\'revisao\',\'Em Revisão\')">'
       +'<label>🔄 Em Revisão</label><span class="dkv">'+revQtd+'</span><span class="dksub">aguardando ajuste</span></div>'
-    +'<div class="dk ciano" style="cursor:pointer" onclick="dashDrill(\'analise\',\'Em+An%C3%A1lise\')">'
+    +'<div class="dk ciano" style="cursor:pointer" onclick="dashElabDrill(\'analise\',\'Em Análise\')">'
       +'<label>🔍 Em Análise</label><span class="dkv">'+analQtd+'</span><span class="dksub">aguardando aprovação</span></div>'
     +'</div>';
 
-  // Funil de elaboração (status interno)
   var funilElabSteps = [
-    {label:'Rascunho',       st:'rascunho',   cor:'#546e7a'},
-    {label:'Em Análise',     st:'analise',    cor:'#1565c0'},
-    {label:'Ap. Gerente',    st:'gerencial',  cor:'#e65100'},
-    {label:'Ap. Diretoria',  st:'diretoria',  cor:'#6a1b9a'},
-    {label:'Aprovado',       st:'aprovado',   cor:'#2e7d32'},
-    {label:'Revisão',        st:'revisao',    cor:'#c62828'}
+    {label:'Rascunho',      st:'rascunho',  cor:'#546e7a'},
+    {label:'Em Análise',    st:'analise',   cor:'#1565c0'},
+    {label:'Ap. Gerente',   st:'gerencial', cor:'#e65100'},
+    {label:'Ap. Diretoria', st:'diretoria', cor:'#6a1b9a'},
+    {label:'Validado',      st:'aprovado',  cor:'#2e7d32'},
+    {label:'Revisão',       st:'revisao',   cor:'#c62828'}
   ];
   var maxElabN = Math.max.apply(null, funilElabSteps.map(function(f){
     return dados.filter(function(o){return o.st===f.st;}).length;
@@ -3943,8 +3969,8 @@ function dashRenderizar(){
     var lista2=dados.filter(function(o){return o.st===f.st;});
     var n=lista2.length, vol2=lista2.reduce(function(t,o){return t+dashValOrc(o);},0);
     var w=Math.round(n/maxElabN*100);
-    window._dashListas['elab_'+f.st]=lista2;
-    return '<div class="funil-step" style="cursor:pointer" onclick="dashDrill(\'elab_'+f.st+'\',\''+encodeURIComponent(f.label)+'\')">'
+    window._dashElabListas['elab_'+f.st]=lista2;
+    return '<div class="funil-step" style="cursor:pointer" onclick="dashElabDrill(\'elab_'+f.st+'\',\''+f.label+'\')">'
       +'<div class="funil-label">'+f.label+'</div>'
       +'<div class="funil-bar"><div class="funil-fill" style="width:'+w+'%;background:'+f.cor+'"></div></div>'
       +'<div class="funil-val" style="color:'+f.cor+'">'+n+'</div>'
@@ -3952,212 +3978,396 @@ function dashRenderizar(){
       +'</div>';
   }).join('');
 
-  // Parados — barras por tempo
-  var paradosBandas = [
-    {label:'> 30 dias',min:30,max:9999,cor:'#c62828'},
-    {label:'15–30 dias',min:15,max:30,cor:'#e65100'},
-    {label:'7–15 dias', min:7, max:15,cor:'#ffa726'},
-    {label:'< 7 dias',  min:0, max:7, cor:'#2e7d32'}
-  ];
+  var paradosBandas=[{label:'> 30 dias',min:30,max:9999,cor:'#c62828'},{label:'15–30 dias',min:15,max:30,cor:'#e65100'},{label:'7–15 dias',min:7,max:15,cor:'#ffa726'},{label:'< 7 dias',min:0,max:7,cor:'#2e7d32'}];
   var paradosHTML = paradosBandas.map(function(b){
     var lista2=paradosList.filter(function(o){return o._dias>=b.min&&o._dias<b.max;});
-    window._dashListas['parado_'+b.min]=lista2;
+    window._dashElabListas['parado_'+b.min]=lista2;
     if(!lista2.length)return'';
-    return '<div class="funil-step" style="cursor:pointer" onclick="dashDrill(\'parado_'+b.min+'\',\''+encodeURIComponent('Parados '+b.label)+'\')">'
+    return '<div class="funil-step" style="cursor:pointer" onclick="dashElabDrill(\'parado_'+b.min+'\',\'Parados '+b.label+'\')">'
       +'<div class="funil-label" style="color:'+b.cor+'">'+b.label+'</div>'
       +'<div class="funil-bar"><div class="funil-fill" style="width:'+Math.round(lista2.length/Math.max(paradosList.length,1)*100)+'%;background:'+b.cor+'"></div></div>'
       +'<div class="funil-val" style="color:'+b.cor+'">'+lista2.length+'</div>'
-      +'<div style="min-width:90px;font-size:9px;color:#555;text-align:right">'+lista2.reduce(function(t,o){return t+dashValOrc(o);},0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,'.').replace(/\.(\d{2})$/,',$1')+'</div>'
+      +'<div style="min-width:90px;font-size:9px;color:#555;text-align:right">'+fmt(lista2.reduce(function(t,o){return t+dashValOrc(o);},0))+'</div>'
       +'</div>';
-  }).join('') || '<div class="dash-vazio" style="color:#66bb6a">✅ Nenhum orçamento parado!</div>';
+  }).join('')||'<div class="dash-vazio" style="color:#66bb6a">✅ Nenhum orçamento parado!</div>';
 
-  var secElaboracao = '<div style="margin-bottom:6px">'
+  var drillPanel = '<div id="dash-elab-drill" style="display:none;margin-top:12px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:6px 6px 0 0;padding:8px 12px">'
+    +'<span id="dash-elab-drill-titulo" style="font-size:11px;color:#fff;font-weight:700"></span>'
+    +'<button onclick="document.getElementById(\'dash-elab-drill\').style.display=\'none\'" style="background:none;border:none;color:#888;cursor:pointer;font-size:14px">✕</button>'
+    +'</div><div id="dash-elab-drill-corpo" style="border:1px solid #2a2a2a;border-top:none;border-radius:0 0 6px 6px"></div></div>';
+
+  document.getElementById('dash-elab-corpo').innerHTML =
+    '<div style="margin-bottom:6px">'
     +'<div style="font-size:11px;color:#c0001a;font-weight:900;text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid #c0001a;padding-bottom:4px;margin-bottom:10px">📋 Elaboração de Orçamentos</div>'
     +kpi1
     +'<div class="dash-row c2" style="margin-top:10px">'
     +'<div class="dash-box"><h3>📊 Status de Aprovação <span>clique para detalhar</span></h3>'+funilElabHTML+'</div>'
     +'<div class="dash-box"><h3>⏸️ Tempo sem Aprovação <span>orçamentos pendentes</span></h3>'+paradosHTML+'</div>'
-    +'</div></div>';
+    +'</div></div>'
+    + drillPanel;
+}
 
-  // ════════════════════════════════════════════════════════
-  //  SEÇÃO 2 — DESEMPENHO COMERCIAL (FUNIL DE VENDAS)
-  // ════════════════════════════════════════════════════════
-  // Só orçamentos que estão NO funil comercial (têm status comercial definido)
-  var comFunil = [
-    {key:'enviada',   label:'📤 Proposta Enviada', cor:'#1565c0'},
-    {key:'negociacao',label:'🤝 Em Negociação',    cor:'#e65100'},
-    {key:'standby',   label:'⏸️ Standby',           cor:'#5d4037'},
-    {key:'ganha',     label:'🏆 Venda Ganha',      cor:'#2e7d32'},
-    {key:'perdida',   label:'❌ Venda Perdida',    cor:'#c62828'}
+function dashElabDrill(key, titulo){
+  var lista = (window._dashElabListas&&window._dashElabListas[key])||[];
+  var SI_LBL2={rascunho:'Rascunho',analise:'Em Análise',gerencial:'Ap. Gerente',diretoria:'Ap. Diretoria',aprovado:'Validado',revisao:'Revisão'};
+  var SI_COR2={rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
+  var panel=document.getElementById('dash-elab-drill');
+  var corpo=document.getElementById('dash-elab-drill-corpo');
+  var tit=document.getElementById('dash-elab-drill-titulo');
+  if(!panel)return;
+  tit.textContent = titulo + ' ('+lista.length+')';
+  panel.style.display='block';
+  if(!lista.length){corpo.innerHTML='<div class="dash-vazio" style="padding:16px">Nenhum orçamento nesta categoria.</div>';return;}
+  corpo.innerHTML='<div style="max-height:340px;overflow-y:auto">'+lista.map(function(o){
+    var f=o.form||{};var val=dashValOrc(o);var cor=SI_COR2[o.st]||'#555';
+    return '<div style="padding:7px 12px;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;gap:8px">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:11px;color:#ddd;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+      +'<div style="font-size:10px;color:#666;margin-top:1px">'+eh(f['f-num']||'')+(f['f-data']?' · '+fD(f['f-data']):'')+(f['f-cons']?' · '+f['f-cons']:'')+'</div></div>'
+      +'<span style="font-size:10px;font-weight:800;color:#fff;white-space:nowrap">'+fmt(val)+'</span>'
+      +'<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:'+cor+'22;color:'+cor+';border:1px solid '+cor+';white-space:nowrap">'+(SI_LBL2[o.st]||o.st)+'</span>'
+      +'</div>';
+  }).join('')+'</div>';
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function dashRenderizar(){
+  var dados  = dashFiltrar();
+  var hoje   = new Date().toISOString().split('T')[0];
+  var total  = _dashDados.length;
+  document.getElementById('dash-sub').textContent = total+' orçamentos carregados';
+
+  var COM_COR = {enviada:'#1565c0',negociacao:'#e65100',standby:'#5d4037',ganha:'#2e7d32',perdida:'#c62828'};
+  var COM_LBL = {enviada:'📤 Proposta Enviada',negociacao:'🤝 Em Negociação',standby:'⏸️ Standby',ganha:'🏆 Venda Ganha',perdida:'❌ Venda Perdida'};
+  var SI_COR  = {rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
+  var SI_LBL  = {rascunho:'Rascunho',analise:'Em Análise',gerencial:'Ap. Gerente',diretoria:'Ap. Diretoria',aprovado:'Validado',revisao:'Revisão'};
+
+  function miniLista(lista,titulo){
+    if(!lista.length)return'<div class="dash-vazio">Nenhum orçamento.</div>';
+    return'<div style="max-height:320px;overflow-y:auto">'
+      +'<div style="font-size:10px;color:#888;font-weight:700;text-transform:uppercase;padding:6px 10px;background:#0d0d0d;border-bottom:1px solid #1a1a1a">'+titulo+' ('+lista.length+')</div>'
+      +lista.map(function(o){
+        var f=o.form||{};var val=dashValOrc(o);var cs=o.dados&&o.dados.comercialStatus||'';var cor=SI_COR[o.st]||'#555';
+        return'<div style="padding:7px 10px;border-bottom:1px solid #111;display:flex;align-items:center;gap:8px">'
+          +'<div style="flex:1;min-width:0"><div style="font-size:11px;color:#ddd;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+          +'<div style="font-size:10px;color:#666;margin-top:1px">'+eh(f['f-num']||'')+(f['f-data']?' · '+fD(f['f-data']):'')+(f['f-cons']?' · '+f['f-cons']:'')+'</div></div>'
+          +(cs?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+(COM_COR[cs]||'#333')+'33;color:'+(COM_COR[cs]||'#888')+';border:1px solid '+(COM_COR[cs]||'#333')+';white-space:nowrap">'+(COM_LBL[cs]||cs)+'</span>':'')
+          +'<span style="font-size:10px;font-weight:800;color:#fff;white-space:nowrap;min-width:80px;text-align:right">'+fmt(val)+'</span>'
+          +'</div>';
+      }).join('')+'</div>';
+  }
+
+  window._dashListas = window._dashListas||{};
+
+  // ── Base: apenas orçamentos VALIDADOS (aprovados internamente) ──────────────
+  var validados   = dados.filter(function(o){return o.st==='aprovado';});
+  var valTotal    = validados.length;
+  var valValTotal = validados.reduce(function(t,o){return t+dashValOrc(o);},0);
+
+  // Etapas do funil comercial sobre os validados
+  var etapas = [
+    {key:'enviada',    label:'📤 Proposta Enviada', cor:'#1565c0', icone:'📤'},
+    {key:'negociacao', label:'🤝 Em Negociação',    cor:'#e65100', icone:'🤝'},
+    {key:'standby',    label:'⏸️ Standby',           cor:'#5d4037', icone:'⏸️'},
+    {key:'ganha',      label:'🏆 Venda Ganha',      cor:'#2e7d32', icone:'🏆'},
+    {key:'perdida',    label:'❌ Venda Perdida',    cor:'#c62828', icone:'❌'}
   ];
 
-  var totalComQtd=0, totalComVal=0;
-  comFunil.forEach(function(f){
-    var lista2=dados.filter(function(o){return o.dados&&o.dados.comercialStatus===f.key;});
-    totalComQtd+=lista2.length;
-    totalComVal+=lista2.reduce(function(t,o){return t+dashValOrc(o);},0);
-    window._dashListas['com_'+f.key]=lista2;
+  etapas.forEach(function(e){
+    var lista2=validados.filter(function(o){return (o.dados&&o.dados.comercialStatus)===e.key;});
+    e.qtd=lista2.length;
+    e.val=lista2.reduce(function(t,o){return t+dashValOrc(o);},0);
+    e.pctQtd=valTotal>0?Math.round(e.qtd/valTotal*100):0;
+    e.pctVal=valValTotal>0?Math.round(e.val/valValTotal*100):0;
+    window._dashListas['com_'+e.key]=lista2;
   });
 
-  var ganhos2    = window._dashListas['com_ganha']||[];
-  var perdidos2  = window._dashListas['com_perdida']||[];
-  var enviados2  = dados.filter(function(o){var cs=o.dados&&o.dados.comercialStatus||'';return ['enviada','negociacao','standby','ganha','perdida'].includes(cs);});
-  window._dashListas['com_enviados']=enviados2;
+  window._dashListas['validados']=validados;
 
-  var ganhoQtd   = ganhos2.length;
-  var perdidoQtd = perdidos2.length;
-  var ganhoVal   = ganhos2.reduce(function(t,o){return t+dashValOrc(o);},0);
-  var perdidoVal = perdidos2.reduce(function(t,o){return t+dashValOrc(o);},0);
-  var envQtd     = enviados2.length;
-  var envVal     = enviados2.reduce(function(t,o){return t+dashValOrc(o);},0);
+  // Ganhos para taxa de conversão
+  var ganhos   = validados.filter(function(o){return (o.dados&&o.dados.comercialStatus)==='ganha';});
+  var ganhoQtd = ganhos.length;
+  var ganhoVal = ganhos.reduce(function(t,o){return t+dashValOrc(o);},0);
+  var txQtd    = valTotal>0?Math.round(ganhoQtd/valTotal*100):0;
+  var txVal    = valValTotal>0?Math.round(ganhoVal/valValTotal*100):0;
 
-  // Taxa de conversão por quantidade
-  var txQtd = envQtd>0?Math.round(ganhoQtd/envQtd*100):0;
-  // Taxa de conversão por valor
-  var txVal = envVal>0?Math.round(ganhoVal/envVal*100):0;
+  // ── KPIs principais ─────────────────────────────────────────────────────────
+  var kpi = '<div class="dash-kpis">'
+    +'<div class="dk verde" style="cursor:pointer" onclick="dashDrill(\'validados\',\'Validados\')">'
+      +'<label>✅ Total Validados</label><span class="dkv">'+valTotal+'</span><span class="dksub">'+fmt(valValTotal)+' · 100%</span></div>';
 
-  var maxComN = Math.max.apply(null,comFunil.map(function(f){return (window._dashListas['com_'+f.key]||[]).length;}).concat([1]));
-  var maxComV = Math.max.apply(null,comFunil.map(function(f){return (window._dashListas['com_'+f.key]||[]).reduce(function(t,o){return t+dashValOrc(o);},0);}).concat([1]));
+  etapas.forEach(function(e){
+    var cls = e.key==='ganha'?'verde':e.key==='perdida'?'vermelho':e.key==='negociacao'?'laranja':'ciano';
+    kpi += '<div class="dk '+cls+'" style="cursor:pointer" onclick="dashDrill(\'com_'+e.key+'\',\''+e.label+'\')">'
+      +'<label>'+e.label+'</label>'
+      +'<span class="dkv">'+e.qtd+'</span>'
+      +'<span class="dksub">'+fmt(e.val)+' · '+e.pctQtd+'%</span>'
+      +'</div>';
+  });
+  kpi += '</div>';
 
-  var comFunilHTML = comFunil.map(function(f){
-    var lista2=window._dashListas['com_'+f.key]||[];
-    var n=lista2.length;
-    var v=lista2.reduce(function(t,o){return t+dashValOrc(o);},0);
-    var wN=Math.round(n/maxComN*100);
-    var wV=Math.round(v/maxComV*100);
-    return '<div style="margin-bottom:8px;cursor:pointer" onclick="dashDrill(\'com_'+f.key+'\',\''+encodeURIComponent(f.label)+'\')">'
-      +'<div style="display:flex;justify-content:space-between;margin-bottom:3px">'
-      +'<span style="font-size:10px;color:'+f.cor+';font-weight:700">'+f.label+'</span>'
-      +'<span style="font-size:10px;color:#888">'+n+' orc. · '+fmt(v)+'</span>'
-      +'</div>'
-      +'<div style="display:flex;gap:4px;align-items:center">'
-      +'<div style="flex:1;height:10px;background:#111;border-radius:2px;overflow:hidden">'
-      +'<div style="width:'+wN+'%;height:100%;background:'+f.cor+';border-radius:2px;opacity:.9"></div></div>'
-      +'<span style="font-size:9px;color:#555;min-width:28px;text-align:right">'+n+'</span>'
-      +'</div>'
-      +'<div style="display:flex;gap:4px;align-items:center;margin-top:2px">'
-      +'<div style="flex:1;height:6px;background:#111;border-radius:2px;overflow:hidden">'
-      +'<div style="width:'+wV+'%;height:100%;background:'+f.cor+';border-radius:2px;opacity:.5"></div></div>'
-      +'<span style="font-size:9px;color:#555;min-width:28px;text-align:right">R$</span>'
-      +'</div>'
+  // ── Tabela de desempenho por etapa ──────────────────────────────────────────
+  var tabelaEtapas = '<table style="width:100%;border-collapse:collapse;font-size:11px">'
+    +'<thead><tr style="border-bottom:2px solid #c0001a">'
+    +'<th style="text-align:left;padding:6px 8px;color:#c0001a;font-size:10px;text-transform:uppercase">Etapa</th>'
+    +'<th style="text-align:center;padding:6px 8px;color:#888;font-size:10px">Qtd</th>'
+    +'<th style="text-align:right;padding:6px 8px;color:#888;font-size:10px">Valor (R$)</th>'
+    +'<th style="text-align:center;padding:6px 8px;color:#888;font-size:10px">% Qtd</th>'
+    +'<th style="text-align:center;padding:6px 8px;color:#888;font-size:10px">% Valor</th>'
+    +'</tr></thead><tbody>'
+    +'<tr style="background:#0d1a0d;border-bottom:1px solid #1a1a1a;cursor:pointer" onclick="dashDrill(\'validados\',\'Validados\')">'
+    +'<td style="padding:7px 8px;color:#66bb6a;font-weight:800">✅ Total Validados</td>'
+    +'<td style="text-align:center;color:#fff;font-weight:800">'+valTotal+'</td>'
+    +'<td style="text-align:right;color:#fff;font-weight:800">'+fmt(valValTotal)+'</td>'
+    +'<td style="text-align:center;color:#888">100%</td>'
+    +'<td style="text-align:center;color:#888">100%</td>'
+    +'</tr>';
+
+  etapas.forEach(function(e){
+    tabelaEtapas += '<tr style="border-bottom:1px solid #1a1a1a;cursor:pointer" onclick="dashDrill(\'com_'+e.key+'\',\''+e.label+'\')" onmouseover="this.style.background=\'#111\'" onmouseout="this.style.background=\'transparent\'">'
+      +'<td style="padding:7px 8px;color:'+e.cor+';font-weight:700">'+e.label+'</td>'
+      +'<td style="text-align:center;color:#ddd;font-weight:700">'+e.qtd+'</td>'
+      +'<td style="text-align:right;color:#ddd">'+fmt(e.val)+'</td>'
+      +'<td style="text-align:center"><span style="padding:1px 8px;border-radius:10px;background:'+e.cor+'22;color:'+e.cor+';font-weight:800;font-size:10px">'+e.pctQtd+'%</span></td>'
+      +'<td style="text-align:center"><span style="padding:1px 8px;border-radius:10px;background:'+e.cor+'11;color:'+e.cor+';font-size:10px">'+e.pctVal+'%</span></td>'
+      +'</tr>';
+  });
+  tabelaEtapas += '</tbody></table>';
+
+  // ── Taxa de conversão por consultor ─────────────────────────────────────────
+  // Base: todos os validados, agrupados por consultor
+  var porCons = {};
+  validados.forEach(function(o){
+    var c=(o.form&&o.form['f-cons'])||'Sem Consultor';
+    var cs=o.dados&&o.dados.comercialStatus||'';
+    if(!porCons[c])porCons[c]={validados:0,negociacao:0,standby:0,ganhos:0,perdidos:0,valValidados:0,valGanhos:0};
+    var pc=porCons[c];
+    pc.validados++;
+    pc.valValidados+=dashValOrc(o);
+    if(cs==='negociacao')pc.negociacao++;
+    if(cs==='standby')pc.standby++;
+    if(cs==='ganha'){pc.ganhos++;pc.valGanhos+=dashValOrc(o);}
+    if(cs==='perdida')pc.perdidos++;
+  });
+  var consOrdem=Object.keys(porCons).sort(function(a,b){return porCons[b].valGanhos-porCons[a].valGanhos;});
+
+  var maxValCons=Math.max.apply(null,consOrdem.map(function(c){return porCons[c].valGanhos;}).concat([1]));
+
+  var tabelaCons = '<table style="width:100%;border-collapse:collapse;font-size:11px">'
+    +'<thead><tr style="border-bottom:2px solid #c0001a">'
+    +'<th style="text-align:left;padding:6px 8px;color:#c0001a;font-size:10px;text-transform:uppercase">Consultor</th>'
+    +'<th style="text-align:center;padding:6px 8px;color:#888;font-size:10px" title="Total de orçamentos validados">Validados</th>'
+    +'<th style="text-align:center;padding:6px 8px;color:#2e7d32;font-size:10px">Ganhos</th>'
+    +'<th style="text-align:center;padding:6px 8px;color:#c62828;font-size:10px">Perdidos</th>'
+    +'<th style="text-align:center;padding:6px 8px;color:#e65100;font-size:10px">Negoc.</th>'
+    +'<th style="text-align:center;padding:6px 8px;color:#5d4037;font-size:10px">Standby</th>'
+    +'<th style="text-align:right;padding:6px 8px;color:#888;font-size:10px">R$ Validado</th>'
+    +'<th style="text-align:right;padding:6px 8px;color:#888;font-size:10px">R$ Ganho</th>'
+    +'<th style="text-align:center;padding:6px 8px;color:#ffa726;font-size:10px" title="R$ Ganho ÷ R$ Validado">Taxa Conv. R$</th>'
+    +'</tr></thead><tbody>';
+
+  // Linha de totais globais
+  var totValG=0,totGanG=0,totPerdG=0,totNegG=0,totStbG=0,totValGanG=0,totValTG=0;
+  consOrdem.forEach(function(c){var pc=porCons[c];totValG+=pc.validados;totGanG+=pc.ganhos;totPerdG+=pc.perdidos;totNegG+=pc.negociacao;totStbG+=pc.standby;totValGanG+=pc.valGanhos;totValTG+=pc.valValidados;});
+  var totTxR=totValTG>0?Math.round(totValGanG/totValTG*100):0;
+  tabelaCons += '<tr style="background:#0d1a0d;border-bottom:2px solid #2e7d32">'
+    +'<td style="padding:7px 8px;color:#66bb6a;font-weight:800">🏁 TOTAL</td>'
+    +'<td style="text-align:center;color:#fff;font-weight:800">'+totValG+'</td>'
+    +'<td style="text-align:center;color:#66bb6a;font-weight:800">'+totGanG+'</td>'
+    +'<td style="text-align:center;color:#ef5350;font-weight:800">'+totPerdG+'</td>'
+    +'<td style="text-align:center;color:#ffa726">'+totNegG+'</td>'
+    +'<td style="text-align:center;color:#a1887f">'+totStbG+'</td>'
+    +'<td style="text-align:right;color:#aaa;font-size:10px">'+fmt(totValTG)+'</td>'
+    +'<td style="text-align:right;color:#fff;font-weight:800">'+fmt(totValGanG)+'</td>'
+    +'<td style="text-align:center"><span style="padding:2px 10px;border-radius:10px;font-weight:900;font-size:11px;background:'+(totTxR>=50?'#2e7d32':totTxR>=25?'#e65100':'#c62828')+';color:#fff">'+totTxR+'%</span></td>'
+    +'</tr>';
+
+  consOrdem.forEach(function(c){
+    var pc=porCons[c];
+    // Taxa de conversão em R$: R$ ganho ÷ R$ validado
+    var txR=pc.valValidados>0?Math.round(pc.valGanhos/pc.valValidados*100):0;
+    var txCor=txR>=50?'#66bb6a':txR>=25?'#ffa726':'#ef5350';
+    var barW=Math.round(pc.valGanhos/maxValCons*100);
+    window._dashListas['cons2_'+c]=validados.filter(function(o){return (o.form&&o.form['f-cons'])===c;});
+    tabelaCons += '<tr style="border-bottom:1px solid #1a1a1a;cursor:pointer" onclick="dashDrill(\'cons2_'+encodeURIComponent(c)+'\',\''+eh(c)+'\')" onmouseover="this.style.background=\'#111\'" onmouseout="this.style.background=\'transparent\'">'
+      +'<td style="padding:7px 8px">'
+      +'<div style="font-size:11px;color:#ddd;font-weight:700">'+eh(c)+'</div>'
+      +'<div style="height:4px;background:#1a1a1a;border-radius:2px;margin-top:4px;overflow:hidden"><div style="width:'+barW+'%;height:100%;background:linear-gradient(90deg,#c0001a,#ff5555);border-radius:2px"></div></div>'
+      +'</td>'
+      +'<td style="text-align:center;color:#aaa">'+pc.validados+'</td>'
+      +'<td style="text-align:center;color:#66bb6a;font-weight:700">'+pc.ganhos+'</td>'
+      +'<td style="text-align:center;color:#ef5350">'+pc.perdidos+'</td>'
+      +'<td style="text-align:center;color:#ffa726">'+pc.negociacao+'</td>'
+      +'<td style="text-align:center;color:#a1887f">'+pc.standby+'</td>'
+      +'<td style="text-align:right;color:#aaa;font-size:10px">'+fmt(pc.valValidados)+'</td>'
+      +'<td style="text-align:right;color:#ddd">'+fmt(pc.valGanhos)+'</td>'
+      +'<td style="text-align:center"><span style="padding:2px 9px;border-radius:10px;font-weight:900;font-size:11px;background:'+txCor+'22;color:'+txCor+';border:1px solid '+txCor+'">'+txR+'%</span></td>'
+      +'</tr>';
+  });
+
+  if(!consOrdem.length) tabelaCons += '<tr><td colspan="9" class="dash-vazio" style="padding:16px">Sem dados comerciais no período.</td></tr>';
+  tabelaCons += '</tbody></table>';
+
+  // ── Taxa de conversão global — card destacado ────────────────────────────────
+  var txCard = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">'
+    +'<div style="flex:1;min-width:180px;background:#0d1a0d;border:1px solid #2e7d32;border-radius:8px;padding:12px 16px;text-align:center">'
+    +'<div style="font-size:10px;color:#66bb6a;text-transform:uppercase;font-weight:800;letter-spacing:1px;margin-bottom:4px">📊 Taxa de Conversão (Qtd)</div>'
+    +'<div style="font-size:28px;font-weight:900;color:#fff">'+txQtd+'%</div>'
+    +'<div style="font-size:10px;color:#555;margin-top:2px">'+ganhoQtd+' ganhos ÷ '+valTotal+' validados</div>'
+    +'</div>'
+    +'<div style="flex:1;min-width:180px;background:#0d1a0d;border:1px solid #ffa726;border-radius:8px;padding:12px 16px;text-align:center">'
+    +'<div style="font-size:10px;color:#ffa726;text-transform:uppercase;font-weight:800;letter-spacing:1px;margin-bottom:4px">💰 Taxa de Conversão (R$)</div>'
+    +'<div style="font-size:28px;font-weight:900;color:#fff">'+txVal+'%</div>'
+    +'<div style="font-size:10px;color:#555;margin-top:2px">'+fmt(ganhoVal)+' ganho ÷ '+fmt(valValTotal)+' total</div>'
+    +'</div>'
+    +'</div>';
+
+  // ── GRÁFICOS SVG ─────────────────────────────────────────────────────────────
+  // Gráfico 1: Donut — distribuição das etapas por R$
+  function svgDonut(slices, cx, cy, r, ri){
+    var total2=slices.reduce(function(s,x){return s+x.val;},0);
+    if(!total2)return'<text x="'+cx+'" y="'+(cy+4)+'" text-anchor="middle" fill="#555" font-size="11">Sem dados</text>';
+    var angle=-Math.PI/2, paths='';
+    slices.forEach(function(s){
+      if(!s.val)return;
+      var pct=s.val/total2;
+      var a2=angle+pct*2*Math.PI;
+      var x1=cx+r*Math.cos(angle),y1=cy+r*Math.sin(angle);
+      var x2=cx+r*Math.cos(a2),  y2=cy+r*Math.sin(a2);
+      var xi1=cx+ri*Math.cos(angle),yi1=cy+ri*Math.sin(angle);
+      var xi2=cx+ri*Math.cos(a2),  yi2=cy+ri*Math.sin(a2);
+      var large=pct>0.5?1:0;
+      paths+='<path d="M'+xi1+','+yi1+' L'+x1+','+y1+' A'+r+','+r+' 0 '+large+',1 '+x2+','+y2+' L'+xi2+','+yi2+' A'+ri+','+ri+' 0 '+large+',0 '+xi1+','+yi1+' Z" fill="'+s.cor+'" opacity="0.9"><title>'+s.label+': '+fmt(s.val)+' ('+Math.round(pct*100)+'%)</title></path>';
+      angle=a2;
+    });
+    return paths;
+  }
+
+  var donutSlices=[
+    {label:'📤 Proposta Enviada',val:etapas.find(function(e){return e.key==='enviada';}).val,   cor:'#1565c0'},
+    {label:'🤝 Em Negociação',   val:etapas.find(function(e){return e.key==='negociacao';}).val, cor:'#e65100'},
+    {label:'⏸️ Standby',          val:etapas.find(function(e){return e.key==='standby';}).val,    cor:'#5d4037'},
+    {label:'🏆 Venda Ganha',     val:etapas.find(function(e){return e.key==='ganha';}).val,      cor:'#2e7d32'},
+    {label:'❌ Venda Perdida',   val:etapas.find(function(e){return e.key==='perdida';}).val,    cor:'#c62828'},
+    {label:'Sem etapa',          val:validados.filter(function(o){var cs=(o.dados&&o.dados.comercialStatus)||'';return !['enviada','negociacao','standby','ganha','perdida'].includes(cs);}).reduce(function(t,o){return t+dashValOrc(o);},0), cor:'#333'}
+  ].filter(function(s){return s.val>0;});
+
+  var donutTotal=donutSlices.reduce(function(s,x){return s+x.val;},0);
+  var legendaDonut=donutSlices.map(function(s){
+    var pct=donutTotal>0?Math.round(s.val/donutTotal*100):0;
+    return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">'
+      +'<div style="width:10px;height:10px;border-radius:2px;background:'+s.cor+';flex-shrink:0"></div>'
+      +'<span style="font-size:9px;color:#aaa;flex:1">'+s.label+'</span>'
+      +'<span style="font-size:9px;color:#ddd;font-weight:700">'+pct+'%</span>'
       +'</div>';
   }).join('');
 
-  // Conversão por consultor
-  var porCons2={};
-  dados.forEach(function(o){
-    var c=(o.form&&o.form['f-cons'])||'Sem Consultor';
-    var cs=o.dados&&o.dados.comercialStatus||'';
-    if(!porCons2[c])porCons2[c]={qtd:0,env:0,ganhos:0,perdidos:0,valEnv:0,valGanho:0};
-    var pc=porCons2[c];
-    pc.qtd++;
-    if(['enviada','negociacao','standby','ganha','perdida'].includes(cs)){pc.env++;pc.valEnv+=dashValOrc(o);}
-    if(cs==='ganha'){pc.ganhos++;pc.valGanho+=dashValOrc(o);}
-    if(cs==='perdida')pc.perdidos++;
-  });
-  var consOrdem2=Object.keys(porCons2).sort(function(a,b){return porCons2[b].valGanho-porCons2[a].valGanho;});
-
-  var consHTML2=consOrdem2.map(function(c){
-    var pc=porCons2[c];
-    var txQ=pc.env>0?Math.round(pc.ganhos/pc.env*100):0;
-    var txV=pc.valEnv>0?Math.round(pc.valGanho/pc.valEnv*100):0;
-    var cor=txQ>=50?'#66bb6a':txQ>=25?'#ffa726':'#ef5350';
-    window._dashListas['cons_'+c]=dados.filter(function(o){return (o.form&&o.form['f-cons'])===c;});
-    return '<div class="cons-row" style="cursor:pointer" onclick="dashDrill(\'cons_'+encodeURIComponent(c)+'\',\''+encodeURIComponent(c)+'\')">'
-      +'<div class="cons-nome" title="'+c+'">'+c+'</div>'
-      +'<div style="flex:1;display:flex;flex-direction:column;gap:2px">'
-      +'<div style="height:10px;background:#111;border-radius:2px;overflow:hidden">'
-      +'<div style="width:'+Math.round(pc.valGanho/Math.max(1,Math.max.apply(null,consOrdem2.map(function(x){return porCons2[x].valGanho;})))*100)+'%;height:100%;background:linear-gradient(90deg,#c0001a,#ff5555);border-radius:2px"></div></div>'
-      +'</div>'
-      +'<div style="display:flex;flex-direction:column;align-items:flex-end;min-width:70px">'
-      +'<span style="font-size:10px;font-weight:800;color:'+cor+'">Qtd: '+txQ+'%</span>'
-      +'<span style="font-size:9px;color:#666">Val: '+txV+'%</span>'
-      +'</div>'
-      +'<div class="cons-val">'+fmt(pc.valGanho)+'</div>'
-      +'</div>';
-  }).join('') || '<div class="dash-vazio">Sem dados comerciais</div>';
-
-  var kpi2 = '<div class="dash-kpis">'
-    +'<div class="dk verde" style="cursor:pointer" onclick="dashDrill(\'com_ganha\',\'Vendas+Ganhas\')">'
-      +'<label>🏆 Vendas Ganhas</label><span class="dkv">'+ganhoQtd+'</span><span class="dksub">'+fmt(ganhoVal)+'</span></div>'
-    +'<div class="dk vermelho" style="cursor:pointer" onclick="dashDrill(\'com_perdida\',\'Vendas+Perdidas\')">'
-      +'<label>❌ Vendas Perdidas</label><span class="dkv">'+perdidoQtd+'</span><span class="dksub">'+fmt(perdidoVal)+'</span></div>'
-    +'<div class="dk azul" style="cursor:pointer" onclick="dashDrill(\'com_enviados\',\'Propostas+Enviadas\')">'
-      +'<label>📤 Propostas no Funil</label><span class="dkv">'+envQtd+'</span><span class="dksub">'+fmt(envVal)+'</span></div>'
-    +'<div class="dk laranja">'
-      +'<label>📊 Conversão Qtd</label><span class="dkv">'+txQtd+'%</span><span class="dksub">ganhos/propostas</span></div>'
-    +'<div class="dk ciano">'
-      +'<label>💰 Conversão Valor</label><span class="dkv">'+txVal+'%</span><span class="dksub">R$ ganho/proposta</span></div>'
+  var grafDonut = '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">'
+    +'<svg viewBox="0 0 200 200" style="width:140px;height:140px;flex-shrink:0">'
+    + svgDonut(donutSlices,100,100,90,52)
+    +'<text x="100" y="96" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">TOTAL</text>'
+    +'<text x="100" y="110" text-anchor="middle" fill="#aaa" font-size="8">'+fmt(valValTotal)+'</text>'
+    +'</svg>'
+    +'<div style="flex:1;min-width:100px">'+legendaDonut+'</div>'
     +'</div>';
 
-  var secComercial = '<div style="margin-bottom:6px;margin-top:16px">'
-    +'<div style="font-size:11px;color:#c0001a;font-weight:900;text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid #c0001a;padding-bottom:4px;margin-bottom:10px">📈 Desempenho Comercial</div>'
-    +kpi2
-    +'<div class="dash-row c2" style="margin-top:10px">'
-    +'<div class="dash-box"><h3>🔽 Funil de Vendas <span>barra superior = qtd · inferior = valor</span></h3>'+comFunilHTML+'</div>'
-    +'<div class="dash-box"><h3>👤 Conversão por Consultor <span>qtd% · valor%</span></h3>'+consHTML2+'</div>'
-    +'</div></div>';
+  // Gráfico 2: Barras horizontais — R$ Ganho por consultor
+  var grafBars='';
+  if(consOrdem.length){
+    var maxBarVal=Math.max.apply(null,consOrdem.map(function(c){return porCons[c].valValidados;}).concat([1]));
+    grafBars=consOrdem.map(function(c){
+      var pc=porCons[c];
+      var wG=Math.round(pc.valGanhos/maxBarVal*100);
+      var wV=Math.round(pc.valValidados/maxBarVal*100);
+      var txR2=pc.valValidados>0?Math.round(pc.valGanhos/pc.valValidados*100):0;
+      var txCor2=txR2>=50?'#66bb6a':txR2>=25?'#ffa726':'#ef5350';
+      return '<div style="margin-bottom:10px">'
+        +'<div style="display:flex;justify-content:space-between;margin-bottom:2px">'
+        +'<span style="font-size:10px;color:#ccc;font-weight:700">'+eh(c)+'</span>'
+        +'<span style="font-size:9px;color:'+txCor2+';font-weight:800">'+txR2+'% conv.</span>'
+        +'</div>'
+        +'<div style="position:relative;height:14px;background:#1a1a1a;border-radius:3px;overflow:hidden;margin-bottom:2px">'
+        +'<div style="position:absolute;left:0;top:0;height:100%;width:'+wV+'%;background:#333;border-radius:3px" title="R$ Validado: '+fmt(pc.valValidados)+'"></div>'
+        +'<div style="position:absolute;left:0;top:0;height:100%;width:'+wG+'%;background:linear-gradient(90deg,#c0001a,#ff5555);border-radius:3px" title="R$ Ganho: '+fmt(pc.valGanhos)+'"></div>'
+        +'</div>'
+        +'<div style="display:flex;justify-content:space-between">'
+        +'<span style="font-size:8px;color:#555">Validado: '+fmt(pc.valValidados)+'</span>'
+        +'<span style="font-size:8px;color:#c0001a;font-weight:700">Ganho: '+fmt(pc.valGanhos)+'</span>'
+        +'</div>'
+        +'</div>';
+    }).join('');
+  } else {
+    grafBars='<div class="dash-vazio">Sem dados</div>';
+  }
 
-  // ── Drill-down panel (oculto por padrão) ────────────────
+  // Gráfico 3: Taxa de conversão R$ por consultor — barras de progresso coloridas
+  var grafTaxa='';
+  if(consOrdem.length){
+    grafTaxa=consOrdem.map(function(c){
+      var pc=porCons[c];
+      var txR3=pc.valValidados>0?Math.round(pc.valGanhos/pc.valValidados*100):0;
+      var cor3=txR3>=50?'#2e7d32':txR3>=25?'#e65100':'#c62828';
+      return '<div style="margin-bottom:8px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">'
+        +'<span style="font-size:10px;color:#ccc;font-weight:700">'+eh(c)+'</span>'
+        +'<span style="font-size:11px;font-weight:900;color:'+cor3+'">'+txR3+'%</span>'
+        +'</div>'
+        +'<div style="background:#1a1a1a;border-radius:3px;overflow:hidden;height:12px">'
+        +'<div style="width:'+txR3+'%;height:100%;background:'+cor3+';border-radius:3px;transition:width .3s"></div>'
+        +'</div>'
+        +'</div>';
+    }).join('');
+  } else {
+    grafTaxa='<div class="dash-vazio">Sem dados</div>';
+  }
+
+  // ── Drill-down panel ─────────────────────────────────────────────────────────
   var drillPanel = '<div id="dash-drill" style="display:none;margin-top:12px">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:6px 6px 0 0;padding:8px 12px">'
     +'<span id="dash-drill-titulo" style="font-size:11px;color:#fff;font-weight:700"></span>'
     +'<button onclick="document.getElementById(\'dash-drill\').style.display=\'none\'" style="background:none;border:none;color:#888;cursor:pointer;font-size:14px">✕</button>'
-    +'</div>'
-    +'<div id="dash-drill-corpo" style="border:1px solid #2a2a2a;border-top:none;border-radius:0 0 6px 6px"></div>'
-    +'</div>';
+    +'</div><div id="dash-drill-corpo" style="border:1px solid #2a2a2a;border-top:none;border-radius:0 0 6px 6px"></div></div>';
 
-  document.getElementById('dash-corpo').innerHTML = secElaboracao + secComercial + drillPanel;
+  document.getElementById('dash-corpo').innerHTML =
+    '<div style="font-size:11px;color:#c0001a;font-weight:900;text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid #c0001a;padding-bottom:4px;margin-bottom:12px">📈 Desempenho Comercial</div>'
+    + kpi
+    + '<div style="margin:14px 0 6px;font-size:10px;color:#888;font-weight:800;text-transform:uppercase;letter-spacing:1px">📋 Resultados por Etapa</div>'
+    + '<div class="dash-box" style="margin-bottom:12px">'+tabelaEtapas+'</div>'
+    + '<div style="margin:14px 0 6px;font-size:10px;color:#888;font-weight:800;text-transform:uppercase;letter-spacing:1px">📊 Taxa de Conversão Global</div>'
+    + txCard
+    + '<div class="dash-row c2" style="margin-top:14px">'
+    + '<div class="dash-box"><h3>🍩 Distribuição por Etapa (R$) <span>donut por valor</span></h3>'+grafDonut+'</div>'
+    + '<div class="dash-box"><h3>💰 Taxa de Conversão R$ por Consultor</h3>'+grafTaxa+'</div>'
+    + '</div>'
+    + '<div style="margin:14px 0 6px;font-size:10px;color:#888;font-weight:800;text-transform:uppercase;letter-spacing:1px">📊 R$ Validado vs R$ Ganho por Consultor</div>'
+    + '<div class="dash-box" style="margin-bottom:12px">'+grafBars+'</div>'
+    + '<div style="margin:14px 0 6px;font-size:10px;color:#888;font-weight:800;text-transform:uppercase;letter-spacing:1px">👤 Desempenho por Consultor <span style="font-size:9px;color:#555;font-weight:400">· Taxa = R$ Ganho ÷ R$ Validado</span></div>'
+    + '<div class="dash-box" style="overflow-x:auto">'+tabelaCons+'</div>'
+    + drillPanel;
 }
 
 function dashDrill(key, tituloEnc){
-  var titulo = decodeURIComponent(tituloEnc);
-  var lista  = (window._dashListas&&window._dashListas[key])||[];
-  // Para cons_ precisamos decodificar a chave
-  if(key.startsWith('cons_')){
-    var consKey=decodeURIComponent(key.replace('cons_',''));
-    lista=(window._dashListas&&window._dashListas['cons_'+consKey])||[];
-  }
-  var panel = document.getElementById('dash-drill');
-  var corpo = document.getElementById('dash-drill-corpo');
-  var tit   = document.getElementById('dash-drill-titulo');
+  var titulo=decodeURIComponent(tituloEnc);
+  var lista=(window._dashListas&&window._dashListas[key])||[];
+  if(key.startsWith('cons2_')){var k=decodeURIComponent(key.replace('cons2_',''));lista=(window._dashListas&&window._dashListas['cons2_'+k])||[];}
+  var panel=document.getElementById('dash-drill');
+  var corpo=document.getElementById('dash-drill-corpo');
+  var tit=document.getElementById('dash-drill-titulo');
   if(!panel)return;
-  tit.textContent = titulo + ' ('+lista.length+')';
-  // Mini lista
-  if(!lista.length){
-    corpo.innerHTML='<div class="dash-vazio" style="padding:16px">Nenhum orçamento nesta categoria.</div>';
-  }else{
-    var SI_COR2={rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
-    var SI_LBL2={rascunho:'Rascunho',analise:'Em Análise',gerencial:'Ap. Gerente',diretoria:'Ap. Diretoria',aprovado:'Aprovado',revisao:'Revisão'};
-    var COM_COR2={enviada:'#1565c0',negociacao:'#e65100',standby:'#5d4037',ganha:'#2e7d32',perdida:'#c62828'};
-    var COM_LBL2={enviada:'Prop. Enviada',negociacao:'Em Negociação',standby:'Standby',ganha:'🏆 Ganha',perdida:'❌ Perdida'};
-    var hoje2=new Date().toISOString().split('T')[0];
-    corpo.innerHTML='<div style="max-height:300px;overflow-y:auto">'
-      +lista.map(function(o){
-        var f=o.form||{};
-        var val=dashValOrc(o);
-        var cs=o.dados&&o.dados.comercialStatus||'';
-        var cor=SI_COR2[o.st]||'#555';
-        var dt=f['f-data']||'';
-        var dias=dt?Math.floor((new Date(hoje2+'T12:00:00')-new Date(dt+'T12:00:00'))/(1000*60*60*24)):null;
-        return '<div style="padding:8px 12px;border-bottom:1px solid #111;display:flex;align-items:center;gap:8px">'
-          +'<div style="flex:1;min-width:0">'
-          +'<div style="font-size:11px;color:#fff;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
-          +'<div style="font-size:10px;color:#666;margin-top:2px">'
-          +eh(f['f-num']||'—')+(dt?' · '+fD(dt):'')+(f['f-cons']?' · '+f['f-cons']:'')
-          +(dias!==null?' · <span style="color:'+(dias>30?'#ef5350':dias>15?'#ffa726':'#888')+'">'+dias+'d</span>':'')
-          +'</div></div>'
-          +(cs?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+(COM_COR2[cs]||'#333')+'33;color:'+(COM_COR2[cs]||'#888')+';white-space:nowrap">'+(COM_LBL2[cs]||cs)+'</span>':'')
-          +'<span style="font-size:11px;font-weight:800;color:#fff;white-space:nowrap;min-width:85px;text-align:right">'+fmt(val)+'</span>'
-          +'<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:'+cor+'22;color:'+cor+';white-space:nowrap">'+(SI_LBL2[o.st]||o.st)+'</span>'
-          +'</div>';
-      }).join('')
-      +'</div>'
-      +'<div style="padding:7px 12px;background:#0d0d0d;border-top:1px solid #1a1a1a;font-size:10px;color:#888;display:flex;justify-content:space-between">'
-      +'<span>'+lista.length+' orçamento(s)</span>'
-      +'<span style="color:#fff;font-weight:800">'+fmt(lista.reduce(function(t,o){return t+dashValOrc(o);},0))+'</span>'
+  tit.textContent=titulo+' ('+lista.length+')';
+  var SI_COR2={rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
+  var COM_COR2={enviada:'#1565c0',negociacao:'#e65100',standby:'#5d4037',ganha:'#2e7d32',perdida:'#c62828'};
+  var COM_LBL2={enviada:'📤 Proposta Enviada',negociacao:'🤝 Em Negociação',standby:'⏸️ Standby',ganha:'🏆 Venda Ganha',perdida:'❌ Venda Perdida'};
+  if(!lista.length){corpo.innerHTML='<div class="dash-vazio" style="padding:16px">Nenhum orçamento nesta categoria.</div>';panel.style.display='block';return;}
+  corpo.innerHTML='<div style="max-height:340px;overflow-y:auto">'+lista.map(function(o){
+    var f=o.form||{};var val=dashValOrc(o);var cs=o.dados&&o.dados.comercialStatus||'';var cor=SI_COR2[o.st]||'#555';
+    return'<div style="padding:7px 12px;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;gap:8px">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:11px;color:#ddd;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+      +'<div style="font-size:10px;color:#666;margin-top:1px">'+eh(f['f-num']||'')+(f['f-data']?' · '+fD(f['f-data']):'')+(f['f-cons']?' · '+f['f-cons']:'')+'</div></div>'
+      +(cs?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+(COM_COR2[cs]||'#333')+'33;color:'+(COM_COR2[cs]||'#888')+';border:1px solid '+(COM_COR2[cs]||'#333')+';white-space:nowrap">'+(COM_LBL2[cs]||cs)+'</span>':'')
+      +'<span style="font-size:10px;font-weight:800;color:#fff;white-space:nowrap">'+fmt(val)+'</span>'
       +'</div>';
-  }
+  }).join('')+'</div>';
   panel.style.display='block';
   panel.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
@@ -4196,7 +4406,7 @@ function dashFinRenderizar(){
   var stFilt = document.getElementById('dashfin-status').value;
   var hoje   = new Date().toISOString().split('T')[0];
 
-  // Coletar todas as parcelas
+  // Coletar todas as parcelas (com referência ao driveId do orçamento)
   var todas = [];
   _dashFinDados.forEach(function(o){
     var fin = (o.dados && o.dados.finParcelas)||[];
@@ -4204,14 +4414,16 @@ function dashFinRenderizar(){
       var atrasado = p.status!=='pago' && p.data && p.data < hoje;
       var stReal   = p.status==='pago'?'pago':(atrasado?'atrasado':'pendente');
       todas.push({
-        num:    o.form&&o.form['f-num']||'—',
-        cliente:o.form&&o.form['f-cliente']||'—',
-        cons:   o.form&&o.form['f-cons']||'—',
-        desc:   p.desc||'—',
-        data:   p.data||'',
-        valor:  parseFloat(p.valor)||0,
-        forma:  p.forma||'—',
-        status: stReal
+        num:     o.form&&o.form['f-num']||'—',
+        cliente: o.form&&o.form['f-cliente']||'—',
+        cons:    o.form&&o.form['f-cons']||'—',
+        desc:    p.desc||'—',
+        data:    p.data||'',
+        valor:   parseFloat(p.valor)||0,
+        forma:   p.forma||'—',
+        status:  stReal,
+        driveId: o.driveId||'',
+        nome:    o.nome||''
       });
     });
   });
@@ -4224,71 +4436,126 @@ function dashFinRenderizar(){
     return true;
   });
 
-  // KPIs
-  var totalPago   = todas.filter(function(p){return p.status==='pago';}).reduce(function(t,p){return t+p.valor;},0);
-  var totalPend   = todas.filter(function(p){return p.status==='pendente';}).reduce(function(t,p){return t+p.valor;},0);
-  var totalAtras  = todas.filter(function(p){return p.status==='atrasado';}).reduce(function(t,p){return t+p.valor;},0);
-  var totalGeral  = totalPago+totalPend+totalAtras;
-  var qtdAtras    = todas.filter(function(p){return p.status==='atrasado';}).length;
-  var qtdPend     = todas.filter(function(p){return p.status==='pendente';}).length;
-  // Próximas 7 dias
+  // KPI base (sempre sobre todas, sem filtro de data/status para os cards globais)
+  var pagasTodas   = todas.filter(function(p){return p.status==='pago';});
+  var pendTodas    = todas.filter(function(p){return p.status==='pendente';});
+  var atrasTodas   = todas.filter(function(p){return p.status==='atrasado';});
+  var totalPago    = pagasTodas.reduce(function(t,p){return t+p.valor;},0);
+  var totalPend    = pendTodas.reduce(function(t,p){return t+p.valor;},0);
+  var totalAtras   = atrasTodas.reduce(function(t,p){return t+p.valor;},0);
+  var totalGeral   = totalPago+totalPend+totalAtras;
+  var qtdAtras     = atrasTodas.length;
+  var qtdPend      = pendTodas.length;
   var em7d = new Date(); em7d.setDate(em7d.getDate()+7);
   var em7dStr = em7d.toISOString().split('T')[0];
-  var vencSemana = todas.filter(function(p){return p.status==='pendente'&&p.data>=hoje&&p.data<=em7dStr;}).reduce(function(t,p){return t+p.valor;},0);
+  var venc7dLista  = pendTodas.filter(function(p){return p.data>=hoje&&p.data<=em7dStr;});
+  var vencSemana   = venc7dLista.reduce(function(t,p){return t+p.valor;},0);
+
+  // Guardar listas para drill
+  window._dashFinListas = {
+    pago:     pagasTodas,
+    pendente: pendTodas,
+    atrasado: atrasTodas,
+    venc7d:   venc7dLista
+  };
 
   // Por forma de pagamento
   var porForma = {};
   filtradas.filter(function(p){return p.status==='pago';}).forEach(function(p){
     var f = p.forma||'Não informado';
-    if(!porForma[f])porForma[f]=0;
-    porForma[f]+=p.valor;
+    if(!porForma[f])porForma[f]=[];
+    porForma[f].push(p);
   });
 
   // Por mês (parcelas pagas)
   var porMesFin = {};
   todas.filter(function(p){return p.status==='pago'&&p.data>=de&&p.data<=ate;}).forEach(function(p){
     var m = p.data.substring(0,7);
-    if(!porMesFin[m])porMesFin[m]=0;
-    porMesFin[m]+=p.valor;
+    if(!porMesFin[m])porMesFin[m]=[];
+    porMesFin[m].push(p);
   });
   var mesesFin = Object.keys(porMesFin).sort();
-  var maxMesFin = Math.max.apply(null,mesesFin.map(function(m){return porMesFin[m];}).concat([1]));
+  var maxMesFin = Math.max.apply(null,mesesFin.map(function(m){return porMesFin[m].reduce(function(t,p){return t+p.valor;},0);}).concat([1]));
 
   // Por consultor (volume ganho = parcelas pagas)
   var porConsFin = {};
   filtradas.filter(function(p){return p.status==='pago';}).forEach(function(p){
-    if(!porConsFin[p.cons])porConsFin[p.cons]=0;
-    porConsFin[p.cons]+=p.valor;
+    if(!porConsFin[p.cons])porConsFin[p.cons]=[];
+    porConsFin[p.cons].push(p);
   });
 
-  // Próximos vencimentos
-  var proxVenc = todas.filter(function(p){return p.status==='pendente'&&p.data>=hoje;})
-    .sort(function(a,b){return a.data>b.data?1:-1;}).slice(0,8);
-
-  // Parcelas atrasadas
-  var atrasadas = todas.filter(function(p){return p.status==='atrasado';})
-    .sort(function(a,b){return a.data>b.data?1:-1;}).slice(0,8);
+  // Próximos vencimentos e atrasados
+  var proxVenc  = pendTodas.filter(function(p){return p.data>=hoje;}).sort(function(a,b){return a.data>b.data?1:-1;}).slice(0,10);
+  var atrasadas = atrasTodas.sort(function(a,b){return a.data<b.data?1:-1;}).slice(0,10);
 
   var ST_COR = {pago:'#66bb6a',pendente:'#ffa726',atrasado:'#ef5350'};
-  var ST_LBL = {pago:'✅ Pago',pendente:'⏳ Pendente',atrasado:'⚠️ Atrasado'};
+
+  // ── Helper: linha de parcela clicável ─────────────────────────────────────
+  function linhaParc(p, campos){
+    var nomeClick = p.driveId
+      ? 'onclick="dashFinAbrirOrc(\''+p.driveId+'\',\''+eh(p.nome)+'\')"'
+      : '';
+    var nomeStyle = p.driveId
+      ? 'cursor:pointer;color:#90caf9;text-decoration:underline dotted;font-weight:700'
+      : 'color:#ccc';
+    var base = '<div class="fin-row" style="gap:6px">'
+      +'<div style="min-width:72px;color:#888;font-size:9px">'+fD(p.data)+'</div>'
+      +'<div style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" '+nomeClick+'>'
+        +'<span style="'+nomeStyle+'" title="Clique para abrir o orçamento">'+eh(p.cliente)+'</span>'
+        +'<span style="font-size:9px;color:#555;margin-left:4px">· '+eh(p.num)+'</span>'
+      +'</div>';
+    campos.forEach(function(c){base+=c;});
+    base+='</div>';
+    return base;
+  }
+
+  // ── Helper: mini-lista drill com totalizador ──────────────────────────────
+  function miniListaFin(lista, titulo){
+    if(!lista.length) return '<div class="dash-vazio">Nenhuma parcela.</div>';
+    var total2=lista.reduce(function(t,p){return t+p.valor;},0);
+    return '<div style="max-height:340px;overflow-y:auto">'
+      +'<div style="padding:6px 10px;background:#111;border-bottom:1px solid #1a1a1a;display:flex;justify-content:space-between">'
+      +'<span style="font-size:10px;color:#888;font-weight:700;text-transform:uppercase">'+titulo+' ('+lista.length+')</span>'
+      +'<span style="font-size:10px;font-weight:800;color:#fff">'+fmt(total2)+'</span>'
+      +'</div>'
+      +lista.map(function(p){
+        var corVal=ST_COR[p.status]||'#888';
+        var nomeClick = p.driveId?'onclick="dashFinAbrirOrc(\''+p.driveId+'\',\''+eh(p.nome)+'\')"':'';
+        var nomeStyle = p.driveId?'cursor:pointer;color:#90caf9;text-decoration:underline dotted':'color:#ccc';
+        return '<div style="padding:6px 10px;border-bottom:1px solid #111;display:flex;align-items:center;gap:8px">'
+          +'<div style="flex:1;min-width:0"><div style="font-size:10px;font-weight:700;'+nomeStyle+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis" '+nomeClick+' title="Clique para abrir">'+eh(p.cliente)+'</div>'
+          +'<div style="font-size:9px;color:#555">'+eh(p.num)+' · '+eh(p.cons)+' · '+fD(p.data)+' · '+eh(p.desc)+'</div></div>'
+          +'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+corVal+'22;color:'+corVal+';border:1px solid '+corVal+';white-space:nowrap">'+p.forma+'</span>'
+          +'<span style="font-size:10px;font-weight:800;color:'+corVal+';white-space:nowrap">'+fmt(p.valor)+'</span>'
+          +'</div>';
+      }).join('')+'</div>';
+  }
 
   var html = '';
 
-  // ── KPIs ─────────────────────────────────────────────
+  // ── KPIs clicáveis ────────────────────────────────────────────────────────
   html += '<div class="dash-kpis">'
-    +'<div class="dk verde"><label>Total Recebido</label><span class="dkv" style="font-size:13px">'+fmt(totalPago)+'</span><span class="dksub">parcelas pagas</span></div>'
-    +'<div class="dk laranja"><label>A Receber</label><span class="dkv" style="font-size:13px;color:#ffa726">'+fmt(totalPend)+'</span><span class="dksub">'+qtdPend+' parcela(s)</span></div>'
-    +'<div class="dk vermelho"><label>Em Atraso</label><span class="dkv" style="font-size:13px;color:#ef5350">'+fmt(totalAtras)+'</span><span class="dksub">'+qtdAtras+' parcela(s)</span></div>'
-    +'<div class="dk ciano"><label>Vence em 7 dias</label><span class="dkv" style="font-size:13px;color:#80deea">'+fmt(vencSemana)+'</span><span class="dksub">atenção</span></div>'
+    +'<div class="dk verde" style="cursor:pointer" onclick="dashFinDrill(\'pago\',\'Total Recebido\')">'
+      +'<label>Total Recebido</label><span class="dkv" style="font-size:13px">'+fmt(totalPago)+'</span><span class="dksub">clique para detalhar</span></div>'
+    +'<div class="dk laranja" style="cursor:pointer" onclick="dashFinDrill(\'pendente\',\'A Receber\')">'
+      +'<label>A Receber</label><span class="dkv" style="font-size:13px;color:#ffa726">'+fmt(totalPend)+'</span><span class="dksub">'+qtdPend+' parcela(s) · clique</span></div>'
+    +'<div class="dk vermelho" style="cursor:pointer" onclick="dashFinDrill(\'atrasado\',\'Em Atraso\')">'
+      +'<label>Em Atraso</label><span class="dkv" style="font-size:13px;color:#ef5350">'+fmt(totalAtras)+'</span><span class="dksub">'+qtdAtras+' parcela(s) · clique</span></div>'
+    +'<div class="dk ciano" style="cursor:pointer" onclick="dashFinDrill(\'venc7d\',\'Vence em 7 dias\')">'
+      +'<label>Vence em 7 dias</label><span class="dkv" style="font-size:13px;color:#80deea">'+fmt(vencSemana)+'</span><span class="dksub">'+venc7dLista.length+' parcela(s) · clique</span></div>'
     +'<div class="dk roxo"><label>Total Geral</label><span class="dkv" style="font-size:13px">'+fmt(totalGeral)+'</span><span class="dksub">todas as parcelas</span></div>'
     +'<div class="dk azul"><label>% Recebido</label><span class="dkv">'+(totalGeral>0?Math.round(totalPago/totalGeral*100):0)+'%</span><span class="dksub">do total</span></div>'
     +'</div>';
 
-  // ── Linha 1: Recebimento mensal + Forma pgto ─────────
-  var formaHTML = Object.keys(porForma).sort(function(a,b){return porForma[b]-porForma[a];}).map(function(f){
-    var v=porForma[f]; var max2=Math.max.apply(null,Object.values(porForma));
+  // ── Recebimento mensal + Forma pgto ──────────────────────────────────────
+  var formaHTML = Object.keys(porForma).sort(function(a,b){
+    return porForma[b].reduce(function(t,p){return t+p.valor;},0)-porForma[a].reduce(function(t,p){return t+p.valor;},0);
+  }).map(function(f){
+    var lista2=porForma[f]; var v=lista2.reduce(function(t,p){return t+p.valor;},0);
+    var max2=Math.max.apply(null,Object.values(porForma).map(function(l){return l.reduce(function(t,p){return t+p.valor;},0);}));
     var w=Math.round(v/max2*100);
-    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+    window._dashFinListas['forma_'+f]=lista2;
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer" onclick="dashFinDrill(\'forma_'+encodeURIComponent(f)+'\',\''+f+'\')">'
       +'<div style="min-width:110px;font-size:10px;color:#ccc">'+f+'</div>'
       +'<div style="flex:1;height:16px;background:#111;border-radius:3px;overflow:hidden">'
       +'<div style="width:'+w+'%;height:100%;background:#1565c0;border-radius:3px"></div></div>'
@@ -4296,59 +4563,67 @@ function dashFinRenderizar(){
       +'</div>';
   }).join('') || '<div class="dash-vazio">Sem recebimentos no período</div>';
 
-  var barMeses = mesesFin.length ? '<div style="display:flex;align-items:flex-end;gap:5px;height:70px;margin-bottom:6px">'
+  var barMeses = mesesFin.length ? '<div style="display:flex;align-items:flex-end;gap:5px;height:80px;margin-bottom:6px">'
     +mesesFin.map(function(m){
-      var h2=Math.max(6,Math.round(porMesFin[m]/maxMesFin*65));
+      var lista2=porMesFin[m]; var v=lista2.reduce(function(t,p){return t+p.valor;},0);
+      var h2=Math.max(6,Math.round(v/maxMesFin*72));
       var pts=m.split('-');
-      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">'
-        +'<div style="font-size:8px;color:#666">'+fmt(porMesFin[m]).replace('R$','').trim()+'</div>'
-        +'<div style="width:100%;height:'+h2+'px;background:#2e7d32;border-radius:3px 3px 0 0" title="'+pts[1]+'/'+pts[0]+': '+fmt(porMesFin[m])+'"></div>'
+      window._dashFinListas['mes_'+m]=lista2;
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer" onclick="dashFinDrill(\'mes_'+m+'\',\''+pts[1]+'/'+pts[0]+'\')">'
+        +'<div style="font-size:8px;color:#666">'+fmt(v).replace('R$','').trim()+'</div>'
+        +'<div style="width:100%;height:'+h2+'px;background:#2e7d32;border-radius:3px 3px 0 0;transition:opacity .15s" onmouseover="this.style.opacity=.7" onmouseout="this.style.opacity=1" title="'+pts[1]+'/'+pts[0]+': '+fmt(v)+'"></div>'
         +'<div style="font-size:9px;color:#555">'+pts[1]+'/'+pts[0].substring(2)+'</div>'
         +'</div>';
     }).join('')+'</div>'
   : '<div class="dash-vazio">Sem recebimentos no período</div>';
 
   html += '<div class="dash-row c2">'
-    +'<div class="dash-box"><h3>📊 Recebimentos por Mês</h3>'+barMeses+'</div>'
-    +'<div class="dash-box"><h3>💳 Por Forma de Pagamento <span>parcelas pagas</span></h3>'+formaHTML+'</div>'
+    +'<div class="dash-box"><h3>📊 Recebimentos por Mês <span>clique no mês para detalhar</span></h3>'+barMeses+'</div>'
+    +'<div class="dash-box"><h3>💳 Por Forma de Pagamento <span>clique para detalhar</span></h3>'+formaHTML+'</div>'
     +'</div>';
 
-  // ── Linha 2: Próximos vencimentos + Atrasados ────────
+  // ── Próximos vencimentos + Atrasados ─────────────────────────────────────
   var proxVencHTML = proxVenc.length ? proxVenc.map(function(p){
     var dias=Math.ceil((new Date(p.data+'T12:00:00')-new Date(hoje+'T12:00:00'))/(1000*60*60*24));
     var corDias = dias<=3?'#ef5350':dias<=7?'#ffa726':'#888';
+    var nomeClick=p.driveId?'onclick="dashFinAbrirOrc(\''+p.driveId+'\',\''+eh(p.nome)+'\')" style="cursor:pointer;color:#90caf9;text-decoration:underline dotted"':'style="color:#ccc"';
     return '<div class="fin-row">'
       +'<div style="min-width:36px;text-align:center;font-weight:800;color:'+corDias+'">'+dias+'d</div>'
       +'<div style="min-width:72px;color:#888;font-size:9px">'+fD(p.data)+'</div>'
-      +'<div style="flex:1;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+eh(p.cliente)+'</div>'
+      +'<div style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Clique para abrir o orçamento"><span '+nomeClick+'>'+eh(p.cliente)+'</span></div>'
       +'<div style="min-width:65px;color:#888;font-size:9px;text-align:right">'+eh(p.forma||'—')+'</div>'
       +'<div style="min-width:80px;text-align:right;font-weight:800;color:#ffa726">'+fmt(p.valor)+'</div>'
       +'</div>';
   }).join('') : '<div class="dash-vazio" style="color:#66bb6a">✅ Nenhum vencimento próximo!</div>';
 
   var atrasadasHTML = atrasadas.length ? atrasadas.map(function(p){
-    var diasAtras = Math.ceil((new Date(hoje+'T12:00:00')-new Date(p.data+'T12:00:00'))/(1000*60*60*24));
+    var diasAtras2=Math.ceil((new Date(hoje+'T12:00:00')-new Date(p.data+'T12:00:00'))/(1000*60*60*24));
+    var nomeClick=p.driveId?'onclick="dashFinAbrirOrc(\''+p.driveId+'\',\''+eh(p.nome)+'\')" style="cursor:pointer;color:#ef9a9a;text-decoration:underline dotted"':'style="color:#ef9a9a"';
     return '<div class="fin-row">'
-      +'<div style="min-width:46px;text-align:center;font-weight:800;color:#ef5350">'+diasAtras+'d</div>'
+      +'<div style="min-width:46px;text-align:center;font-weight:800;color:#ef5350">'+diasAtras2+'d</div>'
       +'<div style="min-width:72px;color:#888;font-size:9px">'+fD(p.data)+'</div>'
-      +'<div style="flex:1;color:#ef9a9a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+eh(p.cliente)+'</div>'
+      +'<div style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Clique para abrir o orçamento"><span '+nomeClick+'>'+eh(p.cliente)+'</span></div>'
       +'<div style="min-width:65px;color:#888;font-size:9px;text-align:right">'+eh(p.cons||'—')+'</div>'
       +'<div style="min-width:80px;text-align:right;font-weight:800;color:#ef5350">'+fmt(p.valor)+'</div>'
       +'</div>';
   }).join('') : '<div class="dash-vazio" style="color:#66bb6a">✅ Nenhuma parcela atrasada!</div>';
 
   html += '<div class="dash-row c2">'
-    +'<div class="dash-box"><h3>🔜 Próximos Vencimentos <span>dias · cliente · valor</span></h3>'+proxVencHTML+'</div>'
-    +'<div class="dash-box"><h3>⚠️ Parcelas Atrasadas <span style="color:#ef5350">'+fmt(totalAtras)+'</span></h3>'+atrasadasHTML+'</div>'
+    +'<div class="dash-box"><h3>🔜 Próximos Vencimentos <span>clique no cliente p/ abrir orçamento</span></h3>'+proxVencHTML+'</div>'
+    +'<div class="dash-box"><h3>⚠️ Parcelas Atrasadas <span style="color:#ef5350">'+fmt(totalAtras)+' · clique no cliente</span></h3>'+atrasadasHTML+'</div>'
     +'</div>';
 
-  // ── Linha 3: Por consultor ───────────────────────────
-  var consFinOrdem = Object.keys(porConsFin).sort(function(a,b){return porConsFin[b]-porConsFin[a];});
-  var maxConsFin = Math.max.apply(null,consFinOrdem.map(function(c){return porConsFin[c];}).concat([1]));
+  // ── Por consultor ─────────────────────────────────────────────────────────
+  var consFinOrdem = Object.keys(porConsFin).sort(function(a,b){
+    return porConsFin[b].reduce(function(t,p){return t+p.valor;},0)-porConsFin[a].reduce(function(t,p){return t+p.valor;},0);
+  });
+  var maxConsFin = Math.max.apply(null,consFinOrdem.map(function(c){return porConsFin[c].reduce(function(t,p){return t+p.valor;},0);}).concat([1]));
   var consFinHTML = consFinOrdem.length ? consFinOrdem.map(function(c){
-    var v=porConsFin[c]; var w=Math.round(v/maxConsFin*100);
+    var lista2=porConsFin[c]; var v=lista2.reduce(function(t,p){return t+p.valor;},0);
+    var w=Math.round(v/maxConsFin*100);
     var pct=totalPago>0?Math.round(v/totalPago*100):0;
-    return '<div class="cons-row">'
+    window._dashFinListas['cons_'+c]=lista2;
+    return '<div class="cons-row" style="cursor:pointer" onclick="dashFinDrill(\'cons_'+encodeURIComponent(c)+'\',\''+eh(c)+'\')">'
       +'<div class="cons-nome">'+eh(c)+'</div>'
       +'<div class="cons-bar"><div style="width:'+w+'%;height:100%;background:linear-gradient(90deg,#1565c0,#42a5f5);border-radius:3px"></div></div>'
       +'<div class="cons-pct">'+pct+'%</div>'
@@ -4357,10 +4632,60 @@ function dashFinRenderizar(){
   }).join('') : '<div class="dash-vazio">Sem recebimentos no período</div>';
 
   html += '<div class="dash-row">'
-    +'<div class="dash-box"><h3>👤 Recebimentos por Consultor <span>valor recebido no período</span></h3>'+consFinHTML+'</div>'
+    +'<div class="dash-box"><h3>👤 Recebimentos por Consultor <span>clique para detalhar</span></h3>'+consFinHTML+'</div>'
     +'</div>';
 
+  // ── Drill-down panel ─────────────────────────────────────────────────────
+  html += '<div id="dashfin-drill" style="display:none;margin-top:12px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:6px 6px 0 0;padding:8px 12px">'
+    +'<span id="dashfin-drill-titulo" style="font-size:11px;color:#fff;font-weight:700"></span>'
+    +'<button onclick="document.getElementById(\'dashfin-drill\').style.display=\'none\'" style="background:none;border:none;color:#888;cursor:pointer;font-size:14px">✕</button>'
+    +'</div><div id="dashfin-drill-corpo" style="border:1px solid #2a2a2a;border-top:none;border-radius:0 0 6px 6px"></div></div>';
+
   document.getElementById('dashfin-corpo').innerHTML = html;
+}
+
+function dashFinDrill(key, titulo){
+  var lista = (window._dashFinListas&&window._dashFinListas[key])||[];
+  if(key.startsWith('forma_')){var k=decodeURIComponent(key.replace('forma_',''));lista=(window._dashFinListas&&window._dashFinListas['forma_'+k])||[];}
+  if(key.startsWith('cons_')){var k2=decodeURIComponent(key.replace('cons_',''));lista=(window._dashFinListas&&window._dashFinListas['cons_'+k2])||[];}
+  if(key.startsWith('mes_')){var k3=key.replace('mes_','');lista=(window._dashFinListas&&window._dashFinListas['mes_'+k3])||[];}
+  var panel=document.getElementById('dashfin-drill');
+  var corpo=document.getElementById('dashfin-drill-corpo');
+  var tit=document.getElementById('dashfin-drill-titulo');
+  if(!panel)return;
+  var total2=lista.reduce(function(t,p){return t+p.valor;},0);
+  tit.textContent=decodeURIComponent(titulo)+' — '+lista.length+' parcela(s) · '+fmt(total2).replace('R$','R$ ');
+  if(!lista.length){corpo.innerHTML='<div class="dash-vazio" style="padding:16px">Nenhuma parcela nesta categoria.</div>';panel.style.display='block';return;}
+  var ST_COR2={pago:'#66bb6a',pendente:'#ffa726',atrasado:'#ef5350'};
+  corpo.innerHTML='<div style="max-height:360px;overflow-y:auto">'
+    +lista.map(function(p){
+      var cor2=ST_COR2[p.status]||'#888';
+      var nomeClick=p.driveId?'onclick="dashFinAbrirOrc(\''+p.driveId+'\',\''+eh(p.nome)+'\')" style="cursor:pointer;color:#90caf9;text-decoration:underline dotted;font-weight:700"':'style="color:#ccc;font-weight:700"';
+      return '<div style="padding:6px 10px;border-bottom:1px solid #111;display:flex;align-items:center;gap:8px">'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" '+nomeClick+' title="Clique para abrir o orçamento">'+eh(p.cliente)+'</div>'
+        +'<div style="font-size:9px;color:#555;margin-top:1px">'+eh(p.num)+' · '+eh(p.cons)+' · '+fD(p.data)+' · '+eh(p.desc)+' · '+eh(p.forma)+'</div>'
+        +'</div>'
+        +'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+cor2+'22;color:'+cor2+';border:1px solid '+cor2+';white-space:nowrap">'+p.status+'</span>'
+        +'<span style="font-size:10px;font-weight:800;color:'+cor2+';white-space:nowrap">'+fmt(p.valor)+'</span>'
+        +'</div>';
+    }).join('')
+    +'<div style="padding:6px 10px;background:#0d0d0d;border-top:1px solid #1a1a1a;display:flex;justify-content:space-between">'
+    +'<span style="font-size:10px;color:#555">'+lista.length+' parcela(s)</span>'
+    +'<span style="font-size:10px;font-weight:800;color:#fff">'+fmt(total2)+'</span>'
+    +'</div>'
+    +'</div>';
+  panel.style.display='block';
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+async function dashFinAbrirOrc(driveId, nome){
+  if(!driveId){alert('ID do orçamento não encontrado.');return;}
+  if(!confirm('Abrir orçamento "'+nome+'"?\n\nDados não salvos do orçamento atual serão perdidos.'))return;
+  document.getElementById('dashfin-ov').classList.remove('open');
+  window.scrollTo({top:0,behavior:'smooth'});
+  await driveCarregar(driveId, nome);
 }
 
 function renderAdmExclusoes(){
