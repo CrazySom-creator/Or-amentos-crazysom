@@ -1193,6 +1193,11 @@ function doLogin(){
   funilCarregarDados();
 }
 function logout(){
+  if(_naoSalvo){
+    var cli=gv('f-cliente')||'este orçamento';
+    var ir=confirm('⚠️ "'+cli+'" não foi salvo no Drive.\n\nDeseja descartar as alterações e sair?');
+    if(!ir)return;
+  }
   usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];snapshotAnterior=null;finParcelas=[];finObs='';driveIdAtual=null;driveNumAtual=null;
   // Resetar funil
   _funilCache=[];_funilCarregado=false;_funilCarregando=false;
