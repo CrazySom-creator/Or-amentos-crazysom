@@ -444,6 +444,17 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
           <option>Jefferson</option><option>Wagner Wolff</option>
         </select>
       </div>
+      <div><label>Etapa do Funil</label>
+        <select id="dash-funil">
+          <option value="">Todas as Etapas</option>
+          <option value="enviada">📤 Proposta Enviada</option>
+          <option value="negociacao">🤝 Em Negociação</option>
+          <option value="standby">⏸️ Standby</option>
+          <option value="ganha">🏆 Venda Ganha</option>
+          <option value="perdida">❌ Venda Perdida</option>
+          <option value="__sem_etapa__">⚠️ Aprovados sem Etapa</option>
+        </select>
+      </div>
       <div><button class="btn btn-r btn-sm" onclick="dashRenderizar()">📊 Aplicar</button></div>
     </div>
 
@@ -713,6 +724,22 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
       <select id="f-cons" onchange="marcarAlterado()"><option value="">Selecione...</option><option>Fabiano Santos</option><option>Giovana Borges</option><option>Jéssica Elisandra</option><option>Rafael Oliveira</option><option>Jefferson</option><option>Wagner Wolff</option></select>
     </div>
   </div>
+  <div class="g4">
+    <div style="grid-column:span 2"><label>Fonte / Origem do Cliente</label>
+      <select id="f-fonte" onchange="marcarAlterado()" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;color:#222;background:#fafafa">
+        <option value="">Selecione a origem...</option>
+        <option value="Cliente Ativo">🔁 Cliente Ativo</option>
+        <option value="Contato pelo Site">🌐 Contato pelo Site</option>
+        <option value="Contato por E-mail">📧 Contato por E-mail</option>
+        <option value="Contato por Telefone">📞 Contato por Telefone</option>
+        <option value="Feiras e Eventos">🎪 Feiras e Eventos</option>
+        <option value="Instagram">📸 Instagram</option>
+        <option value="Google">🔍 Google</option>
+        <option value="Indicação">🤝 Indicação</option>
+        <option value="Outros">📝 Outros</option>
+      </select>
+    </div>
+  </div>
 </div>
 
 <div class="card">
@@ -750,7 +777,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 <div class="card">
   <div class="st">🗓️ Datas e Horários</div>
   <div class="g4" style="margin-bottom:8px">
-    <div><label>Início do Evento</label><input type="date" id="f-dia" oninput="setDS();marcarAlterado()"></div>
+    <div><label>Início do Evento</label><input type="date" id="f-dia" oninput="setDS();calcDiariasAuto();marcarAlterado()"></div>
     <div><label>Dia da Semana</label><input id="f-sem" readonly placeholder="Auto"></div>
     <div><label>Fim do Evento</label><input type="date" id="f-dia-fim" oninput="setDSFim();calcDiariasAuto();marcarAlterado()"></div>
     <div><label>Dia da Semana (fim)</label><input id="f-sem-fim" readonly placeholder="Auto"></div>
@@ -926,6 +953,51 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <button class="btn btn-r" onclick="abrirTipo()">📄 Visualizar PDF</button>
     <button class="btn btn-d" onclick="downloadPDF()">⬇️ Download PDF</button>
   </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  FUNIL DE VENDAS — CARD FIXO (fora do totbox)          -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="card" id="funil-card" style="display:none;border-radius:0 0 10px 10px;border-bottom:none">
+  <div class="st" style="background:#1b5e20">📊 Funil de Vendas — Acompanhamento Comercial</div>
+
+  <!-- Contadores por etapa (badges rápidos) -->
+  <div id="funil-counters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
+
+  <!-- Filtros -->
+  <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:5px;padding:9px 11px;margin-bottom:10px">
+    <div style="flex:1;min-width:170px">
+      <label>Etapa do Funil</label>
+      <select id="funil-filtro-etapa" onchange="funilFiltrarLista()" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;color:#222;background:#fff">
+        <option value="__sem_etapa__">⚠️ Aprovados sem Etapa</option>
+        <option value="enviada">📤 Proposta Enviada</option>
+        <option value="negociacao">🤝 Em Negociação</option>
+        <option value="standby">⏸️ Standby</option>
+        <option value="ganha">🏆 Venda Ganha</option>
+        <option value="perdida">❌ Venda Perdida</option>
+        <option value="__todos__">📋 Todos os aprovados</option>
+      </select>
+    </div>
+    <div style="min-width:160px">
+      <label>Consultor</label>
+      <select id="funil-filtro-cons" onchange="funilFiltrarLista()" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;color:#222;background:#fff">
+        <option value="">Todos</option>
+        <option>Fabiano Santos</option><option>Giovana Borges</option>
+        <option>Jéssica Elisandra</option><option>Rafael Oliveira</option>
+        <option>Wagner Wolff</option>
+      </select>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button onclick="funilRecarregar()" style="padding:6px 13px;background:#111;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">🔄 Atualizar</button>
+    </div>
+  </div>
+
+  <!-- Status de carregamento -->
+  <div id="funil-lista-status" style="font-size:11px;color:#888;margin-bottom:7px;min-height:14px"></div>
+
+  <!-- Lista de orçamentos -->
+  <div id="funil-lista" style="border:1px solid #e0e0e0;border-radius:5px;overflow:hidden;max-height:420px;overflow-y:auto;background:#fff"></div>
 </div>
 </div>
 
@@ -1113,9 +1185,15 @@ function doLogin(){
   document.getElementById('user-cargo').textContent=NIVEIS[u.nivel]||u.nivel;
   document.getElementById('btn-adm').style.display=u.nivel==='adm'?'inline-block':'none';
   renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+  // Mostrar e carregar o funil de vendas
+  funilMostrarCard();
+  funilCarregarDados();
 }
 function logout(){
   usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];snapshotAnterior=null;finParcelas=[];finObs='';driveIdAtual=null;driveNumAtual=null;
+  // Resetar funil
+  _funilCache=[];_funilCarregado=false;_funilCarregando=false;
+  funilEsconderCard();
   document.getElementById('login-ov').style.display='flex';
   document.getElementById('user-badge').style.display='none';
   document.getElementById('l-user').value='';document.getElementById('l-pass').value='';
@@ -1143,13 +1221,14 @@ function renderStatusOrc(){
   var nivel=usuarioAtual.nivel==='adm'?'consultor':usuarioAtual.nivel;
   var cImp=0;try{cImp=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)*(1+IMP);}catch(e){}
   var acoes='';
-  var obsHtml='<textarea id="aprov-obs" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:4px;font-size:11px;resize:vertical;height:52px;margin-top:8px;background:#fff;color:#222" placeholder="Observação / Motivo..."></textarea>';
+  var obsVal=document.getElementById('aprov-obs')?document.getElementById('aprov-obs').value:'';
+  var obsHtml='<textarea id="aprov-obs" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:4px;font-size:11px;resize:vertical;height:52px;margin-top:8px;background:#fff;color:#222" placeholder="Observação / Motivo...">'+obsVal+'</textarea>';
   function btn(cor,txt,fn){return '<button onclick="'+fn+'" style="padding:8px 15px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;color:#fff;background:'+cor+';margin:3px">'+txt+'</button>';}
   if(nivel==='consultor'&&(aprovStatus==='rascunho'||aprovStatus==='revisao')){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#1565c0',aprovStatus==='rascunho'?'📤 Enviar para Análise Técnica':'📤 Reenviar para Análise Técnica',"aprovAcao('analise')")+'</div>';}
   else if(nivel==='tecnico'&&aprovStatus==='analise'){if(cImp<=LIMITE_TEC){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar (até R$ 4.000)',"aprovAcao('aprovado')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}else{acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#e65100','📊 Encaminhar ao Gerente',"aprovAcao('gerencial')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}}
-  else if(nivel==='gerente'&&aprovStatus==='gerencial'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#6a1b9a','🏆 Encaminhar à Diretoria',"aprovAcao('diretoria')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}
+  else if(nivel==='gerente'&&aprovStatus==='gerencial'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#6a1b9a','🏆 Enviar para Diretoria',"aprovAcao('diretoria')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}
   else if(nivel==='diretor'&&aprovStatus==='diretoria'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#c62828','🔄 Reprovar / Revisão',"aprovAcao('revisao')")+'</div>';}
-  else if(['adm','gerente','diretor'].includes(usuarioAtual.nivel)&&aprovStatus!=='aprovado'&&aprovStatus!=='rascunho'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}
+  else if(['adm','gerente','diretor'].includes(usuarioAtual.nivel)&&aprovStatus!=='aprovado'&&aprovStatus!=='rascunho'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#6a1b9a','🏆 Enviar para Diretoria',"aprovAcao('diretoria')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}
   else{var msgs={rascunho:'Aguardando envio pelo consultor.',analise:'Aguardando análise técnica.',gerencial:'Aguardando aprovação do gerente.',diretoria:'Aguardando aprovação da diretoria.',aprovado:'✅ Orçamento aprovado!',revisao:'🔄 Revisão solicitada.'};acoes='<p style="font-size:11px;color:#888;padding:6px 0">'+(msgs[aprovStatus]||'')+'</p>';}
   sa.innerHTML=acoes;
 }
@@ -1178,9 +1257,9 @@ function renderAprovInline(){
   btnsEl.innerHTML='';var mostrar=false;
   if(nivel==='consultor'&&(aprovStatus==='rascunho'||aprovStatus==='revisao')){mostrar=true;btnsEl.appendChild(btn('#1565c0',aprovStatus==='rascunho'?'📤 Enviar para Análise Técnica':'📤 Reenviar para Análise Técnica','analise'));}
   else if(nivel==='tecnico'&&aprovStatus==='analise'){mostrar=true;if(cImp<=LIMITE_TEC){btnsEl.appendChild(btn('#2e7d32','✅ Aprovar (até R$ 4.000)','aprovado'));}else{btnsEl.appendChild(btn('#e65100','📊 Encaminhar ao Gerente','gerencial'));}btnsEl.appendChild(btn('#c62828','🔄 Solicitar Revisão','revisao'));}
-  else if(nivel==='gerente'&&aprovStatus==='gerencial'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#6a1b9a','🏆 Encaminhar à Diretoria','diretoria'));btnsEl.appendChild(btn('#c62828','🔄 Solicitar Revisão','revisao'));}
+  else if(nivel==='gerente'&&aprovStatus==='gerencial'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#6a1b9a','🏆 Enviar para Diretoria','diretoria'));btnsEl.appendChild(btn('#c62828','🔄 Solicitar Revisão','revisao'));}
   else if(nivel==='diretor'&&aprovStatus==='diretoria'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#c62828','🔄 Reprovar / Revisão','revisao'));}
-  else if(['adm','gerente','diretor'].includes(usuarioAtual.nivel)&&aprovStatus!=='aprovado'&&aprovStatus!=='rascunho'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#c62828','🔄 Solicitar Revisão','revisao'));}
+  else if(['adm','gerente','diretor'].includes(usuarioAtual.nivel)&&aprovStatus!=='aprovado'&&aprovStatus!=='rascunho'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#6a1b9a','🏆 Enviar para Diretoria','diretoria'));btnsEl.appendChild(btn('#c62828','🔄 Solicitar Revisão','revisao'));}
   box.style.display=mostrar?'block':'none';
 }
 
@@ -1782,7 +1861,7 @@ async function driveDeletar(id,nome){
   }
 }
 
-var FORM_IDS=['f-num','f-data','f-val','f-cons','f-cliente','f-doc','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dd','f-hd','f-pub','f-obs','f-obs-os','f-pgto','f-svinc','desc-pct','desc-rs','val-liq','f-bv'];
+var FORM_IDS=['f-num','f-data','f-val','f-cons','f-fonte','f-cliente','f-doc','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dd','f-hd','f-pub','f-obs','f-obs-os','f-pgto','f-svinc','desc-pct','desc-rs','val-liq','f-bv'];
 function getForm(){var o={};FORM_IDS.forEach(function(id){var e=document.getElementById(id);if(e)o[id]=e.value;});if((!o['f-bv']||o['f-bv']==='0')&&_bvStorage>0)o['f-bv']=String(_bvStorage);return o;}
 function setForm(f){Object.keys(f).forEach(function(id){var e=document.getElementById(id);if(e)e.value=f[id];});sv('orc-disp',f['f-num']||'—');}
 function salvar(){var blob=new Blob([JSON.stringify({form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs},null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(gv('f-num')||'orc')+' - '+(gv('f-cliente')||'cliente')+'.json';a.click();URL.revokeObjectURL(a.href);}
@@ -2462,6 +2541,248 @@ function salvarComercial(){
     driveStatus('⏳ Salvando...','');
   }
   alert('✅ Registro comercial salvo!');
+  // Recarregar funil para refletir nova etapa
+  funilRecarregar();
+}
+
+// ════════════════════════════════════════════════════════
+//  FUNIL DE VENDAS — CARD FIXO PERMANENTE
+// ════════════════════════════════════════════════════════
+var _funilCache = [];
+var _funilCarregado = false;
+var _funilCarregando = false;
+
+var FUNIL_SI = {
+  enviada:   {label:'📤 Proposta Enviada', bg:'#1565c0', tx:'#fff', lbg:'#e3f2fd', ltx:'#1565c0', lbd:'#90caf9'},
+  negociacao:{label:'🤝 Em Negociação',    bg:'#e65100', tx:'#fff', lbg:'#fff3e0', ltx:'#e65100', lbd:'#ffb74d'},
+  standby:   {label:'⏸️ Standby',          bg:'#5d4037', tx:'#fff', lbg:'#efebe9', ltx:'#5d4037', lbd:'#bcaaa4'},
+  ganha:     {label:'🏆 Venda Ganha',      bg:'#2e7d32', tx:'#fff', lbg:'#e8f5e9', ltx:'#1b5e20', lbd:'#a5d6a7'},
+  perdida:   {label:'❌ Venda Perdida',    bg:'#c62828', tx:'#fff', lbg:'#ffebee', ltx:'#b71c1c', lbd:'#ef9a9a'}
+};
+
+function funilMostrarCard(){
+  var card = document.getElementById('funil-card');
+  if(card) card.style.display = 'block';
+}
+
+function funilEsconderCard(){
+  var card = document.getElementById('funil-card');
+  if(card) card.style.display = 'none';
+}
+
+async function funilCarregarDados(forcar){
+  if(_funilCarregando) return;
+  if(_funilCarregado && !forcar) { funilFiltrarLista(); return; }
+  _funilCarregando = true;
+  var stEl = document.getElementById('funil-lista-status');
+  var listaEl = document.getElementById('funil-lista');
+  if(stEl) stEl.textContent = '⏳ Carregando orçamentos do Drive...';
+  if(listaEl) listaEl.innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:12px">⏳ Buscando...</div>';
+  try{
+    var r = await fetch(SCRIPT_URL+'?action=list&q=');
+    var d = await r.json();
+    if(!d.ok) throw new Error(d.erro||'Erro ao listar');
+    var INTERNOS = ['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'];
+    var itens = (d.lista||[]).filter(function(x){
+      return !INTERNOS.some(function(n){ return x.nome && x.nome.indexOf(n) >= 0; });
+    });
+    if(stEl) stEl.textContent = '⏳ Carregando ' + itens.length + ' orçamento(s)...';
+    // Filtrar apenas aprovados para o funil (otimiza: só carrega aprovados e os que têm status comercial)
+    var todos = await fetchComLimite(itens, 5);
+    _funilCache = todos.filter(Boolean).filter(function(o){ return o.st === 'aprovado'; });
+    _funilCarregado = true;
+    funilRenderCounters();
+    funilFiltrarLista();
+  }catch(e){
+    if(stEl) stEl.textContent = '⚠️ Erro ao carregar: ' + e.message;
+    if(listaEl) listaEl.innerHTML = '<div style="padding:20px;text-align:center;color:#c0001a;font-size:12px">⚠️ ' + e.message + '</div>';
+  }finally{
+    _funilCarregando = false;
+  }
+}
+
+function funilRecarregar(){
+  _funilCarregado = false;
+  funilCarregarDados(true);
+}
+
+function funilRenderCounters(){
+  var el = document.getElementById('funil-counters');
+  if(!el) return;
+  var semEtapa = _funilCache.filter(function(o){
+    var cs = (o.dados && o.dados.comercialStatus) || '';
+    return !['enviada','negociacao','standby','ganha','perdida'].includes(cs);
+  }).length;
+  var html = '';
+  if(semEtapa > 0){
+    html += '<span onclick="funilSelecionarEtapa(\'__sem_etapa__\')" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:800;background:#e65100;color:#fff;border:2px solid #e65100">'
+      + '⚠️ Sem Etapa: ' + semEtapa + '</span>';
+  }
+  ['enviada','negociacao','standby','ganha','perdida'].forEach(function(k){
+    var si = FUNIL_SI[k];
+    var n = _funilCache.filter(function(o){ return (o.dados&&o.dados.comercialStatus)===k; }).length;
+    html += '<span onclick="funilSelecionarEtapa(\''+k+'\')" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:800;background:'+si.bg+';color:'+si.tx+';border:2px solid '+si.bg+'">'
+      + si.label + ': ' + n + '</span>';
+  });
+  var total = _funilCache.length;
+  html += '<span onclick="funilSelecionarEtapa(\'__todos__\')" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:700;background:#333;color:#ccc;border:2px solid #444">'
+    + '📋 Todos: ' + total + '</span>';
+  el.innerHTML = html;
+}
+
+function funilSelecionarEtapa(etapa){
+  var sel = document.getElementById('funil-filtro-etapa');
+  if(sel){ sel.value = etapa; }
+  funilFiltrarLista();
+}
+
+function funilFiltrarLista(){
+  var etapa  = (document.getElementById('funil-filtro-etapa')||{}).value || '__sem_etapa__';
+  var cons   = (document.getElementById('funil-filtro-cons')||{}).value  || '';
+  var stEl   = document.getElementById('funil-lista-status');
+  var listaEl= document.getElementById('funil-lista');
+  if(!listaEl) return;
+
+  if(!_funilCarregado){
+    funilCarregarDados();
+    return;
+  }
+
+  var isSemEtapa = etapa === '__sem_etapa__';
+  var isTodos    = etapa === '__todos__';
+
+  var filtrados = _funilCache.filter(function(o){
+    if(cons && (o.form && o.form['f-cons']) !== cons) return false;
+    var cs = (o.dados && o.dados.comercialStatus) || '';
+    if(isSemEtapa){
+      return !['enviada','negociacao','standby','ganha','perdida'].includes(cs);
+    }
+    if(isTodos) return true;
+    return cs === etapa;
+  });
+
+  // Ordenar por data do evento (mais próximo primeiro) ou data do orçamento
+  filtrados.sort(function(a,b){
+    var da = (a.form&&(a.form['f-dia']||a.form['f-data']))||'';
+    var db = (b.form&&(b.form['f-dia']||b.form['f-data']))||'';
+    return da < db ? -1 : da > db ? 1 : 0;
+  });
+
+  var si = isSemEtapa
+    ? {label:'⚠️ Aprovados sem Etapa', lbg:'#fff3e0', ltx:'#e65100', lbd:'#ffb74d'}
+    : isTodos
+      ? {label:'📋 Todos os Aprovados', lbg:'#f5f5f5', ltx:'#333', lbd:'#ddd'}
+      : FUNIL_SI[etapa];
+
+  var total = filtrados.length;
+  var totalVal = filtrados.reduce(function(t,o){
+    var b=0;
+    try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+      if(o.dados&&o.dados.state&&o.dados.state[s]){
+        var rs=o.dados.state[s];
+        Object.keys(rs.rows||{}).forEach(function(aid){(rs.rows[aid]||[]).forEach(function(r){b+=rowTot(r);});});
+      }
+    });}catch(e){}
+    return t + b*(1+IMP);
+  }, 0);
+
+  if(stEl){
+    var aviso = isSemEtapa && total > 0
+      ? ' &nbsp;⚠️ <span style="color:#e65100;font-weight:800">Cobrar classificação dos consultores!</span>'
+      : '';
+    stEl.innerHTML = '<b style="color:#333">' + (si?si.label:'') + '</b> &mdash; '
+      + total + ' orçamento(s) &nbsp;·&nbsp; Total: <b style="color:#c0001a">' + fmt(totalVal) + '</b>'
+      + aviso;
+  }
+
+  if(!filtrados.length){
+    listaEl.innerHTML = '<div style="padding:24px;text-align:center;color:#aaa;font-size:12px">'
+      + (isSemEtapa
+          ? '✅ Todos os orçamentos aprovados já têm etapa do funil definida!'
+          : 'Nenhum orçamento nesta etapa.')
+      + '</div>';
+    return;
+  }
+
+  // Cabeçalho
+  var cabBg = si ? si.lbg : '#f5f5f5';
+  var cabTx = si ? si.ltx : '#333';
+  var cabBd = si ? si.lbd : '#ddd';
+  var header = '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:'+cabBg+';border-bottom:2px solid '+cabBd+'">'
+    + '<span style="font-size:11px;font-weight:800;color:'+cabTx+'">'+( si ? si.label : '' )+'</span>'
+    + '<span style="margin-left:auto;font-size:10px;color:'+cabTx+';opacity:.7">'+total+' orc. · '+fmt(totalVal)+'</span>'
+    + '</div>';
+
+  var rows = filtrados.map(function(o){
+    var f = o.form || {};
+    var cs = (o.dados && o.dados.comercialStatus) || '';
+    var siCs = FUNIL_SI[cs];
+    var etapaBadge = siCs
+      ? '<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:'+siCs.bg+';color:'+siCs.tx+';font-weight:800;white-space:nowrap;flex-shrink:0">'+siCs.label+'</span>'
+      : '<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:#fff3cd;color:#856404;border:1px solid #ffc107;font-weight:800;white-space:nowrap;flex-shrink:0">⚠️ Sem Etapa</span>';
+
+    var bruto = 0;
+    try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+      if(o.dados&&o.dados.state&&o.dados.state[s]){
+        var rs=o.dados.state[s];
+        Object.keys(rs.rows||{}).forEach(function(aid){(rs.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});});
+      }
+    });}catch(e){}
+    var val = bruto*(1+IMP);
+
+    var dataOrc = f['f-data'] ? fD(f['f-data']) : '—';
+    var dataEv  = f['f-dia']  ? fD(f['f-dia'])  : null;
+
+    // Último comentário comercial
+    var histCom = (o.dados && o.dados.comercialHist) || [];
+    var ult = histCom.length ? histCom[histCom.length-1] : null;
+    var ultObs = ult && ult.obs
+      ? '<div style="font-size:9px;color:#888;font-style:italic;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">💬 '+eh(ult.obs)+'</div>'
+      : '';
+    var ultData = ult
+      ? '<span style="font-size:9px;color:#aaa"> · últ. reg: '+ult.data+'</span>'
+      : '';
+
+    var driveId = o.driveId || '';
+
+    return '<div onclick="funilAbrirOrcamento(\''+driveId+'\',\''+eh(o.nome||'')+'\')" '
+      + 'style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #f0f0f0;cursor:pointer;transition:background .12s" '
+      + 'onmouseover="this.style.background=\'#f9f9f9\'" onmouseout="this.style.background=\'#fff\'">'
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="font-size:12px;font-weight:700;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+      + '<div style="font-size:10px;color:#888;margin-top:1px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+      + '<span style="color:#555;font-weight:700">'+eh(f['f-num']||'—')+'</span>'
+      + (f['f-cons'] ? '<span>· '+eh(f['f-cons'])+'</span>' : '')
+      + '<span>· Orc: '+dataOrc+'</span>'
+      + (dataEv ? '<span style="color:#1565c0;font-weight:700">· Evento: '+dataEv+'</span>' : '')
+      + ultData
+      + '</div>'
+      + ultObs
+      + '</div>'
+      + etapaBadge
+      + '<div style="text-align:right;flex-shrink:0;min-width:80px">'
+      + '<div style="font-size:11px;font-weight:800;color:#222">'+fmt(val)+'</div>'
+      + '<div style="font-size:9px;color:#aaa;margin-top:1px">clique p/ abrir</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+
+  listaEl.innerHTML = header + rows;
+}
+
+async function funilAbrirOrcamento(driveId, nome){
+  if(!driveId){ alert('ID do orçamento não encontrado.'); return; }
+  if(!confirm('Abrir orçamento "'+nome+'"?\nDados não salvos do orçamento atual serão perdidos.')) return;
+  // Rolar para o topo do formulário
+  window.scrollTo({top:0, behavior:'smooth'});
+  await driveCarregar(driveId, nome);
+  // Após carregar, rolar para a seção de Acompanhamento Comercial
+  setTimeout(function(){
+    var comPanel = document.getElementById('com-panel');
+    if(comPanel && comPanel.style.display !== 'none'){
+      comPanel.scrollIntoView({behavior:'smooth', block:'start'});
+    }
+  }, 800);
 }
 
 function abrirFinanceiro(){
@@ -3417,11 +3738,22 @@ function dashFiltrar(){
   var de  = document.getElementById('dash-de').value;
   var ate = document.getElementById('dash-ate').value;
   var cons = document.getElementById('dash-cons').value;
+  var funil = document.getElementById('dash-funil') ? document.getElementById('dash-funil').value : '';
   return _dashDados.filter(function(o){
     var dt = o.form && o.form['f-data'] || '';
     if(de  && dt && dt < de)  return false;
     if(ate && dt && dt > ate) return false;
     if(cons && (o.form && o.form['f-cons']) !== cons) return false;
+    if(funil){
+      var cs = o.dados && o.dados.comercialStatus || '';
+      if(funil === '__sem_etapa__'){
+        // Aprovados que ainda não têm nenhuma etapa do funil
+        if(o.st !== 'aprovado') return false;
+        if(cs && ['enviada','negociacao','standby','ganha','perdida'].indexOf(cs) >= 0) return false;
+      } else {
+        if(cs !== funil) return false;
+      }
+    }
     return true;
   });
 }
@@ -4322,7 +4654,9 @@ async function aprovarExclusaoModal(idx){
     atualizarBadgeExclusoes();
     renderExclusivoModal();
     renderAdmExclusoes();
-    driveListar();
+    await driveListar();
+    // Fechar modal de aprovações e retornar à lista
+    document.getElementById('aprov-ov').classList.remove('open');
   }catch(e){driveStatus('Erro: '+e.message,'err');}
 }
 
