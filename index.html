@@ -1081,8 +1081,11 @@ function safe(v){return (isNaN(v)||!isFinite(v))?0:v;}
 function fmtCep(el){var v=el.value.replace(/\D/g,'').slice(0,8);if(v.length>5)v=v.slice(0,5)+'-'+v.slice(5);el.value=v;}
 function fmtDoc(el){var v=el.value.replace(/\D/g,'');if(v.length<=11){if(v.length>9)v=v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6,9)+'-'+v.slice(9);else if(v.length>6)v=v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6);else if(v.length>3)v=v.slice(0,3)+'.'+v.slice(3);}else{v=v.slice(0,14);if(v.length>12)v=v.slice(0,2)+'.'+v.slice(2,5)+'.'+v.slice(5,8)+'/'+v.slice(8,12)+'-'+v.slice(12);else if(v.length>8)v=v.slice(0,2)+'.'+v.slice(2,5)+'.'+v.slice(5,8)+'/'+v.slice(8);else if(v.length>5)v=v.slice(0,2)+'.'+v.slice(2,5)+'.'+v.slice(5);else if(v.length>2)v=v.slice(0,2)+'.'+v.slice(2);}el.value=v;}
 
+var _naoSalvo = false; // flag: orçamento tem alterações não salvas no Drive
+
 function marcarAlterado(){
   if(_carregandoOrc)return;
+  _naoSalvo = true;
   if(aprovStatus==='aprovado'){
     aprovHist.push({ico:'⚠️',acao:'Aprovação anulada por alteração',usuario:usuarioAtual?usuarioAtual.nome:'Sistema',cargo:usuarioAtual?(NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel):'',data:new Date().toLocaleString('pt-BR'),obs:'Orçamento editado após aprovação. Necessita nova aprovação.'});
     aprovStatus='analise';
@@ -1233,17 +1236,28 @@ function renderStatusOrc(){
   sa.innerHTML=acoes;
 }
 
-function aprovAcao(novo){
+async function aprovAcao(novo){
   var obs=(document.getElementById('aprov-obs')||{}).value||'';
   var icos={analise:'📤',gerencial:'📊',diretoria:'🏆',aprovado:'✅',revisao:'🔄'};
   var atos={analise:'Enviado p/ Análise Técnica',gerencial:'Encaminhado ao Gerente',diretoria:'Encaminhado à Diretoria',aprovado:'Aprovado',revisao:'Revisão Solicitada'};
-  // Calcular diffs ao reenviar para análise (nova rodada de aprovação)
   var diffs=[];
   if(novo==='analise'&&snapshotAnterior){diffs=compararSnapshots(snapshotAnterior,tirarSnapshot());}
   if(novo==='analise'){snapshotAnterior=tirarSnapshot();}
   aprovHist.push({ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),obs:obs,diffs:diffs});
   aprovStatus=novo;renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
-  if(driveIdAtual){var num=gv('f-num')||'SN',cli=gv('f-cliente')||'SemCliente',dt=gv('f-data')||new Date().toISOString().split('T')[0];fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})}).catch(function(){});driveStatus('⏳ Salvando...','');}
+  var num=gv('f-num')||'SN',cli=gv('f-cliente')||'SemCliente',dt=gv('f-data')||new Date().toISOString().split('T')[0];
+  if(novo==='analise'){
+    driveStatus('⏳ Salvando automaticamente...','');
+    try{
+      var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual||null,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})});
+      var d=await r.json();
+      if(d.ok){driveIdAtual=d.id;driveNumAtual=num;_naoSalvo=false;driveStatus('✅ Salvo automaticamente: '+d.nome,'ok');driveListar();}
+      else{driveStatus('⚠️ Erro ao salvar: '+(d.erro||''),'err');}
+    }catch(e){driveStatus('⚠️ Erro ao salvar: '+e.message,'err');}
+  }else if(driveIdAtual){
+    fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})}).then(function(){_naoSalvo=false;}).catch(function(){});
+    driveStatus('⏳ Salvando...','');
+  }
 }
 
 function renderAprovInline(){
@@ -1263,7 +1277,7 @@ function renderAprovInline(){
   box.style.display=mostrar?'block':'none';
 }
 
-function aprovAcaoInline(novo){
+async function aprovAcaoInline(novo){
   var obs=(document.getElementById('aprov-inline-obs')||{}).value||'';
   var icos={analise:'📤',gerencial:'📊',diretoria:'🏆',aprovado:'✅',revisao:'🔄'};
   var atos={analise:'Enviado p/ Análise Técnica',gerencial:'Encaminhado ao Gerente',diretoria:'Encaminhado à Diretoria',aprovado:'Aprovado',revisao:'Revisão Solicitada'};
@@ -1273,7 +1287,21 @@ function aprovAcaoInline(novo){
   aprovHist.push({ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),obs:obs,diffs:diffs});
   aprovStatus=novo;document.getElementById('aprov-inline-obs').value='';
   renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
-  if(driveIdAtual){var num=gv('f-num')||'SN',cli=gv('f-cliente')||'SemCliente',dt=gv('f-data')||new Date().toISOString().split('T')[0];fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})}).catch(function(){});driveStatus('⏳ Salvando...','');}
+  // Salvar no Drive (automático ao enviar para análise; também ao demais fluxos se já tiver ID)
+  var num=gv('f-num')||'SN',cli=gv('f-cliente')||'SemCliente',dt=gv('f-data')||new Date().toISOString().split('T')[0];
+  if(novo==='analise'){
+    // Salvamento automático obrigatório
+    driveStatus('⏳ Salvando automaticamente...','');
+    try{
+      var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual||null,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})});
+      var d=await r.json();
+      if(d.ok){driveIdAtual=d.id;driveNumAtual=num;_naoSalvo=false;driveStatus('✅ Salvo automaticamente: '+d.nome,'ok');driveListar();}
+      else{driveStatus('⚠️ Erro ao salvar: '+(d.erro||''),'err');}
+    }catch(e){driveStatus('⚠️ Erro ao salvar: '+e.message,'err');}
+  }else if(driveIdAtual){
+    fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})}).then(function(){_naoSalvo=false;}).catch(function(){});
+    driveStatus('⏳ Salvando...','');
+  }
 }
 
 function abrirAdm(){renderAdmList();renderAdmExclusoes();document.getElementById('adm-ov').classList.add('open');}
@@ -1771,11 +1799,15 @@ async function driveSalvar(){
     var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual||null,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist}})});
     var d=await r.json();if(!d.ok)throw new Error(d.erro);
     driveIdAtual=d.id;driveNumAtual=num;
+    _naoSalvo=false;
     driveStatus('✅ Salvo: '+d.nome,'ok');driveListar();
   }catch(e){driveStatus('Erro: '+e.message,'err');}
 }
 async function driveCarregar(id,nome){
-  if(!confirm('Carregar "'+nome+'"?\nDados não salvos serão perdidos.'))return;
+  var msg = _naoSalvo
+    ? '⚠️ Este orçamento não foi salvo no Drive.\n\nDeseja descartar as alterações e carregar "'+nome+'"?'
+    : 'Carregar "'+nome+'"?\nDados não salvos serão perdidos.';
+  if(!confirm(msg))return;
   driveStatus('⏳ Carregando...','');_carregandoOrc=true;
   try{
     var r=await fetch(SCRIPT_URL+'?action=load&id='+id);var d=await r.json();if(!d.ok)throw new Error(d.erro);
@@ -1784,6 +1816,7 @@ async function driveCarregar(id,nome){
     if(dados.form)setForm(dados.form);
     aprovStatus=dados.aprovStatus||'rascunho';aprovHist=dados.aprovHist||[];comercialStatus=dados.comercialStatus||'';comercialHist=dados.comercialHist||[];snapshotAnterior=dados.snapshotAnterior||null;finParcelas=dados.finParcelas||[];finObs=dados.finObs||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
     driveIdAtual=id;driveNumAtual=dados.form&&dados.form['f-num']?dados.form['f-num']:null;
+    _naoSalvo=false;
     buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
     driveStatus('✅ Carregado: '+nome,'ok');
   }catch(e){driveStatus('Erro: '+e.message,'err');}
@@ -1882,7 +1915,13 @@ function carregar(input){
   fr.readAsText(file);input.value='';
 }
 function limpar(){
-  if(!confirm('Iniciar Novo Orçamento? Todos os dados serão limpos.'))return;
+  if(_naoSalvo){
+    var cli=gv('f-cliente')||'este orçamento';
+    var ir=confirm('⚠️ "'+cli+'" não foi salvo no Drive.\n\nDeseja descartar as alterações e abrir um novo orçamento?');
+    if(!ir)return;
+  }else{
+    if(!confirm('Iniciar Novo Orçamento? Todos os dados serão limpos.'))return;
+  }
   SECS.forEach(function(s){state[s]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{default:[]}};});
   FORM_IDS.filter(function(id){return ['desc-pct','desc-rs','val-liq','f-pgto','f-svinc'].indexOf(id)<0;}).forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('f-cons').value='';
@@ -1891,12 +1930,23 @@ function limpar(){
   ['cep-st','doc-st','cep-ev-st'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent='';});
   sv('orc-disp','—');
   driveIdAtual=null;driveNumAtual=null;
+  _naoSalvo=false;
   aprovStatus='rascunho';aprovHist=[];
   comercialStatus='';comercialHist=[];
   snapshotAnterior=null;
   finParcelas=[];finObs='';
   buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
 }
+
+// Popup ao tentar fechar/recarregar a aba com alterações não salvas
+window.addEventListener('beforeunload',function(e){
+  if(_naoSalvo&&usuarioAtual){
+    var msg='Este orçamento não foi salvo. Deseja realmente sair?';
+    e.preventDefault();
+    e.returnValue=msg;
+    return msg;
+  }
+});
 
 function abrirTipo(){document.getElementById('tipo-modal').classList.add('open');}
 function selTipo(t){tipoAtual=t;document.getElementById('card-det').classList.toggle('sel',t==='det');document.getElementById('card-res').classList.toggle('sel',t==='res');}
