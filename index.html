@@ -348,6 +348,156 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 .fin-parc-row{display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid #0d1a0d;border-radius:3px}
 .fin-parc-row:last-child{border-bottom:none}
 .fin-parc-row:nth-child(even){background:#080808}
+
+/* ═══════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — até 768px
+═══════════════════════════════════════════════════════ */
+@media(max-width:768px){
+  /* Base */
+  body{padding:6px}
+  .wrap{max-width:100%}
+
+  /* Header */
+  .app-hdr{padding:10px 12px;gap:8px;border-radius:6px 6px 0 0}
+  .app-hdr h1{font-size:13px}
+  .orc-n b{font-size:15px}
+  .ubtn{padding:4px 7px;font-size:9px}
+  .user-badge{padding:4px 8px;gap:5px}
+  .user-badge span{font-size:10px}
+
+  /* Cards e grids */
+  .card{padding:11px 12px}
+  .st{margin:-11px -12px 9px;font-size:10px;padding:4px 10px}
+  .g3,.g4{grid-template-columns:1fr 1fr!important;gap:6px}
+  .g4>div:last-child{grid-column:span 2}
+
+  /* Totals box */
+  .totbox{padding:12px 12px;border-radius:0 0 6px 6px}
+  .tg3{grid-template-columns:1fr 1fr!important;gap:6px}
+  .tg2{grid-template-columns:1fr 1fr;gap:6px}
+  .grand{padding:9px 12px}
+  .grand b{font-size:17px}
+  .mbox{padding:9px 11px}
+  .mg{grid-template-columns:1fr 1fr}
+
+  /* Sbar e botões de ação */
+  .sbar{padding:8px 10px;gap:5px}
+  .sbar span{font-size:10px}
+  .btn{padding:5px 10px;font-size:10px}
+  .btn-sm{padding:3px 7px;font-size:9px}
+
+  /* Tabela de itens — scroll horizontal */
+  table.it{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table.it th,table.it td{white-space:nowrap;padding:4px 5px;font-size:10px}
+
+  /* Tabs de seções */
+  .tabs{gap:1px}
+  .tbtn{padding:5px 8px;font-size:10px}
+
+  /* Drive panel */
+  .drive-panel{padding:10px 11px;margin-top:8px}
+  .drive-search{gap:5px}
+  .drive-item{flex-wrap:wrap;gap:5px;padding:7px 8px}
+  .di-nome{font-size:10px;width:100%}
+  .di-data{font-size:9px}
+
+  /* Painel de aprovação inline */
+  .aprov-inline{padding:11px 12px;margin-top:8px}
+  .aprov-inline .btns{gap:5px}
+  .aprov-inline textarea{font-size:11px;min-height:44px}
+
+  /* Painel comercial */
+  .com-panel{padding:11px 12px;margin-top:8px}
+  .com-btns{gap:4px}
+  .com-btn{padding:6px 10px;font-size:10px;border-radius:16px}
+
+  /* Financeiro inline */
+  .fin-inline{padding:11px 12px;margin-top:8px}
+  .fin-inline-resumo{grid-template-columns:1fr 1fr!important}
+  .fin-resumo{grid-template-columns:1fr 1fr!important}
+  .fin-parc-row{flex-wrap:wrap;gap:4px}
+
+  /* Funil de vendas card */
+  #funil-card{border-radius:0!important}
+  #funil-counters{gap:4px}
+  #funil-counters span{font-size:9px;padding:3px 8px}
+  #funil-lista{max-height:320px}
+
+  /* Modais — full screen */
+  .ov{align-items:flex-end!important;padding:0}
+  .modal-box{border-radius:14px 14px 0 0!important;padding:18px 16px!important;max-width:100%!important;max-height:92vh!important;width:100%!important}
+  .dash-modal{border-radius:14px 14px 0 0!important;padding:16px 14px!important;max-width:100%!important;max-height:92vh!important;width:100%!important}
+  .modal-box h2,.dash-modal h2{font-size:14px}
+
+  /* Filtros dos dashboards */
+  .dash-filtros{gap:6px}
+  .dash-filtros>div{flex:1 1 calc(50% - 6px);min-width:0}
+  .dash-filtros input,.dash-filtros select{font-size:11px;padding:5px 7px}
+
+  /* KPIs dos dashboards */
+  .dash-kpis{grid-template-columns:repeat(2,1fr)!important;gap:6px}
+  .dk{padding:9px 10px}
+  .dk label{font-size:9px}
+  .dkv{font-size:18px!important}
+  .dksub{font-size:9px}
+
+  /* Boxes e tabelas do dash */
+  .dash-row{grid-template-columns:1fr!important}
+  .dash-box{padding:10px 11px}
+  .dash-box h3{font-size:9px}
+
+  /* Relatórios */
+  .rel-tabs{gap:3px}
+  .rel-tab{padding:5px 9px;font-size:10px}
+  .rel-kpi{grid-template-columns:1fr 1fr}
+  .rel-table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .rel-table th,.rel-table td{white-space:nowrap;padding:5px 7px;font-size:10px}
+
+  /* Tabela de parcelas financeiras */
+  .fin-parcelas{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .fin-parcelas th,.fin-parcelas td{white-space:nowrap;padding:5px 6px;font-size:10px}
+
+  /* Funil steps */
+  .funil-step{gap:5px}
+  .funil-label{min-width:80px;font-size:9px}
+
+  /* Adm rows */
+  .adm-row{gap:5px}
+  .adm-inp{min-width:80px;font-size:10px}
+
+  /* Metas modal */
+  #mpane-geral .grand,.meta-ev-row{padding:8px}
+
+  /* Login box */
+  .login-box{padding:28px 20px;border-radius:10px}
+  .login-box h2{font-size:17px}
+  .lf input{font-size:13px;padding:9px 11px}
+  .lbtn{font-size:13px;padding:10px}
+
+  /* Status bar orçamento */
+  .st-bar-orc{flex-wrap:wrap;gap:5px;padding:7px 11px}
+
+  /* Drow (campos de desconto/margem no totbox) */
+  .drow{flex-wrap:wrap;gap:5px}
+  .drow input{max-width:100%}
+}
+
+/* Mobile pequeno — até 420px */
+@media(max-width:420px){
+  .g3,.g4{grid-template-columns:1fr!important}
+  .g4>div:last-child{grid-column:span 1}
+  .tg3{grid-template-columns:1fr!important}
+  .tg2{grid-template-columns:1fr!important}
+  .dash-kpis{grid-template-columns:1fr 1fr!important}
+  .fin-resumo,.fin-inline-resumo{grid-template-columns:1fr!important}
+  .rel-kpi{grid-template-columns:1fr}
+  .app-hdr{flex-wrap:wrap}
+  .mg{grid-template-columns:1fr}
+  .ubtn{padding:3px 6px;font-size:9px}
+  .dash-filtros>div{flex:1 1 100%}
+  .modal-box{padding:14px 12px!important}
+  .grand b{font-size:15px}
+}
 </style>
 </head>
 <body>
@@ -6004,6 +6154,12 @@ document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
 calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
 document.getElementById('l-pass').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
 document.getElementById('l-user').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('l-pass').focus();});
+// Fechar modais ao tocar no overlay (mobile UX)
+document.querySelectorAll('.ov').forEach(function(ov){
+  ov.addEventListener('click',function(e){
+    if(e.target===ov) ov.classList.remove('open');
+  });
+});
 </script>
 </body>
 </html>
