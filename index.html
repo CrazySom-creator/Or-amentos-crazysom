@@ -420,6 +420,73 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  MODAL METAS                                           -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="metas-ov">
+  <div class="modal-box dash-modal" style="max-width:820px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div>
+        <h2 style="margin-bottom:2px">🎯 Metas Comerciais</h2>
+        <p class="sub" id="metas-sub" style="margin:0">Configure e acompanhe as metas</p>
+      </div>
+      <div style="display:flex;gap:7px">
+        <button class="btn btn-r btn-sm" onclick="metasRenderizar()">🔄 Atualizar</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('metas-ov').classList.remove('open')">✕</button>
+      </div>
+    </div>
+
+    <!-- Abas -->
+    <div class="rel-tabs" style="margin-bottom:12px">
+      <div class="rel-tab active" onclick="metasAba('geral')">🏆 Meta Geral</div>
+      <div class="rel-tab" onclick="metasAba('consultor')">👤 Por Consultor</div>
+      <div class="rel-tab" onclick="metasAba('eventos')">📅 Meta por Mês de Evento</div>
+      <div class="rel-tab" onclick="metasAba('ticket')">🎫 Ticket Médio</div>
+    </div>
+
+    <!-- ABA: Meta Geral -->
+    <div class="rel-pane active" id="mpane-geral">
+      <div style="background:#111;border:1px solid #2a2a2a;border-radius:6px;padding:12px;margin-bottom:12px">
+        <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:800;display:block;margin-bottom:6px">Meta de Vendas Gerais (R$) — soma de todos os orçamentos com Venda Ganha</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="number" id="meta-geral-val" placeholder="Ex: 500000" style="flex:1;min-width:180px;padding:7px 10px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:13px">
+          <button onclick="metasSalvar()" style="padding:7px 16px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Metas</button>
+        </div>
+      </div>
+      <div id="metas-geral-resultado"></div>
+    </div>
+
+    <!-- ABA: Por Consultor -->
+    <div class="rel-pane" id="mpane-consultor">
+      <div style="background:#111;border:1px solid #2a2a2a;border-radius:6px;padding:12px;margin-bottom:12px">
+        <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:800;display:block;margin-bottom:8px">Meta de Vendas por Consultor (R$ Vendas Ganhas)</label>
+        <div id="metas-cons-inputs"></div>
+        <button onclick="metasSalvar()" style="margin-top:8px;padding:7px 16px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Metas</button>
+      </div>
+      <div id="metas-cons-resultado"></div>
+    </div>
+
+    <!-- ABA: Meta por Mês de Evento -->
+    <div class="rel-pane" id="mpane-eventos">
+      <div style="background:#111;border:1px solid #2a2a2a;border-radius:6px;padding:12px;margin-bottom:12px">
+        <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:800;display:block;margin-bottom:4px">Meta por Mês do Evento — o sistema busca orçamentos com Venda Ganha pelo mês em que o evento vai acontecer</label>
+        <p style="font-size:9px;color:#555;margin:0 0 8px">Ex: Meta de R$100k em eventos em julho/2026. O sistema soma todos os orçamentos com venda ganha cuja data do evento (f-dia) está em julho.</p>
+        <div id="metas-ev-inputs"></div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <button onclick="metasAddMes()" style="padding:6px 12px;background:#1565c0;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">+ Adicionar Mês</button>
+          <button onclick="metasSalvar()" style="padding:6px 12px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">💾 Salvar Metas</button>
+        </div>
+      </div>
+      <div id="metas-ev-resultado"></div>
+    </div>
+
+    <!-- ABA: Ticket Médio -->
+    <div class="rel-pane" id="mpane-ticket">
+      <div id="metas-ticket-resultado"></div>
+    </div>
+  </div>
+</div>
+
 <div class="ov" id="dash-elab-ov">
   <div class="modal-box dash-modal">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -726,6 +793,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <button class="ubtn" id="btn-aprovacoes" onclick="abrirAprovacoes()">📋 Aprovações</button>
     <button class="ubtn" onclick="abrirDashElab()">📋 Elaboração</button>
     <button class="ubtn" onclick="abrirDashboard()">📈 Comercial</button>
+    <button class="ubtn" onclick="abrirMetas()">🎯 Metas</button>
     <button class="ubtn" onclick="abrirDashFin()">💰 Financeiro</button>
     <button class="ubtn" onclick="abrirRelatorios()">📊 Relatórios</button>
     <button class="ubtn" id="btn-adm" onclick="abrirAdm()" style="display:none">⚙️ ADM</button>
@@ -1330,22 +1398,6 @@ async function aprovAcaoInline(novo){
 }
 
 function abrirAdm(){renderAdmList();renderAdmExclusoes();document.getElementById('adm-ov').classList.add('open');}
-function renderAdmList(){
-  document.getElementById('adm-list').innerHTML=USUARIOS.map(function(u,i){
-    return '<div class="adm-row"><div class="adm-info"><div class="adm-nome">'+u.nome+'</div><div class="adm-id">'+u.id+'</div></div>'
-      +'<input class="adm-inp" id="an'+i+'" value="'+u.nome+'" placeholder="Nome">'
-      +'<input class="adm-inp" id="ai'+i+'" value="'+u.id+'" placeholder="Login">'
-      +'<input class="adm-inp" type="password" id="ap'+i+'" placeholder="Nova senha">'
-      +'<select class="adm-sel" id="al'+i+'">'+Object.keys(NIVEIS).map(function(k){return '<option value="'+k+'"'+(u.nivel===k?' selected':'')+'>'+NIVEIS[k]+'</option>';}).join('')+'</select>'
-      +'<button class="adm-save" onclick="admSalvar('+i+')">💾</button>'
-      +(u.nivel!=='adm'?'<button class="adm-del" onclick="admDel('+i+')">🗑️</button>':'')
-      +'</div>';
-  }).join('');
-}
-function admSalvar(i){var nome=document.getElementById('an'+i).value.trim();var id=document.getElementById('ai'+i).value.trim().toLowerCase().replace(/\s+/g,'.');var pass=document.getElementById('ap'+i).value;var nivel=document.getElementById('al'+i).value;if(!nome||!id){alert('Nome e login obrigatórios.');return;}USUARIOS[i]=Object.assign({},USUARIOS[i],{nome:nome,id:id,nivel:nivel});if(pass.trim())USUARIOS[i].senha=hs(pass.trim());renderAdmList();alert('✅ Salvo!');}
-function admDel(i){if(!confirm('Excluir "'+USUARIOS[i].nome+'"?'))return;USUARIOS.splice(i,1);renderAdmList();}
-function admNovo(){USUARIOS.push({id:'novo.usuario',nome:'Novo Usuário',nivel:'consultor',senha:hs('crazy@2026')});renderAdmList();document.getElementById('adm-list').lastElementChild.scrollIntoView({behavior:'smooth'});}
-
 function abrirAprovacoes(){
   document.getElementById('aprov-ov').classList.add('open');
   carregarSolExclusaoDrive().then(function(){
@@ -2924,9 +2976,39 @@ function finRenderParcelas(){
 }
 
 function finToggleStatus(i){
-  finParcelas[i].status=finParcelas[i].status==='pago'?'pendente':'pago';
+  var p=finParcelas[i];
+  if(p.status!=='pago'){
+    // Marcar como pago — pedir data do pagamento
+    var hoje=new Date().toISOString().split('T')[0];
+    var dataPgto=prompt('📅 Informe a data do pagamento (AAAA-MM-DD):',p.dataPagamento||hoje);
+    if(dataPgto===null)return; // cancelou
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(dataPgto)){alert('Data inválida. Use o formato AAAA-MM-DD.');return;}
+    p.status='pago';
+    p.dataPagamento=dataPgto;
+  } else {
+    p.status='pendente';
+    p.dataPagamento='';
+  }
   finRenderParcelas();
   finAtualizarResumo();
+}
+
+function finToggleInline(i){
+  var p=finParcelas[i];
+  if(p.status!=='pago'){
+    var hoje=new Date().toISOString().split('T')[0];
+    var dataPgto=prompt('📅 Informe a data do pagamento (AAAA-MM-DD):',p.dataPagamento||hoje);
+    if(dataPgto===null)return;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(dataPgto)){alert('Data inválida. Use o formato AAAA-MM-DD.');return;}
+    p.status='pago';
+    p.dataPagamento=dataPgto;
+  } else {
+    p.status='pendente';
+    p.dataPagamento='';
+  }
+  renderFinanceiroInline();
+  finAtualizarResumo();
+  finRenderParcelas();
 }
 
 function finRemoveParcela(i){
@@ -3033,13 +3115,6 @@ function renderFinanceiroInline(){
   }).join('');
 }
 
-function finToggleInline(i){
-  finParcelas[i].status=finParcelas[i].status==='pago'?'pendente':'pago';
-  renderFinanceiroInline();
-  finAtualizarResumo();
-  // Atualizar também no modal se estiver aberto
-  finRenderParcelas();
-}
 
 // ════════════════════════════════════════════════════════
 //  RELATÓRIOS
@@ -4328,6 +4403,45 @@ function dashRenderizar(){
     +'<button onclick="document.getElementById(\'dash-drill\').style.display=\'none\'" style="background:none;border:none;color:#888;cursor:pointer;font-size:14px">✕</button>'
     +'</div><div id="dash-drill-corpo" style="border:1px solid #2a2a2a;border-top:none;border-radius:0 0 6px 6px"></div></div>';
 
+  // ── Vendas Ganhas por Mês de Evento ──────────────────────────────────────
+  var ganhosPorMesEv = {};
+  ganhos.forEach(function(o){
+    var dtEv = o.form&&o.form['f-dia']||'';
+    if(!dtEv) return;
+    var mes = dtEv.substring(0,7);
+    if(!ganhosPorMesEv[mes])ganhosPorMesEv[mes]={val:0,qtd:0,lista:[]};
+    ganhosPorMesEv[mes].val += dashValOrc(o);
+    ganhosPorMesEv[mes].qtd++;
+    ganhosPorMesEv[mes].lista.push(o);
+  });
+  var mesesEv = Object.keys(ganhosPorMesEv).sort();
+  var maxEvVal = Math.max.apply(null, mesesEv.map(function(m){return ganhosPorMesEv[m].val;}).concat([1]));
+
+  var evHtml = mesesEv.length
+    ? '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
+      +'<thead><tr style="border-bottom:2px solid #c0001a">'
+      +'<th style="text-align:left;padding:6px 8px;color:#c0001a;font-size:10px;text-transform:uppercase">Mês do Evento</th>'
+      +'<th style="text-align:center;padding:6px 8px;color:#888;font-size:10px">Qtd</th>'
+      +'<th style="text-align:right;padding:6px 8px;color:#888;font-size:10px">R$ Vendas Ganhas</th>'
+      +'<th style="padding:6px 8px;color:#888;font-size:10px">Distribuição</th>'
+      +'</tr></thead><tbody>'
+      + mesesEv.map(function(m){
+          var me=ganhosPorMesEv[m];
+          var w=Math.round(me.val/maxEvVal*100);
+          var pts=m.split('-');
+          var nomes=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+          var label=nomes[parseInt(pts[1])-1]+'/'+pts[0];
+          window._dashListas['ev_'+m]=me.lista;
+          return '<tr style="border-bottom:1px solid #1a1a1a;cursor:pointer" onclick="dashDrill(\'ev_'+m+'\',\'Eventos em '+label+'\')" onmouseover="this.style.background=\'#111\'" onmouseout="this.style.background=\'transparent\'">'
+            +'<td style="padding:7px 8px;color:#90caf9;font-weight:700">📅 '+label+'</td>'
+            +'<td style="text-align:center;color:#ddd;font-weight:700">'+me.qtd+'</td>'
+            +'<td style="text-align:right;color:#66bb6a;font-weight:800">'+fmt(me.val)+'</td>'
+            +'<td style="padding:7px 8px;min-width:120px"><div style="background:#1a1a1a;border-radius:3px;overflow:hidden;height:10px"><div style="width:'+w+'%;height:100%;background:linear-gradient(90deg,#1565c0,#66bb6a);border-radius:3px"></div></div></td>'
+            +'</tr>';
+        }).join('')
+      +'</tbody></table></div>'
+    : '<div class="dash-vazio">Nenhuma venda ganha com data de evento definida.</div>';
+
   document.getElementById('dash-corpo').innerHTML =
     '<div style="font-size:11px;color:#c0001a;font-weight:900;text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid #c0001a;padding-bottom:4px;margin-bottom:12px">📈 Desempenho Comercial</div>'
     + kpi
@@ -4342,9 +4456,322 @@ function dashRenderizar(){
     + '<div style="margin:14px 0 6px;font-size:10px;color:#888;font-weight:800;text-transform:uppercase;letter-spacing:1px">📊 R$ Validado vs R$ Ganho por Consultor</div>'
     + '<div class="dash-box" style="margin-bottom:12px">'+grafBars+'</div>'
     + '<div style="margin:14px 0 6px;font-size:10px;color:#888;font-weight:800;text-transform:uppercase;letter-spacing:1px">👤 Desempenho por Consultor <span style="font-size:9px;color:#555;font-weight:400">· Taxa = R$ Ganho ÷ R$ Validado</span></div>'
-    + '<div class="dash-box" style="overflow-x:auto">'+tabelaCons+'</div>'
+    + '<div class="dash-box" style="overflow-x:auto;margin-bottom:12px">'+tabelaCons+'</div>'
+    + '<div style="margin:14px 0 6px;font-size:10px;color:#888;font-weight:800;text-transform:uppercase;letter-spacing:1px">📅 Vendas Ganhas por Mês de Evento <span style="font-size:9px;color:#555;font-weight:400">· visão de pipeline futuro</span></div>'
+    + '<div class="dash-box" style="margin-bottom:12px">'+evHtml+'</div>'
     + drillPanel;
 }
+
+// ════════════════════════════════════════════════════════
+//  METAS COMERCIAIS
+// ════════════════════════════════════════════════════════
+var _metasDados = {};
+var _metasAbaAtual = 'geral';
+
+function metasAba(aba){
+  _metasAbaAtual=aba;
+  document.querySelectorAll('#metas-ov .rel-tab').forEach(function(t,i){
+    var abas=['geral','consultor','eventos','ticket'];
+    t.classList.toggle('active',abas[i]===aba);
+  });
+  document.querySelectorAll('#metas-ov .rel-pane').forEach(function(p){p.classList.remove('active');});
+  var el=document.getElementById('mpane-'+aba);
+  if(el)el.classList.add('active');
+  metasRenderizarAba(aba);
+}
+
+function metasSalvar(){
+  // Meta geral
+  var vg=parseFloat(document.getElementById('meta-geral-val').value)||0;
+  if(vg) _metasDados.geral=vg;
+  // Metas por consultor
+  _metasDados.consultor=_metasDados.consultor||{};
+  document.querySelectorAll('.meta-cons-inp').forEach(function(el){
+    var c=el.dataset.cons; var v=parseFloat(el.value)||0;
+    if(v) _metasDados.consultor[c]=v;
+  });
+  // Metas por mês de evento
+  _metasDados.eventos=_metasDados.eventos||[];
+  var novosMeses=[];
+  document.querySelectorAll('.meta-ev-row').forEach(function(row){
+    var mes=row.querySelector('.meta-ev-mes').value;
+    var vTotal=parseFloat(row.querySelector('.meta-ev-val').value)||0;
+    if(mes&&vTotal) novosMeses.push({mes:mes,meta:vTotal,consultores:{}});
+    // Metas por consultor no mês
+    row.querySelectorAll('.meta-ev-cons-inp').forEach(function(el2){
+      var c=el2.dataset.cons; var v=parseFloat(el2.value)||0;
+      if(v&&mes){var last=novosMeses[novosMeses.length-1];if(last)last.consultores[c]=v;}
+    });
+  });
+  _metasDados.eventos=novosMeses;
+  // Persistir no localStorage
+  try{localStorage.setItem('crazySomMetas',JSON.stringify(_metasDados));}catch(e){}
+  alert('✅ Metas salvas!');
+  metasRenderizarAba(_metasAbaAtual);
+}
+
+function metasCarregar(){
+  try{var d=localStorage.getItem('crazySomMetas');if(d)_metasDados=JSON.parse(d);}catch(e){}
+}
+
+function metasAddMes(){
+  _metasDados.eventos=_metasDados.eventos||[];
+  _metasDados.eventos.push({mes:'',meta:0,consultores:{}});
+  metasRenderizarAba('eventos');
+}
+
+async function abrirMetas(){
+  document.getElementById('metas-ov').classList.add('open');
+  metasCarregar();
+  // Carregar dados se necessário
+  if(!_dashDados.length){
+    document.getElementById('metas-sub').textContent='Carregando dados...';
+    await dashCarregarDados();
+  }
+  document.getElementById('metas-sub').textContent=_dashDados.length+' orçamentos carregados';
+  // Preencher inputs existentes
+  if(_metasDados.geral) document.getElementById('meta-geral-val').value=_metasDados.geral;
+  metasRenderizarConsInputs();
+  metasRenderizarEvInputs();
+  metasRenderizarAba('geral');
+}
+
+function metasRenderizarConsInputs(){
+  var CONS=['Fabiano Santos','Giovana Borges','Jéssica Elisandra','Rafael Oliveira','Wagner Wolff'];
+  var el=document.getElementById('metas-cons-inputs');
+  if(!el)return;
+  el.innerHTML=CONS.map(function(c){
+    var v=(_metasDados.consultor&&_metasDados.consultor[c])||'';
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+      +'<span style="min-width:160px;font-size:11px;color:#ccc;font-weight:700">'+c+'</span>'
+      +'<input type="number" class="meta-cons-inp" data-cons="'+c+'" value="'+v+'" placeholder="Meta R$" '
+      +'style="flex:1;padding:6px 9px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:12px">'
+      +'</div>';
+  }).join('');
+}
+
+function metasRenderizarEvInputs(){
+  var CONS=['Fabiano Santos','Giovana Borges','Jéssica Elisandra','Rafael Oliveira','Wagner Wolff'];
+  var el=document.getElementById('metas-ev-inputs');
+  if(!el)return;
+  var evs=_metasDados.eventos||[];
+  el.innerHTML=evs.map(function(ev,idx){
+    return '<div class="meta-ev-row" style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:5px;padding:10px;margin-bottom:8px">'
+      +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">'
+      +'<div><label style="font-size:9px;color:#888;display:block;margin-bottom:2px">Mês/Ano</label>'
+      +'<input type="month" class="meta-ev-mes" value="'+(ev.mes||'')+'" style="padding:5px 8px;background:#111;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px"></div>'
+      +'<div style="flex:1;min-width:140px"><label style="font-size:9px;color:#888;display:block;margin-bottom:2px">Meta Total (R$)</label>'
+      +'<input type="number" class="meta-ev-val" value="'+(ev.meta||'')+'" placeholder="Meta total do mês" style="width:100%;padding:5px 8px;background:#111;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px"></div>'
+      +'<button onclick="metasRemoveMes('+idx+')" style="padding:5px 10px;background:#333;color:#ef5350;border:none;border-radius:4px;font-size:11px;cursor:pointer;margin-top:14px">🗑️</button>'
+      +'</div>'
+      +'<div style="font-size:9px;color:#888;font-weight:800;text-transform:uppercase;margin-bottom:5px">Meta por Consultor neste mês:</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:5px">'
+      +CONS.map(function(c){
+        var v=(ev.consultores&&ev.consultores[c])||'';
+        return '<div style="display:flex;align-items:center;gap:4px">'
+          +'<span style="font-size:9px;color:#aaa;min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+c+'">'+c.split(' ')[0]+'</span>'
+          +'<input type="number" class="meta-ev-cons-inp" data-cons="'+c+'" value="'+v+'" placeholder="R$" '
+          +'style="flex:1;padding:4px 6px;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:3px;color:#fff;font-size:10px">'
+          +'</div>';
+      }).join('')
+      +'</div></div>';
+  }).join('');
+}
+
+function metasRemoveMes(idx){
+  (_metasDados.eventos||[]).splice(idx,1);
+  metasRenderizarEvInputs();
+}
+
+function metasRenderizar(){
+  metasRenderizarAba(_metasAbaAtual);
+}
+
+function metasRenderizarAba(aba){
+  var ganhosDash=_dashDados.filter(function(o){return (o.dados&&o.dados.comercialStatus)==='ganha';});
+  var totalGanho=ganhosDash.reduce(function(t,o){return t+dashValOrc(o);},0);
+  var CONS=['Fabiano Santos','Giovana Borges','Jéssica Elisandra','Rafael Oliveira','Wagner Wolff'];
+
+  if(aba==='geral'){
+    var meta=_metasDados.geral||0;
+    var pct=meta>0?Math.round(totalGanho/meta*100):0;
+    var cor=pct>=100?'#66bb6a':pct>=70?'#ffa726':'#ef5350';
+    var faltam=meta>totalGanho?meta-totalGanho:0;
+    document.getElementById('metas-geral-resultado').innerHTML=meta?
+      '<div style="background:#0d1a0d;border:1px solid #2e7d32;border-radius:8px;padding:16px">'
+      +'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
+      +'<div><div style="font-size:10px;color:#888;text-transform:uppercase;font-weight:800;margin-bottom:2px">Meta Geral</div><div style="font-size:22px;font-weight:900;color:#fff">'+fmt(meta)+'</div></div>'
+      +'<div><div style="font-size:10px;color:#888;text-transform:uppercase;font-weight:800;margin-bottom:2px">Realizado</div><div style="font-size:22px;font-weight:900;color:'+cor+'">'+fmt(totalGanho)+'</div></div>'
+      +'<div><div style="font-size:10px;color:#888;text-transform:uppercase;font-weight:800;margin-bottom:2px">Faltam</div><div style="font-size:22px;font-weight:900;color:'+(faltam>0?'#ef5350':'#66bb6a')+'">'+fmt(faltam)+'</div></div>'
+      +'<div style="text-align:center"><div style="font-size:10px;color:#888;text-transform:uppercase;font-weight:800;margin-bottom:2px">Atingimento</div><div style="font-size:28px;font-weight:900;color:'+cor+'">'+pct+'%</div></div>'
+      +'</div>'
+      +'<div style="background:#1a1a1a;border-radius:6px;overflow:hidden;height:20px">'
+      +'<div style="width:'+Math.min(pct,100)+'%;height:100%;background:linear-gradient(90deg,#c0001a,'+cor+');border-radius:6px;transition:width .3s;position:relative">'
+      +(pct>=15?'<span style="position:absolute;right:8px;top:2px;font-size:10px;font-weight:900;color:#fff">'+pct+'%</span>':'')
+      +'</div></div>'
+      +'</div>'
+      :'<div class="dash-vazio">Configure a meta acima e clique em Salvar.</div>';
+  }
+
+  if(aba==='consultor'){
+    var resultHtml='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
+      +'<thead><tr style="border-bottom:2px solid #c0001a">'
+      +'<th style="text-align:left;padding:6px 8px;color:#c0001a;font-size:10px;text-transform:uppercase">Consultor</th>'
+      +'<th style="text-align:right;padding:6px 8px;color:#888;font-size:10px">Meta R$</th>'
+      +'<th style="text-align:right;padding:6px 8px;color:#888;font-size:10px">Realizado</th>'
+      +'<th style="text-align:right;padding:6px 8px;color:#888;font-size:10px">Faltam</th>'
+      +'<th style="text-align:center;padding:6px 8px;color:#888;font-size:10px">%</th>'
+      +'<th style="padding:6px 8px;color:#888;font-size:10px">Barra</th>'
+      +'</tr></thead><tbody>';
+    CONS.forEach(function(c){
+      var meta2=(_metasDados.consultor&&_metasDados.consultor[c])||0;
+      var real=ganhosDash.filter(function(o){return (o.form&&o.form['f-cons'])===c;}).reduce(function(t,o){return t+dashValOrc(o);},0);
+      var pct2=meta2>0?Math.round(real/meta2*100):0;
+      var cor2=pct2>=100?'#66bb6a':pct2>=70?'#ffa726':'#ef5350';
+      resultHtml+='<tr style="border-bottom:1px solid #1a1a1a">'
+        +'<td style="padding:7px 8px;color:#ddd;font-weight:700">'+c+'</td>'
+        +'<td style="text-align:right;color:#888">'+fmt(meta2)+'</td>'
+        +'<td style="text-align:right;color:'+cor2+';font-weight:800">'+fmt(real)+'</td>'
+        +'<td style="text-align:right;color:'+(meta2>real?'#ef5350':'#66bb6a')+'">'+fmt(Math.max(0,meta2-real))+'</td>'
+        +'<td style="text-align:center"><span style="padding:2px 8px;border-radius:10px;font-weight:900;font-size:11px;background:'+cor2+'22;color:'+cor2+';border:1px solid '+cor2+'">'+pct2+'%</span></td>'
+        +'<td style="padding:7px 8px;min-width:100px"><div style="background:#1a1a1a;border-radius:3px;overflow:hidden;height:10px"><div style="width:'+Math.min(pct2,100)+'%;height:100%;background:'+cor2+';border-radius:3px"></div></div></td>'
+        +'</tr>';
+    });
+    resultHtml+='</tbody></table></div>';
+    document.getElementById('metas-cons-resultado').innerHTML=resultHtml;
+    metasRenderizarConsInputs();
+  }
+
+  if(aba==='eventos'){
+    metasRenderizarEvInputs();
+    var evs=_metasDados.eventos||[];
+    var nomes2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    var evResultHtml=evs.length?'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
+      +'<thead><tr style="border-bottom:2px solid #c0001a">'
+      +'<th style="text-align:left;padding:6px 8px;color:#c0001a;font-size:10px;text-transform:uppercase">Mês do Evento</th>'
+      +'<th style="text-align:right;padding:6px 8px;color:#888;font-size:10px">Meta Total</th>'
+      +'<th style="text-align:right;padding:6px 8px;color:#888;font-size:10px">Realizado</th>'
+      +'<th style="text-align:right;padding:6px 8px;color:#888;font-size:10px">Faltam</th>'
+      +'<th style="text-align:center;padding:6px 8px;color:#888;font-size:10px">%</th>'
+      +'</tr></thead><tbody>'
+      + evs.map(function(ev){
+        if(!ev.mes)return'';
+        var pts=ev.mes.split('-');
+        var label=nomes2[parseInt(pts[1])-1]+'/'+pts[0];
+        // Soma orçamentos com venda ganha cujo f-dia está no mês ev.mes
+        var real=ganhosDash.filter(function(o){
+          var dtEv=o.form&&o.form['f-dia']||'';
+          return dtEv.substring(0,7)===ev.mes;
+        }).reduce(function(t,o){return t+dashValOrc(o);},0);
+        var pct3=ev.meta>0?Math.round(real/ev.meta*100):0;
+        var cor3=pct3>=100?'#66bb6a':pct3>=70?'#ffa726':'#ef5350';
+        var rows='<tr style="background:#0d0d0d;border-bottom:1px solid #1a1a1a">'
+          +'<td style="padding:7px 8px;color:#90caf9;font-weight:800">📅 '+label+'</td>'
+          +'<td style="text-align:right;color:#888">'+fmt(ev.meta)+'</td>'
+          +'<td style="text-align:right;color:'+cor3+';font-weight:800">'+fmt(real)+'</td>'
+          +'<td style="text-align:right;color:'+(ev.meta>real?'#ef5350':'#66bb6a')+'">'+fmt(Math.max(0,ev.meta-real))+'</td>'
+          +'<td style="text-align:center"><span style="padding:2px 8px;border-radius:10px;font-weight:900;font-size:11px;background:'+cor3+'22;color:'+cor3+';border:1px solid '+cor3+'">'+pct3+'%</span></td>'
+          +'</tr>';
+        // Linhas por consultor
+        CONS.forEach(function(c){
+          if(!ev.consultores||!ev.consultores[c])return;
+          var metaC=ev.consultores[c]||0;
+          var realC=ganhosDash.filter(function(o){
+            var dtEv=o.form&&o.form['f-dia']||'';
+            return dtEv.substring(0,7)===ev.mes&&(o.form&&o.form['f-cons'])===c;
+          }).reduce(function(t,o){return t+dashValOrc(o);},0);
+          var pct4=metaC>0?Math.round(realC/metaC*100):0;
+          var cor4=pct4>=100?'#66bb6a':pct4>=70?'#ffa726':'#ef5350';
+          rows+='<tr style="border-bottom:1px solid #111">'
+            +'<td style="padding:4px 8px 4px 20px;color:#aaa;font-size:10px">↳ '+c+'</td>'
+            +'<td style="text-align:right;color:#555;font-size:10px">'+fmt(metaC)+'</td>'
+            +'<td style="text-align:right;color:'+cor4+';font-size:10px;font-weight:700">'+fmt(realC)+'</td>'
+            +'<td style="text-align:right;color:'+(metaC>realC?'#c62828':'#2e7d32')+';font-size:10px">'+fmt(Math.max(0,metaC-realC))+'</td>'
+            +'<td style="text-align:center"><span style="padding:1px 6px;border-radius:8px;font-weight:800;font-size:10px;background:'+cor4+'22;color:'+cor4+'">'+pct4+'%</span></td>'
+            +'</tr>';
+        });
+        return rows;
+      }).join('')
+      +'</tbody></table></div>'
+    :'<div class="dash-vazio">Nenhuma meta de evento cadastrada. Adicione um mês acima.</div>';
+    document.getElementById('metas-ev-resultado').innerHTML=evResultHtml;
+  }
+
+  if(aba==='ticket'){
+    // Ticket médio geral e por consultor (base: vendas ganhas)
+    var ticketGeral=ganhosDash.length>0?Math.round(totalGanho/ganhosDash.length):0;
+    var ticketHtml='<div style="background:#0d1a0d;border:1px solid #2e7d32;border-radius:8px;padding:12px;margin-bottom:12px;display:flex;align-items:center;gap:16px">'
+      +'<div><div style="font-size:10px;color:#888;text-transform:uppercase;font-weight:800;margin-bottom:2px">🎫 Ticket Médio Geral</div>'
+      +'<div style="font-size:26px;font-weight:900;color:#fff">'+fmt(ticketGeral)+'</div>'
+      +'<div style="font-size:10px;color:#555">base: '+ganhosDash.length+' vendas ganhas</div></div>'
+      +'</div>'
+      +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
+      +'<thead><tr style="border-bottom:2px solid #c0001a">'
+      +'<th style="text-align:left;padding:6px 8px;color:#c0001a;font-size:10px;text-transform:uppercase">Consultor</th>'
+      +'<th style="text-align:center;padding:6px 8px;color:#888;font-size:10px">Qtd Ganhas</th>'
+      +'<th style="text-align:right;padding:6px 8px;color:#888;font-size:10px">R$ Total Ganho</th>'
+      +'<th style="text-align:right;padding:6px 8px;color:#ffa726;font-size:10px">Ticket Médio</th>'
+      +'<th style="padding:6px 8px;color:#888;font-size:10px">vs. Média Geral</th>'
+      +'</tr></thead><tbody>';
+    CONS.forEach(function(c){
+      var gC=ganhosDash.filter(function(o){return (o.form&&o.form['f-cons'])===c;});
+      var totalC=gC.reduce(function(t,o){return t+dashValOrc(o);},0);
+      var tickC=gC.length>0?Math.round(totalC/gC.length):0;
+      var diff=tickC-ticketGeral;
+      var difCor=diff>=0?'#66bb6a':'#ef5350';
+      var difTxt=(diff>=0?'+':'')+fmt(diff);
+      ticketHtml+='<tr style="border-bottom:1px solid #1a1a1a">'
+        +'<td style="padding:7px 8px;color:#ddd;font-weight:700">'+c+'</td>'
+        +'<td style="text-align:center;color:#aaa">'+gC.length+'</td>'
+        +'<td style="text-align:right;color:#ddd">'+fmt(totalC)+'</td>'
+        +'<td style="text-align:right;color:#ffa726;font-weight:800">'+fmt(tickC)+'</td>'
+        +'<td style="text-align:center"><span style="font-size:10px;font-weight:700;color:'+difCor+'">'+difTxt+'</span></td>'
+        +'</tr>';
+    });
+    ticketHtml+='</tbody></table></div>';
+    document.getElementById('metas-ticket-resultado').innerHTML=ticketHtml;
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  GERENCIAR USUÁRIOS — cargo
+// ════════════════════════════════════════════════════════
+var CARGOS=['Consultor','Assistente Comercial','Análise Técnica','Logística','Gerente Comercial','Diretoria'];
+
+function renderAdmList(){
+  document.getElementById('adm-list').innerHTML=USUARIOS.map(function(u,i){
+    var cargoVal=u.cargo||'';
+    return '<div class="adm-row" style="flex-wrap:wrap;gap:5px">'
+      +'<div class="adm-info"><div class="adm-nome">'+u.nome+'</div><div class="adm-id">'+u.id+(cargoVal?' · '+cargoVal:'')+'</div></div>'
+      +'<input class="adm-inp" id="an'+i+'" value="'+u.nome+'" placeholder="Nome">'
+      +'<input class="adm-inp" id="ai'+i+'" value="'+u.id+'" placeholder="Login">'
+      +'<input class="adm-inp" type="password" id="ap'+i+'" placeholder="Nova senha">'
+      +'<select class="adm-sel" id="al'+i+'">'+Object.keys(NIVEIS).map(function(k){return '<option value="'+k+'"'+(u.nivel===k?' selected':'')+'>'+NIVEIS[k]+'</option>';}).join('')+'</select>'
+      +'<select class="adm-sel" id="ac'+i+'" style="min-width:140px">'
+      +'<option value="">Cargo...</option>'
+      +CARGOS.map(function(c){return '<option value="'+c+'"'+(cargoVal===c?' selected':'')+'>'+c+'</option>';}).join('')
+      +'</select>'
+      +'<button class="adm-save" onclick="admSalvar('+i+')">💾</button>'
+      +(u.nivel!=='adm'?'<button class="adm-del" onclick="admDel('+i+')">🗑️</button>':'')
+      +'</div>';
+  }).join('');
+}
+
+function admSalvar(i){
+  var nome=document.getElementById('an'+i).value.trim();
+  var id=document.getElementById('ai'+i).value.trim().toLowerCase().replace(/\s+/g,'.');
+  var pass=document.getElementById('ap'+i).value;
+  var nivel=document.getElementById('al'+i).value;
+  var cargo=(document.getElementById('ac'+i)||{}).value||'';
+  if(!nome||!id){alert('Nome e login obrigatórios.');return;}
+  USUARIOS[i]=Object.assign({},USUARIOS[i],{nome:nome,id:id,nivel:nivel,cargo:cargo});
+  if(pass.trim())USUARIOS[i].senha=hs(pass.trim());
+  renderAdmList();
+  alert('✅ Salvo!');
+}
+
+function admDel(i){if(!confirm('Excluir "'+USUARIOS[i].nome+'"?'))return;USUARIOS.splice(i,1);renderAdmList();}
+function admNovo(){USUARIOS.push({id:'novo.usuario',nome:'Novo Usuário',nivel:'consultor',cargo:'',senha:hs('crazy@2026')});renderAdmList();document.getElementById('adm-list').lastElementChild.scrollIntoView({behavior:'smooth'});}
 
 function dashDrill(key, tituloEnc){
   var titulo=decodeURIComponent(tituloEnc);
@@ -4659,16 +5086,21 @@ function dashFinDrill(key, titulo){
   if(!lista.length){corpo.innerHTML='<div class="dash-vazio" style="padding:16px">Nenhuma parcela nesta categoria.</div>';panel.style.display='block';return;}
   var ST_COR2={pago:'#66bb6a',pendente:'#ffa726',atrasado:'#ef5350'};
   corpo.innerHTML='<div style="max-height:360px;overflow-y:auto">'
+    +'<div style="display:flex;gap:4px;background:#111;border-bottom:2px solid #c0001a;padding:5px 10px;font-size:9px;color:#888;text-transform:uppercase;font-weight:800">'
+    +'<span style="min-width:72px">Venc.</span><span style="flex:1">Cliente</span><span style="min-width:90px;text-align:center">Consultor</span><span style="min-width:70px;text-align:right">Forma</span><span style="min-width:80px;text-align:right">Valor</span>'
+    +'</div>'
     +lista.map(function(p){
       var cor2=ST_COR2[p.status]||'#888';
-      var nomeClick=p.driveId?'onclick="dashFinAbrirOrc(\''+p.driveId+'\',\''+eh(p.nome)+'\')" style="cursor:pointer;color:#90caf9;text-decoration:underline dotted;font-weight:700"':'style="color:#ccc;font-weight:700"';
-      return '<div style="padding:6px 10px;border-bottom:1px solid #111;display:flex;align-items:center;gap:8px">'
+      var nomeClick=p.driveId?'onclick="dashFinAbrirOrc(\''+p.driveId+'\',\''+eh(p.nome)+'\')" style="cursor:pointer;color:#90caf9;text-decoration:underline;font-weight:800"':'style="color:#fff;font-weight:700"';
+      return '<div style="padding:6px 10px;border-bottom:1px solid #111;display:flex;align-items:center;gap:6px">'
+        +'<div style="min-width:72px;color:#888;font-size:9px;flex-shrink:0">'+fD(p.data)+'</div>'
         +'<div style="flex:1;min-width:0">'
-        +'<div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" '+nomeClick+' title="Clique para abrir o orçamento">'+eh(p.cliente)+'</div>'
-        +'<div style="font-size:9px;color:#555;margin-top:1px">'+eh(p.num)+' · '+eh(p.cons)+' · '+fD(p.data)+' · '+eh(p.desc)+' · '+eh(p.forma)+'</div>'
+        +'<div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" '+nomeClick+' title="Clique para abrir o orçamento">'+(p.cliente&&p.cliente!=='—'?eh(p.cliente):'(sem cliente)')+'</div>'
+        +'<div style="font-size:9px;color:#555;margin-top:1px">Orc: '+eh(p.num)+' · '+eh(p.desc)+'</div>'
         +'</div>'
-        +'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+cor2+'22;color:'+cor2+';border:1px solid '+cor2+';white-space:nowrap">'+p.status+'</span>'
-        +'<span style="font-size:10px;font-weight:800;color:'+cor2+';white-space:nowrap">'+fmt(p.valor)+'</span>'
+        +'<div style="min-width:90px;text-align:center;font-size:9px;color:#aaa;flex-shrink:0">'+eh(p.cons)+'</div>'
+        +'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+cor2+'22;color:'+cor2+';border:1px solid '+cor2+';white-space:nowrap;min-width:70px;text-align:center;flex-shrink:0">'+eh(p.forma)+'</span>'
+        +'<span style="font-size:10px;font-weight:800;color:'+cor2+';white-space:nowrap;min-width:80px;text-align:right;flex-shrink:0">'+fmt(p.valor)+'</span>'
         +'</div>';
     }).join('')
     +'<div style="padding:6px 10px;background:#0d0d0d;border-top:1px solid #1a1a1a;display:flex;justify-content:space-between">'
@@ -5070,7 +5502,7 @@ async function rejeitarExclusaoModal(idx){
 
 buildTabs();
 document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
-calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();renderFinanceiroInline();
+calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
 document.getElementById('l-pass').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
 document.getElementById('l-user').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('l-pass').focus();});
 </script>
