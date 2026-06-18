@@ -379,14 +379,46 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 </div>
 
 <div class="ov" id="adm-ov">
-  <div class="modal-box">
-    <h2>⚙️ Gerenciar Usuários</h2>
-    <p class="sub">Edite login, senha e nível de acesso</p>
-    <div id="adm-list"></div>
-<div id="adm-excl" style="margin-top:16px"></div>
-    <div style="display:flex;gap:8px;margin-top:14px;justify-content:space-between">
-      <button class="btn btn-g btn-sm" onclick="admNovo()">+ Novo Usuário</button>
-      <button class="btn btn-o btn-sm" onclick="document.getElementById('adm-ov').classList.remove('open')">Fechar</button>
+  <div class="modal-box" style="max-width:780px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div><h2 style="margin-bottom:2px">⚙️ Administração</h2><p class="sub" style="margin:0">Usuários, Permissões e Acessos</p></div>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('adm-ov').classList.remove('open')">✕</button>
+    </div>
+    <div class="rel-tabs" style="margin-bottom:12px">
+      <div class="rel-tab active" onclick="admAba('usuarios')">👤 Usuários</div>
+      <div class="rel-tab" onclick="admAba('permissoes')">🔐 Permissões por Cargo</div>
+      <div class="rel-tab" onclick="admAba('dashboards')">📊 Acesso a Dashboards</div>
+    </div>
+    <!-- ABA Usuários -->
+    <div class="rel-pane active" id="admpane-usuarios">
+      <div id="adm-list"></div>
+      <div id="adm-excl" style="margin-top:16px"></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn btn-g btn-sm" onclick="admNovo()">+ Novo Usuário</button>
+      </div>
+    </div>
+    <!-- ABA Permissões por Cargo -->
+    <div class="rel-pane" id="admpane-permissoes">
+      <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:11px;color:#888;font-weight:700">Cargo:</label>
+        <select id="perm-cargo-sel" onchange="permRenderizar()" style="padding:6px 10px;background:#111;border:1px solid #333;border-radius:4px;color:#fff;font-size:12px">
+          <option value="Consultor">Consultor</option>
+          <option value="Assistente Comercial">Assistente Comercial</option>
+          <option value="Análise Técnica">Análise Técnica</option>
+          <option value="Logística">Logística</option>
+          <option value="Gerente Comercial">Gerente Comercial</option>
+          <option value="Diretoria">Diretoria</option>
+        </select>
+        <button onclick="permSalvar()" style="padding:6px 14px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer;font-size:11px">💾 Salvar</button>
+        <span style="font-size:10px;color:#555">Marque os campos que o cargo pode editar</span>
+      </div>
+      <div id="perm-corpo" style="max-height:480px;overflow-y:auto"></div>
+    </div>
+    <!-- ABA Acesso Dashboards -->
+    <div class="rel-pane" id="admpane-dashboards">
+      <p style="font-size:11px;color:#888;margin-bottom:10px">Defina quais dashboards e relatórios cada cargo pode acessar.</p>
+      <div id="dash-acesso-corpo"></div>
+      <button onclick="dashAcessoSalvar()" style="margin-top:12px;padding:7px 18px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Acessos</button>
     </div>
   </div>
 </div>
@@ -791,10 +823,10 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   <div class="user-badge" id="user-badge" style="display:none">
     <div><span id="user-nome">—</span><small id="user-cargo">—</small></div>
     <button class="ubtn" id="btn-aprovacoes" onclick="abrirAprovacoes()">📋 Aprovações</button>
-    <button class="ubtn" onclick="abrirDashElab()">📋 Elaboração</button>
-    <button class="ubtn" onclick="abrirDashboard()">📈 Comercial</button>
-    <button class="ubtn" onclick="abrirMetas()">🎯 Metas</button>
-    <button class="ubtn" onclick="abrirDashFin()">💰 Financeiro</button>
+    <button class="ubtn" onclick="abrirDashElab()" id="btn-dash-elab">📋 Elaboração</button>
+    <button class="ubtn" onclick="abrirDashboard()" id="btn-dash-com">📈 Comercial</button>
+    <button class="ubtn" onclick="abrirMetas()" id="btn-metas">🎯 Metas</button>
+    <button class="ubtn" onclick="abrirDashFin()" id="btn-dash-fin">💰 Financeiro</button>
     <button class="ubtn" onclick="abrirRelatorios()">📊 Relatórios</button>
     <button class="ubtn" id="btn-adm" onclick="abrirAdm()" style="display:none">⚙️ ADM</button>
     <button class="ubtn" onclick="logout()">Sair</button>
@@ -1268,17 +1300,24 @@ function doLogin(){
   if(!u){err.textContent='❌ Usuário "'+uid+'" não encontrado.';document.getElementById('l-pass').value='';return;}
   if(u.senha!==hs(pwd)){err.textContent='❌ Senha incorreta.';document.getElementById('l-pass').value='';document.getElementById('l-pass').focus();return;}
   usuarioAtual=u;aprovStatus='rascunho';aprovHist=[];
+  permCarregar();
   carregarExcluidosDrive();
   carregarSolExclusaoDrive();
   document.getElementById('login-ov').style.display='none';
   document.getElementById('user-badge').style.display='flex';
   document.getElementById('user-nome').textContent=u.nome;
-  document.getElementById('user-cargo').textContent=NIVEIS[u.nivel]||u.nivel;
+  document.getElementById('user-cargo').textContent=u.cargo||(NIVEIS[u.nivel]||u.nivel);
   document.getElementById('btn-adm').style.display=u.nivel==='adm'?'inline-block':'none';
+  // Aplicar visibilidade dos botões de dashboard conforme cargo
+  var dashMap={'btn-dash-elab':'dash-elab','btn-dash-com':'dash-com','btn-metas':'dash-metas','btn-dash-fin':'dash-fin'};
+  Object.keys(dashMap).forEach(function(btnId){
+    var el=document.getElementById(btnId);
+    if(el) el.style.display=dashTemAcesso(dashMap[btnId])?'':'none';
+  });
   renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
   // Mostrar e carregar o funil de vendas
-  funilMostrarCard();
-  funilCarregarDados();
+  if(dashTemAcesso('funil-card')){funilMostrarCard();funilCarregarDados();}
+  else{funilEsconderCard();}
 }
 function logout(){
   if(_naoSalvo){
@@ -1397,7 +1436,7 @@ async function aprovAcaoInline(novo){
   }
 }
 
-function abrirAdm(){renderAdmList();renderAdmExclusoes();document.getElementById('adm-ov').classList.add('open');}
+function abrirAdm(){permCarregar();renderAdmList();renderAdmExclusoes();document.getElementById('adm-ov').classList.add('open');admAba('usuarios');}
 function abrirAprovacoes(){
   document.getElementById('aprov-ov').classList.add('open');
   carregarSolExclusaoDrive().then(function(){
@@ -4182,6 +4221,53 @@ function dashRenderizar(){
   kpi += '</div>';
 
   // ── Tabela de desempenho por etapa ──────────────────────────────────────────
+  var hoje = new Date();
+
+  // Extrai a data da última aprovação interna do histórico (formato "DD/MM/AAAA, HH:MM:SS")
+  function dataAprovacao(o){
+    var hist=(o.dados&&o.dados.aprovHist)||[];
+    // Pegar o último registro com acao='Aprovado'
+    for(var i=hist.length-1;i>=0;i--){
+      if(hist[i].acao==='Aprovado'){
+        var partes=hist[i].data?hist[i].data.split(',')[0].trim().split('/'):'';
+        if(partes.length===3){
+          // DD/MM/AAAA → Date
+          return new Date(partes[2]+'-'+partes[1]+'-'+partes[0]+'T12:00:00');
+        }
+      }
+    }
+    return null;
+  }
+
+  function diasDesdeAprov(o){
+    var dtAprov = dataAprovacao(o);
+    if(!dtAprov) return null;
+    return Math.floor((hoje - dtAprov)/(1000*60*60*24));
+  }
+
+  function diasNaEtapa(lista2){
+    if(!lista2.length) return '—';
+    // Maior tempo desde aprovação interna (orçamento mais antigo aprovado nessa etapa)
+    var maxDias = -1;
+    lista2.forEach(function(o){
+      var d = diasDesdeAprov(o);
+      if(d!==null && d > maxDias) maxDias = d;
+    });
+    if(maxDias < 0){
+      // Fallback: usar data do orçamento se não houver aprovação registrada
+      maxDias = 0;
+      lista2.forEach(function(o){
+        var dt = o.form&&o.form['f-data']||'';
+        if(!dt) return;
+        var d = Math.floor((hoje - new Date(dt+'T12:00:00'))/(1000*60*60*24));
+        if(d > maxDias) maxDias = d;
+      });
+    }
+    if(!maxDias) return '—';
+    var cor3 = maxDias>30?'#ef5350':maxDias>15?'#ffa726':'#66bb6a';
+    return '<span style="color:'+cor3+';font-weight:800" title="Mais antigo desde aprovação interna">'+maxDias+'d</span>';
+  }
+
   var tabelaEtapas = '<table style="width:100%;border-collapse:collapse;font-size:11px">'
     +'<thead><tr style="border-bottom:2px solid #c0001a">'
     +'<th style="text-align:left;padding:6px 8px;color:#c0001a;font-size:10px;text-transform:uppercase">Etapa</th>'
@@ -4189,6 +4275,7 @@ function dashRenderizar(){
     +'<th style="text-align:right;padding:6px 8px;color:#888;font-size:10px">Valor (R$)</th>'
     +'<th style="text-align:center;padding:6px 8px;color:#888;font-size:10px">% Qtd</th>'
     +'<th style="text-align:center;padding:6px 8px;color:#888;font-size:10px">% Valor</th>'
+    +'<th style="text-align:center;padding:6px 8px;color:#ffa726;font-size:10px" title="Tempo médio nesta etapa">⏱️ Tempo</th>'
     +'</tr></thead><tbody>'
     +'<tr style="background:#0d1a0d;border-bottom:1px solid #1a1a1a;cursor:pointer" onclick="dashDrill(\'validados\',\'Validados\')">'
     +'<td style="padding:7px 8px;color:#66bb6a;font-weight:800">✅ Total Validados</td>'
@@ -4196,18 +4283,24 @@ function dashRenderizar(){
     +'<td style="text-align:right;color:#fff;font-weight:800">'+fmt(valValTotal)+'</td>'
     +'<td style="text-align:center;color:#888">100%</td>'
     +'<td style="text-align:center;color:#888">100%</td>'
+    +'<td style="text-align:center;color:#555">—</td>'
     +'</tr>';
 
   etapas.forEach(function(e){
+    var tempoHtml = ['enviada','negociacao','standby'].indexOf(e.key)>=0
+      ? diasNaEtapa(validados.filter(function(o){return (o.dados&&o.dados.comercialStatus)===e.key;}))
+      : '<span style="color:#555">—</span>';
     tabelaEtapas += '<tr style="border-bottom:1px solid #1a1a1a;cursor:pointer" onclick="dashDrill(\'com_'+e.key+'\',\''+e.label+'\')" onmouseover="this.style.background=\'#111\'" onmouseout="this.style.background=\'transparent\'">'
       +'<td style="padding:7px 8px;color:'+e.cor+';font-weight:700">'+e.label+'</td>'
       +'<td style="text-align:center;color:#ddd;font-weight:700">'+e.qtd+'</td>'
       +'<td style="text-align:right;color:#ddd">'+fmt(e.val)+'</td>'
       +'<td style="text-align:center"><span style="padding:1px 8px;border-radius:10px;background:'+e.cor+'22;color:'+e.cor+';font-weight:800;font-size:10px">'+e.pctQtd+'%</span></td>'
       +'<td style="text-align:center"><span style="padding:1px 8px;border-radius:10px;background:'+e.cor+'11;color:'+e.cor+';font-size:10px">'+e.pctVal+'%</span></td>'
+      +'<td style="text-align:center;font-size:10px">'+tempoHtml+'</td>'
       +'</tr>';
   });
-  tabelaEtapas += '</tbody></table>';
+  tabelaEtapas += '<tr><td colspan="6" style="padding:4px 8px;font-size:9px;color:#555;font-style:italic">⏱️ Tempo = dias do orçamento mais antigo parado nesta etapa (desde a data do orçamento até hoje)</td></tr>'
+    +'</tbody></table>';
 
   // ── Taxa de conversão por consultor ─────────────────────────────────────────
   // Base: todos os validados, agrupados por consultor
@@ -4453,9 +4546,6 @@ function dashRenderizar(){
     + '<div class="dash-box"><h3>🍩 Distribuição por Etapa (R$) <span>donut por valor</span></h3>'+grafDonut+'</div>'
     + '<div class="dash-box"><h3>💰 Taxa de Conversão R$ por Consultor</h3>'+grafTaxa+'</div>'
     + '</div>'
-    + '<div style="margin:14px 0 6px;font-size:10px;color:#888;font-weight:800;text-transform:uppercase;letter-spacing:1px">📊 R$ Validado vs R$ Ganho por Consultor</div>'
-    + '<div class="dash-box" style="margin-bottom:12px">'+grafBars+'</div>'
-    + '<div style="margin:14px 0 6px;font-size:10px;color:#888;font-weight:800;text-transform:uppercase;letter-spacing:1px">👤 Desempenho por Consultor <span style="font-size:9px;color:#555;font-weight:400">· Taxa = R$ Ganho ÷ R$ Validado</span></div>'
     + '<div class="dash-box" style="overflow-x:auto;margin-bottom:12px">'+tabelaCons+'</div>'
     + '<div style="margin:14px 0 6px;font-size:10px;color:#888;font-weight:800;text-transform:uppercase;letter-spacing:1px">📅 Vendas Ganhas por Mês de Evento <span style="font-size:9px;color:#555;font-weight:400">· visão de pipeline futuro</span></div>'
     + '<div class="dash-box" style="margin-bottom:12px">'+evHtml+'</div>'
@@ -4738,6 +4828,195 @@ function metasRenderizarAba(aba){
 // ════════════════════════════════════════════════════════
 var CARGOS=['Consultor','Assistente Comercial','Análise Técnica','Logística','Gerente Comercial','Diretoria'];
 
+// ════════════════════════════════════════════════════════
+//  SISTEMA DE PERMISSÕES POR CARGO
+// ════════════════════════════════════════════════════════
+var PERM_MODULOS = [
+  {id:'orcamento', label:'📋 Orçamento', campos:[
+    {id:'f-num',    label:'Nº do Orçamento'},
+    {id:'f-data',   label:'Data'},
+    {id:'f-val',    label:'Validade'},
+    {id:'f-cons',   label:'Consultor'},
+    {id:'f-fonte',  label:'Fonte / Origem'}
+  ]},
+  {id:'cliente', label:'👤 Dados do Cliente', campos:[
+    {id:'f-cliente', label:'Nome / Razão Social'},
+    {id:'f-doc',     label:'CPF / CNPJ'},
+    {id:'f-tel',     label:'Telefone'},
+    {id:'f-cep',     label:'CEP'},
+    {id:'f-end',     label:'Endereço'},
+    {id:'f-bairro',  label:'Bairro'},
+    {id:'f-cidade',  label:'Cidade'}
+  ]},
+  {id:'evento', label:'🎪 Local do Evento', campos:[
+    {id:'f-local',   label:'Local'},
+    {id:'f-tipo',    label:'Tipo de Evento'},
+    {id:'f-resp',    label:'Responsável'},
+    {id:'f-cep-ev',  label:'CEP do Evento'},
+    {id:'f-end-ev',  label:'Endereço do Evento'},
+    {id:'f-pub',     label:'Público Estimado'}
+  ]},
+  {id:'datas', label:'📅 Datas e Horários', campos:[
+    {id:'f-dia',    label:'Início do Evento'},
+    {id:'f-dia-fim',label:'Fim do Evento'},
+    {id:'f-hi',     label:'Horário Início'},
+    {id:'f-hf',     label:'Horário Fim'},
+    {id:'f-dm',     label:'Montagem'},
+    {id:'f-dd',     label:'Desmontagem'}
+  ]},
+  {id:'equipamentos', label:'🎛️ Equipamentos', campos:[
+    {id:'tab-som',       label:'Aba Sonorização'},
+    {id:'tab-video',     label:'Aba Vídeo'},
+    {id:'tab-luz',       label:'Aba Iluminação'},
+    {id:'tab-estrutura', label:'Aba Estrutura'},
+    {id:'tab-servico',   label:'Aba Serviços'},
+    {id:'tab-logistica', label:'Aba Logística'}
+  ]},
+  {id:'financeiro', label:'💰 Financeiro', campos:[
+    {id:'desc-pct',  label:'Desconto %'},
+    {id:'desc-rs',   label:'Desconto R$'},
+    {id:'val-liq',   label:'Valor Líquido'},
+    {id:'f-bv',      label:'BV (Bonificação)'},
+    {id:'f-pgto',    label:'Condições de Pagamento'},
+    {id:'finParcelas',label:'Parcelas do Financeiro'}
+  ]},
+  {id:'aprovacao', label:'✅ Aprovação', campos:[
+    {id:'enviar-analise',  label:'Enviar para Análise'},
+    {id:'aprovar',         label:'Aprovar Orçamento'},
+    {id:'solicitar-revisao',label:'Solicitar Revisão'},
+    {id:'enviar-diretoria',label:'Enviar para Diretoria'}
+  ]},
+  {id:'comercial', label:'🤝 Comercial', campos:[
+    {id:'com-status',   label:'Definir Etapa do Funil'},
+    {id:'com-obs',      label:'Registrar Observação'},
+    {id:'com-motivo',   label:'Registrar Motivo de Perda'}
+  ]},
+  {id:'obs', label:'📝 Observações', campos:[
+    {id:'f-obs',     label:'Observações Gerais'},
+    {id:'f-obs-os',  label:'Observações da OS'}
+  ]}
+];
+
+var DASH_MODULOS = [
+  {id:'dash-elab',  label:'📋 Dashboard Elaboração'},
+  {id:'dash-com',   label:'📈 Dashboard Comercial'},
+  {id:'dash-metas', label:'🎯 Metas'},
+  {id:'dash-fin',   label:'💰 Dashboard Financeiro'},
+  {id:'rel',        label:'📄 Relatórios'},
+  {id:'aprovacoes', label:'📋 Aprovações (modal)'},
+  {id:'funil-card', label:'📊 Funil de Vendas (card fixo)'}
+];
+
+// Permissões padrão — todos os campos liberados para adm/gerente/diretor
+// Para outros cargos, começa restrito
+var _permissoes = {};
+var _dashAcessos = {};
+
+function permCarregar(){
+  try{
+    var d=localStorage.getItem('crazySomPerm');
+    if(d) _permissoes=JSON.parse(d);
+    var d2=localStorage.getItem('crazySomDashAcesso');
+    if(d2) _dashAcessos=JSON.parse(d2);
+  }catch(e){}
+}
+
+function permSalvar(){
+  var cargo=document.getElementById('perm-cargo-sel').value;
+  if(!_permissoes[cargo]) _permissoes[cargo]={};
+  // Coletar checkboxes
+  document.querySelectorAll('.perm-cb').forEach(function(cb){
+    _permissoes[cargo][cb.dataset.campo]=cb.checked;
+  });
+  try{localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes));}catch(e){}
+  alert('✅ Permissões do cargo "'+cargo+'" salvas!');
+}
+
+function dashAcessoSalvar(){
+  document.querySelectorAll('.dash-acesso-cargo').forEach(function(bloco){
+    var cargo=bloco.dataset.cargo;
+    if(!_dashAcessos[cargo]) _dashAcessos[cargo]={};
+    bloco.querySelectorAll('.dash-acesso-cb').forEach(function(cb){
+      _dashAcessos[cargo][cb.dataset.dash]=cb.checked;
+    });
+  });
+  try{localStorage.setItem('crazySomDashAcesso',JSON.stringify(_dashAcessos));}catch(e){}
+  alert('✅ Acessos a dashboards salvos!');
+}
+
+function permTemAcesso(campo){
+  if(!usuarioAtual) return false;
+  var cargo=usuarioAtual.cargo||'';
+  var nivel=usuarioAtual.nivel||'';
+  // adm, gerente e diretor têm acesso total por padrão
+  if(['adm','gerente','diretor'].includes(nivel)) return true;
+  if(!cargo||!_permissoes[cargo]) return true; // sem restrição configurada = permite
+  var perm=_permissoes[cargo];
+  if(perm[campo]===undefined) return true; // campo não configurado = permite
+  return !!perm[campo];
+}
+
+function dashTemAcesso(dashId){
+  if(!usuarioAtual) return false;
+  var cargo=usuarioAtual.cargo||'';
+  var nivel=usuarioAtual.nivel||'';
+  if(['adm','gerente','diretor'].includes(nivel)) return true;
+  if(!cargo||!_dashAcessos[cargo]) return true;
+  var ac=_dashAcessos[cargo];
+  if(ac[dashId]===undefined) return true;
+  return !!ac[dashId];
+}
+
+function admAba(aba){
+  document.querySelectorAll('#adm-ov .rel-tab').forEach(function(t,i){
+    var abas=['usuarios','permissoes','dashboards'];
+    t.classList.toggle('active',abas[i]===aba);
+  });
+  document.querySelectorAll('#adm-ov .rel-pane').forEach(function(p){p.classList.remove('active');});
+  var el=document.getElementById('admpane-'+aba);
+  if(el)el.classList.add('active');
+  if(aba==='permissoes') permRenderizar();
+  if(aba==='dashboards') dashAcessoRenderizar();
+}
+
+function permRenderizar(){
+  var cargo=document.getElementById('perm-cargo-sel').value;
+  var perm=(_permissoes[cargo])||{};
+  var html='';
+  PERM_MODULOS.forEach(function(mod){
+    html+='<div style="background:#111;border:1px solid #2a2a2a;border-radius:6px;padding:10px 12px;margin-bottom:8px">'
+      +'<div style="font-size:11px;color:#c0001a;font-weight:800;margin-bottom:8px">'+mod.label+'</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px">'
+      +mod.campos.map(function(c){
+        var checked=perm[c.id]===undefined?true:perm[c.id];
+        return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:#ddd;padding:3px 6px;border-radius:3px;background:#1a1a1a">'
+          +'<input type="checkbox" class="perm-cb" data-campo="'+c.id+'"'+(checked?' checked':'')
+          +' style="width:14px;height:14px;cursor:pointer"> '+c.label+'</label>';
+      }).join('')
+      +'</div></div>';
+  });
+  document.getElementById('perm-corpo').innerHTML=html;
+}
+
+function dashAcessoRenderizar(){
+  var cargos=CARGOS;
+  var html='';
+  cargos.forEach(function(cargo){
+    var ac=(_dashAcessos[cargo])||{};
+    html+='<div class="dash-acesso-cargo" data-cargo="'+cargo+'" style="background:#111;border:1px solid #2a2a2a;border-radius:6px;padding:10px 12px;margin-bottom:8px">'
+      +'<div style="font-size:11px;color:#fff;font-weight:800;margin-bottom:8px">👔 '+cargo+'</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px">'
+      +DASH_MODULOS.map(function(d){
+        var checked=ac[d.id]===undefined?true:ac[d.id];
+        return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:#ddd;padding:3px 6px;border-radius:3px;background:#1a1a1a">'
+          +'<input type="checkbox" class="dash-acesso-cb" data-dash="'+d.id+'"'+(checked?' checked':'')
+          +' style="width:14px;height:14px;cursor:pointer"> '+d.label+'</label>';
+      }).join('')
+      +'</div></div>';
+  });
+  document.getElementById('dash-acesso-corpo').innerHTML=html;
+}
+
 function renderAdmList(){
   document.getElementById('adm-list').innerHTML=USUARIOS.map(function(u,i){
     var cargoVal=u.cargo||'';
@@ -4781,24 +5060,135 @@ function dashDrill(key, tituloEnc){
   var corpo=document.getElementById('dash-drill-corpo');
   var tit=document.getElementById('dash-drill-titulo');
   if(!panel)return;
+
+  // Ordenar da mais antiga para mais nova (data do orçamento crescente)
+  lista = lista.slice().sort(function(a,b){
+    var da=(a.form&&a.form['f-data'])||'9999';
+    var db=(b.form&&b.form['f-data'])||'9999';
+    return da<db?-1:da>db?1:0;
+  });
+
   tit.textContent=titulo+' ('+lista.length+')';
-  var SI_COR2={rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
   var COM_COR2={enviada:'#1565c0',negociacao:'#e65100',standby:'#5d4037',ganha:'#2e7d32',perdida:'#c62828'};
   var COM_LBL2={enviada:'📤 Proposta Enviada',negociacao:'🤝 Em Negociação',standby:'⏸️ Standby',ganha:'🏆 Venda Ganha',perdida:'❌ Venda Perdida'};
+  var ETAPAS_COM_DIAS=['enviada','negociacao','standby'];
+  var hoje2=new Date();
+
+  // Extrai data da última aprovação interna do histórico
+  function getDataAprov(o){
+    var hist=(o.dados&&o.dados.aprovHist)||[];
+    for(var i=hist.length-1;i>=0;i--){
+      if(hist[i].acao==='Aprovado'){
+        var p=hist[i].data?hist[i].data.split(',')[0].trim().split('/'):'';
+        if(p.length===3) return new Date(p[2]+'-'+p[1]+'-'+p[0]+'T12:00:00');
+      }
+    }
+    return null;
+  }
+
+  function getDiasEtapa(o){
+    // Prioridade 1: data da aprovação interna
+    var dtAprov = getDataAprov(o);
+    if(dtAprov) return Math.floor((hoje2-dtAprov)/(1000*60*60*24));
+    // Fallback: data do orçamento
+    var dt=o.form&&o.form['f-data']||'';
+    if(!dt) return null;
+    return Math.floor((hoje2-new Date(dt+'T12:00:00'))/(1000*60*60*24));
+  }
+
+  // Detectar se esta lista precisa de coluna de dias
+  var qualquerEtapa = lista.some(function(o){
+    var cs=o.dados&&o.dados.comercialStatus||'';
+    return ETAPAS_COM_DIAS.indexOf(cs)>=0;
+  });
+  // Verificar se todas são da mesma etapa de funil
+  var etapaUnica='';
+  if(lista.length){
+    var cs0=lista[0].dados&&lista[0].dados.comercialStatus||'';
+    if(ETAPAS_COM_DIAS.indexOf(cs0)>=0&&lista.every(function(o){return (o.dados&&o.dados.comercialStatus||'')=== cs0;})){
+      etapaUnica=cs0;
+    }
+  }
+  var mostrarDias = etapaUnica!==''||qualquerEtapa;
+
   if(!lista.length){corpo.innerHTML='<div class="dash-vazio" style="padding:16px">Nenhum orçamento nesta categoria.</div>';panel.style.display='block';return;}
-  corpo.innerHTML='<div style="max-height:340px;overflow-y:auto">'+lista.map(function(o){
-    var f=o.form||{};var val=dashValOrc(o);var cs=o.dados&&o.dados.comercialStatus||'';var cor=SI_COR2[o.st]||'#555';
-    return'<div style="padding:7px 12px;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;gap:8px">'
-      +'<div style="flex:1;min-width:0"><div style="font-size:11px;color:#ddd;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
-      +'<div style="font-size:10px;color:#666;margin-top:1px">'+eh(f['f-num']||'')+(f['f-data']?' · '+fD(f['f-data']):'')+(f['f-cons']?' · '+f['f-cons']:'')+'</div></div>'
-      +(cs?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+(COM_COR2[cs]||'#333')+'33;color:'+(COM_COR2[cs]||'#888')+';border:1px solid '+(COM_COR2[cs]||'#333')+';white-space:nowrap">'+(COM_LBL2[cs]||cs)+'</span>':'')
-      +'<span style="font-size:10px;font-weight:800;color:#fff;white-space:nowrap">'+fmt(val)+'</span>'
+
+  // Cabeçalho
+  var header='<div style="display:flex;align-items:center;gap:8px;background:#111;border-bottom:2px solid #c0001a;padding:5px 10px;font-size:9px;color:#888;text-transform:uppercase;font-weight:800">'
+    +'<span style="min-width:72px">Data Orc.</span>'
+    +'<span style="flex:1">Cliente</span>'
+    +(mostrarDias?'<span style="min-width:52px;text-align:center;color:#ffa726">⏱️ Dias</span>':'')
+    +'<span style="min-width:90px;text-align:center">Consultor</span>'
+    +'<span style="min-width:80px;text-align:right">Valor</span>'
+    +'</div>';
+
+  var rows=lista.map(function(o){
+    var f=o.form||{};
+    var val=dashValOrc(o);
+    var cs=o.dados&&o.dados.comercialStatus||'';
+    var corEtapa=COM_COR2[cs]||'#555';
+    var etapaBadge=cs?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+corEtapa+'22;color:'+corEtapa+';border:1px solid '+corEtapa+';white-space:nowrap;flex-shrink:0">'+(COM_LBL2[cs]||cs)+'</span>':'';
+
+    // Calcular dias nesta etapa (desde aprovação interna, ou data do orçamento como fallback)
+    var diasHtml='';
+    if(mostrarDias){
+      if(ETAPAS_COM_DIAS.indexOf(cs)>=0){
+        var dias=getDiasEtapa(o);
+        if(dias!==null){
+          var corD=dias>30?'#ef5350':dias>15?'#ffa726':'#66bb6a';
+          var dtAprovObj=getDataAprov(o);
+          var tooltipTxt=dtAprovObj?'Aprovado em '+dtAprovObj.toLocaleDateString('pt-BR'):'Desde data do orçamento';
+          diasHtml='<div style="min-width:52px;text-align:center;flex-shrink:0"><span style="font-size:10px;font-weight:800;color:'+corD+'" title="'+tooltipTxt+'">'+dias+'d</span></div>';
+        } else {
+          diasHtml='<div style="min-width:52px;text-align:center;flex-shrink:0;color:#555">—</div>';
+        }
+      } else {
+        diasHtml='<div style="min-width:52px;text-align:center;flex-shrink:0;color:#555">—</div>';
+      }
+    }
+
+    return '<div style="padding:7px 10px;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;gap:8px;background:#0d0d0d;cursor:pointer;transition:background .12s" '
+      +'onmouseover="this.style.background=\'#151515\'" onmouseout="this.style.background=\'#0d0d0d\'" '
+      +(o.driveId?'onclick="dashDrillAbrirOrc(\''+o.driveId+'\',\''+eh(o.nome||'')+'\')" title="Clique para abrir o orçamento"':'')+'>'
+      +'<div style="min-width:72px;color:#aaa;font-size:9px;flex-shrink:0">'+(f['f-data']?fD(f['f-data']):'—')+'</div>'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:11px;color:#ffffff;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+      +'<div style="font-size:9px;color:#888;margin-top:1px">'+eh(f['f-num']||'')+(f['f-cons']?' · '+eh(f['f-cons']):'')+(o.driveId?'<span style="color:#555;margin-left:6px">↗ clique para abrir</span>':'')+'</div>'
+      +'</div>'
+      +diasHtml
+      +'<div style="min-width:90px;text-align:center;font-size:9px;color:#aaa;flex-shrink:0">'+etapaBadge+'</div>'
+      +'<div style="min-width:80px;text-align:right;font-size:10px;font-weight:800;color:#fff;flex-shrink:0">'+fmt(val)+'</div>'
       +'</div>';
-  }).join('')+'</div>';
+  }).join('');
+
+  var total=lista.reduce(function(t,o){return t+dashValOrc(o);},0);
+  var footer='<div style="padding:6px 10px;background:#111;border-top:1px solid #2a2a2a;display:flex;justify-content:space-between">'
+    +'<span style="font-size:10px;color:#555">'+lista.length+' orçamento(s) · mais antigo primeiro</span>'
+    +'<span style="font-size:10px;font-weight:800;color:#fff">'+fmt(total)+'</span>'
+    +'</div>';
+
+  corpo.innerHTML='<div style="max-height:400px;overflow-y:auto">'+header+rows+footer+'</div>';
   panel.style.display='block';
   panel.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
+
+async function dashDrillAbrirOrc(driveId, nome){
+  if(!driveId){alert('ID do orçamento não encontrado.');return;}
+  if(!confirm('Abrir orçamento "'+nome+'"?\n\nDados não salvos do orçamento atual serão perdidos.'))return;
+  // Fechar todos os modais abertos
+  document.getElementById('dash-ov').classList.remove('open');
+  document.getElementById('dash-elab-ov').classList.remove('open');
+  window.scrollTo({top:0,behavior:'smooth'});
+  await driveCarregar(driveId, nome);
+  // Após carregar, rolar para o Acompanhamento Comercial
+  setTimeout(function(){
+    var comPanel=document.getElementById('com-panel');
+    if(comPanel&&comPanel.style.display!=='none'){
+      comPanel.scrollIntoView({behavior:'smooth',block:'start'});
+    }
+  }, 900);
+}
 
 async function abrirDashFin(){
   document.getElementById('dashfin-ov').classList.add('open');
@@ -4924,12 +5314,12 @@ function dashFinRenderizar(){
       : '';
     var nomeStyle = p.driveId
       ? 'cursor:pointer;color:#90caf9;text-decoration:underline dotted;font-weight:700'
-      : 'color:#ccc';
+      : 'color:#ffffff;font-weight:700';
     var base = '<div class="fin-row" style="gap:6px">'
-      +'<div style="min-width:72px;color:#888;font-size:9px">'+fD(p.data)+'</div>'
+      +'<div style="min-width:72px;color:#aaa;font-size:9px">'+fD(p.data)+'</div>'
       +'<div style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" '+nomeClick+'>'
         +'<span style="'+nomeStyle+'" title="Clique para abrir o orçamento">'+eh(p.cliente)+'</span>'
-        +'<span style="font-size:9px;color:#555;margin-left:4px">· '+eh(p.num)+'</span>'
+        +'<span style="font-size:9px;color:#888;margin-left:4px">· '+eh(p.num)+'</span>'
       +'</div>';
     campos.forEach(function(c){base+=c;});
     base+='</div>';
@@ -4948,10 +5338,10 @@ function dashFinRenderizar(){
       +lista.map(function(p){
         var corVal=ST_COR[p.status]||'#888';
         var nomeClick = p.driveId?'onclick="dashFinAbrirOrc(\''+p.driveId+'\',\''+eh(p.nome)+'\')"':'';
-        var nomeStyle = p.driveId?'cursor:pointer;color:#90caf9;text-decoration:underline dotted':'color:#ccc';
-        return '<div style="padding:6px 10px;border-bottom:1px solid #111;display:flex;align-items:center;gap:8px">'
-          +'<div style="flex:1;min-width:0"><div style="font-size:10px;font-weight:700;'+nomeStyle+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis" '+nomeClick+' title="Clique para abrir">'+eh(p.cliente)+'</div>'
-          +'<div style="font-size:9px;color:#555">'+eh(p.num)+' · '+eh(p.cons)+' · '+fD(p.data)+' · '+eh(p.desc)+'</div></div>'
+        var nomeStyle = p.driveId?'cursor:pointer;color:#90caf9;text-decoration:underline dotted;font-weight:700':'color:#ffffff;font-weight:700';
+        return '<div style="padding:6px 10px;border-bottom:1px solid #111;display:flex;align-items:center;gap:8px;background:#0d0d0d">'
+          +'<div style="flex:1;min-width:0"><div style="font-size:11px;'+nomeStyle+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis" '+nomeClick+' title="Clique para abrir">'+eh(p.cliente)+'</div>'
+          +'<div style="font-size:9px;color:#888;margin-top:1px">'+eh(p.num)+' · '+eh(p.cons)+' · '+fD(p.data)+' · '+eh(p.desc)+'</div></div>'
           +'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+corVal+'22;color:'+corVal+';border:1px solid '+corVal+';white-space:nowrap">'+p.forma+'</span>'
           +'<span style="font-size:10px;font-weight:800;color:'+corVal+';white-space:nowrap">'+fmt(p.valor)+'</span>'
           +'</div>';
@@ -5013,7 +5403,7 @@ function dashFinRenderizar(){
   var proxVencHTML = proxVenc.length ? proxVenc.map(function(p){
     var dias=Math.ceil((new Date(p.data+'T12:00:00')-new Date(hoje+'T12:00:00'))/(1000*60*60*24));
     var corDias = dias<=3?'#ef5350':dias<=7?'#ffa726':'#888';
-    var nomeClick=p.driveId?'onclick="dashFinAbrirOrc(\''+p.driveId+'\',\''+eh(p.nome)+'\')" style="cursor:pointer;color:#90caf9;text-decoration:underline dotted"':'style="color:#ccc"';
+    var nomeClick=p.driveId?'onclick="dashFinAbrirOrc(\''+p.driveId+'\',\''+eh(p.nome)+'\')" style="cursor:pointer;color:#90caf9;text-decoration:underline dotted;font-weight:700"':'style="color:#ffffff;font-weight:700"';
     return '<div class="fin-row">'
       +'<div style="min-width:36px;text-align:center;font-weight:800;color:'+corDias+'">'+dias+'d</div>'
       +'<div style="min-width:72px;color:#888;font-size:9px">'+fD(p.data)+'</div>'
@@ -5091,14 +5481,16 @@ function dashFinDrill(key, titulo){
     +'</div>'
     +lista.map(function(p){
       var cor2=ST_COR2[p.status]||'#888';
-      var nomeClick=p.driveId?'onclick="dashFinAbrirOrc(\''+p.driveId+'\',\''+eh(p.nome)+'\')" style="cursor:pointer;color:#90caf9;text-decoration:underline;font-weight:800"':'style="color:#fff;font-weight:700"';
-      return '<div style="padding:6px 10px;border-bottom:1px solid #111;display:flex;align-items:center;gap:6px">'
-        +'<div style="min-width:72px;color:#888;font-size:9px;flex-shrink:0">'+fD(p.data)+'</div>'
+      var nomeAttrs=p.driveId
+        ?'onclick="dashFinAbrirOrc(\''+p.driveId+'\',\''+eh(p.nome)+'\')" style="cursor:pointer;color:#90caf9;text-decoration:underline;font-weight:800;font-size:11px"'
+        :'style="color:#ffffff;font-weight:700;font-size:11px"';
+      return '<div style="padding:6px 10px;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;gap:6px;background:#0d0d0d">'
+        +'<div style="min-width:72px;color:#aaa;font-size:9px;flex-shrink:0">'+fD(p.data)+'</div>'
         +'<div style="flex:1;min-width:0">'
-        +'<div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" '+nomeClick+' title="Clique para abrir o orçamento">'+(p.cliente&&p.cliente!=='—'?eh(p.cliente):'(sem cliente)')+'</div>'
-        +'<div style="font-size:9px;color:#555;margin-top:1px">Orc: '+eh(p.num)+' · '+eh(p.desc)+'</div>'
+        +'<div '+nomeAttrs+' style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Clique para abrir o orçamento">'+(p.cliente&&p.cliente!=='—'?eh(p.cliente):'(sem cliente)')+'</div>'
+        +'<div style="font-size:9px;color:#888;margin-top:1px">Orc: '+eh(p.num)+' · '+eh(p.desc)+'</div>'
         +'</div>'
-        +'<div style="min-width:90px;text-align:center;font-size:9px;color:#aaa;flex-shrink:0">'+eh(p.cons)+'</div>'
+        +'<div style="min-width:90px;text-align:center;font-size:9px;color:#ccc;flex-shrink:0">'+eh(p.cons)+'</div>'
         +'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+cor2+'22;color:'+cor2+';border:1px solid '+cor2+';white-space:nowrap;min-width:70px;text-align:center;flex-shrink:0">'+eh(p.forma)+'</span>'
         +'<span style="font-size:10px;font-weight:800;color:'+cor2+';white-space:nowrap;min-width:80px;text-align:right;flex-shrink:0">'+fmt(p.valor)+'</span>'
         +'</div>';
