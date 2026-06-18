@@ -1533,10 +1533,11 @@ async function aprovAcao(novo){
     try{
       var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual||null,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})});
       var d=await r.json();
-      if(d.ok){driveIdAtual=d.id;driveNumAtual=num;_naoSalvo=false;driveStatus('✅ Salvo automaticamente: '+d.nome,'ok');driveListar();}
+      if(d.ok){driveIdAtual=d.id;driveNumAtual=num;_naoSalvo=false;if(_driveCache)_driveCache[d.id]=null;driveStatus('✅ Salvo automaticamente: '+d.nome,'ok');driveListar();}
       else{driveStatus('⚠️ Erro ao salvar: '+(d.erro||''),'err');}
     }catch(e){driveStatus('⚠️ Erro ao salvar: '+e.message,'err');}
   }else if(driveIdAtual){
+    if(_driveCache)_driveCache[driveIdAtual]=null;
     fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})}).then(function(){_naoSalvo=false;}).catch(function(){});
     driveStatus('⏳ Salvando...','');
   }
@@ -1577,10 +1578,11 @@ async function aprovAcaoInline(novo){
     try{
       var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual||null,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})});
       var d=await r.json();
-      if(d.ok){driveIdAtual=d.id;driveNumAtual=num;_naoSalvo=false;driveStatus('✅ Salvo automaticamente: '+d.nome,'ok');driveListar();}
+      if(d.ok){driveIdAtual=d.id;driveNumAtual=num;_naoSalvo=false;if(_driveCache)_driveCache[d.id]=null;driveStatus('✅ Salvo automaticamente: '+d.nome,'ok');driveListar();}
       else{driveStatus('⚠️ Erro ao salvar: '+(d.erro||''),'err');}
     }catch(e){driveStatus('⚠️ Erro ao salvar: '+e.message,'err');}
   }else if(driveIdAtual){
+    if(_driveCache)_driveCache[driveIdAtual]=null;
     fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})}).then(function(){_naoSalvo=false;}).catch(function(){});
     driveStatus('⏳ Salvando...','');
   }
@@ -2895,7 +2897,6 @@ function setComercial(status){
 function salvarComercial(){
   var obs=(document.getElementById('com-obs')||{}).value||'';
   if(!comercialStatus){alert('Selecione um status comercial antes de registrar.');return;}
-  // Validar motivo obrigatório para venda perdida
   var motivo='';
   if(comercialStatus==='perdida'){
     motivo=(document.getElementById('com-motivo')||{}).value||'';
@@ -2914,21 +2915,39 @@ function salvarComercial(){
   });
   document.getElementById('com-obs').value='';
   if(document.getElementById('com-motivo'))document.getElementById('com-motivo').value='';
-  // Esconder select de motivo após salvar
   var motivoLabel=document.getElementById('com-motivo-label');
   var motivoSel=document.getElementById('com-motivo');
   if(motivoLabel)motivoLabel.style.display='none';
   if(motivoSel)motivoSel.style.display='none';
   renderComercial();renderFinanceiroInline();
-  // Salvar no Drive se houver ID
+
+  // Salvar no Drive e só depois recarregar o funil
   if(driveIdAtual){
     var num=gv('f-num')||'SN',cli=gv('f-cliente')||'SemCliente',dt=gv('f-data')||new Date().toISOString().split('T')[0];
-    fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})}).catch(function(){});
     driveStatus('⏳ Salvando...','');
+    // Invalidar cache deste orçamento para garantir dados frescos no funil
+    if(typeof _driveCacheSet === 'function') _driveCache[driveIdAtual]=null;
+    fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(d&&d.ok){
+          driveStatus('✅ Salvo!','ok');
+          _naoSalvo=false;
+        } else {
+          driveStatus('⚠️ Erro ao salvar','err');
+        }
+        // Só recarregar funil APÓS confirmação do Drive
+        funilRecarregar();
+      })
+      .catch(function(){
+        driveStatus('⚠️ Erro de conexão','err');
+        funilRecarregar();
+      });
+    alert('✅ Registro comercial salvo! O funil será atualizado em instantes.');
+  } else {
+    alert('✅ Registro comercial salvo!');
+    funilRecarregar();
   }
-  alert('✅ Registro comercial salvo!');
-  // Recarregar funil para refletir nova etapa
-  funilRecarregar();
 }
 
 // ════════════════════════════════════════════════════════
@@ -2999,7 +3018,10 @@ async function funilCarregarDados(forcar){
 }
 
 function funilRecarregar(){
+  // Limpar cache do Drive para garantir dados frescos do servidor
+  _driveCacheClear();
   _funilCarregado = false;
+  _funilCarregando = false;
   funilCarregarDados(true);
 }
 
