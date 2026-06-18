@@ -1484,31 +1484,100 @@ function mudarAbaAprov(aba){
   carregarListaAprov(aba);
 }
 
-async function fetchComLimite(itens,limite){
-  var resultados=[];limite=limite||5;
+// ── Cache de sessão para dados do Drive ──────────────────────────────────────
+var _driveCache = {}; // id → dados carregados nesta sessão
+
+function _driveCacheGet(id){ return _driveCache[id]||null; }
+function _driveCacheSet(id, dados){ _driveCache[id]=dados; }
+function _driveCacheClear(){ _driveCache={}; }
+
+async function fetchComLimite(itens, limite){
+  var resultados = [];
+  limite = Math.max(limite||5, 12); // mínimo 12 paralelos
+
   for(var i=0;i<itens.length;i+=limite){
-    var lote=itens.slice(i,i+limite);
-    var res=await Promise.all(lote.map(async function(item){
-      for(var t=0;t<2;t++){try{var r=await fetch(SCRIPT_URL+'?action=load&id='+item.id);if(!r.ok)continue;var d=await r.json();if(!d.ok)continue;var dados=d.dados;var st=dados.aprovStatus||'rascunho';return{driveId:item.id,nome:item.nome,modificado:item.modificado,st:st,form:dados.form||{},hist:dados.aprovHist||[],dados:dados};}catch(e){}}return null;
+    var lote = itens.slice(i,i+limite);
+    var res = await Promise.all(lote.map(function(item){
+      // Usar cache se disponível
+      var cached = _driveCacheGet(item.id);
+      if(cached) return Promise.resolve(cached);
+
+      return fetch(SCRIPT_URL+'?action=load&id='+item.id)
+        .then(function(r){return r.ok?r.json():null;})
+        .then(function(d){
+          if(!d||!d.ok) return null;
+          var dados=d.dados;
+          var obj={driveId:item.id,nome:item.nome,modificado:item.modificado,
+            st:dados.aprovStatus||'rascunho',form:dados.form||{},
+            hist:dados.aprovHist||[],dados:dados};
+          _driveCacheSet(item.id, obj);
+          return obj;
+        })
+        .catch(function(){return null;});
     }));
     for(var j=0;j<res.length;j++){if(res[j])resultados.push(res[j]);}
   }
   return resultados;
 }
 
+// Versão progressiva: chama onProgress(resultadosParciais) a cada lote
+async function fetchProgressivo(itens, limite, onProgress){
+  var resultados = [];
+  limite = Math.max(limite||12, 12);
+  var INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'];
+  itens = itens.filter(function(x){return !INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});});
+
+  for(var i=0;i<itens.length;i+=limite){
+    var lote = itens.slice(i,i+limite);
+    var res = await Promise.all(lote.map(function(item){
+      var cached = _driveCacheGet(item.id);
+      if(cached) return Promise.resolve(cached);
+      return fetch(SCRIPT_URL+'?action=load&id='+item.id)
+        .then(function(r){return r.ok?r.json():null;})
+        .then(function(d){
+          if(!d||!d.ok) return null;
+          var dados=d.dados;
+          var obj={driveId:item.id,nome:item.nome,modificado:item.modificado,
+            st:dados.aprovStatus||'rascunho',form:dados.form||{},
+            hist:dados.aprovHist||[],dados:dados};
+          _driveCacheSet(item.id, obj);
+          return obj;
+        })
+        .catch(function(){return null;});
+    }));
+    for(var j=0;j<res.length;j++){if(res[j])resultados.push(res[j]);}
+    if(onProgress) onProgress(resultados.slice(), itens.length);
+  }
+  return resultados;
+}
+
 async function carregarListaAprov(aba){
   var lista=document.getElementById('aprov-lista');
-  lista.innerHTML='<div style="text-align:center;padding:30px;color:#888;font-size:12px">⏳ Carregando...</div>';
+  lista.innerHTML='<div style="text-align:center;padding:30px;color:#888;font-size:12px">⏳ Buscando orçamentos...</div>';
   _aprovadosOffset=0;_aprovadosCache=[];
   try{
     var r=await fetch(SCRIPT_URL+'?action=list&q=');var d=await r.json();
     if(!d.ok)throw new Error(d.erro||'Erro ao listar');
-    var itens=d.lista||[];
-    // Filtrar arquivos internos do sistema
-    itens=itens.filter(function(x){return !['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'].some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});});
+    var itens=(d.lista||[]).filter(function(x){
+      return !['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'].some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
+    });
     if(!itens.length){lista.innerHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">Nenhum orçamento no Drive.</div>';return;}
-    lista.innerHTML='<div style="text-align:center;padding:20px;color:#888;font-size:12px">⏳ Carregando '+itens.length+' orçamento(s)...</div>';
-    var validos=await fetchComLimite(itens,5);
+
+    var total=itens.length;
+    lista.innerHTML='<div id="aprov-progress" style="text-align:center;padding:16px;color:#888;font-size:12px">'
+      +'⏳ Carregando 0 / '+total+' orçamento(s)...'
+      +'<div style="background:#1a1a1a;border-radius:4px;height:6px;margin-top:8px;overflow:hidden">'
+      +'<div id="aprov-prog-bar" style="height:100%;background:#c0001a;width:0%;transition:width .3s;border-radius:4px"></div>'
+      +'</div></div>';
+
+    var validos=await fetchProgressivo(itens, 15, function(parciais, totalItens){
+      var pct=Math.round(parciais.length/totalItens*100);
+      var pg=document.getElementById('aprov-progress');
+      var pb=document.getElementById('aprov-prog-bar');
+      if(pg) pg.childNodes[0].textContent='⏳ Carregando '+parciais.length+' / '+totalItens+' orçamento(s)...';
+      if(pb) pb.style.width=pct+'%';
+    });
+
     if(aba==='pend'){
       var pendentes=validos.filter(function(x){return x.st!=='aprovado'&&x.st!=='rascunho';});
       _listaAprov=pendentes;
@@ -1916,6 +1985,7 @@ async function driveSalvar(){
     var d=await r.json();if(!d.ok)throw new Error(d.erro);
     driveIdAtual=d.id;driveNumAtual=num;
     _naoSalvo=false;
+    _driveCacheClear(); // cache stale após salvar
     driveStatus('✅ Salvo: '+d.nome,'ok');driveListar();
   }catch(e){driveStatus('Erro: '+e.message,'err');}
 }
@@ -2742,19 +2812,30 @@ async function funilCarregarDados(forcar){
   _funilCarregando = true;
   var stEl = document.getElementById('funil-lista-status');
   var listaEl = document.getElementById('funil-lista');
-  if(stEl) stEl.textContent = '⏳ Carregando orçamentos do Drive...';
-  if(listaEl) listaEl.innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:12px">⏳ Buscando...</div>';
+  if(stEl) stEl.textContent = '⏳ Carregando orçamentos...';
+  if(listaEl) listaEl.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">'
+    +'⏳ Buscando...'
+    +'<div style="background:#e0e0e0;border-radius:4px;height:5px;margin-top:8px;overflow:hidden">'
+    +'<div id="funil-prog-bar" style="height:100%;background:#c0001a;width:0%;transition:width .3s;border-radius:4px"></div>'
+    +'</div></div>';
   try{
     var r = await fetch(SCRIPT_URL+'?action=list&q=');
     var d = await r.json();
     if(!d.ok) throw new Error(d.erro||'Erro ao listar');
-    var INTERNOS = ['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'];
-    var itens = (d.lista||[]).filter(function(x){
-      return !INTERNOS.some(function(n){ return x.nome && x.nome.indexOf(n) >= 0; });
-    });
+    var itens = d.lista||[];
     if(stEl) stEl.textContent = '⏳ Carregando ' + itens.length + ' orçamento(s)...';
-    // Filtrar apenas aprovados para o funil (otimiza: só carrega aprovados e os que têm status comercial)
-    var todos = await fetchComLimite(itens, 5);
+    var todos = await fetchProgressivo(itens, 15, function(parciais, total){
+      var pct=Math.round(parciais.length/total*100);
+      var pb=document.getElementById('funil-prog-bar');
+      if(pb) pb.style.width=pct+'%';
+      if(stEl) stEl.textContent='⏳ '+parciais.length+' / '+total+' carregados...';
+      // Mostrar aprovados já encontrados progressivamente
+      var aprovParciais=parciais.filter(function(o){return o.st==='aprovado';});
+      if(aprovParciais.length>0){
+        _funilCache=aprovParciais;
+        funilRenderCounters();
+      }
+    });
     _funilCache = todos.filter(Boolean).filter(function(o){ return o.st === 'aprovado'; });
     _funilCarregado = true;
     funilRenderCounters();
@@ -3907,14 +3988,27 @@ async function abrirDashboard(){
 
 async function dashAtualizar(){
   document.getElementById('dash-sub').textContent = 'Carregando orçamentos do Drive...';
-  document.getElementById('dash-corpo').innerHTML = '<div class="dash-loading">⏳ Buscando dados...</div>';
+  document.getElementById('dash-corpo').innerHTML = '<div class="dash-loading">'
+    +'⏳ Buscando dados...'
+    +'<div style="background:#1a1a1a;border-radius:4px;height:6px;margin-top:12px;overflow:hidden;max-width:300px;margin-left:auto;margin-right:auto">'
+    +'<div id="dash-prog-bar" style="height:100%;background:#c0001a;width:0%;transition:width .3s;border-radius:4px"></div>'
+    +'</div><div id="dash-prog-txt" style="color:#555;font-size:10px;margin-top:6px">0 / 0</div></div>';
   try{
     var r = await fetch(SCRIPT_URL+'?action=list&q=');
     var d = await r.json();
     if(!d.ok) throw new Error(d.erro);
-    var lista = d.lista || [];
+    var lista = (d.lista||[]).filter(function(x){
+      return !['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'].some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
+    });
     document.getElementById('dash-sub').textContent = 'Carregando '+lista.length+' orçamentos...';
-    _dashDados = (await fetchComLimite(lista, 5)).filter(Boolean);
+    _dashDados = (await fetchProgressivo(lista, 15, function(parciais, total){
+      var pct=Math.round(parciais.length/total*100);
+      var pb=document.getElementById('dash-prog-bar');
+      var pt=document.getElementById('dash-prog-txt');
+      if(pb) pb.style.width=pct+'%';
+      if(pt) pt.textContent=parciais.length+' / '+total+' carregados';
+      document.getElementById('dash-sub').textContent='⏳ '+parciais.length+' / '+total+' orçamentos...';
+    })).filter(Boolean);
     document.getElementById('dash-sub').textContent = '📦 '+_dashDados.length+' orçamentos carregados';
     dashRenderizar();
   }catch(e){
@@ -5201,14 +5295,27 @@ async function abrirDashFin(){
 
 async function dashFinAtualizar(){
   document.getElementById('dashfin-sub').textContent = 'Carregando dados...';
-  document.getElementById('dashfin-corpo').innerHTML = '<div class="dash-loading">⏳ Buscando dados...</div>';
+  document.getElementById('dashfin-corpo').innerHTML = '<div class="dash-loading">'
+    +'⏳ Buscando dados financeiros...'
+    +'<div style="background:#1a1a1a;border-radius:4px;height:6px;margin-top:12px;overflow:hidden;max-width:300px;margin-left:auto;margin-right:auto">'
+    +'<div id="dashfin-prog-bar" style="height:100%;background:#c0001a;width:0%;transition:width .3s;border-radius:4px"></div>'
+    +'</div><div id="dashfin-prog-txt" style="color:#555;font-size:10px;margin-top:6px">0 / 0</div></div>';
   try{
     var r = await fetch(SCRIPT_URL+'?action=list&q=');
     var d = await r.json();
     if(!d.ok) throw new Error(d.erro);
-    var lista = d.lista||[];
+    var lista = (d.lista||[]).filter(function(x){
+      return !['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'].some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
+    });
     document.getElementById('dashfin-sub').textContent = 'Carregando '+lista.length+' orçamentos...';
-    _dashFinDados = (await fetchComLimite(lista,5)).filter(Boolean);
+    _dashFinDados = (await fetchProgressivo(lista, 15, function(parciais, total){
+      var pct=Math.round(parciais.length/total*100);
+      var pb=document.getElementById('dashfin-prog-bar');
+      var pt=document.getElementById('dashfin-prog-txt');
+      if(pb) pb.style.width=pct+'%';
+      if(pt) pt.textContent=parciais.length+' / '+total+' carregados';
+      document.getElementById('dashfin-sub').textContent='⏳ '+parciais.length+' / '+total+'...';
+    })).filter(Boolean);
     document.getElementById('dashfin-sub').textContent = '📦 '+_dashFinDados.length+' orçamentos carregados';
     dashFinRenderizar();
   }catch(e){
