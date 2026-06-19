@@ -2155,7 +2155,7 @@ async function driveCarregar(id,nome){
     aprovStatus=dados.aprovStatus||'rascunho';aprovHist=dados.aprovHist||[];comercialStatus=dados.comercialStatus||'';comercialHist=dados.comercialHist||[];snapshotAnterior=dados.snapshotAnterior||null;finParcelas=dados.finParcelas||[];finObs=dados.finObs||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
     driveIdAtual=id;driveNumAtual=dados.form&&dados.form['f-num']?dados.form['f-num']:null;
     _naoSalvo=false;
-    buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+    buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
     driveStatus('✅ Carregado: '+nome,'ok');
   }catch(e){driveStatus('Erro: '+e.message,'err');}
   finally{setTimeout(function(){_carregandoOrc=false;},400);}
@@ -2246,7 +2246,7 @@ function carregar(input){
       if(data.state){SECS.forEach(function(s){if(data.state[s]){state[s].ambientes=data.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=data.state[s].ambAtiva||'default';state[s].rows=data.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
       if(data.form)setForm(data.form);
       aprovStatus=data.aprovStatus||'rascunho';aprovHist=data.aprovHist||[];comercialStatus=data.comercialStatus||'';comercialHist=data.comercialHist||[];snapshotAnterior=data.snapshotAnterior||null;finParcelas=data.finParcelas||[];finObs=data.finObs||'';
-      buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();alert('✅ Carregado!');
+      buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();alert('✅ Carregado!');
     }catch(err){alert('⚠️ Arquivo inválido: '+err.message);}
     finally{setTimeout(function(){_carregandoOrc=false;},400);}
   };
