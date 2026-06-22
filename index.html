@@ -1466,6 +1466,8 @@ function doLogin(){
     if(el) el.style.display=dashTemAcesso(dashMap[btnId])?'':'none';
   });
   renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+  // Aplicar permissões nos campos
+  setTimeout(aplicarPermissoes, 100);
   // Mostrar e carregar o funil de vendas
   if(dashTemAcesso('funil-card')){funilMostrarCard();funilCarregarDados();}
   else{funilEsconderCard();}
@@ -1547,8 +1549,7 @@ async function aprovAcao(novo){
 function renderAprovInline(){
   var box=document.getElementById('aprov-inline-box');
   var btnsEl=document.getElementById('aprov-inline-btns');
-  if(!box||!btnsEl)return;
-  if(!usuarioAtual){box.style.display='none';return;}
+  if(!box||!btnsEl)return;  if(!usuarioAtual){box.style.display='none';return;}
   var nivel=usuarioAtual.nivel==='adm'?'consultor':usuarioAtual.nivel;
   var cImp=0;try{cImp=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)*(1+IMP);}catch(e){}
   function btn(cor,txt,st){var b=document.createElement('button');b.className='acao-btn';b.style.background=cor;b.textContent=txt;b.onclick=function(){aprovAcaoInline(st);};return b;}
@@ -1559,6 +1560,8 @@ function renderAprovInline(){
   else if(nivel==='diretor'&&aprovStatus==='diretoria'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#c62828','🔄 Reprovar / Revisão','revisao'));}
   else if(['adm','gerente','diretor'].includes(usuarioAtual.nivel)&&aprovStatus!=='aprovado'&&aprovStatus!=='rascunho'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#6a1b9a','🏆 Enviar para Diretoria','diretoria'));btnsEl.appendChild(btn('#c62828','🔄 Solicitar Revisão','revisao'));}
   box.style.display=mostrar?'block':'none';
+  // Reaplicar permissões nos botões reconstruídos
+  if(typeof aplicarPermissoes==='function') setTimeout(aplicarPermissoes, 50);
 }
 
 async function aprovAcaoInline(novo){
@@ -2157,6 +2160,7 @@ async function driveCarregar(id,nome){
     driveIdAtual=id;driveNumAtual=dados.form&&dados.form['f-num']?dados.form['f-num']:null;
     _naoSalvo=false;
     buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+    setTimeout(aplicarPermissoes, 150);
     driveStatus('✅ Carregado: '+nome,'ok');
   }catch(e){driveStatus('Erro: '+e.message,'err');}
   finally{setTimeout(function(){_carregandoOrc=false;},400);}
@@ -5224,12 +5228,105 @@ function permTemAcesso(campo){
   if(!usuarioAtual) return false;
   var cargo=usuarioAtual.cargo||'';
   var nivel=usuarioAtual.nivel||'';
-  // adm, gerente e diretor têm acesso total por padrão
   if(['adm','gerente','diretor'].includes(nivel)) return true;
-  if(!cargo||!_permissoes[cargo]) return true; // sem restrição configurada = permite
+  if(!cargo||!_permissoes[cargo]) return true;
   var perm=_permissoes[cargo];
-  if(perm[campo]===undefined) return true; // campo não configurado = permite
+  if(perm[campo]===undefined) return true;
   return !!perm[campo];
+}
+
+// Aplica as permissões nos campos do formulário bloqueando/habilitando
+function aplicarPermissoes(){
+  if(!usuarioAtual) return;
+  var nivel=usuarioAtual.nivel||'';
+  // ADM/gerente/diretor: tudo liberado
+  var tudo = ['adm','gerente','diretor'].includes(nivel);
+
+  // ── Campos de formulário diretos (input/select/textarea) ──────────────────
+  var camposForm=[
+    'f-num','f-data','f-val','f-cons','f-fonte',
+    'f-cliente','f-doc','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade',
+    'f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev',
+    'f-dia','f-dia-fim','f-hi','f-hf','f-dm','f-hm','f-dd','f-hd','f-pub',
+    'f-obs','f-obs-os','f-pgto','f-svinc',
+    'desc-pct','desc-rs','val-liq','f-bv'
+  ];
+  camposForm.forEach(function(id){
+    var el=document.getElementById(id);
+    if(!el) return;
+    var ok = tudo || permTemAcesso(id);
+    el.disabled = !ok;
+    el.style.opacity = ok?'':'0.4';
+    el.style.cursor = ok?'':'not-allowed';
+    if(!ok) el.title='⛔ Sem permissão para editar este campo';
+    else el.removeAttribute('title');
+  });
+
+  // ── Abas de equipamentos ──────────────────────────────────────────────────
+  var abas=['som','video','luz','estrutura','servico','logistica'];
+  abas.forEach(function(s){
+    var ok=tudo||permTemAcesso('tab-'+s);
+    // Bloquear botões de adicionar/remover itens dentro da aba
+    var secEl=document.getElementById('sec-'+s);
+    if(!secEl) return;
+    secEl.querySelectorAll('button, select.row-sel, input.row-qty, input.row-diar, input.row-vunit').forEach(function(el){
+      el.disabled=!ok;
+      el.style.opacity=ok?'':'0.4';
+      el.style.cursor=ok?'':'not-allowed';
+    });
+  });
+
+  // ── Botões de aprovação ───────────────────────────────────────────────────
+  var btnsAprov={
+    'enviar-analise': '[onclick*="aprovAcaoInline(\'analise\')"],[onclick*="aprovAcao(\'analise\'"]',
+    'aprovar':        '[onclick*="aprovAcaoInline(\'aprovado\')"],[onclick*="aprovAcao(\'aprovado\'"]',
+    'solicitar-revisao': '[onclick*="aprovAcaoInline(\'revisao\')"],[onclick*="aprovAcao(\'revisao\'"]',
+    'enviar-diretoria':  '[onclick*="aprovAcaoInline(\'diretoria\')"],[onclick*="aprovAcao(\'diretoria\'"]'
+  };
+  Object.keys(btnsAprov).forEach(function(perm){
+    var ok=tudo||permTemAcesso(perm);
+    document.querySelectorAll(btnsAprov[perm]).forEach(function(el){
+      el.disabled=!ok;
+      el.style.opacity=ok?'':'0.4';
+      el.style.cursor=ok?'':'not-allowed';
+      el.title=ok?'':'⛔ Sem permissão';
+    });
+  });
+
+  // ── Painel comercial ──────────────────────────────────────────────────────
+  var okComStatus=tudo||permTemAcesso('com-status');
+  var okComObs=tudo||permTemAcesso('com-obs');
+  var okComMotivo=tudo||permTemAcesso('com-motivo');
+  document.querySelectorAll('.com-btn').forEach(function(el){
+    el.disabled=!okComStatus;
+    el.style.opacity=okComStatus?'':'0.4';
+    el.style.cursor=okComStatus?'':'not-allowed';
+  });
+  ['com-obs','com-motivo'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(!el) return;
+    var ok=id==='com-obs'?okComObs:okComMotivo;
+    el.disabled=!ok;el.style.opacity=ok?'':'0.4';
+  });
+  var btnReg=document.querySelector('button[onclick="salvarComercial()"]');
+  if(btnReg){btnReg.disabled=!okComStatus;btnReg.style.opacity=okComStatus?'':'0.4';}
+
+  // ── Parcelas financeiras ──────────────────────────────────────────────────
+  var okFin=tudo||permTemAcesso('finParcelas');
+  document.querySelectorAll('.fin-add-btn, .fin-parc-row button, [onclick*="finToggle"], [onclick*="finRemove"]').forEach(function(el){
+    el.disabled=!okFin;
+    el.style.opacity=okFin?'':'0.4';
+    el.style.cursor=okFin?'':'not-allowed';
+  });
+
+  // ── Desconto/BV (financeiro do orçamento) ────────────────────────────────
+  ['desc-pct','desc-rs','val-liq','f-bv'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(!el) return;
+    var ok=tudo||permTemAcesso(id);
+    el.disabled=!ok;
+    el.style.opacity=ok?'':'0.4';
+  });
 }
 
 function dashTemAcesso(dashId){
