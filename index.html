@@ -1439,6 +1439,7 @@ var PRECOS={
 };
 
 function doLogin(){
+  usuariosCarregarStorage(); // carregar alterações salvas (novos cargos, senhas, etc.)
   var uid=(document.getElementById('l-user').value||'').trim().toLowerCase();
   var pwd=document.getElementById('l-pass').value||'';
   var err=document.getElementById('l-err');
@@ -1588,7 +1589,7 @@ async function aprovAcaoInline(novo){
   }
 }
 
-function abrirAdm(){permCarregar();renderAdmList();renderAdmExclusoes();document.getElementById('adm-ov').classList.add('open');admAba('usuarios');}
+function abrirAdm(){permCarregar();usuariosCarregarStorage();renderAdmList();renderAdmExclusoes();document.getElementById('adm-ov').classList.add('open');admAba('usuarios');}
 function abrirAprovacoes(){
   document.getElementById('aprov-ov').classList.add('open');
   carregarSolExclusaoDrive().then(function(){
@@ -5189,13 +5190,18 @@ function permCarregar(){
 
 function permSalvar(){
   var cargo=document.getElementById('perm-cargo-sel').value;
+  if(!cargo){alert('Selecione um cargo.');return;}
   if(!_permissoes[cargo]) _permissoes[cargo]={};
-  // Coletar checkboxes
   document.querySelectorAll('.perm-cb').forEach(function(cb){
     _permissoes[cargo][cb.dataset.campo]=cb.checked;
   });
-  try{localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes));}catch(e){}
-  alert('✅ Permissões do cargo "'+cargo+'" salvas!');
+  try{
+    localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes));
+    // Feedback visual no botão
+    var btn=document.querySelector('#admpane-permissoes button[onclick="permSalvar()"]');
+    if(btn){var orig=btn.textContent;btn.textContent='✅ Salvo!';btn.style.background='#2e7d32';setTimeout(function(){btn.textContent=orig;btn.style.background='#c0001a';},1500);}
+    else{alert('✅ Permissões do cargo "'+cargo+'" salvas!');}
+  }catch(e){alert('⚠️ Erro ao salvar: '+e.message);}
 }
 
 function dashAcessoSalvar(){
@@ -5206,8 +5212,12 @@ function dashAcessoSalvar(){
       _dashAcessos[cargo][cb.dataset.dash]=cb.checked;
     });
   });
-  try{localStorage.setItem('crazySomDashAcesso',JSON.stringify(_dashAcessos));}catch(e){}
-  alert('✅ Acessos a dashboards salvos!');
+  try{
+    localStorage.setItem('crazySomDashAcesso',JSON.stringify(_dashAcessos));
+    var btn=document.querySelector('#admpane-dashboards button[onclick="dashAcessoSalvar()"]');
+    if(btn){var orig=btn.textContent;btn.textContent='✅ Salvo!';btn.style.background='#2e7d32';setTimeout(function(){btn.textContent=orig;btn.style.background='#c0001a';},1500);}
+    else{alert('✅ Acessos a dashboards salvos!');}
+  }catch(e){alert('⚠️ Erro ao salvar: '+e.message);}
 }
 
 function permTemAcesso(campo){
@@ -5283,21 +5293,72 @@ function dashAcessoRenderizar(){
   document.getElementById('dash-acesso-corpo').innerHTML=html;
 }
 
+function usuariosSalvarStorage(){
+  try{
+    // Salvar lista sem as senhas de usuários padrão (segurança mínima)
+    localStorage.setItem('crazySomUsuarios', JSON.stringify(USUARIOS));
+  }catch(e){}
+}
+
+function usuariosCarregarStorage(){
+  try{
+    var d=localStorage.getItem('crazySomUsuarios');
+    if(d){
+      var arr=JSON.parse(d);
+      if(Array.isArray(arr)&&arr.length>0) {
+        // Mesclar: manter entradas da lista padrão para usuários que sumiram
+        arr.forEach(function(u){
+          var idx=USUARIOS.findIndex(function(x){return x.id===u.id;});
+          if(idx>=0){
+            USUARIOS[idx]=Object.assign({},USUARIOS[idx],u);
+          } else {
+            USUARIOS.push(u);
+          }
+        });
+      }
+    }
+  }catch(e){}
+}
+
 function renderAdmList(){
+  usuariosCarregarStorage();
   document.getElementById('adm-list').innerHTML=USUARIOS.map(function(u,i){
     var cargoVal=u.cargo||'';
-    return '<div class="adm-row" style="flex-wrap:wrap;gap:5px">'
-      +'<div class="adm-info"><div class="adm-nome">'+u.nome+'</div><div class="adm-id">'+u.id+(cargoVal?' · '+cargoVal:'')+'</div></div>'
-      +'<input class="adm-inp" id="an'+i+'" value="'+u.nome+'" placeholder="Nome">'
-      +'<input class="adm-inp" id="ai'+i+'" value="'+u.id+'" placeholder="Login">'
-      +'<input class="adm-inp" type="password" id="ap'+i+'" placeholder="Nova senha">'
-      +'<select class="adm-sel" id="al'+i+'">'+Object.keys(NIVEIS).map(function(k){return '<option value="'+k+'"'+(u.nivel===k?' selected':'')+'>'+NIVEIS[k]+'</option>';}).join('')+'</select>'
-      +'<select class="adm-sel" id="ac'+i+'" style="min-width:140px">'
-      +'<option value="">Cargo...</option>'
-      +CARGOS.map(function(c){return '<option value="'+c+'"'+(cargoVal===c?' selected':'')+'>'+c+'</option>';}).join('')
-      +'</select>'
-      +'<button class="adm-save" onclick="admSalvar('+i+')">💾</button>'
-      +(u.nivel!=='adm'?'<button class="adm-del" onclick="admDel('+i+')">🗑️</button>':'')
+    var nivelOpts=Object.keys(NIVEIS).map(function(k){
+      return '<option value="'+k+'"'+(u.nivel===k?' selected':'')+'>'+NIVEIS[k]+'</option>';
+    }).join('');
+    var cargoOpts='<option value="">— Selecione o Cargo —</option>'
+      +CARGOS.map(function(c){
+        return '<option value="'+c+'"'+(cargoVal===c?' selected':'')+'>'+c+'</option>';
+      }).join('');
+
+    return '<div style="background:#111;border:1px solid #2a2a2a;border-radius:6px;padding:12px;margin-bottom:8px">'
+      // Cabeçalho
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+      +'<div>'
+      +'<div style="font-size:12px;font-weight:800;color:#fff">'+u.nome+'</div>'
+      +'<div style="font-size:10px;color:#666;margin-top:1px">'+u.id+(cargoVal?' · <span style="color:#ffa726">'+cargoVal+'</span>':'')+'</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:5px">'
+      +'<button onclick="admSalvar('+i+')" style="padding:5px 12px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">💾 Salvar</button>'
+      +(u.nivel!=='adm'?'<button onclick="admDel('+i+')" style="padding:5px 10px;background:#333;color:#ef5350;border:none;border-radius:4px;font-size:11px;cursor:pointer">🗑️</button>':'')
+      +'</div>'
+      +'</div>'
+      // Campos em grid
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px">'
+      +'<div><label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">Nome</label>'
+      +'<input id="an'+i+'" value="'+u.nome+'" placeholder="Nome completo" style="width:100%;padding:6px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px;box-sizing:border-box"></div>'
+      +'<div><label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">Login</label>'
+      +'<input id="ai'+i+'" value="'+u.id+'" placeholder="login.usuario" style="width:100%;padding:6px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px;box-sizing:border-box"></div>'
+      +'</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px">'
+      +'<div><label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">Nova Senha</label>'
+      +'<input type="password" id="ap'+i+'" placeholder="deixe em branco p/ manter" style="width:100%;padding:6px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px;box-sizing:border-box"></div>'
+      +'<div><label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">Nível de Acesso</label>'
+      +'<select id="al'+i+'" style="width:100%;padding:6px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px">'+nivelOpts+'</select></div>'
+      +'<div><label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">Cargo</label>'
+      +'<select id="ac'+i+'" style="width:100%;padding:6px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px">'+cargoOpts+'</select></div>'
+      +'</div>'
       +'</div>';
   }).join('');
 }
@@ -5307,16 +5368,31 @@ function admSalvar(i){
   var id=document.getElementById('ai'+i).value.trim().toLowerCase().replace(/\s+/g,'.');
   var pass=document.getElementById('ap'+i).value;
   var nivel=document.getElementById('al'+i).value;
-  var cargo=(document.getElementById('ac'+i)||{}).value||'';
+  var cargo=document.getElementById('ac'+i).value||'';
   if(!nome||!id){alert('Nome e login obrigatórios.');return;}
+  // Verificar login duplicado
+  var duplicado=USUARIOS.some(function(u,j){return j!==i&&u.id===id;});
+  if(duplicado){alert('⚠️ Este login já está em uso por outro usuário.');return;}
   USUARIOS[i]=Object.assign({},USUARIOS[i],{nome:nome,id:id,nivel:nivel,cargo:cargo});
-  if(pass.trim())USUARIOS[i].senha=hs(pass.trim());
+  if(pass.trim()) USUARIOS[i].senha=hs(pass.trim());
+  usuariosSalvarStorage();
   renderAdmList();
-  alert('✅ Salvo!');
+  alert('✅ Usuário "'+nome+'" salvo com sucesso!');
 }
 
-function admDel(i){if(!confirm('Excluir "'+USUARIOS[i].nome+'"?'))return;USUARIOS.splice(i,1);renderAdmList();}
-function admNovo(){USUARIOS.push({id:'novo.usuario',nome:'Novo Usuário',nivel:'consultor',cargo:'',senha:hs('crazy@2026')});renderAdmList();document.getElementById('adm-list').lastElementChild.scrollIntoView({behavior:'smooth'});}
+function admDel(i){
+  if(!confirm('Excluir o usuário "'+USUARIOS[i].nome+'"?\nEsta ação não pode ser desfeita.'))return;
+  USUARIOS.splice(i,1);
+  usuariosSalvarStorage();
+  renderAdmList();
+}
+
+function admNovo(){
+  USUARIOS.push({id:'novo.usuario',nome:'Novo Usuário',nivel:'consultor',cargo:'',senha:hs('crazy@2026')});
+  usuariosSalvarStorage();
+  renderAdmList();
+  setTimeout(function(){document.getElementById('adm-list').lastElementChild.scrollIntoView({behavior:'smooth'});},100);
+}
 
 function dashDrill(key, tituloEnc){
   var titulo=decodeURIComponent(tituloEnc);
@@ -6173,6 +6249,9 @@ async function rejeitarExclusaoModal(idx){
 
 buildTabs();
 document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
+// Carregar dados persistidos ao iniciar
+usuariosCarregarStorage();
+permCarregar();
 calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
 document.getElementById('l-pass').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
 document.getElementById('l-user').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('l-pass').focus();});
