@@ -1188,9 +1188,21 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   </div>
   <div class="sep" style="margin-top:11px">
     <label style="color:#888">Valor Líquido Final (PDF)</label>
-    <div style="display:flex;gap:8px;align-items:center;margin-top:5px">
-      <input type="number" id="val-liq" placeholder="0,00" step="1" style="max-width:175px;background:#1c1c1c;color:#fff;border-color:#3a3a3a;font-size:14px;font-weight:700;padding:6px 9px" oninput="calc();marcarAlterado()">
-      <span style="color:#555;font-size:10px">← deixe vazio para usar o valor calculado</span>
+    <div style="display:flex;gap:12px;align-items:flex-start;margin-top:5px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:9px;color:#ffa726;text-transform:uppercase;font-weight:800;margin-bottom:3px">Com Imposto (PDF c/ nota)</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="number" id="val-liq" placeholder="0,00" step="1" style="max-width:155px;background:#1c1c1c;color:#fff;border-color:#3a3a3a;font-size:14px;font-weight:700;padding:6px 9px" oninput="calc();marcarAlterado()">
+          <span style="color:#555;font-size:10px">← vazio = valor calculado</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:9px;color:#66bb6a;text-transform:uppercase;font-weight:800;margin-bottom:3px">Sem Imposto (PDF s/ nota)</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="number" id="val-liq-si" placeholder="0,00" step="1" style="max-width:155px;background:#1c1c1c;color:#fff;border-color:#2e7d32;font-size:14px;font-weight:700;padding:6px 9px;border:1px solid #2e7d32;border-radius:4px" oninput="calc();marcarAlterado()">
+          <span style="color:#555;font-size:10px">← vazio = valor calculado</span>
+        </div>
+      </div>
     </div>
   </div>
   <div style="margin:11px 0 0">
@@ -2344,6 +2356,12 @@ async function salvarNoDrive(opts){
 
 async function _executarSave(num,cli,dt,opts){
   opts=opts||{};
+  // Bloquear save em modo somente leitura
+  if(_modoLeitura){
+    driveStatus('⛔ Modo somente leitura — salvar bloqueado','err');
+    alert('⛔ Este orçamento está em modo somente leitura.\n\nAguarde o outro usuário terminar ou clique em "🔄 Tentar Editar".');
+    return null;
+  }
   try{
     var dados=getDadosCompletos();
     // Gravar nova versão (timestamp)
@@ -2583,10 +2601,13 @@ function ativarModoLeitura(lock){
   }
   b.innerHTML='👁️ SOMENTE LEITURA'
     +(lock?' — <b>'+eh(lock.usuarioNome)+'</b> está editando':'')
-    +' &nbsp;<button onclick="verificarLockEEditar()" style="padding:3px 10px;background:#fff;color:#e65100;border:none;border-radius:3px;cursor:pointer;font-weight:800;font-size:10px">🔄 Tentar Editar</button>'
-    +' <button onclick="desativarModoLeitura()" style="padding:3px 8px;background:#c62828;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:10px">✕</button>';
+    +' &nbsp;<button onclick="verificarLockEEditar()" style="padding:3px 10px;background:#fff;color:#e65100;border:none;border-radius:3px;cursor:pointer;font-weight:800;font-size:10px">🔄 Tentar Editar</button>';
   // Bloquear formulário
   document.querySelectorAll('.card input,.card select,.card textarea,.card button,.totbox input,.totbox select,.totbox button,.aprov-inline button,.com-panel button,.fin-inline button,#fin-inline button').forEach(function(el){
+    if(!el.dataset.lockDisabled){el.dataset.lockDisabled=el.disabled?'1':'0';el.disabled=true;el.style.opacity='0.45';}
+  });
+  // Bloquear botão de salvar no drive e salvar local
+  document.querySelectorAll('[onclick*="driveSalvar"],[onclick*="salvar()"]').forEach(function(el){
     if(!el.dataset.lockDisabled){el.dataset.lockDisabled=el.disabled?'1':'0';el.disabled=true;el.style.opacity='0.45';}
   });
 }
@@ -2750,7 +2771,7 @@ async function driveDeletar(id,nome){
   }
 }
 
-var FORM_IDS=['f-num','f-data','f-val','f-cons','f-fonte','f-cliente','f-doc','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dd','f-hd','f-pub','f-obs','f-obs-os','f-pgto','f-svinc','desc-pct','desc-rs','val-liq','f-bv'];
+var FORM_IDS=['f-num','f-data','f-val','f-cons','f-fonte','f-cliente','f-doc','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dd','f-hd','f-pub','f-obs','f-obs-os','f-pgto','f-svinc','desc-pct','desc-rs','val-liq','val-liq-si','f-bv'];
 function getForm(){var o={};FORM_IDS.forEach(function(id){var e=document.getElementById(id);if(e)o[id]=e.value;});if((!o['f-bv']||o['f-bv']==='0')&&_bvStorage>0)o['f-bv']=String(_bvStorage);return o;}
 function setForm(f){Object.keys(f).forEach(function(id){var e=document.getElementById(id);if(e)e.value=f[id];});sv('orc-disp',f['f-num']||'—');}
 function salvar(){var blob=new Blob([JSON.stringify({form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs},null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(gv('f-num')||'orc')+' - '+(gv('f-cliente')||'cliente')+'.json';a.click();URL.revokeObjectURL(a.href);}
@@ -2785,7 +2806,9 @@ function limpar(){
   SECS.forEach(function(s){state[s]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{default:[]}};});
   FORM_IDS.filter(function(id){return ['desc-pct','desc-rs','val-liq','f-pgto','f-svinc'].indexOf(id)<0;}).forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('f-cons').value='';
-  document.getElementById('desc-pct').value=0;document.getElementById('desc-rs').value=0;document.getElementById('val-liq').value='';_bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value='';
+  document.getElementById('desc-pct').value=0;document.getElementById('desc-rs').value=0;document.getElementById('val-liq').value='';
+  var vlsi=document.getElementById('val-liq-si');if(vlsi)vlsi.value='';
+  _bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value='';
   document.getElementById('f-pgto').value='50% na contratação;\n50% até 03 dias antes da montagem.';
   ['cep-st','doc-st','cep-ev-st'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent='';});
   sv('orc-disp','—');
@@ -2852,9 +2875,13 @@ function buildPDF(tipo){
   var imp=bruto*IMP,cImp=bruto+imp;
   var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
   var dv=drs>0?drs:cImp*(dpct/100);
-  var vl=parseFloat(gv('val-liq'))||0;
+  var vl=parseFloat(gv('val-liq'))||0;          // valor líquido c/ imposto
+  var vlsi=parseFloat(gv('val-liq-si'))||0;     // valor líquido s/ imposto
   var descFrac=cImp>0?dv/cImp:0;
-  var totalFinal=impAtual==='cimp'?(vl>0?vl:cImp-dv):(vl>0?vl/(1+IMP):bruto-bruto*descFrac);
+  // totalFinal: c/ imposto usa val-liq; s/ imposto usa val-liq-si (ou desconto aplicado sobre bruto)
+  var totalFinal=impAtual==='cimp'
+    ?(vl>0?vl:cImp-dv)
+    :(vlsi>0?vlsi:bruto-bruto*descFrac);
   var incLines=getSvinc().split('\n').map(function(l){return l.trim();}).filter(Boolean);
   var endCli=[gv('f-end'),gv('f-endnum'),gv('f-bairro'),gv('f-cidade')].filter(Boolean).join(', ');
   var endEv=[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
@@ -5697,7 +5724,8 @@ var PERM_MODULOS = [
   {id:'financeiro', label:'💰 Financeiro', campos:[
     {id:'desc-pct',  label:'Desconto %'},
     {id:'desc-rs',   label:'Desconto R$'},
-    {id:'val-liq',   label:'Valor Líquido'},
+    {id:'val-liq',      label:'Valor Líquido (c/ Imposto)'},
+    {id:'val-liq-si',   label:'Valor Líquido (s/ Imposto)'},
     {id:'f-bv',      label:'BV (Bonificação)'},
     {id:'f-pgto',    label:'Condições de Pagamento'},
     {id:'finParcelas',label:'Parcelas do Financeiro'}
