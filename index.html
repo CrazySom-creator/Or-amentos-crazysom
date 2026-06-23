@@ -1193,8 +1193,8 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   <div class="drive-panel">
     <div style="font-size:10px;color:#aaa;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:10px">☁️ Orçamentos – Google Drive</div>
     <div class="drive-search">
-      <input id="drive-q" placeholder="🔍 Buscar por número, cliente ou data...">
-      <select id="drive-filtro-st" style="background:#111;border:1px solid #333;border-radius:4px;color:#aaa;padding:4px 7px;font-size:11px">
+      <input id="drive-q" placeholder="🔍 Buscar por nº, cliente ou data..." oninput="driveFiltrarLocal()" style="flex:2">
+      <select id="drive-filtro-st" onchange="driveFiltrarLocal()" style="background:#111;border:1px solid #333;border-radius:4px;color:#aaa;padding:4px 7px;font-size:11px;flex:1">
         <option value="">Todos os status</option>
         <option value="rascunho">Rascunho</option>
         <option value="analise">Em Análise</option>
@@ -2073,65 +2073,131 @@ function calc(){
 }
 
 function driveStatus(msg,tipo){var el=document.getElementById('drive-status');if(!el)return;el.textContent=msg;el.className='drive-status '+(tipo||'');if(msg)setTimeout(function(){if(el.textContent===msg)el.textContent='';},5000);}
+var _driveListaCache = []; // Cache da lista completa carregada do Drive
+
 async function driveListar(){
-  var el=document.getElementById('drive-list');el.style.display='block';
-  var q=(gv('drive-q')||'').trim();
-  el.innerHTML='<div class="drive-item" style="color:#888">⏳ Buscando...</div>';
+  var el=document.getElementById('drive-list');
+  el.style.display='block';
+  el.innerHTML='<div class="drive-item" style="color:#888">⏳ Buscando no Drive...</div>';
   try{
-    var r=await fetch(SCRIPT_URL+'?action=list&q='+encodeURIComponent(q));
-    var d=await r.json();if(!d.ok)throw new Error(d.erro);
-    var lista=d.lista||[];
-    // Filtrar arquivos internos do sistema (não devem aparecer na lista)
+    var r=await fetch(SCRIPT_URL+'?action=list&q=');
+    var d=await r.json();
+    if(!d.ok) throw new Error(d.erro);
     var NOMES_INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'];
-    function ehArquivoInterno(nome){return NOMES_INTERNOS.some(function(n){return nome&&nome.indexOf(n)>=0;});}
-    lista=lista.filter(function(x){return !ehArquivoInterno(x.nome);});
-    if(!lista.length){el.innerHTML='<div class="drive-item" style="color:#aaa">Nenhum resultado.</div>';return;}
-    // Carregar dados de cada arquivo para aplicar filtro de status
-    var filtroSt=(document.getElementById('drive-filtro-st')||{}).value||'';
-    var podeDel=usuarioAtual&&(PODE_EXCLUIR.includes(usuarioAtual.nivel)||usuarioAtual.id==='fabiano.santos');
-    // Se há filtro de status, carregar dados para filtrar
-    if(filtroSt){
-      el.innerHTML='<div class="drive-item" style="color:#888">⏳ Filtrando por status...</div>';
-      fetchComLimite(lista,5).then(function(validos){
-        var filtrados=validos.filter(function(x){return x&&x.st===filtroSt;});
-        if(!filtrados.length){el.innerHTML='<div class="drive-item" style="color:#aaa">Nenhum resultado com este status.</div>';return;}
-        el.innerHTML=filtrados.map(function(x){
-          var solPend=solExclusao.some(function(s){return s.id===x.driveId&&s.status==='pendente';});
-          var SI_COR2={rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
-          var cor=SI_COR2[x.st]||'#555';
-          var badge=solPend?'<span style="background:#e65100;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;margin-left:5px">⏳ EXCL. PENDENTE</span>':'';
-          var stBadge='<span style="background:'+cor+'22;color:'+cor+';border:1px solid '+cor+';font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px">'+x.st+'</span>';
-          return '<div class="drive-item" style="background:#111;border-bottom:1px solid #2a2a2a">'
-            +'<div class="di-nome" style="color:#e0e0e0">📄 '+x.nome+stBadge+badge+'</div>'
-            +'<div class="di-data" style="color:#888">'+x.modificado+'</div>'
-            +'<button class="btn-dl" onclick="driveCarregar(\''+x.driveId+'\',\''+eh(x.nome)+'\')" >📂 Abrir</button>'
-            +(solPend
-              ?'<button class="btn-ddel" style="opacity:.4;cursor:not-allowed" title="Aguardando aprovação">🔒</button>'
-              :(podeDel
-                ?'<button class="btn-ddel" onclick="driveDeletar(\''+x.driveId+'\',\''+eh(x.nome)+'\')" title="Excluir">🗑️</button>'
-                :'<button class="btn-ddel" onclick="driveDeletar(\''+x.driveId+'\',\''+eh(x.nome)+'\')" title="Solicitar exclusão" style="opacity:.6">📤</button>'))
-            +'</div>';
-        }).join('');
+    var lista=(d.lista||[]).filter(function(x){
+      return !NOMES_INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
+    });
+    _driveListaCache = lista;
+    driveFiltrarLocal();
+  }catch(e){
+    el.innerHTML='<div class="drive-item" style="color:#ef5350">⚠️ Erro: '+e.message+'</div>';
+  }
+}
+
+function driveFiltrarLocal(){
+  var el=document.getElementById('drive-list');
+  if(!el||!_driveListaCache.length) return;
+  el.style.display='block';
+
+  var q=(document.getElementById('drive-q').value||'').trim().toLowerCase();
+  var filtroSt=(document.getElementById('drive-filtro-st').value||'');
+  var podeDel=usuarioAtual&&(PODE_EXCLUIR.includes(usuarioAtual.nivel)||usuarioAtual.id==='fabiano.santos');
+
+  var SI_COR2={rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
+  var SI_LBL={rascunho:'Rascunho',analise:'Em Análise',gerencial:'Ap. Gerencial',diretoria:'Ap. Diretoria',aprovado:'Aprovado',revisao:'Revisão'};
+
+  // Filtrar por texto (busca no nome do arquivo: contém nº, cliente e data)
+  var filtrados=_driveListaCache.filter(function(x){
+    if(q){
+      var nome=(x.nome||'').toLowerCase();
+      // O nome do arquivo tem formato "20264948 - Murilo - 2026-06-16"
+      // Buscar em qualquer parte do nome
+      var termos=q.split(/\s+/);
+      if(!termos.every(function(t){return nome.indexOf(t)>=0;})) return false;
+    }
+    return true;
+  });
+
+  // Filtro de status: precisa carregar dados (usa cache se disponível)
+  if(filtroSt){
+    // Verificar quais já estão no cache do Drive
+    var comStatus=filtrados.filter(function(x){
+      var cached=_driveCacheGet(x.id);
+      return cached && cached.st === filtroSt;
+    });
+    var semCache=filtrados.filter(function(x){return !_driveCacheGet(x.id);});
+
+    if(semCache.length>0){
+      el.innerHTML='<div class="drive-item" style="color:#888">⏳ Filtrando por status ('
+        +comStatus.length+'/'+filtrados.length+' prontos)...</div>';
+      fetchProgressivo(semCache, 15, function(parciais){
+        // Atualizar progressivamente
+        var atualizados=filtrados.filter(function(x){
+          var c=_driveCacheGet(x.id);
+          return c && c.st===filtroSt;
+        });
+        driveRenderLista(el, atualizados, podeDel, SI_COR2, SI_LBL, q);
+      }).then(function(){
+        var final=filtrados.filter(function(x){
+          var c=_driveCacheGet(x.id);
+          return c && c.st===filtroSt;
+        });
+        driveRenderLista(el, final, podeDel, SI_COR2, SI_LBL, q);
       });
+      // Mostrar já o que tem em cache enquanto carrega o resto
+      if(comStatus.length) driveRenderLista(el, comStatus, podeDel, SI_COR2, SI_LBL, q);
       return;
     }
-    el.innerHTML=lista.map(function(x){
-      var solPend=solExclusao.some(function(s){return s.id===x.id&&s.status==='pendente';});
+
+    filtrados=comStatus;
+  }
+
+  driveRenderLista(el, filtrados, podeDel, SI_COR2, SI_LBL, q);
+}
+
+function driveRenderLista(el, lista, podeDel, SI_COR2, SI_LBL, q){
+  if(!lista.length){
+    el.innerHTML='<div class="drive-item" style="color:#aaa;padding:12px;text-align:center">'
+      +(q?'🔍 Nenhum resultado para "'+q+'"':'Nenhum orçamento encontrado.')+'</div>';
+    return;
+  }
+
+  // Destacar termo buscado no nome
+  function highlight(texto, termo){
+    if(!termo) return eh(texto);
+    var t=eh(texto);
+    var tl=t.toLowerCase(), ql=termo.toLowerCase();
+    var idx=tl.indexOf(ql);
+    if(idx<0) return t;
+    return t.substring(0,idx)+'<mark style="background:#c0001a22;color:#ff8a80;border-radius:2px">'+t.substring(idx,idx+ql.length)+'</mark>'+t.substring(idx+ql.length);
+  }
+
+  el.innerHTML='<div style="padding:4px 10px;background:#0d0d0d;border-bottom:1px solid #222;font-size:9px;color:#666;display:flex;justify-content:space-between">'
+    +'<span>'+lista.length+' orçamento(s)</span>'
+    +'<span>'+(q?'🔍 "'+q+'"':'Todos')+'</span>'
+    +'</div>'
+    +lista.map(function(x){
+      var cached=_driveCacheGet(x.id);
+      var st=cached?cached.st:'';
+      var cor=SI_COR2[st]||'#555';
+      var stBadge=st?'<span style="background:'+cor+'22;color:'+cor+';border:1px solid '+cor+';font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:5px">'+(SI_LBL[st]||st)+'</span>':'';
+      var solPend=solExclusao.some(function(s){return (s.id===x.id||s.id===x.driveId)&&s.status==='pendente';});
       var badge=solPend?'<span style="background:#e65100;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;margin-left:5px">⏳ EXCL. PENDENTE</span>':'';
+      var nomeDisplay=highlight(x.nome||'',q);
+      var driveId=x.driveId||x.id;
       return '<div class="drive-item" style="background:#111;border-bottom:1px solid #2a2a2a">'
-        +'<div class="di-nome" style="color:#e0e0e0">📄 '+x.nome+badge+'</div>'
-        +'<div class="di-data" style="color:#888">'+x.modificado+'</div>'
-        +'<button class="btn-dl" onclick="driveCarregar(\''+x.id+'\',\''+eh(x.nome)+'\')">📂 Abrir</button>'
+        +'<div class="di-nome" style="color:#e0e0e0;flex:1">📄 '+nomeDisplay+stBadge+badge+'</div>'
+        +'<div class="di-data" style="color:#888;font-size:10px;white-space:nowrap">'+x.modificado+'</div>'
+        +'<button class="btn-dl" onclick="driveCarregar(\''+driveId+'\',\''+eh(x.nome)+'\')">📂 Abrir</button>'
         +(solPend
-          ?'<button class="btn-ddel" style="opacity:.4;cursor:not-allowed" title="Aguardando aprovação de exclusão">🔒</button>'
+          ?'<button class="btn-ddel" style="opacity:.4;cursor:not-allowed" title="Aguardando aprovação">🔒</button>'
           :(podeDel
-            ?'<button class="btn-ddel" onclick="driveDeletar(\''+x.id+'\',\''+eh(x.nome)+'\')" title="Excluir definitivamente">🗑️</button>'
-            :'<button class="btn-ddel" onclick="driveDeletar(\''+x.id+'\',\''+eh(x.nome)+'\')" title="Solicitar exclusão" style="opacity:.6">📤</button>'
-          ))
+            ?'<button class="btn-ddel" onclick="driveDeletar(\''+driveId+'\',\''+eh(x.nome)+'\')" title="Excluir">🗑️</button>'
+            :'<button class="btn-ddel" onclick="driveDeletar(\''+driveId+'\',\''+eh(x.nome)+'\')" title="Solicitar exclusão" style="opacity:.6">📤</button>'))
         +'</div>';
     }).join('');
-  }catch(e){el.innerHTML='<div class="drive-item" style="color:#c0001a">⚠️ Erro ao conectar</div>';driveStatus('Erro: '+e.message,'err');}
 }
+
 async function driveSalvar(){
   driveStatus('⏳ Salvando...','');
   var num=gv('f-num')||'SN',cli=gv('f-cliente')||'SemCliente',dt=gv('f-data')||new Date().toISOString().split('T')[0];
