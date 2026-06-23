@@ -2508,6 +2508,9 @@ function lockMostrarModal(lock,id,nome,onForcar,onSomenteLeitura){
   var tempoStr=minutos>0?minutos+'min atrás':'agora';
   var isAdm=usuarioAtual&&['adm','gerente','diretor'].includes(usuarioAtual.nivel);
 
+  // Guardar lock e dados em variável global para evitar problema com JSON no onclick
+  window._lockModalDados={lock:lock,id:id,nome:nome};
+
   var modal=document.createElement('div');
   modal.id='lock-modal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px';
@@ -2520,27 +2523,28 @@ function lockMostrarModal(lock,id,nome,onForcar,onSomenteLeitura){
     +'<div style="font-size:10px;color:#555;margin-top:4px">📋 '+eh(nome)+'</div>'
     +'</div>'
     +'<div style="display:flex;flex-direction:column;gap:8px">'
-    +(isAdm?'<button onclick="lockForcarAbertura(\''+id+'\',\''+eh(nome)+'\')" style="padding:11px;background:#c0001a;color:#fff;border:none;border-radius:6px;font-weight:800;cursor:pointer;font-size:13px">⚠️ Forçar Abertura (ADM)</button>':'')
-    +'<button onclick="lockAbrirLeitura(\''+id+'\',\''+eh(nome)+'\','+JSON.stringify(lock)+')" style="padding:11px;background:#1565c0;color:#fff;border:none;border-radius:6px;font-weight:800;cursor:pointer;font-size:13px">👁️ Abrir Somente Leitura</button>'
+    +(isAdm?'<button onclick="lockModalForcar()" style="padding:11px;background:#c0001a;color:#fff;border:none;border-radius:6px;font-weight:800;cursor:pointer;font-size:13px">⚠️ Forçar Abertura (ADM)</button>':'')
+    +'<button onclick="lockModalLeitura()" style="padding:11px;background:#1565c0;color:#fff;border:none;border-radius:6px;font-weight:800;cursor:pointer;font-size:13px">👁️ Abrir Somente Leitura</button>'
     +'<button onclick="document.getElementById(\'lock-modal\').remove();driveStatus(\'\',\'\')" style="padding:9px;background:#333;color:#aaa;border:none;border-radius:6px;cursor:pointer;font-size:12px">← Cancelar</button>'
     +'</div></div>';
   document.body.appendChild(modal);
 }
 
-async function lockForcarAbertura(id,nome){
+async function lockModalForcar(){
   var m=document.getElementById('lock-modal');if(m)m.remove();
-  // Forçar: sobrescrever lock existente
-  _locks[id]={usuarioId:usuarioAtual.id,usuarioNome:usuarioAtual.nome,
+  var d=window._lockModalDados;if(!d)return;
+  _locks[d.id]={usuarioId:usuarioAtual.id,usuarioNome:usuarioAtual.nome,
     desde:new Date().toLocaleString('pt-BR'),desdeTs:Date.now(),expira:Date.now()+LOCK_TTL};
   await _lockFallbackSalvar();
-  await _driveCarregarDados(id,nome,false);
-  lockIniciarHeartbeat(id);
+  await _driveCarregarDados(d.id,d.nome,false);
+  lockIniciarHeartbeat(d.id);
 }
 
-async function lockAbrirLeitura(id,nome,lock){
+async function lockModalLeitura(){
   var m=document.getElementById('lock-modal');if(m)m.remove();
-  await _driveCarregarDados(id,nome,true);
-  ativarModoLeitura(lock);
+  var d=window._lockModalDados;if(!d)return;
+  await _driveCarregarDados(d.id,d.nome,true);
+  ativarModoLeitura(d.lock);
 }
 
 // ── Modal de conflito de versão ──────────────────────────
