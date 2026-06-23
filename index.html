@@ -1338,7 +1338,19 @@ var ELEV=[{l:'20cm',v:100},{l:'30cm',v:100},{l:'40cm',v:100},{l:'60cm',v:100},{l
 function isPalco(n){return n&&n.trim().toLowerCase()==='palco';}
 function calcPalco(r){var a=r.larg*r.prof,np=Math.ceil(a/2),vp=r.elObj?r.elObj.v:100;var tc=r.carp&&r.carpT?a*(r.carpT==='novo'?40:25):0;return{area:a,np:np,tc:tc,total:np*vp+tc};}
 var OCULT=['Montagem','Desmontagem','Frete','Almoço/Janta','Combustível','Hotel','Pedágio','Projeto','Carregadores','BV Produtora','Bônus de Venda'];
-function isOcult(n){return OCULT.some(function(o){return n&&n.toLowerCase().includes(o.toLowerCase());});}
+function isOcult(n){
+  if(!n) return false;
+  var nl=n.toLowerCase();
+  return OCULT.some(function(o){
+    var ol=o.toLowerCase();
+    // Verificar se é palavra inteira (não substring de outra palavra)
+    var idx=nl.indexOf(ol);
+    if(idx<0) return false;
+    var antes=idx===0||!/[a-záàãâéêíóôõúç]/i.test(nl[idx-1]);
+    var depois=idx+ol.length>=nl.length||!/[a-záàãâéêíóôõúç]/i.test(nl[idx+ol.length]);
+    return antes&&depois;
+  });
+}
 
 function fmtN(v){return Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fmt(v){return 'R$ '+fmtN(v);}
