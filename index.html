@@ -1542,6 +1542,8 @@ function doLogin(){
   renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
   // Aplicar permissões nos campos
   setTimeout(aplicarPermissoes, 100);
+  // Carregar locks do Drive
+  locksCarregar();
   // Mostrar e carregar o funil de vendas
   if(dashTemAcesso('funil-card')){funilMostrarCard();funilCarregarDados();}
   else{funilEsconderCard();}
@@ -1552,6 +1554,10 @@ function logout(){
     var ir=confirm('⚠️ "'+cli+'" não foi salvo no Drive.\n\nDeseja descartar as alterações e sair?');
     if(!ir)return;
   }
+  // Liberar lock ao sair
+  if(driveIdAtual&&!_modoLeitura) lockLiberar(driveIdAtual);
+  lockPararHeartbeat();
+  desativarModoLeitura();
   usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];snapshotAnterior=null;finParcelas=[];finObs='';driveIdAtual=null;driveNumAtual=null;
   // Resetar funil
   _funilCache=[];_funilCarregado=false;_funilCarregando=false;
@@ -2274,24 +2280,60 @@ function getDadosCompletos(){
 }
 
 async function salvarNoDrive(opts){
-  // opts: {mostrarStatus, onSucesso, onErro, forcarNovoId}
   opts=opts||{};
+  if(_modoLeitura){driveStatus('⛔ Modo somente leitura — salvar bloqueado','err');return;}
   var num=gv('f-num')||'SN',cli=gv('f-cliente')||'SemCliente',dt=gv('f-data')||new Date().toISOString().split('T')[0];
   if(driveIdAtual&&driveNumAtual&&driveNumAtual!==num&&!opts.forcarNovoId)driveIdAtual=null;
   if(opts.mostrarStatus!==false) driveStatus('⏳ Salvando...','');
+
+  // Verificar conflito de versão antes de salvar
+  if(driveIdAtual&&_versaoAtual){
+    try{
+      var rChk=await fetch(SCRIPT_URL+'?action=load&id='+driveIdAtual);
+      var dChk=await rChk.json();
+      if(dChk.ok&&dChk.dados&&dChk.dados._versao&&dChk.dados._versao!==_versaoAtual){
+        // Conflito detectado!
+        return new Promise(function(resolve){
+          versaoMostrarConflito(
+            // Sobrescrever mesmo assim
+            async function(){
+              var resultado=await _executarSave(num,cli,dt,opts);
+              resolve(resultado);
+            },
+            // Recarregar versão mais recente
+            async function(){
+              await _driveCarregarDados(driveIdAtual, driveNumAtual||num, _modoLeitura);
+              driveStatus('🔄 Recarregado — faça suas alterações novamente','ok');
+              resolve(null);
+            }
+          );
+        });
+      }
+    }catch(e){/* se não conseguir verificar, continua salvando */}
+  }
+
+  return _executarSave(num,cli,dt,opts);
+}
+
+async function _executarSave(num,cli,dt,opts){
+  opts=opts||{};
   try{
+    var dados=getDadosCompletos();
+    // Gravar nova versão (timestamp)
+    dados._versao=Date.now().toString();
     var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
       action:'save',
       id:driveIdAtual||null,
       numero:num,cliente:cli,data:dt,
-      dados:getDadosCompletos()
+      dados:dados
     })});
     var d=await r.json();
     if(!d.ok) throw new Error(d.erro||'Erro desconhecido');
     driveIdAtual=d.id;
     driveNumAtual=num;
     _naoSalvo=false;
-    _driveCache[d.id]=null; // invalidar cache
+    _versaoAtual=dados._versao; // atualizar versão local
+    _driveCache[d.id]=null;
     if(opts.mostrarStatus!==false) driveStatus('✅ Salvo: '+d.nome,'ok');
     driveListar();
     if(opts.onSucesso) opts.onSucesso(d);
@@ -2303,18 +2345,250 @@ async function salvarNoDrive(opts){
   }
 }
 
+// ════════════════════════════════════════════════════════
+//  SISTEMA DE LOCK E CONTROLE DE VERSÃO
+// ════════════════════════════════════════════════════════
+var LOCK_FILE_ID = null;     // ID do arquivo de locks no Drive
+var LOCK_FILE_NOME = '_LOCKS_CRAZYSOM';
+var _locks = {};             // {driveId: {usuario, nome, desde, expira}}
+var _lockHeartbeat = null;   // timer do heartbeat
+var LOCK_TTL = 30 * 60 * 1000; // 30 minutos
+var HEARTBEAT_INTERVAL = 5 * 60 * 1000; // 5 minutos
+var _versaoAtual = null;     // timestamp da versão que carregamos
+
+// ── Carregar locks do Drive ──────────────────────────────
+async function locksCarregar(){
+  try{
+    var r=await fetch(SCRIPT_URL+'?action=list&q=');
+    var d=await r.json();
+    if(!d.ok) return;
+    var lockFile=(d.lista||[]).find(function(x){return x.nome&&x.nome.indexOf(LOCK_FILE_NOME)>=0;});
+    if(lockFile){
+      LOCK_FILE_ID=lockFile.id||lockFile.driveId;
+      var rL=await fetch(SCRIPT_URL+'?action=load&id='+LOCK_FILE_ID);
+      var dL=await rL.json();
+      if(dL.ok&&dL.dados&&dL.dados.locks){
+        _locks=dL.dados.locks;
+        // Limpar locks expirados
+        var agora=Date.now();
+        Object.keys(_locks).forEach(function(k){
+          if(_locks[k].expira<agora) delete _locks[k];
+        });
+      }
+    }
+  }catch(e){/* silencioso */}
+}
+
+// ── Salvar locks no Drive ────────────────────────────────
+async function locksSalvar(){
+  try{
+    var body={action:'save',id:LOCK_FILE_ID||null,numero:LOCK_FILE_NOME,cliente:'CrazySom',data:'2000-01-01',dados:{locks:_locks}};
+    var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify(body)});
+    var d=await r.json();
+    if(d.ok&&!LOCK_FILE_ID) LOCK_FILE_ID=d.id;
+  }catch(e){/* silencioso */}
+}
+
+// ── Adquirir lock ────────────────────────────────────────
+async function lockAdquirir(driveId){
+  await locksCarregar();
+  var agora=Date.now();
+  var lock=_locks[driveId];
+  // Verificar se há lock ativo de outro usuário
+  if(lock&&lock.expira>agora&&lock.usuarioId!==usuarioAtual.id){
+    return {ok:false, lock:lock};
+  }
+  // Adquirir ou renovar lock
+  _locks[driveId]={
+    usuarioId:usuarioAtual.id,
+    usuarioNome:usuarioAtual.nome,
+    desde:new Date().toLocaleString('pt-BR'),
+    desdeTs:agora,
+    expira:agora+LOCK_TTL
+  };
+  await locksSalvar();
+  return {ok:true};
+}
+
+// ── Liberar lock ─────────────────────────────────────────
+async function lockLiberar(driveId){
+  if(!driveId) return;
+  if(_locks[driveId]&&_locks[driveId].usuarioId===usuarioAtual.id){
+    delete _locks[driveId];
+    await locksSalvar();
+  }
+}
+
+// ── Iniciar heartbeat (renovar lock a cada 5 min) ────────
+function lockIniciarHeartbeat(driveId){
+  lockPararHeartbeat();
+  _lockHeartbeat=setInterval(async function(){
+    if(!driveIdAtual||driveIdAtual!==driveId) {lockPararHeartbeat();return;}
+    if(_locks[driveId]&&_locks[driveId].usuarioId===usuarioAtual.id){
+      _locks[driveId].expira=Date.now()+LOCK_TTL;
+      await locksSalvar();
+    }
+  }, HEARTBEAT_INTERVAL);
+}
+
+function lockPararHeartbeat(){
+  if(_lockHeartbeat){clearInterval(_lockHeartbeat);_lockHeartbeat=null;}
+}
+
+// ── Modal de lock ────────────────────────────────────────
+function lockMostrarModal(lock, driveId, nome, onForcar, onSomenteLeitura){
+  var desde=lock.desde||'—';
+  var minutos=lock.desdeTs?Math.floor((Date.now()-lock.desdeTs)/60000):0;
+  var tempoStr=minutos>0?minutos+'min atrás':'agora';
+
+  var modal=document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML='<div style="background:#1a1a1a;border:2px solid #e65100;border-radius:10px;padding:24px;max-width:440px;width:100%">'
+    +'<div style="font-size:18px;font-weight:900;color:#fff;margin-bottom:8px">🔒 Orçamento em uso</div>'
+    +'<div style="font-size:13px;color:#ccc;margin-bottom:16px;line-height:1.6">'
+    +'<b style="color:#ffa726">'+eh(lock.usuarioNome)+'</b> está editando este orçamento.<br>'
+    +'<span style="font-size:11px;color:#888">Desde: '+desde+' ('+tempoStr+')</span>'
+    +'</div>'
+    +'<div style="background:#111;border-radius:6px;padding:10px 12px;margin-bottom:16px;font-size:11px;color:#888">'
+    +'📋 '+eh(nome)+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +(usuarioAtual&&['adm','gerente','diretor'].includes(usuarioAtual.nivel)
+      ?'<button id="lock-btn-forcar" style="padding:10px;background:#c0001a;color:#fff;border:none;border-radius:5px;font-weight:800;cursor:pointer;font-size:13px">⚠️ Forçar Abertura (ADM)</button>':'')
+    +'<button id="lock-btn-leitura" style="padding:10px;background:#1565c0;color:#fff;border:none;border-radius:5px;font-weight:800;cursor:pointer;font-size:13px">👁️ Abrir Somente Leitura</button>'
+    +'<button id="lock-btn-cancel" style="padding:10px;background:#333;color:#aaa;border:none;border-radius:5px;cursor:pointer;font-size:12px">← Cancelar</button>'
+    +'</div></div>';
+
+  document.body.appendChild(modal);
+  var btnForcar=modal.querySelector('#lock-btn-forcar');
+  var btnLeitura=modal.querySelector('#lock-btn-leitura');
+  var btnCancel=modal.querySelector('#lock-btn-cancel');
+  if(btnForcar) btnForcar.onclick=function(){document.body.removeChild(modal);onForcar();};
+  btnLeitura.onclick=function(){document.body.removeChild(modal);onSomenteLeitura();};
+  btnCancel.onclick=function(){document.body.removeChild(modal);};
+}
+
+// ── Modal de conflito de versão ──────────────────────────
+function versaoMostrarConflito(onSobrescrever, onDescartar){
+  var modal=document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML='<div style="background:#1a1a1a;border:2px solid #c62828;border-radius:10px;padding:24px;max-width:460px;width:100%">'
+    +'<div style="font-size:18px;font-weight:900;color:#ef5350;margin-bottom:8px">⚠️ Conflito de Versão</div>'
+    +'<div style="font-size:13px;color:#ccc;margin-bottom:16px;line-height:1.6">'
+    +'Este orçamento foi <b style="color:#ffa726">alterado por outro usuário</b> desde que você o abriu.<br><br>'
+    +'Se sobrescrever, as alterações do outro usuário serão perdidas.'
+    +'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +'<button id="vers-btn-reload" style="padding:10px;background:#2e7d32;color:#fff;border:none;border-radius:5px;font-weight:800;cursor:pointer;font-size:13px">🔄 Recarregar versão mais recente</button>'
+    +'<button id="vers-btn-sobre" style="padding:10px;background:#c62828;color:#fff;border:none;border-radius:5px;font-weight:800;cursor:pointer;font-size:13px">💾 Sobrescrever mesmo assim</button>'
+    +'<button id="vers-btn-cancel" style="padding:10px;background:#333;color:#aaa;border:none;border-radius:5px;cursor:pointer;font-size:12px">← Cancelar</button>'
+    +'</div></div>';
+
+  document.body.appendChild(modal);
+  modal.querySelector('#vers-btn-reload').onclick=function(){document.body.removeChild(modal);onDescartar();};
+  modal.querySelector('#vers-btn-sobre').onclick=function(){document.body.removeChild(modal);onSobrescrever();};
+  modal.querySelector('#vers-btn-cancel').onclick=function(){document.body.removeChild(modal);};
+}
+
+// ── Banner de somente leitura ────────────────────────────
+var _modoLeitura=false;
+function ativarModoLeitura(lock){
+  _modoLeitura=true;
+  var banner=document.getElementById('lock-banner');
+  if(!banner){
+    banner=document.createElement('div');
+    banner.id='lock-banner';
+    banner.style.cssText='position:sticky;top:0;z-index:9999;background:#e65100;color:#fff;padding:7px 14px;font-size:11px;font-weight:800;display:flex;align-items:center;gap:10px;border-radius:0 0 6px 6px;margin-bottom:8px';
+    var wrap=document.querySelector('.wrap');
+    if(wrap) wrap.insertBefore(banner, wrap.firstChild);
+    else document.body.insertBefore(banner, document.body.firstChild);
+  }
+  banner.innerHTML='👁️ SOMENTE LEITURA — '
+    +(lock?'<b>'+eh(lock.usuarioNome)+'</b> está editando este orçamento':'Modo leitura ativo')
+    +' &nbsp;<button onclick="verificarLockEEditar()" style="padding:2px 10px;background:#fff;color:#e65100;border:none;border-radius:3px;cursor:pointer;font-weight:800;font-size:10px">Tentar Editar</button>'
+    +'&nbsp;<button onclick="desativarModoLeitura()" style="padding:2px 8px;background:#c62828;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:10px">✕</button>';
+  // Desabilitar todos os inputs/selects/buttons do formulário
+  document.querySelectorAll('.card input,.card select,.card textarea,.card button,.totbox input,.totbox select,.totbox button,.aprov-inline button,.com-panel button,.fin-inline button').forEach(function(el){
+    el.dataset.wasDisabled=el.disabled?'1':'0';
+    el.disabled=true;
+    el.style.opacity='0.5';
+  });
+}
+
+function desativarModoLeitura(){
+  _modoLeitura=false;
+  var banner=document.getElementById('lock-banner');
+  if(banner) banner.remove();
+  // Reabilitar campos
+  document.querySelectorAll('[data-was-disabled]').forEach(function(el){
+    if(el.dataset.wasDisabled!=='1'){el.disabled=false;el.style.opacity='';}
+    delete el.dataset.wasDisabled;
+  });
+  setTimeout(aplicarPermissoes, 50);
+}
+
+async function verificarLockEEditar(){
+  if(!driveIdAtual) return;
+  var res=await lockAdquirir(driveIdAtual);
+  if(res.ok){
+    desativarModoLeitura();
+    lockIniciarHeartbeat(driveIdAtual);
+    driveStatus('🔓 Modo edição ativado','ok');
+  } else {
+    var minutos=res.lock.desdeTs?Math.floor((Date.now()-res.lock.desdeTs)/60000):0;
+    alert('⛔ '+res.lock.usuarioNome+' ainda está editando (há '+minutos+' min). Tente novamente mais tarde.');
+  }
+}
+
 async function driveSalvar(){
   await salvarNoDrive({mostrarStatus:true});
 }
+
 async function driveCarregar(id,nome){
   var msg = _naoSalvo
     ? '⚠️ Este orçamento não foi salvo no Drive.\n\nDeseja descartar as alterações e carregar "'+nome+'"?'
     : 'Carregar "'+nome+'"?\nDados não salvos serão perdidos.';
   if(!confirm(msg))return;
+
+  // Liberar lock anterior se houver
+  if(driveIdAtual&&!_modoLeitura) await lockLiberar(driveIdAtual);
+  lockPararHeartbeat();
+  desativarModoLeitura();
+
+  // Verificar lock
+  driveStatus('🔍 Verificando disponibilidade...','');
+  var lockRes=await lockAdquirir(id);
+
+  if(!lockRes.ok){
+    // Orçamento em uso — mostrar modal
+    lockMostrarModal(
+      lockRes.lock, id, nome,
+      // Forçar abertura (ADM)
+      async function(){
+        _locks[id].usuarioId=usuarioAtual.id;
+        _locks[id].usuarioNome=usuarioAtual.nome;
+        _locks[id].expira=Date.now()+LOCK_TTL;
+        await locksSalvar();
+        await _driveCarregarDados(id,nome,false);
+      },
+      // Somente leitura
+      async function(){
+        await _driveCarregarDados(id,nome,true);
+      }
+    );
+    return;
+  }
+
+  await _driveCarregarDados(id,nome,false);
+  lockIniciarHeartbeat(id);
+}
+
+async function _driveCarregarDados(id,nome,somenteLeitura){
   driveStatus('⏳ Carregando...','');_carregandoOrc=true;
   try{
     var r=await fetch(SCRIPT_URL+'?action=load&id='+id);var d=await r.json();if(!d.ok)throw new Error(d.erro);
     var dados=d.dados;
+    // Salvar versão carregada
+    _versaoAtual=dados._versao||null;
     if(dados.state){SECS.forEach(function(s){if(dados.state[s]){state[s].ambientes=dados.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=dados.state[s].ambAtiva||'default';state[s].rows=dados.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
     if(dados.form)setForm(dados.form);
     aprovStatus=dados.aprovStatus||'rascunho';aprovHist=dados.aprovHist||[];comercialStatus=dados.comercialStatus||'';comercialHist=dados.comercialHist||[];snapshotAnterior=dados.snapshotAnterior||null;finParcelas=dados.finParcelas||[];finObs=dados.finObs||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
@@ -2323,6 +2597,7 @@ async function driveCarregar(id,nome){
     buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
     setTimeout(aplicarPermissoes, 150);
     driveStatus('✅ Carregado: '+nome,'ok');
+    if(somenteLeitura) ativarModoLeitura(_locks[id]);
   }catch(e){driveStatus('Erro: '+e.message,'err');}
   finally{setTimeout(function(){_carregandoOrc=false;},400);}
 }
@@ -2426,6 +2701,10 @@ function limpar(){
   }else{
     if(!confirm('Iniciar Novo Orçamento? Todos os dados serão limpos.'))return;
   }
+  // Liberar lock do orçamento atual
+  if(driveIdAtual&&!_modoLeitura) lockLiberar(driveIdAtual);
+  lockPararHeartbeat();
+  desativarModoLeitura();
   SECS.forEach(function(s){state[s]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{default:[]}};});
   FORM_IDS.filter(function(id){return ['desc-pct','desc-rs','val-liq','f-pgto','f-svinc'].indexOf(id)<0;}).forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('f-cons').value='';
@@ -2442,13 +2721,25 @@ function limpar(){
   buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
 }
 
-// Popup ao tentar fechar/recarregar a aba com alterações não salvas
+// Liberar lock ao fechar a aba/janela
 window.addEventListener('beforeunload',function(e){
   if(_naoSalvo&&usuarioAtual){
     var msg='Este orçamento não foi salvo. Deseja realmente sair?';
     e.preventDefault();
     e.returnValue=msg;
     return msg;
+  }
+  // Liberar lock (síncrono — usando sendBeacon para garantir envio)
+  if(driveIdAtual&&!_modoLeitura&&usuarioAtual&&_locks[driveIdAtual]){
+    delete _locks[driveIdAtual];
+    // sendBeacon é mais confiável que fetch no beforeunload
+    try{
+      navigator.sendBeacon(SCRIPT_URL,JSON.stringify({
+        action:'save',id:LOCK_FILE_ID||null,
+        numero:LOCK_FILE_NOME,cliente:'CrazySom',data:'2000-01-01',
+        dados:{locks:_locks}
+      }));
+    }catch(e2){}
   }
 });
 
