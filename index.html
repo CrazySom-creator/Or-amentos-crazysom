@@ -2347,87 +2347,126 @@ async function _executarSave(num,cli,dt,opts){
 
 // ════════════════════════════════════════════════════════
 //  SISTEMA DE LOCK E CONTROLE DE VERSÃO
+//  Usa endpoint dedicado no Apps Script (operação atômica)
 // ════════════════════════════════════════════════════════
-var LOCK_FILE_ID = null;     // ID do arquivo de locks no Drive
-var LOCK_FILE_NOME = '_LOCKS_CRAZYSOM';
-var _locks = {};             // {driveId: {usuario, nome, desde, expira}}
-var _lockHeartbeat = null;   // timer do heartbeat
-var LOCK_TTL = 30 * 60 * 1000; // 30 minutos
-var HEARTBEAT_INTERVAL = 5 * 60 * 1000; // 5 minutos
-var _versaoAtual = null;     // timestamp da versão que carregamos
+var LOCK_TTL = 30 * 60 * 1000;        // 30 min
+var HEARTBEAT_INTERVAL = 4 * 60 * 1000; // 4 min
+var _lockHeartbeat = null;
+var _versaoAtual = null;
+var _modoLeitura = false;
 
-// ── Carregar locks do Drive ──────────────────────────────
-async function locksCarregar(){
+// ── Operações de lock via Apps Script ───────────────────
+// O Apps Script usa PropertiesService (atômico) para locks
+async function lockOp(action, driveId, extra){
   try{
-    var r=await fetch(SCRIPT_URL+'?action=list&q=');
-    var d=await r.json();
-    if(!d.ok) return;
-    var lockFile=(d.lista||[]).find(function(x){return x.nome&&x.nome.indexOf(LOCK_FILE_NOME)>=0;});
-    if(lockFile){
-      LOCK_FILE_ID=lockFile.id||lockFile.driveId;
-      var rL=await fetch(SCRIPT_URL+'?action=load&id='+LOCK_FILE_ID);
-      var dL=await rL.json();
-      if(dL.ok&&dL.dados&&dL.dados.locks){
-        _locks=dL.dados.locks;
-        // Limpar locks expirados
-        var agora=Date.now();
-        Object.keys(_locks).forEach(function(k){
-          if(_locks[k].expira<agora) delete _locks[k];
-        });
-      }
-    }
-  }catch(e){/* silencioso */}
-}
-
-// ── Salvar locks no Drive ────────────────────────────────
-async function locksSalvar(){
-  try{
-    var body={action:'save',id:LOCK_FILE_ID||null,numero:LOCK_FILE_NOME,cliente:'CrazySom',data:'2000-01-01',dados:{locks:_locks}};
+    var body={action:'lock',lockAction:action,driveId:driveId,
+      usuarioId:usuarioAtual?usuarioAtual.id:'',
+      usuarioNome:usuarioAtual?usuarioAtual.nome:'',
+      ttl:LOCK_TTL};
+    if(extra) Object.assign(body,extra);
     var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify(body)});
     var d=await r.json();
-    if(d.ok&&!LOCK_FILE_ID) LOCK_FILE_ID=d.id;
-  }catch(e){/* silencioso */}
+    return d;
+  }catch(e){
+    // Se o Apps Script não tiver o endpoint de lock, usar fallback local
+    return _lockFallback(action,driveId);
+  }
 }
 
-// ── Adquirir lock ────────────────────────────────────────
-async function lockAdquirir(driveId){
-  await locksCarregar();
-  var agora=Date.now();
-  var lock=_locks[driveId];
-  // Verificar se há lock ativo de outro usuário
-  if(lock&&lock.expira>agora&&lock.usuarioId!==usuarioAtual.id){
-    return {ok:false, lock:lock};
+// ── Fallback: lock via arquivo no Drive (menos confiável) ─
+var _lockFileId=null;
+var _locks={};
+
+async function _lockFallback(action,driveId){
+  if(action==='acquire'){
+    var agora=Date.now();
+    // Recarregar estado atual
+    await _lockFallbackCarregar();
+    var lock=_locks[driveId];
+    if(lock&&lock.expira>agora&&lock.usuarioId!==usuarioAtual.id){
+      return {ok:false,lock:lock};
+    }
+    _locks[driveId]={
+      usuarioId:usuarioAtual.id,
+      usuarioNome:usuarioAtual.nome,
+      desde:new Date().toLocaleString('pt-BR'),
+      desdeTs:agora,
+      expira:agora+LOCK_TTL
+    };
+    await _lockFallbackSalvar();
+    return {ok:true};
   }
-  // Adquirir ou renovar lock
-  _locks[driveId]={
-    usuarioId:usuarioAtual.id,
-    usuarioNome:usuarioAtual.nome,
-    desde:new Date().toLocaleString('pt-BR'),
-    desdeTs:agora,
-    expira:agora+LOCK_TTL
-  };
-  await locksSalvar();
+  if(action==='release'){
+    await _lockFallbackCarregar();
+    if(_locks[driveId]&&_locks[driveId].usuarioId===usuarioAtual.id){
+      delete _locks[driveId];
+      await _lockFallbackSalvar();
+    }
+    return {ok:true};
+  }
+  if(action==='renew'){
+    if(_locks[driveId]&&_locks[driveId].usuarioId===usuarioAtual.id){
+      _locks[driveId].expira=Date.now()+LOCK_TTL;
+      await _lockFallbackSalvar();
+    }
+    return {ok:true};
+  }
   return {ok:true};
 }
 
-// ── Liberar lock ─────────────────────────────────────────
-async function lockLiberar(driveId){
-  if(!driveId) return;
-  if(_locks[driveId]&&_locks[driveId].usuarioId===usuarioAtual.id){
-    delete _locks[driveId];
-    await locksSalvar();
-  }
+async function _lockFallbackCarregar(){
+  try{
+    if(!_lockFileId){
+      var r=await fetch(SCRIPT_URL+'?action=list&q=');
+      var d=await r.json();
+      if(d.ok){
+        var f=(d.lista||[]).find(function(x){return x.nome&&x.nome.indexOf('_LOCKS_CRAZYSOM')>=0;});
+        if(f) _lockFileId=f.id||f.driveId;
+      }
+    }
+    if(_lockFileId){
+      var r2=await fetch(SCRIPT_URL+'?action=load&id='+_lockFileId);
+      var d2=await r2.json();
+      if(d2.ok&&d2.dados&&d2.dados.locks){
+        _locks=d2.dados.locks;
+        // Limpar expirados
+        var agora=Date.now();
+        Object.keys(_locks).forEach(function(k){if(_locks[k].expira<agora)delete _locks[k];});
+      }
+    }
+  }catch(e){}
 }
 
-// ── Iniciar heartbeat (renovar lock a cada 5 min) ────────
+async function _lockFallbackSalvar(){
+  try{
+    var body={action:'save',id:_lockFileId||null,numero:'_LOCKS_CRAZYSOM',
+      cliente:'CrazySom',data:'2000-01-01',dados:{locks:_locks}};
+    var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify(body)});
+    var d=await r.json();
+    if(d.ok&&!_lockFileId) _lockFileId=d.id;
+  }catch(e){}
+}
+
+// ── API pública de lock ──────────────────────────────────
+async function lockAdquirir(driveId){
+  var res=await lockOp('acquire',driveId);
+  return res;
+}
+
+async function lockLiberar(driveId){
+  if(!driveId||!usuarioAtual) return;
+  await lockOp('release',driveId);
+}
+
+async function lockRenovar(driveId){
+  await lockOp('renew',driveId);
+}
+
 function lockIniciarHeartbeat(driveId){
   lockPararHeartbeat();
-  _lockHeartbeat=setInterval(async function(){
-    if(!driveIdAtual||driveIdAtual!==driveId) {lockPararHeartbeat();return;}
-    if(_locks[driveId]&&_locks[driveId].usuarioId===usuarioAtual.id){
-      _locks[driveId].expira=Date.now()+LOCK_TTL;
-      await locksSalvar();
-    }
+  _lockHeartbeat=setInterval(function(){
+    if(!driveIdAtual||driveIdAtual!==driveId){lockPararHeartbeat();return;}
+    lockRenovar(driveId);
   }, HEARTBEAT_INTERVAL);
 }
 
@@ -2436,106 +2475,113 @@ function lockPararHeartbeat(){
 }
 
 // ── Modal de lock ────────────────────────────────────────
-function lockMostrarModal(lock, driveId, nome, onForcar, onSomenteLeitura){
+function lockMostrarModal(lock,id,nome,onForcar,onSomenteLeitura){
   var desde=lock.desde||'—';
   var minutos=lock.desdeTs?Math.floor((Date.now()-lock.desdeTs)/60000):0;
   var tempoStr=minutos>0?minutos+'min atrás':'agora';
+  var isAdm=usuarioAtual&&['adm','gerente','diretor'].includes(usuarioAtual.nivel);
 
   var modal=document.createElement('div');
-  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px';
-  modal.innerHTML='<div style="background:#1a1a1a;border:2px solid #e65100;border-radius:10px;padding:24px;max-width:440px;width:100%">'
-    +'<div style="font-size:18px;font-weight:900;color:#fff;margin-bottom:8px">🔒 Orçamento em uso</div>'
-    +'<div style="font-size:13px;color:#ccc;margin-bottom:16px;line-height:1.6">'
-    +'<b style="color:#ffa726">'+eh(lock.usuarioNome)+'</b> está editando este orçamento.<br>'
-    +'<span style="font-size:11px;color:#888">Desde: '+desde+' ('+tempoStr+')</span>'
+  modal.id='lock-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML='<div style="background:#1a1a1a;border:2px solid #e65100;border-radius:12px;padding:28px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.6)">'
+    +'<div style="font-size:22px;margin-bottom:6px">🔒</div>'
+    +'<div style="font-size:16px;font-weight:900;color:#fff;margin-bottom:8px">Orçamento em uso</div>'
+    +'<div style="background:#111;border-radius:6px;padding:10px 14px;margin-bottom:14px">'
+    +'<div style="font-size:13px;color:#ffa726;font-weight:700">'+eh(lock.usuarioNome)+'</div>'
+    +'<div style="font-size:11px;color:#888;margin-top:2px">está editando desde '+desde+' ('+tempoStr+')</div>'
+    +'<div style="font-size:10px;color:#555;margin-top:4px">📋 '+eh(nome)+'</div>'
     +'</div>'
-    +'<div style="background:#111;border-radius:6px;padding:10px 12px;margin-bottom:16px;font-size:11px;color:#888">'
-    +'📋 '+eh(nome)+'</div>'
     +'<div style="display:flex;flex-direction:column;gap:8px">'
-    +(usuarioAtual&&['adm','gerente','diretor'].includes(usuarioAtual.nivel)
-      ?'<button id="lock-btn-forcar" style="padding:10px;background:#c0001a;color:#fff;border:none;border-radius:5px;font-weight:800;cursor:pointer;font-size:13px">⚠️ Forçar Abertura (ADM)</button>':'')
-    +'<button id="lock-btn-leitura" style="padding:10px;background:#1565c0;color:#fff;border:none;border-radius:5px;font-weight:800;cursor:pointer;font-size:13px">👁️ Abrir Somente Leitura</button>'
-    +'<button id="lock-btn-cancel" style="padding:10px;background:#333;color:#aaa;border:none;border-radius:5px;cursor:pointer;font-size:12px">← Cancelar</button>'
+    +(isAdm?'<button onclick="lockForcarAbertura(\''+id+'\',\''+eh(nome)+'\')" style="padding:11px;background:#c0001a;color:#fff;border:none;border-radius:6px;font-weight:800;cursor:pointer;font-size:13px">⚠️ Forçar Abertura (ADM)</button>':'')
+    +'<button onclick="lockAbrirLeitura(\''+id+'\',\''+eh(nome)+'\','+JSON.stringify(lock)+')" style="padding:11px;background:#1565c0;color:#fff;border:none;border-radius:6px;font-weight:800;cursor:pointer;font-size:13px">👁️ Abrir Somente Leitura</button>'
+    +'<button onclick="document.getElementById(\'lock-modal\').remove();driveStatus(\'\',\'\')" style="padding:9px;background:#333;color:#aaa;border:none;border-radius:6px;cursor:pointer;font-size:12px">← Cancelar</button>'
     +'</div></div>';
-
   document.body.appendChild(modal);
-  var btnForcar=modal.querySelector('#lock-btn-forcar');
-  var btnLeitura=modal.querySelector('#lock-btn-leitura');
-  var btnCancel=modal.querySelector('#lock-btn-cancel');
-  if(btnForcar) btnForcar.onclick=function(){document.body.removeChild(modal);onForcar();};
-  btnLeitura.onclick=function(){document.body.removeChild(modal);onSomenteLeitura();};
-  btnCancel.onclick=function(){document.body.removeChild(modal);};
+}
+
+async function lockForcarAbertura(id,nome){
+  var m=document.getElementById('lock-modal');if(m)m.remove();
+  // Forçar: sobrescrever lock existente
+  _locks[id]={usuarioId:usuarioAtual.id,usuarioNome:usuarioAtual.nome,
+    desde:new Date().toLocaleString('pt-BR'),desdeTs:Date.now(),expira:Date.now()+LOCK_TTL};
+  await _lockFallbackSalvar();
+  await _driveCarregarDados(id,nome,false);
+  lockIniciarHeartbeat(id);
+}
+
+async function lockAbrirLeitura(id,nome,lock){
+  var m=document.getElementById('lock-modal');if(m)m.remove();
+  await _driveCarregarDados(id,nome,true);
+  ativarModoLeitura(lock);
 }
 
 // ── Modal de conflito de versão ──────────────────────────
-function versaoMostrarConflito(onSobrescrever, onDescartar){
+function versaoMostrarConflito(onSobrescrever,onRecarregar){
+  var m=document.getElementById('versao-modal');if(m)m.remove();
   var modal=document.createElement('div');
-  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px';
-  modal.innerHTML='<div style="background:#1a1a1a;border:2px solid #c62828;border-radius:10px;padding:24px;max-width:460px;width:100%">'
-    +'<div style="font-size:18px;font-weight:900;color:#ef5350;margin-bottom:8px">⚠️ Conflito de Versão</div>'
-    +'<div style="font-size:13px;color:#ccc;margin-bottom:16px;line-height:1.6">'
-    +'Este orçamento foi <b style="color:#ffa726">alterado por outro usuário</b> desde que você o abriu.<br><br>'
-    +'Se sobrescrever, as alterações do outro usuário serão perdidas.'
+  modal.id='versao-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML='<div style="background:#1a1a1a;border:2px solid #c62828;border-radius:12px;padding:28px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.6)">'
+    +'<div style="font-size:22px;margin-bottom:6px">⚠️</div>'
+    +'<div style="font-size:16px;font-weight:900;color:#ef5350;margin-bottom:10px">Conflito de Versão Detectado</div>'
+    +'<div style="font-size:13px;color:#ccc;line-height:1.7;margin-bottom:18px">'
+    +'Este orçamento foi <b style="color:#ffa726">modificado por outro usuário</b> enquanto você editava.<br>'
+    +'Escolha como deseja proceder:'
     +'</div>'
     +'<div style="display:flex;flex-direction:column;gap:8px">'
-    +'<button id="vers-btn-reload" style="padding:10px;background:#2e7d32;color:#fff;border:none;border-radius:5px;font-weight:800;cursor:pointer;font-size:13px">🔄 Recarregar versão mais recente</button>'
-    +'<button id="vers-btn-sobre" style="padding:10px;background:#c62828;color:#fff;border:none;border-radius:5px;font-weight:800;cursor:pointer;font-size:13px">💾 Sobrescrever mesmo assim</button>'
-    +'<button id="vers-btn-cancel" style="padding:10px;background:#333;color:#aaa;border:none;border-radius:5px;cursor:pointer;font-size:12px">← Cancelar</button>'
+    +'<button id="vbtn-reload" style="padding:11px;background:#2e7d32;color:#fff;border:none;border-radius:6px;font-weight:800;cursor:pointer;font-size:13px">🔄 Descartar minhas alterações e recarregar</button>'
+    +'<button id="vbtn-force" style="padding:11px;background:#c62828;color:#fff;border:none;border-radius:6px;font-weight:800;cursor:pointer;font-size:13px">💾 Sobrescrever (perder alterações do outro usuário)</button>'
+    +'<button id="vbtn-cancel" style="padding:9px;background:#333;color:#aaa;border:none;border-radius:6px;cursor:pointer;font-size:12px">← Cancelar (não salvar agora)</button>'
     +'</div></div>';
-
   document.body.appendChild(modal);
-  modal.querySelector('#vers-btn-reload').onclick=function(){document.body.removeChild(modal);onDescartar();};
-  modal.querySelector('#vers-btn-sobre').onclick=function(){document.body.removeChild(modal);onSobrescrever();};
-  modal.querySelector('#vers-btn-cancel').onclick=function(){document.body.removeChild(modal);};
+  modal.querySelector('#vbtn-reload').onclick=function(){modal.remove();onRecarregar();};
+  modal.querySelector('#vbtn-force').onclick=function(){modal.remove();onSobrescrever();};
+  modal.querySelector('#vbtn-cancel').onclick=function(){modal.remove();};
 }
 
-// ── Banner de somente leitura ────────────────────────────
-var _modoLeitura=false;
+// ── Banner somente leitura ───────────────────────────────
 function ativarModoLeitura(lock){
   _modoLeitura=true;
-  var banner=document.getElementById('lock-banner');
-  if(!banner){
-    banner=document.createElement('div');
-    banner.id='lock-banner';
-    banner.style.cssText='position:sticky;top:0;z-index:9999;background:#e65100;color:#fff;padding:7px 14px;font-size:11px;font-weight:800;display:flex;align-items:center;gap:10px;border-radius:0 0 6px 6px;margin-bottom:8px';
+  var b=document.getElementById('lock-banner');
+  if(!b){
+    b=document.createElement('div');b.id='lock-banner';
+    b.style.cssText='position:sticky;top:0;z-index:9000;background:#e65100;color:#fff;padding:8px 16px;font-size:11px;font-weight:800;display:flex;align-items:center;gap:10px;border-radius:0 0 6px 6px;margin-bottom:8px';
     var wrap=document.querySelector('.wrap');
-    if(wrap) wrap.insertBefore(banner, wrap.firstChild);
-    else document.body.insertBefore(banner, document.body.firstChild);
+    if(wrap)wrap.insertBefore(b,wrap.firstChild);
   }
-  banner.innerHTML='👁️ SOMENTE LEITURA — '
-    +(lock?'<b>'+eh(lock.usuarioNome)+'</b> está editando este orçamento':'Modo leitura ativo')
-    +' &nbsp;<button onclick="verificarLockEEditar()" style="padding:2px 10px;background:#fff;color:#e65100;border:none;border-radius:3px;cursor:pointer;font-weight:800;font-size:10px">Tentar Editar</button>'
-    +'&nbsp;<button onclick="desativarModoLeitura()" style="padding:2px 8px;background:#c62828;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:10px">✕</button>';
-  // Desabilitar todos os inputs/selects/buttons do formulário
-  document.querySelectorAll('.card input,.card select,.card textarea,.card button,.totbox input,.totbox select,.totbox button,.aprov-inline button,.com-panel button,.fin-inline button').forEach(function(el){
-    el.dataset.wasDisabled=el.disabled?'1':'0';
-    el.disabled=true;
-    el.style.opacity='0.5';
+  b.innerHTML='👁️ SOMENTE LEITURA'
+    +(lock?' — <b>'+eh(lock.usuarioNome)+'</b> está editando':'')
+    +' &nbsp;<button onclick="verificarLockEEditar()" style="padding:3px 10px;background:#fff;color:#e65100;border:none;border-radius:3px;cursor:pointer;font-weight:800;font-size:10px">🔄 Tentar Editar</button>'
+    +' <button onclick="desativarModoLeitura()" style="padding:3px 8px;background:#c62828;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:10px">✕</button>';
+  // Bloquear formulário
+  document.querySelectorAll('.card input,.card select,.card textarea,.card button,.totbox input,.totbox select,.totbox button,.aprov-inline button,.com-panel button,.fin-inline button,#fin-inline button').forEach(function(el){
+    if(!el.dataset.lockDisabled){el.dataset.lockDisabled=el.disabled?'1':'0';el.disabled=true;el.style.opacity='0.45';}
   });
 }
 
 function desativarModoLeitura(){
   _modoLeitura=false;
-  var banner=document.getElementById('lock-banner');
-  if(banner) banner.remove();
-  // Reabilitar campos
-  document.querySelectorAll('[data-was-disabled]').forEach(function(el){
-    if(el.dataset.wasDisabled!=='1'){el.disabled=false;el.style.opacity='';}
-    delete el.dataset.wasDisabled;
+  var b=document.getElementById('lock-banner');if(b)b.remove();
+  document.querySelectorAll('[data-lock-disabled]').forEach(function(el){
+    if(el.dataset.lockDisabled!=='1'){el.disabled=false;el.style.opacity='';}
+    delete el.dataset.lockDisabled;
   });
-  setTimeout(aplicarPermissoes, 50);
+  setTimeout(aplicarPermissoes,50);
 }
 
 async function verificarLockEEditar(){
-  if(!driveIdAtual) return;
+  if(!driveIdAtual)return;
+  driveStatus('🔍 Verificando disponibilidade...','');
   var res=await lockAdquirir(driveIdAtual);
   if(res.ok){
     desativarModoLeitura();
     lockIniciarHeartbeat(driveIdAtual);
-    driveStatus('🔓 Modo edição ativado','ok');
-  } else {
-    var minutos=res.lock.desdeTs?Math.floor((Date.now()-res.lock.desdeTs)/60000):0;
-    alert('⛔ '+res.lock.usuarioNome+' ainda está editando (há '+minutos+' min). Tente novamente mais tarde.');
+    driveStatus('🔓 Modo edição ativado!','ok');
+  }else{
+    var min=res.lock&&res.lock.desdeTs?Math.floor((Date.now()-res.lock.desdeTs)/60000):0;
+    driveStatus('⛔ Ainda em uso por '+((res.lock&&res.lock.usuarioNome)||'outro usuário'),'err');
+    alert('⛔ '+(res.lock&&res.lock.usuarioNome||'Outro usuário')+' ainda está editando (há '+min+' min).\nTente novamente mais tarde.');
   }
 }
 
