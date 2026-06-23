@@ -729,6 +729,67 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  MÓDULO ORDENS DE SERVIÇO                             -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="os-mod-ov">
+  <div class="modal-box dash-modal" style="max-width:860px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div>
+        <h2 style="margin-bottom:2px">📋 Ordens de Serviço</h2>
+        <p class="sub" id="os-mod-sub" style="margin:0">Filtre por data do evento e imprima as OS</p>
+      </div>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('os-mod-ov').classList.remove('open')">✕</button>
+    </div>
+
+    <!-- Filtros -->
+    <div style="background:#111;border:1px solid #2a2a2a;border-radius:6px;padding:12px 14px;margin-bottom:12px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div>
+          <label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">Data Início do Evento</label>
+          <input type="date" id="os-filtro-de" style="padding:6px 9px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:12px">
+        </div>
+        <div>
+          <label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">Data Fim do Evento</label>
+          <input type="date" id="os-filtro-ate" style="padding:6px 9px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:12px">
+        </div>
+        <div>
+          <label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">Consultor</label>
+          <select id="os-filtro-cons" style="padding:6px 9px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:12px">
+            <option value="">Todos</option>
+            <option>Fabiano Santos</option><option>Giovana Borges</option>
+            <option>Jéssica Elisandra</option><option>Rafael Oliveira</option>
+            <option>Wagner Wolff</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          <button onclick="osModAtalho('hoje')" style="padding:5px 10px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#aaa;font-size:10px;cursor:pointer">Hoje</button>
+          <button onclick="osModAtalho('semana')" style="padding:5px 10px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#aaa;font-size:10px;cursor:pointer">Esta Semana</button>
+          <button onclick="osModAtalho('mes')" style="padding:5px 10px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#aaa;font-size:10px;cursor:pointer">Este Mês</button>
+          <button onclick="osModAtalho('prox7')" style="padding:5px 10px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#aaa;font-size:10px;cursor:pointer">Próx. 7 dias</button>
+          <button onclick="osModAtalho('prox30')" style="padding:5px 10px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#aaa;font-size:10px;cursor:pointer">Próx. 30 dias</button>
+        </div>
+        <button onclick="osModBuscar()" style="padding:7px 18px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer;font-size:12px">🔍 Buscar</button>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div id="os-mod-status" style="font-size:11px;color:#888;margin-bottom:8px;min-height:16px"></div>
+
+    <!-- Lista de resultados -->
+    <div id="os-mod-lista" style="border:1px solid #2a2a2a;border-radius:6px;overflow:hidden;max-height:380px;overflow-y:auto;background:#0d0d0d"></div>
+
+    <!-- Ações em lote -->
+    <div id="os-mod-acoes" style="display:none;margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:#111;border:1px solid #2a2a2a;border-radius:6px">
+      <span id="os-mod-sel-count" style="font-size:11px;color:#aaa;flex:1"></span>
+      <button onclick="osModSelecionarTodos(true)" style="padding:5px 12px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#ccc;font-size:11px;cursor:pointer">☑️ Selecionar Todos</button>
+      <button onclick="osModSelecionarTodos(false)" style="padding:5px 12px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#ccc;font-size:11px;cursor:pointer">☐ Desmarcar Todos</button>
+      <button onclick="osModImprimirSelecionados()" style="padding:7px 18px;background:#1565c0;color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer;font-size:12px">🖨️ Imprimir Selecionados</button>
+      <button onclick="osModImprimirTodos()" style="padding:7px 18px;background:#2e7d32;color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer;font-size:12px">🖨️ Imprimir Todos</button>
+    </div>
+  </div>
+</div>
+
 <div class="ov" id="rel-ov">
   <div class="modal-box rel-modal">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -978,6 +1039,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <button class="ubtn" onclick="abrirMetas()" id="btn-metas">🎯 Metas</button>
     <button class="ubtn" onclick="abrirDashFin()" id="btn-dash-fin">💰 Financeiro</button>
     <button class="ubtn" onclick="abrirRelatorios()">📊 Relatórios</button>
+    <button class="ubtn" onclick="abrirModuloOS()" id="btn-mod-os">📋 Ordens de Serviço</button>
     <button class="ubtn" id="btn-adm" onclick="abrirAdm()" style="display:none">⚙️ ADM</button>
     <button class="ubtn" onclick="logout()">Sair</button>
   </div>
@@ -1472,7 +1534,7 @@ function doLogin(){
   document.getElementById('user-cargo').textContent=u.cargo||(NIVEIS[u.nivel]||u.nivel);
   document.getElementById('btn-adm').style.display=u.nivel==='adm'?'inline-block':'none';
   // Aplicar visibilidade dos botões de dashboard conforme cargo
-  var dashMap={'btn-dash-elab':'dash-elab','btn-dash-com':'dash-com','btn-metas':'dash-metas','btn-dash-fin':'dash-fin'};
+  var dashMap={'btn-dash-elab':'dash-elab','btn-dash-com':'dash-com','btn-metas':'dash-metas','btn-dash-fin':'dash-fin','btn-mod-os':'mod-os'};
   Object.keys(dashMap).forEach(function(btnId){
     var el=document.getElementById(btnId);
     if(el) el.style.display=dashTemAcesso(dashMap[btnId])?'':'none';
@@ -3350,16 +3412,38 @@ function finRenderParcelas(){
   }).join('');
 }
 
+function finParseDataPgto(str){
+  // Aceita dd/mm/aaaa e converte para aaaa-mm-dd
+  if(!str) return null;
+  str=str.trim();
+  if(/^\d{2}\/\d{2}\/\d{4}$/.test(str)){
+    var p=str.split('/');
+    return p[2]+'-'+p[1]+'-'+p[0];
+  }
+  // Também aceita aaaa-mm-dd direto
+  if(/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  return null;
+}
+
+function finFormatarDataPrompt(isoDate){
+  // Converte aaaa-mm-dd para dd/mm/aaaa para exibir no prompt
+  if(!isoDate) return '';
+  var p=isoDate.split('-');
+  if(p.length===3) return p[2]+'/'+p[1]+'/'+p[0];
+  return isoDate;
+}
+
 function finToggleStatus(i){
   var p=finParcelas[i];
   if(p.status!=='pago'){
-    // Marcar como pago — pedir data do pagamento
     var hoje=new Date().toISOString().split('T')[0];
-    var dataPgto=prompt('📅 Informe a data do pagamento (AAAA-MM-DD):',p.dataPagamento||hoje);
-    if(dataPgto===null)return; // cancelou
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(dataPgto)){alert('Data inválida. Use o formato AAAA-MM-DD.');return;}
+    var valorAtual=finFormatarDataPrompt(p.dataPagamento||hoje);
+    var dataPgto=prompt('📅 Informe a data do pagamento (dd/mm/aaaa):',valorAtual);
+    if(dataPgto===null)return;
+    var dataConv=finParseDataPgto(dataPgto);
+    if(!dataConv){alert('Data inválida. Use o formato dd/mm/aaaa.\nExemplo: 23/06/2026');return;}
     p.status='pago';
-    p.dataPagamento=dataPgto;
+    p.dataPagamento=dataConv;
   } else {
     p.status='pendente';
     p.dataPagamento='';
@@ -3372,11 +3456,13 @@ function finToggleInline(i){
   var p=finParcelas[i];
   if(p.status!=='pago'){
     var hoje=new Date().toISOString().split('T')[0];
-    var dataPgto=prompt('📅 Informe a data do pagamento (AAAA-MM-DD):',p.dataPagamento||hoje);
+    var valorAtual=finFormatarDataPrompt(p.dataPagamento||hoje);
+    var dataPgto=prompt('📅 Informe a data do pagamento (dd/mm/aaaa):',valorAtual);
     if(dataPgto===null)return;
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(dataPgto)){alert('Data inválida. Use o formato AAAA-MM-DD.');return;}
+    var dataConv=finParseDataPgto(dataPgto);
+    if(!dataConv){alert('Data inválida. Use o formato dd/mm/aaaa.\nExemplo: 23/06/2026');return;}
     p.status='pago';
-    p.dataPagamento=dataPgto;
+    p.dataPagamento=dataConv;
   } else {
     p.status='pendente';
     p.dataPagamento='';
@@ -5252,6 +5338,7 @@ var DASH_MODULOS = [
   {id:'dash-metas', label:'🎯 Metas'},
   {id:'dash-fin',   label:'💰 Dashboard Financeiro'},
   {id:'rel',        label:'📄 Relatórios'},
+  {id:'mod-os',     label:'📋 Módulo Ordens de Serviço'},
   {id:'aprovacoes', label:'📋 Aprovações (modal)'},
   {id:'funil-card', label:'📊 Funil de Vendas (card fixo)'}
 ];
@@ -5705,6 +5792,318 @@ async function dashDrillAbrirOrc(driveId, nome){
       comPanel.scrollIntoView({behavior:'smooth',block:'start'});
     }
   }, 900);
+}
+
+// ════════════════════════════════════════════════════════
+//  MÓDULO ORDENS DE SERVIÇO
+// ════════════════════════════════════════════════════════
+var _osModDados = [];
+var _osModFiltrados = [];
+
+async function abrirModuloOS(){
+  document.getElementById('os-mod-ov').classList.add('open');
+  // Preencher semana atual como padrão
+  osModAtalho('semana');
+  // Carregar dados se necessário (reutiliza cache do funil/dash)
+  if(!_osModDados.length){
+    await osModCarregarDados();
+  } else {
+    document.getElementById('os-mod-sub').textContent = _osModDados.length+' orçamentos carregados';
+  }
+}
+
+async function osModCarregarDados(){
+  var sub=document.getElementById('os-mod-sub');
+  var lista=document.getElementById('os-mod-lista');
+  sub.textContent='⏳ Carregando orçamentos do Drive...';
+  lista.innerHTML='<div style="padding:20px;text-align:center;color:#888;font-size:12px">⏳ Buscando...</div>';
+  try{
+    var r=await fetch(SCRIPT_URL+'?action=list&q=');
+    var d=await r.json();
+    if(!d.ok) throw new Error(d.erro||'Erro ao listar');
+    var INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'];
+    var itens=(d.lista||[]).filter(function(x){
+      return !INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
+    });
+    sub.textContent='⏳ Carregando '+itens.length+' orçamentos...';
+    _osModDados=(await fetchProgressivo(itens,15,function(parciais,total){
+      sub.textContent='⏳ '+parciais.length+' / '+total+' carregados...';
+    })).filter(Boolean);
+    sub.textContent=_osModDados.length+' orçamentos carregados';
+    lista.innerHTML='';
+  }catch(e){
+    sub.textContent='⚠️ Erro: '+e.message;
+  }
+}
+
+function osModAtalho(tipo){
+  var hoje=new Date();
+  var de='',ate='';
+  function fmt2(d){return d.toISOString().split('T')[0];}
+  if(tipo==='hoje'){
+    de=ate=fmt2(hoje);
+  }else if(tipo==='semana'){
+    var dow=hoje.getDay(); // 0=dom
+    var ini=new Date(hoje); ini.setDate(hoje.getDate()-(dow===0?6:dow-1));
+    var fim=new Date(ini); fim.setDate(ini.getDate()+6);
+    de=fmt2(ini);ate=fmt2(fim);
+  }else if(tipo==='mes'){
+    var ini2=new Date(hoje.getFullYear(),hoje.getMonth(),1);
+    var fim2=new Date(hoje.getFullYear(),hoje.getMonth()+1,0);
+    de=fmt2(ini2);ate=fmt2(fim2);
+  }else if(tipo==='prox7'){
+    var fim3=new Date(hoje); fim3.setDate(hoje.getDate()+7);
+    de=fmt2(hoje);ate=fmt2(fim3);
+  }else if(tipo==='prox30'){
+    var fim4=new Date(hoje); fim4.setDate(hoje.getDate()+30);
+    de=fmt2(hoje);ate=fmt2(fim4);
+  }
+  document.getElementById('os-filtro-de').value=de;
+  document.getElementById('os-filtro-ate').value=ate;
+}
+
+async function osModBuscar(){
+  var de  =document.getElementById('os-filtro-de').value;
+  var ate =document.getElementById('os-filtro-ate').value;
+  var cons=document.getElementById('os-filtro-cons').value;
+  var stEl=document.getElementById('os-mod-status');
+  var listaEl=document.getElementById('os-mod-lista');
+  var acoesEl=document.getElementById('os-mod-acoes');
+
+  if(!de&&!ate){alert('Selecione ao menos uma data.');return;}
+
+  // Carregar dados se necessário
+  if(!_osModDados.length){
+    await osModCarregarDados();
+  }
+
+  // Filtrar por data do evento (f-dia), consultor e SOMENTE venda ganha
+  _osModFiltrados=_osModDados.filter(function(o){
+    var dtEv=o.form&&o.form['f-dia']||'';
+    if(!dtEv) return false;
+    if(de  && dtEv < de)  return false;
+    if(ate && dtEv > ate) return false;
+    if(cons && (o.form&&o.form['f-cons'])!==cons) return false;
+    // Apenas orçamentos com venda ganha
+    var cs=(o.dados&&o.dados.comercialStatus)||'';
+    if(cs!=='ganha') return false;
+    return true;
+  });
+
+  // Ordenar por data do evento
+  _osModFiltrados.sort(function(a,b){
+    var da=a.form&&a.form['f-dia']||'';
+    var db=b.form&&b.form['f-dia']||'';
+    return da<db?-1:da>db?1:0;
+  });
+
+  stEl.textContent=_osModFiltrados.length+' evento(s) encontrado(s) no período';
+
+  if(!_osModFiltrados.length){
+    listaEl.innerHTML='<div style="padding:24px;text-align:center;color:#888;font-size:12px">Nenhum evento encontrado no período selecionado.</div>';
+    acoesEl.style.display='none';
+    return;
+  }
+
+  // Renderizar lista
+  var header='<div style="display:grid;grid-template-columns:40px auto 1fr auto auto;gap:0;background:#111;border-bottom:2px solid #c0001a;padding:6px 12px;font-size:9px;color:#888;text-transform:uppercase;font-weight:800;align-items:center">'
+    +'<span></span><span>Data Evento</span><span>Cliente · Nº · Consultor</span><span style="text-align:center;min-width:80px">Local</span><span style="text-align:center;min-width:70px">OS</span>'
+    +'</div>';
+
+  var rows=_osModFiltrados.map(function(o,idx){
+    var f=o.form||{};
+    var dtEv=f['f-dia']?fD(f['f-dia']):'—';
+    var dtFim=f['f-dia-fim']&&f['f-dia-fim']!==f['f-dia']?' → '+fD(f['f-dia-fim']):'';
+    var diasStr=dtFim?'<span style="font-size:9px;color:#ffa726">'+dtFim+'</span>':'';
+    return '<div style="display:grid;grid-template-columns:40px auto 1fr auto auto;gap:8px;padding:8px 12px;border-bottom:1px solid #1a1a1a;align-items:center" id="os-row-'+idx+'">'
+      +'<input type="checkbox" class="os-mod-cb" data-idx="'+idx+'" onchange="osModAtualizarContagem()" style="width:16px;height:16px;cursor:pointer;accent-color:#c0001a">'
+      +'<div style="white-space:nowrap">'
+        +'<div style="font-size:11px;color:#90caf9;font-weight:700">'+dtEv+'</div>'
+        +diasStr
+      +'</div>'
+      +'<div style="min-width:0">'
+        +'<div style="font-size:11px;color:#fff;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+        +'<div style="font-size:9px;color:#888;margin-top:1px">'+eh(f['f-num']||'—')+(f['f-cons']?' · '+eh(f['f-cons']):'')+(f['f-tipo']?' · '+eh(f['f-tipo']):'')+'</div>'
+      +'</div>'
+      +'<div style="font-size:10px;color:#aaa;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px" title="'+eh(f['f-local']||'')+'">'+eh((f['f-local']||'—').substring(0,18))+'</div>'
+      +'<button onclick="osModImprimirUm('+idx+')" style="padding:5px 12px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap">🖨️ OS</button>'
+      +'</div>';
+  }).join('');
+
+  listaEl.innerHTML=header+rows;
+  acoesEl.style.display='flex';
+  osModAtualizarContagem();
+}
+
+function osModAtualizarContagem(){
+  var cbs=document.querySelectorAll('.os-mod-cb:checked');
+  var total=document.querySelectorAll('.os-mod-cb').length;
+  var el=document.getElementById('os-mod-sel-count');
+  if(el) el.textContent=cbs.length+' de '+total+' selecionado(s)';
+}
+
+function osModSelecionarTodos(marcar){
+  document.querySelectorAll('.os-mod-cb').forEach(function(cb){cb.checked=marcar;});
+  osModAtualizarContagem();
+}
+
+function osModImprimirUm(idx){
+  var o=_osModFiltrados[idx];
+  if(!o) return;
+  osModGerarOS([o]);
+}
+
+function osModImprimirSelecionados(){
+  var cbs=document.querySelectorAll('.os-mod-cb:checked');
+  if(!cbs.length){alert('Selecione ao menos uma OS.');return;}
+  var lista=[];
+  cbs.forEach(function(cb){
+    var idx=parseInt(cb.dataset.idx);
+    if(_osModFiltrados[idx]) lista.push(_osModFiltrados[idx]);
+  });
+  if(!confirm('Imprimir '+lista.length+' OS(s) em lote?\n\nAs OS serão abertas em uma única janela.'))return;
+  osModGerarOS(lista);
+}
+
+function osModImprimirTodos(){
+  if(!_osModFiltrados.length){alert('Nenhuma OS para imprimir.');return;}
+  if(!confirm('Imprimir '+_osModFiltrados.length+' OS(s) em lote?\n\nTodas as OS serão abertas em uma única janela.'))return;
+  osModGerarOS(_osModFiltrados);
+}
+
+function osModGerarOS(lista){
+  // Gerar HTML de todas as OS em uma única página (separadas por page-break)
+  var OCULT_LOC=['Montagem','Desmontagem','Frete','Almoço/Janta','Combustível','Hotel','Pedágio','Projeto','Carregadores','BV Produtora','Bônus de Venda'];
+  function isOcultOS(n){
+    if(!n)return false;
+    var nl=n.toLowerCase();
+    return OCULT_LOC.some(function(o){
+      var ol=o.toLowerCase();
+      var idx=nl.indexOf(ol);
+      if(idx<0)return false;
+      var antes=idx===0||!/[a-záàãâéêíóôõúç]/i.test(nl[idx-1]);
+      var depois=idx+ol.length>=nl.length||!/[a-záàãâéêíóôõúç]/i.test(nl[idx+ol.length]);
+      return antes&&depois;
+    });
+  }
+  function bRowOS(r){
+    var isPal=r.palco||(r.name&&r.name.toLowerCase().includes('palco'));
+    var desc=r.name||'';
+    if(r.painel&&r.larg&&r.alt){var pxW=Math.round(r.larg*(r.name&&r.name.includes('P4')?4:r.name&&r.name.includes('P6')?6:5));var pxH=Math.round(r.alt*(r.name&&r.name.includes('P4')?4:r.name&&r.name.includes('P6')?6:5));desc+=' – '+Number(r.larg).toFixed(2)+'×'+Number(r.alt).toFixed(2)+'m ['+pxW+'×'+pxH+'px]';}
+    else if(isPal&&r.larg&&r.prof){desc='Palco '+Number(r.larg).toFixed(2)+'×'+Number(r.prof).toFixed(2)+'m';if(r.elObj)desc+=' – Elev: '+r.elObj.l;}
+    return'<tr><td class="qtd">'+r.qty+'x</td><td class="item">'+eh(desc)+'</td><td class="chk">☐</td></tr>';
+  }
+
+  var SEC_ICO2={som:'🔊',video:'🎬',luz:'⚡',estrutura:'🏗️',servico:'🔧',logistica:'🚛'};
+  var SEC_LBL2={som:'Sonorização',video:'Vídeo',luz:'Iluminação',estrutura:'Estrutura',servico:'Serviço',logistica:'Logística'};
+  var SECS_OS=['som','video','luz','estrutura','servico','logistica'];
+
+  var paginasHTML=lista.map(function(o,idx){
+    var f=o.form||{};
+    var st=o.dados&&o.dados.state||{};
+    var num=f['f-num']||'—';
+    var dataorc=f['f-data']?fD(f['f-data']):new Date().toLocaleDateString('pt-BR');
+    var horEv=f['f-dia']?fD(f['f-dia']):'—';
+    if(f['f-sem'])horEv+=' ('+f['f-sem']+')';
+    if(f['f-dia-fim']&&f['f-dia-fim']!==f['f-dia']){horEv+=' a '+fD(f['f-dia-fim']);if(f['f-sem-fim'])horEv+=' ('+f['f-sem-fim']+')';}
+    if(f['f-hi'])horEv+=' – Início: '+f['f-hi'];
+    if(f['f-hf'])horEv+=' Fim: '+f['f-hf'];
+    var mStr=f['f-dm']?fD(f['f-dm']):'';if(f['f-hm'])mStr+=' às '+f['f-hm'];
+    var dStr=f['f-dd']?fD(f['f-dd']):'';if(f['f-hd'])dStr+=' às '+f['f-hd'];
+    var endEv=[f['f-end-ev'],f['f-num-ev'],f['f-bairro-ev'],f['f-cid-ev']].filter(Boolean).join(', ');
+    var incLines=(f['f-svinc']||'').split('\n').map(function(l){return l.trim();}).filter(Boolean);
+
+    var corpoOS='';
+    SECS_OS.forEach(function(s){
+      if(!st[s]) return;
+      var todosRows=[];
+      Object.values(st[s].rows||{}).forEach(function(arr){
+        (arr||[]).forEach(function(r){if(!isOcultOS(r.name)&&r.qty>0)todosRows.push(r);});
+      });
+      var isLog=s==='logistica';
+      if(!todosRows.length&&(!isLog||!incLines.length)) return;
+      corpoOS+='<tr><td colspan="3" style="background:#c0001a;color:#fff;font-weight:bold;padding:3px 8px;font-size:11px;print-color-adjust:exact;-webkit-print-color-adjust:exact">'+SEC_ICO2[s]+' '+SEC_LBL2[s].toUpperCase()+'</td></tr>';
+      todosRows.forEach(function(r){corpoOS+=bRowOS(r);});
+      if(isLog)incLines.forEach(function(l){corpoOS+='<tr><td class="qtd">—</td><td class="item">'+eh(l)+'</td><td class="chk">☐</td></tr>';});
+      corpoOS+='<tr><td colspan="3" style="height:4px"></td></tr>';
+    });
+    if(!corpoOS)corpoOS='<tr><td colspan="3" style="padding:12px;text-align:center;color:#aaa;font-size:11px">Nenhum item cadastrado neste orçamento.</td></tr>';
+
+    var extras=Array(10).fill('<tr><td colspan="3" style="height:23px;border-bottom:1px solid #ccc">&nbsp;</td></tr>').join('');
+    var obsOS=f['f-obs-os']?'<div class="obs-os"><div class="obs-os-title">🔧 OBSERVAÇÕES PARA MONTAGEM</div><div class="obs-os-body">'+eh(f['f-obs-os'])+'</div></div>':'';
+    var pageBreak=idx<lista.length-1?'page-break-after:always;':'';
+
+    return '<div class="page" style="'+pageBreak+'">'
+      +'<div class="hdr"><div><h1>CRAZY SOM</h1><p style="font-size:11px;color:#666;margin-top:2px">Audiovisual e Estrutura | (51) 3428-5053 | CNPJ: 10.909.827/0001-76</p></div>'
+      +'<div class="hr"><div class="os">ORDEM DE SERVIÇO</div><div class="osn">'+num+'</div><div class="osd">Emissão: '+dataorc+'</div></div></div>'
+      +'<div class="info"><table>'
+      +'<tr><td class="lbl">Cliente:</td><td><b>'+eh(f['f-cliente']||'—')+'</b></td><td class="lbl">Consultor:</td><td>'+eh(f['f-cons']||'—')+'</td></tr>'
+      +'<tr><td class="lbl">Local:</td><td><b>'+eh(f['f-local']||'—')+'</b></td><td class="lbl">Tipo:</td><td>'+eh(f['f-tipo']||'—')+'</td></tr>'
+      +(endEv?'<tr><td class="lbl">Endereço:</td><td colspan="3">'+eh(endEv)+'</td></tr>':'')
+      +'<tr><td class="lbl">Data/Hora:</td><td>'+horEv+'</td><td class="lbl">Público:</td><td>'+(f['f-pub']?parseInt(f['f-pub']).toLocaleString('pt-BR')+' pessoas':'—')+'</td></tr>'
+      +(mStr?'<tr><td class="lbl">Montagem:</td><td>'+mStr+'</td><td class="lbl">Desmontagem:</td><td>'+(dStr||'—')+'</td></tr>':'')
+      +'</table></div>'
+      +'<table class="eq"><thead><tr><th style="width:48px">QTD</th><th>EQUIPAMENTO / SERVIÇO</th><th style="width:30px;text-align:center">✓</th></tr></thead><tbody>'+corpoOS+'</tbody></table>'
+      +'<div class="xt">📝 MATERIAIS EXTRAS</div><div class="xh">Cabos, adaptadores, consumíveis e demais itens:</div>'
+      +'<table class="ext"><thead><tr><th style="width:48px">QTD</th><th>DESCRIÇÃO</th><th style="width:30px;text-align:center">✓</th></tr></thead><tbody>'+extras+'</tbody></table>'
+      +obsOS
+      +'<div class="assin"><div class="assin-box"><div class="aline">Responsável Técnico</div></div><div class="assin-box"><div class="aline">Conferência</div></div><div class="assin-box"><div class="aline">Carregamento</div></div></div>'
+      +'<div class="foot">Crazy Som – OSVALDO CRUZ, 36 - NITEROI - Canoas - RS | (51) 3428-5053 | CNPJ: 10.909.827/0001-76</div>'
+      +'</div>';
+  }).join('');
+
+  var totalOS=lista.length;
+  var tituloLote=totalOS>1?'<div style="text-align:center;padding:10px;background:#c0001a;color:#fff;font-weight:800;font-size:13px;margin-bottom:12px;border-radius:4px">📋 LOTE DE '+totalOS+' ORDENS DE SERVIÇO</div>':'';
+
+  var fullHTML='<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><style>'
+    +'*{box-sizing:border-box;margin:0;padding:0;font-family:Calibri,Arial,sans-serif}'
+    +'body{background:#eee;padding:18px}'
+    +'.bar{background:#111;padding:9px 14px;border-radius:5px;display:flex;gap:9px;align-items:center;margin-bottom:14px}'
+    +'.bar span{color:#aaa;font-size:12px;flex:1}'
+    +'.bar button{padding:7px 15px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700}'
+    +'.br{background:#c0001a;color:#fff}.bd{background:#444;color:#fff}'
+    +'.page{background:#fff;width:210mm;margin:0 auto 20px;padding:13mm 13mm 17mm;box-shadow:0 4px 18px rgba(0,0,0,.2)}'
+    +'.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:9px;border-bottom:3px solid #c0001a;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'.hdr h1{font-size:21px;font-weight:900;color:#c0001a}'
+    +'.hr{text-align:right}.hr .os{font-size:17px;font-weight:900}.hr .osn{font-size:14px;font-weight:bold;color:#c0001a}.hr .osd{font-size:11px;color:#888}'
+    +'.info{background:#f7f7f7;border:1px solid #ddd;border-radius:3px;padding:7px 11px;margin-bottom:11px}'
+    +'.info table{width:100%;border-collapse:collapse}.info td{padding:2px 5px;font-size:11px;vertical-align:top}'
+    +'.info .lbl{font-weight:bold;color:#555;width:125px;white-space:nowrap}'
+    +'table.eq{width:100%;border-collapse:collapse;margin-bottom:3px}'
+    +'table.eq th{background:#111;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'.qtd{width:46px;padding:3px 7px;border:1px solid #e0e0e0;font-weight:bold;text-align:center;font-size:12px;vertical-align:top}'
+    +'.item{padding:3px 7px;border:1px solid #e0e0e0;font-size:11px}'
+    +'.chk{width:30px;padding:3px 7px;border:1px solid #e0e0e0;text-align:center;font-size:13px}'
+    +'.xt{font-size:12px;font-weight:bold;color:#c0001a;border-bottom:2px solid #c0001a;padding-bottom:3px;margin:16px 0 4px;text-transform:uppercase}'
+    +'.xh{font-size:11px;color:#888;margin-bottom:5px}'
+    +'table.ext{width:100%;border-collapse:collapse}'
+    +'table.ext th{background:#555;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'.obs-os{background:#fff8e1;border:2px solid #ff6f00;border-radius:5px;padding:9px 13px;margin:12px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'.obs-os-title{font-size:10px;font-weight:900;color:#ff6f00;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}'
+    +'.obs-os-body{font-size:11px;color:#3e2000;white-space:pre-wrap;line-height:1.6}'
+    +'.assin{display:flex;gap:18px;margin-top:26px}.assin-box{flex:1;text-align:center}'
+    +'.aline{border-top:1px solid #444;padding-top:4px;font-size:11px;color:#555;margin-top:30px}'
+    +'.foot{margin-top:14px;border-top:1px solid #ddd;padding-top:5px;font-size:11px;color:#aaa;text-align:center}'
+    +'@media print{'
+    +'  body{background:#fff;padding:0}.bar{display:none}'
+    +'  .page{box-shadow:none;margin:0;padding:11mm 11mm 14mm;width:100%;page-break-after:always}'
+    +'  .page:last-child{page-break-after:auto}'
+    +'}'
+    +'</style></head><body>'
+    +'<div class="bar">'
+    +'<span>📋 Ordens de Serviço – Crazy Som ('+totalOS+' OS)</span>'
+    +'<button class="br" onclick="window.print()">🖨️ Imprimir Tudo</button>'
+    +'<button class="bd" onclick="window.close()">✕ Fechar</button>'
+    +'</div>'
+    +tituloLote
+    +paginasHTML
+    +'</body></html>';
+
+  var w=window.open('','_blank');
+  if(!w){alert('⚠️ Pop-up bloqueado! Permita pop-ups para este site.');return;}
+  w.document.open();
+  w.document.write(fullHTML);
+  w.document.close();
 }
 
 async function abrirDashFin(){
