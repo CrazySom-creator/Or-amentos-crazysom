@@ -1604,19 +1604,13 @@ async function aprovAcao(novo){
   if(novo==='analise'){snapshotAnterior=tirarSnapshot();}
   aprovHist.push({ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),obs:obs,diffs:diffs});
   aprovStatus=novo;renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
-  var num=gv('f-num')||'SN',cli=gv('f-cliente')||'SemCliente',dt=gv('f-data')||new Date().toISOString().split('T')[0];
   if(novo==='analise'){
     driveStatus('⏳ Salvando automaticamente...','');
     try{
-      var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual||null,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})});
-      var d=await r.json();
-      if(d.ok){driveIdAtual=d.id;driveNumAtual=num;_naoSalvo=false;if(_driveCache)_driveCache[d.id]=null;driveStatus('✅ Salvo automaticamente: '+d.nome,'ok');driveListar();}
-      else{driveStatus('⚠️ Erro ao salvar: '+(d.erro||''),'err');}
-    }catch(e){driveStatus('⚠️ Erro ao salvar: '+e.message,'err');}
+      await salvarNoDrive({mostrarStatus:true});
+    }catch(e){}
   }else if(driveIdAtual){
-    if(_driveCache)_driveCache[driveIdAtual]=null;
-    fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})}).then(function(){_naoSalvo=false;}).catch(function(){});
-    driveStatus('⏳ Salvando...','');
+    salvarNoDrive({mostrarStatus:false}).catch(function(){});
   }
 }
 
@@ -1648,21 +1642,13 @@ async function aprovAcaoInline(novo){
   aprovHist.push({ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),obs:obs,diffs:diffs});
   aprovStatus=novo;document.getElementById('aprov-inline-obs').value='';
   renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
-  // Salvar no Drive (automático ao enviar para análise; também ao demais fluxos se já tiver ID)
-  var num=gv('f-num')||'SN',cli=gv('f-cliente')||'SemCliente',dt=gv('f-data')||new Date().toISOString().split('T')[0];
   if(novo==='analise'){
-    // Salvamento automático obrigatório
     driveStatus('⏳ Salvando automaticamente...','');
     try{
-      var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual||null,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})});
-      var d=await r.json();
-      if(d.ok){driveIdAtual=d.id;driveNumAtual=num;_naoSalvo=false;if(_driveCache)_driveCache[d.id]=null;driveStatus('✅ Salvo automaticamente: '+d.nome,'ok');driveListar();}
-      else{driveStatus('⚠️ Erro ao salvar: '+(d.erro||''),'err');}
-    }catch(e){driveStatus('⚠️ Erro ao salvar: '+e.message,'err');}
+      await salvarNoDrive({mostrarStatus:true});
+    }catch(e){}
   }else if(driveIdAtual){
-    if(_driveCache)_driveCache[driveIdAtual]=null;
-    fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})}).then(function(){_naoSalvo=false;}).catch(function(){});
-    driveStatus('⏳ Salvando...','');
+    salvarNoDrive({mostrarStatus:false}).catch(function(){});
   }
 }
 
@@ -2272,18 +2258,53 @@ function driveRenderLista(el, lista, podeDel, SI_COR2, SI_LBL, q){
     }).join('');
 }
 
-async function driveSalvar(){
-  driveStatus('⏳ Salvando...','');
+// ── Função central de salvamento — usada por todos os fluxos ─────────────────
+function getDadosCompletos(){
+  return {
+    form:getForm(),
+    state:state,
+    aprovStatus:aprovStatus,
+    aprovHist:aprovHist,
+    comercialStatus:comercialStatus,
+    comercialHist:comercialHist,
+    snapshotAnterior:snapshotAnterior,
+    finParcelas:finParcelas,
+    finObs:finObs
+  };
+}
+
+async function salvarNoDrive(opts){
+  // opts: {mostrarStatus, onSucesso, onErro, forcarNovoId}
+  opts=opts||{};
   var num=gv('f-num')||'SN',cli=gv('f-cliente')||'SemCliente',dt=gv('f-data')||new Date().toISOString().split('T')[0];
-  if(driveIdAtual&&driveNumAtual&&driveNumAtual!==num)driveIdAtual=null;
+  if(driveIdAtual&&driveNumAtual&&driveNumAtual!==num&&!opts.forcarNovoId)driveIdAtual=null;
+  if(opts.mostrarStatus!==false) driveStatus('⏳ Salvando...','');
   try{
-    var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual||null,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist}})});
-    var d=await r.json();if(!d.ok)throw new Error(d.erro);
-    driveIdAtual=d.id;driveNumAtual=num;
+    var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
+      action:'save',
+      id:driveIdAtual||null,
+      numero:num,cliente:cli,data:dt,
+      dados:getDadosCompletos()
+    })});
+    var d=await r.json();
+    if(!d.ok) throw new Error(d.erro||'Erro desconhecido');
+    driveIdAtual=d.id;
+    driveNumAtual=num;
     _naoSalvo=false;
-    _driveCacheClear(); // cache stale após salvar
-    driveStatus('✅ Salvo: '+d.nome,'ok');driveListar();
-  }catch(e){driveStatus('Erro: '+e.message,'err');}
+    _driveCache[d.id]=null; // invalidar cache
+    if(opts.mostrarStatus!==false) driveStatus('✅ Salvo: '+d.nome,'ok');
+    driveListar();
+    if(opts.onSucesso) opts.onSucesso(d);
+    return d;
+  }catch(e){
+    driveStatus('⚠️ Erro ao salvar: '+e.message,'err');
+    if(opts.onErro) opts.onErro(e);
+    throw e;
+  }
+}
+
+async function driveSalvar(){
+  await salvarNoDrive({mostrarStatus:true});
 }
 async function driveCarregar(id,nome){
   var msg = _naoSalvo
@@ -3066,31 +3087,31 @@ function salvarComercial(){
   if(motivoSel)motivoSel.style.display='none';
   renderComercial();renderFinanceiroInline();
 
-  // Salvar no Drive e só depois recarregar o funil
+  // Feedback visual no botão de registrar (sem alert bloqueante)
+  var btnReg=document.querySelector('button[onclick="salvarComercial()"]');
+  if(btnReg){
+    var origTxt=btnReg.textContent;
+    var origBg=btnReg.style.background;
+    btnReg.textContent='⏳ Salvando...';
+    btnReg.disabled=true;
+    btnReg.style.background='#555';
+  }
+
   if(driveIdAtual){
-    var num=gv('f-num')||'SN',cli=gv('f-cliente')||'SemCliente',dt=gv('f-data')||new Date().toISOString().split('T')[0];
     driveStatus('⏳ Salvando...','');
-    // Invalidar cache deste orçamento para garantir dados frescos no funil
-    if(typeof _driveCacheSet === 'function') _driveCache[driveIdAtual]=null;
-    fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})})
-      .then(function(r){return r.json();})
-      .then(function(d){
-        if(d&&d.ok){
-          driveStatus('✅ Salvo!','ok');
-          _naoSalvo=false;
-        } else {
-          driveStatus('⚠️ Erro ao salvar','err');
-        }
-        // Só recarregar funil APÓS confirmação do Drive
+    if(btnReg){btnReg.textContent='⏳ Salvando...';btnReg.disabled=true;btnReg.style.background='#555';}
+    salvarNoDrive({mostrarStatus:true})
+      .then(function(){
+        if(btnReg){btnReg.textContent='✅ Salvo!';btnReg.style.background='#2e7d32';}
+        setTimeout(function(){if(btnReg){btnReg.textContent=origTxt;btnReg.style.background=origBg;btnReg.disabled=false;}},2000);
         funilRecarregar();
       })
       .catch(function(){
-        driveStatus('⚠️ Erro de conexão','err');
+        if(btnReg){btnReg.textContent='⚠️ Erro';btnReg.style.background='#c62828';setTimeout(function(){btnReg.textContent=origTxt;btnReg.style.background=origBg;btnReg.disabled=false;},2000);}
         funilRecarregar();
       });
-    alert('✅ Registro comercial salvo! O funil será atualizado em instantes.');
   } else {
-    alert('✅ Registro comercial salvo!');
+    if(btnReg){btnReg.textContent='✅ Salvo!';btnReg.style.background='#2e7d32';setTimeout(function(){btnReg.textContent=origTxt;btnReg.style.background=origBg;btnReg.disabled=false;},2000);}
     funilRecarregar();
   }
 }
@@ -3524,12 +3545,10 @@ function salvarFinanceiro(){
   var st=document.getElementById('fin-save-status');
   st.textContent='⏳ Salvando...';
   st.style.color='#ffa726';
-  // Salvar no Drive se houver ID
   if(driveIdAtual){
-    var num=gv('f-num')||'SN',cli=gv('f-cliente')||'SemCliente',dt=gv('f-data')||new Date().toISOString().split('T')[0];
-    fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:driveIdAtual,numero:num,cliente:cli,data:dt,dados:{form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs}})})
-    .then(function(){st.textContent='✅ Salvo no Drive!';st.style.color='#66bb6a';setTimeout(function(){st.textContent='';},3000);})
-    .catch(function(){st.textContent='⚠️ Erro ao salvar';st.style.color='#ef5350';});
+    salvarNoDrive({mostrarStatus:false})
+      .then(function(){st.textContent='✅ Salvo no Drive!';st.style.color='#66bb6a';setTimeout(function(){st.textContent='';},3000);})
+      .catch(function(){st.textContent='⚠️ Erro ao salvar';st.style.color='#ef5350';});
   }else{
     st.textContent='✅ Salvo localmente!';st.style.color='#66bb6a';
     setTimeout(function(){st.textContent='';},3000);
@@ -6827,6 +6846,15 @@ document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
 usuariosCarregarStorage();
 permCarregar();
 calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+// Auto-save a cada 3 minutos se houver alterações não salvas e orçamento já tiver ID no Drive
+setInterval(function(){
+  if(_naoSalvo && driveIdAtual && usuarioAtual){
+    console.log('[AutoSave] Salvando automaticamente...');
+    salvarNoDrive({mostrarStatus:false}).then(function(){
+      driveStatus('💾 Auto-salvo às '+new Date().toLocaleTimeString('pt-BR'),'ok');
+    }).catch(function(){});
+  }
+}, 3*60*1000);
 document.getElementById('l-pass').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
 document.getElementById('l-user').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('l-pass').focus();});
 // Fechar modais ao tocar no overlay (mobile UX)
