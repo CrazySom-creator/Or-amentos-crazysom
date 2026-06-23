@@ -2145,24 +2145,51 @@ async function driveListar(){
   var el=document.getElementById('drive-list');
   el.style.display='block';
   el.innerHTML='<div class="drive-item" style="color:#888">⏳ Buscando no Drive...</div>';
+  _driveListaCache=[];
   try{
     var r=await fetch(SCRIPT_URL+'?action=list&q=');
     var d=await r.json();
     if(!d.ok) throw new Error(d.erro);
-    var NOMES_INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'];
+    var NOMES_INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM'];
+    var totalBruto=(d.lista||[]).length;
     var lista=(d.lista||[]).filter(function(x){
       return !NOMES_INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
     });
-    _driveListaCache = lista;
+    // Debug: mostrar quantos o Drive retornou
+    driveStatus('Drive retornou '+totalBruto+' arquivo(s), exibindo '+lista.length,'');
+    _driveListaCache=lista;
     driveFiltrarLocal();
   }catch(e){
     el.innerHTML='<div class="drive-item" style="color:#ef5350">⚠️ Erro: '+e.message+'</div>';
   }
 }
 
+// Versão silenciosa — após saves, só atualiza cache se lista já estiver aberta com itens
+async function driveListarSilencioso(){
+  try{
+    var r=await fetch(SCRIPT_URL+'?action=list&q=');
+    var d=await r.json();
+    if(!d.ok) return;
+    var NOMES_INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM'];
+    var novaLista=(d.lista||[]).filter(function(x){
+      return !NOMES_INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
+    });
+    // Só atualiza cache e re-renderiza se o usuário já tinha clicado em Localizar
+    var el=document.getElementById('drive-list');
+    var listaAberta=el&&el.style.display!=='none'&&el.querySelectorAll('.drive-item').length>0;
+    if(listaAberta){
+      _driveListaCache=novaLista;
+      driveFiltrarLocal();
+    }
+    // Se lista não está aberta, não toca no cache — próximo Localizar vai buscar do Drive
+  }catch(e){}
+}
+
 function driveFiltrarLocal(){
   var el=document.getElementById('drive-list');
-  if(!el||!_driveListaCache.length) return;
+  if(!el) return;
+  // Só filtrar se o usuário já clicou em Localizar (lista visível com conteúdo)
+  if(!_driveListaCache.length) return;
   el.style.display='block';
 
   var q=(document.getElementById('drive-q').value||'').trim().toLowerCase();
@@ -2335,7 +2362,7 @@ async function _executarSave(num,cli,dt,opts){
     _versaoAtual=dados._versao; // atualizar versão local
     _driveCache[d.id]=null;
     if(opts.mostrarStatus!==false) driveStatus('✅ Salvo: '+d.nome,'ok');
-    driveListar();
+    driveListarSilencioso();
     if(opts.onSucesso) opts.onSucesso(d);
     return d;
   }catch(e){
