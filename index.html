@@ -1244,6 +1244,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     </select>
     <label style="color:#888;font-size:10px;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px">💬 Comentário da Negociação</label>
     <textarea class="com-obs" id="com-obs" placeholder="Registre aqui detalhes da negociação, contato com cliente, objeções, condições especiais..."></textarea>
+    <div id="com-pendente" style="display:none;padding:6px 10px;background:#fff3e0;border:1px solid #ffa726;border-radius:4px;font-size:11px;color:#e65100;margin-bottom:6px"></div>
     <button onclick="salvarComercial()" style="padding:7px 16px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">💾 Registrar</button>
     <div class="com-hist" id="com-hist" style="display:none">
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#555;font-weight:700;margin-bottom:6px">📋 Histórico Comercial</div>
@@ -1504,14 +1505,28 @@ function setDSFim(){try{var d=new Date(gv('f-dia-fim')+'T12:00:00');document.get
 function getDiasEvento(){var ini=gv('f-dia'),fim=gv('f-dia-fim');if(!ini)return 1;var d1=new Date(ini+'T12:00:00'),d2=fim?new Date(fim+'T12:00:00'):d1;return Math.max(1,Math.round((d2-d1)/(1000*60*60*24))+1);}
 function getDiariasEquip(){var d=getDiasEvento();return d===1?1:1+(d-1)*0.5;}
 function calcDiariasAuto(){
-  var dias=getDiasEvento(),dEquip=getDiariasEquip();
-  var el=document.getElementById('f-dias-ev');if(el)el.value=dias+(dias===1?' dia':' dias');
-  var el2=document.getElementById('f-diarias-equip');if(el2)el2.value=dEquip.toFixed(1)+(dEquip===1?' diária':' diárias');
-  ['som','video','luz','estrutura','extra'].forEach(function(s){Object.values(state[s].rows).forEach(function(arr){arr.forEach(function(r){r.diaria=dEquip;});});});
-  Object.values(state.logistica.rows).forEach(function(arr){arr.forEach(function(r){r.diaria=1;});});
-  Object.values(state.servico.rows).forEach(function(arr){arr.forEach(function(r){r.diaria=dias;});});
-  SECS.forEach(function(s){try{renderRows(s);}catch(e){}});
-  calc();
+  var dias=getDiasEvento(), dEquip=getDiariasEquip();
+  var el=document.getElementById('f-dias-ev');
+  var el2=document.getElementById('f-diarias-equip');
+  if(el) el.value=dias+(dias===1?' dia':' dias');
+  if(el2) el2.value=dEquip.toFixed(1)+(dEquip===1?' diária':' diárias');
+  // Atualizar diárias nos itens (só se state estiver populado)
+  try{
+    ['som','video','luz','estrutura','extra'].forEach(function(s){
+      if(!state[s]||!state[s].rows) return;
+      Object.values(state[s].rows).forEach(function(arr){
+        arr.forEach(function(r){r.diaria=dEquip;});
+      });
+    });
+    if(state.logistica&&state.logistica.rows){
+      Object.values(state.logistica.rows).forEach(function(arr){arr.forEach(function(r){r.diaria=1;});});
+    }
+    if(state.servico&&state.servico.rows){
+      Object.values(state.servico.rows).forEach(function(arr){arr.forEach(function(r){r.diaria=dias;});});
+    }
+    SECS.forEach(function(s){try{renderRows(s);}catch(e){}});
+    calc();
+  }catch(e){}
 }
 
 var PRECOS={
@@ -2425,18 +2440,19 @@ var _locks={};
 async function _lockFallback(action,driveId){
   if(action==='acquire'){
     var agora=Date.now();
-    // Recarregar estado atual
     await _lockFallbackCarregar();
     var lock=_locks[driveId];
-    if(lock&&lock.expira>agora&&lock.usuarioId!==usuarioAtual.id){
-      return {ok:false,lock:lock};
+    // Lock válido: existe, não expirou, e é de outro usuário
+    if(lock && lock.expira>agora && lock.usuarioId!==usuarioAtual.id){
+      return {ok:false, lock:lock};
     }
+    // Sem lock válido: adquirir
     _locks[driveId]={
-      usuarioId:usuarioAtual.id,
+      usuarioId:  usuarioAtual.id,
       usuarioNome:usuarioAtual.nome,
-      desde:new Date().toLocaleString('pt-BR'),
-      desdeTs:agora,
-      expira:agora+LOCK_TTL
+      desde:      new Date().toLocaleString('pt-BR'),
+      desdeTs:    agora,
+      expira:     agora+LOCK_TTL
     };
     await _lockFallbackSalvar();
     return {ok:true};
@@ -2473,10 +2489,13 @@ async function _lockFallbackCarregar(){
       var r2=await fetch(SCRIPT_URL+'?action=load&id='+_lockFileId);
       var d2=await r2.json();
       if(d2.ok&&d2.dados&&d2.dados.locks){
-        _locks=d2.dados.locks;
-        // Limpar expirados
         var agora=Date.now();
-        Object.keys(_locks).forEach(function(k){if(_locks[k].expira<agora)delete _locks[k];});
+        var locksRaw=d2.dados.locks;
+        // Limpar TODOS os expirados antes de usar
+        Object.keys(locksRaw).forEach(function(k){
+          if(locksRaw[k].expira<agora) delete locksRaw[k];
+        });
+        _locks=locksRaw;
       }
     }
   }catch(e){}
@@ -2484,6 +2503,9 @@ async function _lockFallbackCarregar(){
 
 async function _lockFallbackSalvar(){
   try{
+    // Limpar expirados antes de salvar
+    var agora=Date.now();
+    Object.keys(_locks).forEach(function(k){if(_locks[k].expira<agora)delete _locks[k];});
     var body={action:'save',id:_lockFileId||null,numero:'_LOCKS_CRAZYSOM',
       cliente:'CrazySom',data:'2000-01-01',dados:{locks:_locks}};
     var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify(body)});
@@ -2551,9 +2573,14 @@ function lockMostrarModal(lock,id,nome,onForcar,onSomenteLeitura){
 async function lockModalForcar(){
   var m=document.getElementById('lock-modal');if(m)m.remove();
   var d=window._lockModalDados;if(!d)return;
-  _locks[d.id]={usuarioId:usuarioAtual.id,usuarioNome:usuarioAtual.nome,
-    desde:new Date().toLocaleString('pt-BR'),desdeTs:Date.now(),expira:Date.now()+LOCK_TTL};
-  await _lockFallbackSalvar();
+  // Forçar: gravar nosso lock diretamente via Apps Script
+  var res=await lockOp('acquire',d.id,{forcar:true});
+  if(!res.ok){
+    // Fallback: sobrescrever no arquivo local de locks
+    _locks[d.id]={usuarioId:usuarioAtual.id,usuarioNome:usuarioAtual.nome,
+      desde:new Date().toLocaleString('pt-BR'),desdeTs:Date.now(),expira:Date.now()+LOCK_TTL};
+    await _lockFallbackSalvar();
+  }
   await _driveCarregarDados(d.id,d.nome,false);
   lockIniciarHeartbeat(d.id);
 }
@@ -2642,41 +2669,26 @@ async function driveSalvar(){
 }
 
 async function driveCarregar(id,nome){
-  var msg = _naoSalvo
-    ? '⚠️ Este orçamento não foi salvo no Drive.\n\nDeseja descartar as alterações e carregar "'+nome+'"?'
-    : 'Carregar "'+nome+'"?\nDados não salvos serão perdidos.';
-  if(!confirm(msg))return;
+  // Confirmar descarte se houver alterações não salvas
+  if(_naoSalvo){
+    if(!confirm('⚠️ Este orçamento não foi salvo no Drive.\n\nDeseja descartar as alterações e carregar "'+nome+'"?')) return;
+  }
 
-  // Liberar lock anterior se houver
-  if(driveIdAtual&&!_modoLeitura) await lockLiberar(driveIdAtual);
+  // Liberar lock anterior
+  if(driveIdAtual && !_modoLeitura) await lockLiberar(driveIdAtual);
   lockPararHeartbeat();
   desativarModoLeitura();
 
   // Verificar lock
   driveStatus('🔍 Verificando disponibilidade...','');
-  var lockRes=await lockAdquirir(id);
+  var lockRes = await lockAdquirir(id);
 
   if(!lockRes.ok){
-    // Orçamento em uso — mostrar modal
-    lockMostrarModal(
-      lockRes.lock, id, nome,
-      // Forçar abertura (ADM)
-      async function(){
-        _locks[id].usuarioId=usuarioAtual.id;
-        _locks[id].usuarioNome=usuarioAtual.nome;
-        _locks[id].expira=Date.now()+LOCK_TTL;
-        await locksSalvar();
-        await _driveCarregarDados(id,nome,false);
-      },
-      // Somente leitura
-      async function(){
-        await _driveCarregarDados(id,nome,true);
-      }
-    );
+    lockMostrarModal(lockRes.lock, id, nome);
     return;
   }
 
-  await _driveCarregarDados(id,nome,false);
+  await _driveCarregarDados(id, nome, false);
   lockIniciarHeartbeat(id);
 }
 
@@ -2690,6 +2702,7 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     if(dados.state){SECS.forEach(function(s){if(dados.state[s]){state[s].ambientes=dados.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=dados.state[s].ambAtiva||'default';state[s].rows=dados.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
     if(dados.form)setForm(dados.form);
     aprovStatus=dados.aprovStatus||'rascunho';aprovHist=dados.aprovHist||[];comercialStatus=dados.comercialStatus||'';comercialHist=dados.comercialHist||[];snapshotAnterior=dados.snapshotAnterior||null;finParcelas=dados.finParcelas||[];finObs=dados.finObs||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
+    _comercialStatusSelecionado=''; // limpar seleção pendente ao carregar novo orçamento
     driveIdAtual=id;driveNumAtual=dados.form&&dados.form['f-num']?dados.form['f-num']:null;
     _naoSalvo=false;
     buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
@@ -3435,14 +3448,30 @@ function renderComercial(){
   }
 }
 
+// Status selecionado na UI (pendente de confirmação via Registrar)
+var _comercialStatusSelecionado = '';
+
 function setComercial(status){
-  comercialStatus=status;
-  // Abrir financeiro ao marcar venda ganha
-  if(status==='ganha'){
-    renderComercial();renderFinanceiroInline();
-    setTimeout(function(){abrirFinanceiro();},300);
-    return;
-  }
+  // Apenas marca seleção visual — NÃO altera comercialStatus ainda
+  // O status real só muda ao clicar em "Registrar"
+  _comercialStatusSelecionado = status;
+
+  // Destacar botão selecionado
+  var ids=['enviada','negociacao','standby','ganha','perdida'];
+  ids.forEach(function(id){
+    var btn=document.getElementById('cbtn-'+id);
+    if(!btn)return;
+    if(id===status){
+      btn.style.boxShadow='0 0 0 3px #fff, 0 0 0 5px '+COM_SI[id].bg;
+      btn.style.transform='scale(1.05)';
+      btn.style.opacity='1';
+    }else{
+      btn.style.boxShadow='none';
+      btn.style.transform='scale(1)';
+      btn.style.opacity='0.6';
+    }
+  });
+
   // Mostrar select de motivo apenas se perdida
   var motivoLabel=document.getElementById('com-motivo-label');
   var motivoSel=document.getElementById('com-motivo');
@@ -3452,14 +3481,23 @@ function setComercial(status){
     motivoSel.style.display=isPerdida?'block':'none';
     if(!isPerdida)motivoSel.value='';
   }
-  renderComercial();renderFinanceiroInline();
+
+  // Mostrar aviso visual de que há seleção pendente de confirmação
+  var pendEl=document.getElementById('com-pendente');
+  if(pendEl){
+    var si=COM_SI[status];
+    pendEl.style.display='block';
+    pendEl.innerHTML='⚠️ Selecionado: <b style="color:'+si.bg+'">'+si.label+'</b> — clique em <b>Registrar</b> para confirmar.';
+  }
 }
 
 function salvarComercial(){
   var obs=(document.getElementById('com-obs')||{}).value||'';
-  if(!comercialStatus){alert('Selecione um status comercial antes de registrar.');return;}
+  // Usar status selecionado (pendente) — NÃO o comercialStatus atual
+  var statusParaSalvar=_comercialStatusSelecionado||comercialStatus;
+  if(!statusParaSalvar){alert('Selecione um status comercial antes de registrar.');return;}
   var motivo='';
-  if(comercialStatus==='perdida'){
+  if(statusParaSalvar==='perdida'){
     motivo=(document.getElementById('com-motivo')||{}).value||'';
     if(!motivo){
       alert('⚠️ Por favor, selecione o motivo da perda antes de registrar.');
@@ -3467,6 +3505,11 @@ function salvarComercial(){
       return;
     }
   }
+
+  // CONFIRMAR o status agora — único ponto onde comercialStatus muda
+  comercialStatus=statusParaSalvar;
+  _comercialStatusSelecionado='';
+
   comercialHist.push({
     status:comercialStatus,
     motivo:motivo||'',
@@ -3480,6 +3523,12 @@ function salvarComercial(){
   var motivoSel=document.getElementById('com-motivo');
   if(motivoLabel)motivoLabel.style.display='none';
   if(motivoSel)motivoSel.style.display='none';
+  var pendEl=document.getElementById('com-pendente');
+  if(pendEl)pendEl.style.display='none';
+
+  // Abrir financeiro se venda ganha
+  if(comercialStatus==='ganha') setTimeout(function(){abrirFinanceiro();},300);
+
   renderComercial();renderFinanceiroInline();
 
   // Feedback visual no botão de registrar (sem alert bloqueante)
@@ -3494,7 +3543,6 @@ function salvarComercial(){
 
   if(driveIdAtual){
     driveStatus('⏳ Salvando...','');
-    if(btnReg){btnReg.textContent='⏳ Salvando...';btnReg.disabled=true;btnReg.style.background='#555';}
     salvarNoDrive({mostrarStatus:true})
       .then(function(){
         if(btnReg){btnReg.textContent='✅ Salvo!';btnReg.style.background='#2e7d32';}
@@ -3552,15 +3600,18 @@ async function funilCarregarDados(forcar){
     var r = await fetch(SCRIPT_URL+'?action=list&q=');
     var d = await r.json();
     if(!d.ok) throw new Error(d.erro||'Erro ao listar');
-    var itens = d.lista||[];
+    // Filtrar arquivos internos do sistema
+    var INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM'];
+    var itens=(d.lista||[]).filter(function(x){
+      return !INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
+    });
     if(stEl) stEl.textContent = '⏳ Carregando ' + itens.length + ' orçamento(s)...';
     var todos = await fetchProgressivo(itens, 15, function(parciais, total){
       var pct=Math.round(parciais.length/total*100);
       var pb=document.getElementById('funil-prog-bar');
       if(pb) pb.style.width=pct+'%';
       if(stEl) stEl.textContent='⏳ '+parciais.length+' / '+total+' carregados...';
-      // Mostrar aprovados já encontrados progressivamente
-      var aprovParciais=parciais.filter(function(o){return o.st==='aprovado';});
+      var aprovParciais=parciais.filter(function(o){return o&&o.st==='aprovado';});
       if(aprovParciais.length>0){
         _funilCache=aprovParciais;
         funilRenderCounters();
@@ -3570,6 +3621,7 @@ async function funilCarregarDados(forcar){
     _funilCarregado = true;
     funilRenderCounters();
     funilFiltrarLista();
+    if(stEl) stEl.textContent = _funilCache.length + ' orçamento(s) aprovado(s)';
   }catch(e){
     if(stEl) stEl.textContent = '⚠️ Erro ao carregar: ' + e.message;
     if(listaEl) listaEl.innerHTML = '<div style="padding:20px;text-align:center;color:#c0001a;font-size:12px">⚠️ ' + e.message + '</div>';
