@@ -1343,8 +1343,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 
   <!-- Lista de orçamentos -->
   <div id="funil-lista" style="border:1px solid #e0e0e0;border-radius:5px;overflow:hidden;max-height:420px;overflow-y:auto;background:#fff"></div>
-</div>
-</div>
+</div><!-- /funil-card -->
 
 <script>
 var IMP=0.135;
@@ -1567,13 +1566,14 @@ function doLogin(){
     if(el) el.style.display=dashTemAcesso(dashMap[btnId])?'':'none';
   });
   renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
-  // Aplicar permissões nos campos
-  setTimeout(aplicarPermissoes, 100);
+  // Mostrar funil ANTES de aplicar permissões
+  var nivelTemFunil=['adm','gerente','diretor','consultor','assistente'].includes(u.nivel)||dashTemAcesso('funil-card');
+  if(nivelTemFunil){funilMostrarCard();funilCarregarDados();}
+  else{funilEsconderCard();}
+  // Aplicar permissões nos campos (excluindo funil-card)
+  setTimeout(aplicarPermissoes, 150);
   // Carregar locks do Drive
   locksCarregar();
-  // Mostrar e carregar o funil de vendas
-  if(dashTemAcesso('funil-card')){funilMostrarCard();funilCarregarDados();}
-  else{funilEsconderCard();}
 }
 function logout(){
   if(_naoSalvo){
@@ -2630,7 +2630,7 @@ function ativarModoLeitura(lock){
     +(lock?' — <b>'+eh(lock.usuarioNome)+'</b> está editando':'')
     +' &nbsp;<button onclick="verificarLockEEditar()" style="padding:3px 10px;background:#fff;color:#e65100;border:none;border-radius:3px;cursor:pointer;font-weight:800;font-size:10px">🔄 Tentar Editar</button>';
   // Bloquear formulário
-  document.querySelectorAll('.card input,.card select,.card textarea,.card button,.totbox input,.totbox select,.totbox button,.aprov-inline button,.com-panel button,.fin-inline button,#fin-inline button').forEach(function(el){
+  document.querySelectorAll('.card:not(#funil-card) input,.card:not(#funil-card) select,.card:not(#funil-card) textarea,.card:not(#funil-card) button,.totbox input,.totbox select,.totbox button,.aprov-inline button,.com-panel button,.fin-inline button,#fin-inline button').forEach(function(el){
     if(!el.dataset.lockDisabled){el.dataset.lockDisabled=el.disabled?'1':'0';el.disabled=true;el.style.opacity='0.45';}
   });
   // Bloquear botão de salvar no drive e salvar local
