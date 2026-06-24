@@ -1575,16 +1575,17 @@ function doLogin(){
   // Carregar locks do Drive
   locksCarregar();
 }
-function logout(){
+async function logout(){
   if(_naoSalvo){
     var cli=gv('f-cliente')||'este orçamento';
     var ir=confirm('⚠️ "'+cli+'" não foi salvo no Drive.\n\nDeseja descartar as alterações e sair?');
     if(!ir)return;
   }
-  // Liberar lock ao sair
-  if(driveIdAtual&&!_modoLeitura) lockLiberar(driveIdAtual);
+  // Liberar lock ao sair — capturar id antes de zerar variáveis
+  var _idParaLiberar=driveIdAtual;
   lockPararHeartbeat();
   desativarModoLeitura();
+  if(_idParaLiberar&&!_modoLeitura) await lockLiberar(_idParaLiberar);
   usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];snapshotAnterior=null;finParcelas=[];finObs='';driveIdAtual=null;driveNumAtual=null;
   // Resetar funil
   _funilCache=[];_funilCarregado=false;_funilCarregando=false;
@@ -2356,7 +2357,9 @@ async function salvarNoDrive(opts){
             },
             // Recarregar versão mais recente
             async function(){
-              await _driveCarregarDados(driveIdAtual, driveNumAtual||num, _modoLeitura);
+              var _eraModoLeitura=_modoLeitura;
+              await _driveCarregarDados(driveIdAtual, driveNumAtual||num, _eraModoLeitura);
+              if(_eraModoLeitura) ativarModoLeitura(_locks[driveIdAtual]||null);
               driveStatus('🔄 Recarregado — faça suas alterações novamente','ok');
               resolve(null);
             }
@@ -2708,7 +2711,9 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
     setTimeout(aplicarPermissoes, 150);
     driveStatus('✅ Carregado: '+nome,'ok');
-    if(somenteLeitura) ativarModoLeitura(_locks[id]);
+    // Nota: ativarModoLeitura é chamado pelo caller (lockModalLeitura ou driveCarregar)
+    // com o objeto lock correto. Não chamamos aqui para evitar ativar com _locks[id] indefinido
+    // quando o Apps Script gerencia o lock (não o fallback local).
   }catch(e){driveStatus('Erro: '+e.message,'err');}
   finally{setTimeout(function(){_carregandoOrc=false;},400);}
 }
@@ -2804,7 +2809,7 @@ function carregar(input){
   };
   fr.readAsText(file);input.value='';
 }
-function limpar(){
+async function limpar(){
   if(_naoSalvo){
     var cli=gv('f-cliente')||'este orçamento';
     var ir=confirm('⚠️ "'+cli+'" não foi salvo no Drive.\n\nDeseja descartar as alterações e abrir um novo orçamento?');
@@ -2812,10 +2817,11 @@ function limpar(){
   }else{
     if(!confirm('Iniciar Novo Orçamento? Todos os dados serão limpos.'))return;
   }
-  // Liberar lock do orçamento atual
-  if(driveIdAtual&&!_modoLeitura) lockLiberar(driveIdAtual);
+  // Liberar lock do orçamento atual — capturar id antes de zerar variáveis
+  var _idParaLiberar=driveIdAtual;
   lockPararHeartbeat();
   desativarModoLeitura();
+  if(_idParaLiberar&&!_modoLeitura) await lockLiberar(_idParaLiberar);
   SECS.forEach(function(s){state[s]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{default:[]}};});
   FORM_IDS.filter(function(id){return ['desc-pct','desc-rs','val-liq','f-pgto','f-svinc'].indexOf(id)<0;}).forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('f-cons').value='';
@@ -2843,16 +2849,19 @@ window.addEventListener('beforeunload',function(e){
     return msg;
   }
   // Liberar lock (síncrono — usando sendBeacon para garantir envio)
-  if(driveIdAtual&&!_modoLeitura&&usuarioAtual&&_locks[driveIdAtual]){
-    delete _locks[driveIdAtual];
-    // sendBeacon é mais confiável que fetch no beforeunload
+  if(driveIdAtual&&!_modoLeitura&&usuarioAtual){
+    // Liberar via Apps Script (endpoint de lock, atômico)
     try{
       navigator.sendBeacon(SCRIPT_URL,JSON.stringify({
-        action:'save',id:LOCK_FILE_ID||null,
-        numero:LOCK_FILE_NOME,cliente:'CrazySom',data:'2000-01-01',
-        dados:{locks:_locks}
+        action:'lock',lockAction:'release',
+        driveId:driveIdAtual,
+        usuarioId:usuarioAtual.id,
+        usuarioNome:usuarioAtual.nome,
+        ttl:LOCK_TTL
       }));
     }catch(e2){}
+    // Também limpar cache local do fallback se existir
+    if(_locks[driveIdAtual]) delete _locks[driveIdAtual];
   }
 });
 
