@@ -2412,8 +2412,8 @@ async function _executarSave(num,cli,dt,opts){
 //  SISTEMA DE LOCK E CONTROLE DE VERSÃO
 //  Usa endpoint dedicado no Apps Script (operação atômica)
 // ════════════════════════════════════════════════════════
-var LOCK_TTL = 30 * 60 * 1000;        // 30 min
-var HEARTBEAT_INTERVAL = 4 * 60 * 1000; // 4 min
+var LOCK_TTL = 5 * 60 * 1000;         // 5 min (expira automaticamente se aba fechar)
+var HEARTBEAT_INTERVAL = 2 * 60 * 1000;  // 2 min (renova a cada 2min enquanto ativo)
 var _lockHeartbeat = null;
 var _versaoAtual = null;
 var _modoLeitura = false;
@@ -2545,11 +2545,11 @@ function lockPararHeartbeat(){
 }
 
 // ── Modal de lock ────────────────────────────────────────
-function lockMostrarModal(lock,id,nome,onForcar,onSomenteLeitura){
+function lockMostrarModal(lock,id,nome){
   var desde=lock.desde||'—';
-  var minutos=lock.desdeTs?Math.floor((Date.now()-lock.desdeTs)/60000):0;
-  var tempoStr=minutos>0?minutos+'min atrás':'agora';
-  var isAdm=usuarioAtual&&['adm','gerente','diretor'].includes(usuarioAtual.nivel);
+  var editandoHa=lock.desdeTs?Math.floor((Date.now()-lock.desdeTs)/60000):0;
+  var expiraEm=lock.expira?Math.max(0,Math.ceil((lock.expira-Date.now())/60000)):Math.ceil(LOCK_TTL/60000);
+  var tempoStr=editandoHa>0?editandoHa+'min atrás':'agora';
 
   // Guardar lock e dados em variável global para evitar problema com JSON no onclick
   window._lockModalDados={lock:lock,id:id,nome:nome};
@@ -2563,46 +2563,16 @@ function lockMostrarModal(lock,id,nome,onForcar,onSomenteLeitura){
     +'<div style="background:#111;border-radius:6px;padding:10px 14px;margin-bottom:14px">'
     +'<div style="font-size:13px;color:#ffa726;font-weight:700">'+eh(lock.usuarioNome)+'</div>'
     +'<div style="font-size:11px;color:#888;margin-top:2px">está editando desde '+desde+' ('+tempoStr+')</div>'
+    +(expiraEm>0?'<div style="font-size:10px;color:#e65100;margin-top:3px">⏳ Libera em ~'+expiraEm+'min se a aba for fechada</div>':'')
     +'<div style="font-size:10px;color:#555;margin-top:4px">📋 '+eh(nome)+'</div>'
     +'</div>'
     +'<div style="display:flex;flex-direction:column;gap:8px">'
-    +(isAdm?'<button onclick="lockModalForcar()" style="padding:11px;background:#c0001a;color:#fff;border:none;border-radius:6px;font-weight:800;cursor:pointer;font-size:13px">⚠️ Forçar Abertura (ADM)</button>':'')
     +'<button onclick="lockModalLeitura()" style="padding:11px;background:#1565c0;color:#fff;border:none;border-radius:6px;font-weight:800;cursor:pointer;font-size:13px">👁️ Abrir Somente Leitura</button>'
-    +'<button onclick="document.getElementById(\'lock-modal\').remove();driveStatus(\'\',\'\')" style="padding:9px;background:#333;color:#aaa;border:none;border-radius:6px;cursor:pointer;font-size:12px">← Cancelar</button>'
+    +'<button onclick="document.getElementById(\'lock-modal\').remove();driveStatus(\'\',\'\')" style="padding:9px;background:#333;color:#aaa;border:none;border-radius:6px;cursor:pointer;font-size:12px">← Cancelar e aguardar</button>'
     +'</div></div>';
   document.body.appendChild(modal);
 }
 
-async function lockModalForcar(){
-  var m=document.getElementById('lock-modal');if(m)m.remove();
-  var d=window._lockModalDados;if(!d)return;
-  driveStatus('⏳ Forçando abertura...','');
-  try{
-    // Passo 1: liberar o lock preso enviando release em nome do dono atual
-    var lockPreso=d.lock;
-    if(lockPreso&&lockPreso.usuarioId){
-      await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
-        action:'lock',lockAction:'release',
-        driveId:d.id,
-        usuarioId:lockPreso.usuarioId,
-        usuarioNome:lockPreso.usuarioNome,
-        ttl:LOCK_TTL
-      })});
-    }
-    // Passo 2: adquirir o lock como nós mesmos
-    var res=await lockOp('acquire',d.id);
-    if(!res.ok){
-      driveStatus('⚠️ Não foi possível forçar o lock — tente novamente','err');
-      return;
-    }
-  }catch(e2){
-    driveStatus('⚠️ Erro ao forçar: '+e2.message,'err');
-    return;
-  }
-  await _driveCarregarDados(d.id,d.nome,false);
-  lockIniciarHeartbeat(d.id);
-  driveStatus('🔓 Abertura forçada com sucesso','ok');
-}
 
 async function lockModalLeitura(){
   var m=document.getElementById('lock-modal');if(m)m.remove();
