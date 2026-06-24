@@ -937,48 +937,10 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   </div>
 </div>
 
-<div class="ov" id="dash-ger-ov">
-  <div class="modal-box" style="max-width:1100px;padding:0">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:#0d0d0d;border-bottom:1px solid #1e1e1e">
-      <div>
-        <h2 style="margin:0;font-size:16px;color:#fff">📊 Dashboard Gerencial</h2>
-        <p style="margin:2px 0 0;font-size:11px;color:#888" id="dash-ger-sub">Carregando...</p>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <input type="date" id="dash-ger-de" style="padding:5px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px">
-        <input type="date" id="dash-ger-ate" style="padding:5px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px">
-        <select id="dash-ger-cons" style="padding:5px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px">
-          <option value="">Todos os Consultores</option>
-        </select>
-        <button onclick="dashGerAtualizar()" style="padding:6px 12px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">🔄 Atualizar</button>
-        <button onclick="document.getElementById('dash-ger-ov').classList.remove('open')" style="padding:6px 12px;background:#333;color:#aaa;border:none;border-radius:4px;font-size:11px;cursor:pointer">� Fechar</button>
-      </div>
-    </div>
-    <div id="dash-ger-corpo" style="padding:16px;overflow-y:auto;max-height:80vh">
-      <div class="dash-loading">⏳ Carregando dados gerenciais...</div>
-    </div>
-  </div>
-</div>
-
 <div class="ov" id="fin-ov">
   <div class="modal-box fin-modal">
     <h2>💰 Financeiro da Venda</h2>
     <p class="sub" id="fin-sub">Orçamento — Cliente</p>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;padding:12px;background:#0d0d0d;border-radius:8px;border:1px solid #1e1e1e">
-      <div>
-        <label style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;font-weight:700">🔢 Número da Venda <span style="color:#555;font-weight:400">(opcional)</span></label>
-        <input id="fin-num-venda" placeholder="Ex: VND-2026-001" style="width:100%;padding:7px 9px;background:#0a0a0a;border:1px solid #333;border-radius:4px;color:#fff;font-size:12px;font-weight:700;box-sizing:border-box" oninput="marcarAlterado()">
-      </div>
-      <div>
-        <label style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;font-weight:700">💰 Valor da Venda <span style="color:#c0001a;font-weight:800">*</span></label>
-        <div style="display:flex;gap:6px">
-          <button id="fin-ibtn-cimp" onclick="finSelImp('cimp')" style="flex:1;padding:7px 4px;background:#1a6e2e;color:#fff;border:none;border-radius:4px;font-size:10px;font-weight:800;cursor:pointer;border:2px solid #2e7d32">Com Imposto</button>
-          <button id="fin-ibtn-simp" onclick="finSelImp('simp')" style="flex:1;padding:7px 4px;background:#1a1a1a;color:#888;border:2px solid #333;border-radius:4px;font-size:10px;font-weight:800;cursor:pointer">Sem Imposto</button>
-        </div>
-        <div id="fin-imp-aviso" style="display:none;font-size:9px;color:#c0001a;margin-top:3px;font-weight:700">⚠️ Selecione Com ou Sem Imposto antes de salvar</div>
-      </div>
-    </div>
 
     <div class="fin-resumo">
       <div class="fin-card">
@@ -1077,7 +1039,6 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <button class="ubtn" onclick="abrirMetas()" id="btn-metas">🎯 Metas</button>
     <button class="ubtn" onclick="abrirDashFin()" id="btn-dash-fin">💰 Financeiro</button>
     <button class="ubtn" onclick="abrirRelatorios()">📊 Relatórios</button>
-    <button class="ubtn" onclick="abrirDashGerencial()" id="btn-dash-ger" style="display:none">📊 Gerencial</button>
     <button class="ubtn" onclick="abrirModuloOS()" id="btn-mod-os">📋 Ordens de Serviço</button>
     <button class="ubtn" id="btn-adm" onclick="abrirAdm()" style="display:none">⚙️ ADM</button>
     <button class="ubtn" onclick="logout()">Sair</button>
@@ -1226,22 +1187,39 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     </div>
   </div>
   <div class="sep" style="margin-top:11px">
-    <label style="color:#888">Valor Líquido Final (PDF)</label>
-    <div style="display:flex;gap:12px;align-items:flex-start;margin-top:5px;flex-wrap:wrap">
-      <div>
-        <div style="font-size:9px;color:#ffa726;text-transform:uppercase;font-weight:800;margin-bottom:3px">Com Imposto (PDF c/ nota)</div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input type="number" id="val-liq" placeholder="0,00" step="1" style="max-width:155px;background:#1c1c1c;color:#fff;border-color:#3a3a3a;font-size:14px;font-weight:700;padding:6px 9px" oninput="calc();marcarAlterado()">
-          <span style="color:#555;font-size:10px">← vazio = valor calculado</span>
+    <label style="color:#888">Valor Líquido Final — <span style="font-size:10px;color:#aaa">selecione o tipo da venda</span></label>
+    <div style="display:flex;gap:10px;align-items:stretch;margin-top:6px;flex-wrap:wrap">
+
+      <!-- Sem Imposto -->
+      <div id="valliq-simp-box" onclick="selImpVenda('simp')" style="flex:1;min-width:170px;cursor:pointer;border:2px solid #333;border-radius:8px;padding:10px 12px;background:#111;transition:all .15s">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
+          <span id="valliq-simp-radio" style="width:16px;height:16px;border-radius:50%;border:2px solid #555;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s"></span>
+          <span style="font-size:10px;color:#66bb6a;font-weight:800;text-transform:uppercase;letter-spacing:.5px">Sem Imposto</span>
+          <span style="font-size:9px;color:#555;margin-left:auto">s/ nota fiscal</span>
         </div>
+        <input type="number" id="val-liq-si" placeholder="0,00" step="1"
+          style="width:100%;background:#0a0a0a;color:#fff;border:1px solid #2e7d32;border-radius:4px;font-size:15px;font-weight:700;padding:6px 9px;box-sizing:border-box"
+          onclick="event.stopPropagation();selImpVenda('simp')"
+          oninput="calc();marcarAlterado()">
+        <div style="font-size:9px;color:#555;margin-top:4px">vazio = usa valor calculado</div>
       </div>
-      <div>
-        <div style="font-size:9px;color:#66bb6a;text-transform:uppercase;font-weight:800;margin-bottom:3px">Sem Imposto (PDF s/ nota)</div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input type="number" id="val-liq-si" placeholder="0,00" step="1" style="max-width:155px;background:#1c1c1c;color:#fff;border-color:#2e7d32;font-size:14px;font-weight:700;padding:6px 9px;border:1px solid #2e7d32;border-radius:4px" oninput="calc();marcarAlterado()">
-          <span style="color:#555;font-size:10px">← vazio = valor calculado</span>
+
+      <!-- Com Imposto -->
+      <div id="valliq-cimp-box" onclick="selImpVenda('cimp')" style="flex:1;min-width:170px;cursor:pointer;border:2px solid #c0001a;border-radius:8px;padding:10px 12px;background:#140303;transition:all .15s">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
+          <span id="valliq-cimp-radio" style="width:16px;height:16px;border-radius:50%;border:2px solid #c0001a;background:#c0001a;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">
+            <span style="width:7px;height:7px;background:#fff;border-radius:50%;display:block"></span>
+          </span>
+          <span style="font-size:10px;color:#ef5350;font-weight:800;text-transform:uppercase;letter-spacing:.5px">Com Imposto</span>
+          <span style="font-size:9px;color:#555;margin-left:auto">c/ nota fiscal</span>
         </div>
+        <input type="number" id="val-liq" placeholder="0,00" step="1"
+          style="width:100%;background:#0a0a0a;color:#fff;border:1px solid #c0001a;border-radius:4px;font-size:15px;font-weight:700;padding:6px 9px;box-sizing:border-box"
+          onclick="event.stopPropagation();selImpVenda('cimp')"
+          oninput="calc();marcarAlterado()">
+        <div style="font-size:9px;color:#555;margin-top:4px">vazio = usa valor calculado</div>
       </div>
+
     </div>
   </div>
   <div style="margin:11px 0 0">
@@ -1423,10 +1401,8 @@ var _bvStorage=0; // valor BV persistido entre re-renders do painel
 var excluídosHist=[]; // registro local de orçamentos excluídos
 var finParcelas=[];
 var finObs='';
+var finImposto='cimp'; // 'cimp' = com imposto (default), 'simp' = sem imposto
 var finNumVenda='';
-var finImposto=''; // 'cimp' ou 'simp' - obrigatório para salvar
-var finNumVenda='';
-var finImposto=''; // 'cimp' ou 'simp' - obrigatório para salvar
 var driveIdAtual=null;
 var driveNumAtual=null;
 var abaAprovAtual='pend';
@@ -1602,8 +1578,6 @@ function doLogin(){
   document.getElementById('user-nome').textContent=u.nome;
   document.getElementById('user-cargo').textContent=u.cargo||(NIVEIS[u.nivel]||u.nivel);
   document.getElementById('btn-adm').style.display=u.nivel==='adm'?'inline-block':'none';
-  var btnGer=document.getElementById('btn-dash-ger');
-  if(btnGer) btnGer.style.display=['adm','gerente','diretor'].includes(u.nivel)?'inline-block':'none';
   // Aplicar visibilidade dos botões de dashboard conforme cargo
   var dashMap={'btn-dash-elab':'dash-elab','btn-dash-com':'dash-com','btn-metas':'dash-metas','btn-dash-fin':'dash-fin','btn-mod-os':'mod-os'};
   Object.keys(dashMap).forEach(function(btnId){
@@ -1630,7 +1604,7 @@ function logout(){
   if(driveIdAtual&&!_modoLeitura) lockLiberar(driveIdAtual);
   lockPararHeartbeat();
   desativarModoLeitura();
-  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];snapshotAnterior=null;finParcelas=[];finObs='';finNumVenda='';finImposto='';driveIdAtual=null;driveNumAtual=null;
+  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];snapshotAnterior=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';driveIdAtual=null;driveNumAtual=null;
   // Resetar funil
   _funilCache=[];_funilCarregado=false;_funilCarregando=false;
   funilEsconderCard();
@@ -1971,6 +1945,7 @@ async function abrirOrcDrive(idx,ev){
   aprovStatus=dados.aprovStatus||'rascunho';aprovHist=dados.aprovHist||[];
   driveIdAtual=orc.driveId;driveNumAtual=dados.form&&dados.form['f-num']?dados.form['f-num']:null;
   buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+  setTimeout(function(){selImpVenda('cimp');_preencherValLiqCalculado();},50);
   setTimeout(function(){_carregandoOrc=false;document.getElementById('status-orc-card').scrollIntoView({behavior:'smooth',block:'start'});},400);
 }
 
@@ -2196,7 +2171,18 @@ function calc(){
   sv('r-bruto',fmt(bruto));sv('r-imp',fmt(imp));sv('r-cimp',fmt(cImp));
   sv('r-dv','-'+fmt(dv));sv('r-vdsi',fmt(vdsi));sv('r-vdci',fmt(vdci));sv('r-total',fmt(total));
   sv('m-sd',fmt(msd));sv('m-cd',fmt(mcd));sv('m-sd-pct',fmtN(msdP)+'%');sv('m-cd-pct',fmtN(mcdP)+'%');
+  // Atualizar placeholders dos campos val-liq com valores calculados
+  (function(){
+    var elci=document.getElementById('val-liq');if(elci)elci.placeholder=vdci>0?Math.round(vdci).toString():'0';
+    var elsi=document.getElementById('val-liq-si');if(elsi)elsi.placeholder=vdsi>0?Math.round(vdsi).toString():'0';
+  })();
   var dl=document.getElementById('desc-label');if(dl)dl.textContent=dv>0?'Desconto: -'+fmt(dv):(vl>0?'Valor ajustado manualmente':'');
+  // Atualizar label TOTAL FINAL conforme impAtual
+  var grandLabel=document.querySelector('.grand span');
+  if(grandLabel) grandLabel.textContent=impAtual==='simp'?'TOTAL FINAL (s/ impostos)':'TOTAL FINAL (c/ impostos)';
+  // r-total mostra o totalFinal correto conforme impAtual
+  var tfinal=impAtual==='cimp'?(vl>0?vl:vdci):(parseFloat(gv('val-liq-si'))||0)>0?(parseFloat(gv('val-liq-si'))||0):(bruto-bruto*(cImp>0?dv/cImp:0));
+  sv('r-total',fmt(tfinal));
   var todosAmbs=[],ambIdsC={};
   ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){state[s].ambientes.forEach(function(a){if(!ambIdsC[a.id]){ambIdsC[a.id]=true;todosAmbs.push({id:a.id,nome:a.nome});}});});
   var subGeral=document.getElementById('subtot-geral-ambientes');
@@ -2375,8 +2361,8 @@ function getDadosCompletos(){
     snapshotAnterior:snapshotAnterior,
     finParcelas:finParcelas,
     finObs:finObs,
-    finNumVenda:finNumVenda,
-    finImposto:finImposto
+    finImposto:finImposto,
+    finNumVenda:finNumVenda
   };
 }
 
@@ -2748,12 +2734,12 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     _versaoAtual=dados._versao||null;
     if(dados.state){SECS.forEach(function(s){if(dados.state[s]){state[s].ambientes=dados.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=dados.state[s].ambAtiva||'default';state[s].rows=dados.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
     if(dados.form)setForm(dados.form);
-    aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();snapshotAnterior=dados.snapshotAnterior||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finNumVenda=dados.finNumVenda||'';finImposto=dados.finImposto||'';
-    _bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
+    aprovStatus=dados.aprovStatus||'rascunho';aprovHist=dados.aprovHist||[];comercialStatus=dados.comercialStatus||'';comercialHist=dados.comercialHist||[];snapshotAnterior=dados.snapshotAnterior||null;finParcelas=dados.finParcelas||[];finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
     _comercialStatusSelecionado=''; // limpar seleção pendente ao carregar novo orçamento
     driveIdAtual=id;driveNumAtual=dados.form&&dados.form['f-num']?dados.form['f-num']:null;
     _naoSalvo=false;
     buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+    setTimeout(function(){selImpVenda(finImposto||'cimp');_preencherValLiqCalculado();},50);
     setTimeout(aplicarPermissoes, 150);
     driveStatus('✅ Carregado: '+nome,'ok');
     if(somenteLeitura) ativarModoLeitura(_locks[id]);
@@ -2845,7 +2831,7 @@ function carregar(input){
       var data=JSON.parse(e.target.result);
       if(data.state){SECS.forEach(function(s){if(data.state[s]){state[s].ambientes=data.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=data.state[s].ambAtiva||'default';state[s].rows=data.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
       if(data.form)setForm(data.form);
-      aprovStatus=data.aprovStatus||'rascunho';aprovHist=data.aprovHist||[];comercialStatus=data.comercialStatus||'';comercialHist=data.comercialHist||[];snapshotAnterior=data.snapshotAnterior||null;finParcelas=data.finParcelas||[];finObs=data.finObs||'';finNumVenda=data.finNumVenda||'';finImposto=data.finImposto||'';finNumVenda=data.finNumVenda||'';finImposto=data.finImposto||'';
+      aprovStatus=data.aprovStatus||'rascunho';aprovHist=data.aprovHist||[];comercialStatus=data.comercialStatus||'';comercialHist=data.comercialHist||[];snapshotAnterior=data.snapshotAnterior||null;finParcelas=data.finParcelas||[];finObs=data.finObs||'';finImposto=data.finImposto||'cimp';finNumVenda=data.finNumVenda||'';
       buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();alert('✅ Carregado!');
     }catch(err){alert('⚠️ Arquivo inválido: '+err.message);}
     finally{setTimeout(function(){_carregandoOrc=false;},400);}
@@ -2878,7 +2864,7 @@ function limpar(){
   aprovStatus='rascunho';aprovHist=[];
   comercialStatus='';comercialHist=[];
   snapshotAnterior=null;
-  finParcelas=[];finObs='';finNumVenda='';finImposto='';finNumVenda='';finImposto='';
+  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';
   buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
 }
 
@@ -2908,29 +2894,53 @@ function abrirTipo(){document.getElementById('tipo-modal').classList.add('open')
 function selTipo(t){tipoAtual=t;document.getElementById('card-det').classList.toggle('sel',t==='det');document.getElementById('card-res').classList.toggle('sel',t==='res');}
 function selImp(t){impAtual=t;document.getElementById('ibtn-cimp').classList.toggle('sel',t==='cimp');document.getElementById('ibtn-simp').classList.toggle('sel',t==='simp');}
 
-function finSelImp(t){
+function selImpVenda(t){
+  impAtual=t;
   finImposto=t;
-  var bc=document.getElementById('fin-ibtn-cimp');
-  var bs=document.getElementById('fin-ibtn-simp');
-  var av=document.getElementById('fin-imp-aviso');
-  if(bc){bc.style.background=t==='cimp'?'#1a6e2e':'#1a1a1a';bc.style.color=t==='cimp'?'#fff':'#888';bc.style.borderColor=t==='cimp'?'#2e7d32':'#333';}
-  if(bs){bs.style.background=t==='simp'?'#1565c0':'#1a1a1a';bs.style.color=t==='simp'?'#fff':'#888';bs.style.borderColor=t==='simp'?'#1976d2':'#333';}
-  if(av) av.style.display='none';
+  // Sincronizar botões do modal PDF também
+  document.getElementById('ibtn-cimp').classList.toggle('sel',t==='cimp');
+  document.getElementById('ibtn-simp').classList.toggle('sel',t==='simp');
+  // Atualizar visual dos boxes
+  var bcimp=document.getElementById('valliq-cimp-box');
+  var bsimp=document.getElementById('valliq-simp-box');
+  var rcimp=document.getElementById('valliq-cimp-radio');
+  var rsimp=document.getElementById('valliq-simp-radio');
+  if(bcimp){
+    bcimp.style.borderColor=t==='cimp'?'#c0001a':'#333';
+    bcimp.style.background=t==='cimp'?'#140303':'#111';
+  }
+  if(bsimp){
+    bsimp.style.borderColor=t==='simp'?'#2e7d32':'#333';
+    bsimp.style.background=t==='simp'?'#031403':'#111';
+  }
+  if(rcimp) rcimp.innerHTML=t==='cimp'?'<span style="width:7px;height:7px;background:#fff;border-radius:50%;display:block"></span>':'';
+  if(rcimp) rcimp.style.borderColor=t==='cimp'?'#c0001a':'#555';
+  if(rcimp) rcimp.style.background=t==='cimp'?'#c0001a':'transparent';
+  if(rsimp) rsimp.innerHTML=t==='simp'?'<span style="width:7px;height:7px;background:#fff;border-radius:50%;display:block"></span>':'';
+  if(rsimp) rsimp.style.borderColor=t==='simp'?'#2e7d32':'#555';
+  if(rsimp) rsimp.style.background=t==='simp'?'#2e7d32':'transparent';
+  // Preencher o campo do tipo selecionado com o valor calculado se estiver vazio
+  _preencherValLiqCalculado();
   marcarAlterado();
-  renderizarFinanceiro();
+  calc();
 }
 
-function finSelImp(t){
-  finImposto=t;
-  var bc=document.getElementById('fin-ibtn-cimp');
-  var bs=document.getElementById('fin-ibtn-simp');
-  var av=document.getElementById('fin-imp-aviso');
-  if(bc){bc.style.background=t==='cimp'?'#1a6e2e':'#1a1a1a';bc.style.color=t==='cimp'?'#fff':'#888';bc.style.borderColor=t==='cimp'?'#2e7d32':'#333';}
-  if(bs){bs.style.background=t==='simp'?'#1565c0':'#1a1a1a';bs.style.color=t==='simp'?'#fff':'#888';bs.style.borderColor=t==='simp'?'#1976d2':'#333';}
-  if(av) av.style.display='none';
-  marcarAlterado();
-  renderizarFinanceiro();
+function _preencherValLiqCalculado(){
+  // Calcula bruto/cImp/vdsi/vdci a partir do estado atual e preenche placeholder real
+  try{
+    var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+(_bvStorage||parseFloat(gv('f-bv'))||0);
+    var imp=bruto*IMP,cImp=bruto+imp;
+    var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
+    var dv=drs>0?drs:cImp*(dpct/100);
+    var vdci=cImp-dv;
+    var vdsi=bruto-bruto*(cImp>0?dv/cImp:0);
+    var elci=document.getElementById('val-liq');
+    var elsi=document.getElementById('val-liq-si');
+    if(elci) elci.placeholder=vdci>0?Math.round(vdci).toString():'0';
+    if(elsi) elsi.placeholder=vdsi>0?Math.round(vdsi).toString():'0';
+  }catch(e){}
 }
+
 function getSvinc(){var e=document.getElementById('f-svinc');return e?e.value:'';}
 function pdfFator(){return impAtual==='cimp'?(1+IMP):1;}
 
@@ -3779,7 +3789,16 @@ function funilFiltrarLista(){
       : FUNIL_SI[etapa];
 
   var total = filtrados.length;
-  var totalVal = filtrados.reduce(function(t,o){ return t + dashValOrc(o); }, 0);
+  var totalVal = filtrados.reduce(function(t,o){
+    var b=0;
+    try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+      if(o.dados&&o.dados.state&&o.dados.state[s]){
+        var rs=o.dados.state[s];
+        Object.keys(rs.rows||{}).forEach(function(aid){(rs.rows[aid]||[]).forEach(function(r){b+=rowTot(r);});});
+      }
+    });}catch(e){}
+    return t + b*(1+IMP);
+  }, 0);
 
   if(stEl){
     var aviso = isSemEtapa && total > 0
@@ -3816,7 +3835,14 @@ function funilFiltrarLista(){
       ? '<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:'+siCs.bg+';color:'+siCs.tx+';font-weight:800;white-space:nowrap;flex-shrink:0">'+siCs.label+'</span>'
       : '<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:#fff3cd;color:#856404;border:1px solid #ffc107;font-weight:800;white-space:nowrap;flex-shrink:0">⚠️ Sem Etapa</span>';
 
-    var val = dashValOrc(o);
+    var bruto = 0;
+    try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+      if(o.dados&&o.dados.state&&o.dados.state[s]){
+        var rs=o.dados.state[s];
+        Object.keys(rs.rows||{}).forEach(function(aid){(rs.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});});
+      }
+    });}catch(e){}
+    var val = bruto*(1+IMP);
 
     var dataOrc = f['f-data'] ? fD(f['f-data']) : '—';
     var dataEv  = f['f-dia']  ? fD(f['f-dia'])  : null;
@@ -3878,18 +3904,6 @@ function abrirFinanceiro(){
   var cli=gv('f-cliente')||'—';
   document.getElementById('fin-sub').textContent='Orçamento '+num+' — '+cli;
   document.getElementById('fin-obs').value=finObs||'';
-  // Sincronizar campo Número da Venda
-  var fnv=document.getElementById('fin-num-venda');if(fnv)fnv.value=finNumVenda||'';
-  // Sincronizar botões de imposto
-  finSelImp(finImposto||'cimp');
-  // Valor Total conforme selecao de imposto
-  var finImpFator=(finImposto==='simp')?1:(1+IMP);
-  // Sincronizar campo Número da Venda
-  var fnv=document.getElementById('fin-num-venda');if(fnv)fnv.value=finNumVenda||'';
-  // Sincronizar botões de imposto
-  finSelImp(finImposto||'cimp');
-  // Valor Total conforme selecao de imposto
-  var finImpFator=(finImposto==='simp')?1:(1+IMP);
   finRenderParcelas();
   finAtualizarResumo();
   document.getElementById('fin-ov').classList.add('open');
@@ -4056,15 +4070,6 @@ function finPresetCustom(){
 
 function salvarFinanceiro(){
   finObs=document.getElementById('fin-obs').value||'';
-  var fnvEl=document.getElementById('fin-num-venda');
-  if(fnvEl) finNumVenda=fnvEl.value.trim()||'';
-  // Validar imposto obrigatório
-  if(!finImposto){
-    var av=document.getElementById('fin-imp-aviso');
-    if(av) av.style.display='block';
-    alert('⚠️ Selecione "Com Imposto" ou "Sem Imposto" antes de salvar o financeiro.');
-    return;
-  }
   renderFinanceiroInline();
   var st=document.getElementById('fin-save-status');
   st.textContent='⏳ Salvando...';
@@ -4926,27 +4931,26 @@ function dashFiltrar(){
 }
 
 function dashValOrc(o){
-  // Usar val-liq (com imp) ou val-liq-si (sem imp) se definido no financeiro
-  var fimp = o.dados && o.dados.finImposto ? o.dados.finImposto : 'cimp';
-  var form = o.dados && o.dados.form ? o.dados.form : (o.form||{});
-  var valLiq = parseFloat(form['val-liq'])||0;
-  var valLiqSi = parseFloat(form['val-liq-si'])||0;
-  // Se há valor líquido definido, usar ele (respeita desconto/ajuste manual)
-  if(fimp==='simp' && valLiqSi>0) return valLiqSi;
-  if(fimp==='cimp' && valLiq>0) return valLiq;
+  // Usar val-liq ou val-liq-si conforme finImposto de cada orçamento
+  var fimp=(o.dados&&o.dados.finImposto)||'cimp';
+  var form=o.form||{};
+  var valLiq=parseFloat(form['val-liq'])||0;
+  var valLiqSi=parseFloat(form['val-liq-si'])||0;
+  if(fimp==='simp'&&valLiqSi>0) return valLiqSi;
+  if(fimp==='cimp'&&valLiq>0) return valLiq;
   // Fallback: calcular do bruto
-  var bruto = 0;
+  var bruto=0;
   try{
     ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
-      if(o.dados && o.dados.state && o.dados.state[s]){
-        var st2 = o.dados.state[s];
+      if(o.dados&&o.dados.state&&o.dados.state[s]){
+        var st2=o.dados.state[s];
         Object.keys(st2.rows||{}).forEach(function(aid){
-          (st2.rows[aid]||[]).forEach(function(r){ bruto += rowTot(r); });
+          (st2.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});
         });
       }
     });
   }catch(e){}
-  return bruto * (fimp==='cimp'?(1+IMP):1);
+  return bruto*(fimp==='cimp'?(1+IMP):1);
 }
 
 async function abrirDashElab(){
@@ -7397,167 +7401,6 @@ document.querySelectorAll('.ov').forEach(function(ov){
     if(e.target===ov) ov.classList.remove('open');
   });
 });
-
-// DASHBOARD GERENCIAL
-async function abrirDashGerencial(){
-  document.getElementById('dash-ger-ov').classList.add('open');
-  var hoje=new Date();
-  var ini=new Date(hoje.getFullYear(),hoje.getMonth(),1);
-  var de=document.getElementById('dash-ger-de');
-  var ate=document.getElementById('dash-ger-ate');
-  if(de&&!de.value) de.value=ini.toISOString().split('T')[0];
-  if(ate&&!ate.value) ate.value=hoje.toISOString().split('T')[0];
-  if(!_dashDados.length) await dashCarregarDados();
-  dashGerRenderizar();
-}
-
-async function dashGerAtualizar(){
-  _dashDados=[];
-  document.getElementById('dash-ger-corpo').innerHTML='<div class="dash-loading">⏳ Carregando...</div>';
-  await dashCarregarDados();
-  dashGerRenderizar();
-}
-
-function dashGerFiltrar(){
-  var de=document.getElementById('dash-ger-de').value;
-  var ate=document.getElementById('dash-ger-ate').value;
-  var cons=document.getElementById('dash-ger-cons').value;
-  return _dashDados.filter(function(o){
-    var dt=o.form&&o.form['f-data']||'';
-    if(de&&dt&&dt<de) return false;
-    if(ate&&dt&&dt>ate) return false;
-    if(cons&&(o.form&&o.form['f-cons'])!==cons) return false;
-    return true;
-  });
-}
-
-function dashGerRenderizar(){
-  var corpo=document.getElementById('dash-ger-corpo');
-  if(!corpo) return;
-  var dados=dashGerFiltrar();
-  var total=dados.length;
-  // Preencher filtro consultores
-  var consSet={};
-  _dashDados.forEach(function(o){var c=o.form&&o.form['f-cons']||'';if(c)consSet[c]=1;});
-  var consEl=document.getElementById('dash-ger-cons');
-  if(consEl){var sel=consEl.value;consEl.innerHTML='<option value="">Todos os Consultores</option>'+Object.keys(consSet).sort().map(function(c){return '<option value="'+eh(c)+'">'+eh(c)+'</option>';}).join('');consEl.value=sel;}
-  document.getElementById('dash-ger-sub').textContent=total+' orçamentos no período';
-
-  // Métricas
-  var volTotal=0,volAprov=0,volGanho=0,volPerdido=0;
-  var cntTotal=total,cntAprov=0,cntGanho=0,cntPerdido=0;
-  var margens=[];
-  var porCons={};
-
-  dados.forEach(function(o){
-    var val=dashValOrc(o);
-    var cs=(o.dados&&o.dados.comercialStatus)||'';
-    volTotal+=val;
-    if(o.st==='aprovado'){cntAprov++;volAprov+=val;}
-    if(cs==='ganha'){cntGanho++;volGanho+=val;}
-    if(cs==='perdida'){cntPerdido++;volPerdido+=val;}
-    // Custo (extra rows)
-    var custo=0;
-    try{if(o.dados&&o.dados.state&&o.dados.state.extra){Object.keys(o.dados.state.extra.rows||{}).forEach(function(aid){(o.dados.state.extra.rows[aid]||[]).forEach(function(r){custo+=r.qty*(r.val||0)*(r.diaria||1);});});}}
-    catch(e){}
-    var margPct=val>0?Math.round((val-custo)/val*100):0;
-    margens.push({num:o.form&&o.form['f-num']||'?',nome:o.form&&o.form['f-cliente']||'?',cons:o.form&&o.form['f-cons']||'?',val:val,custo:custo,marg:margPct,cs:cs});
-    // Por consultor
-    var c=o.form&&o.form['f-cons']||'(sem consultor)';
-    if(!porCons[c]) porCons[c]={nome:c,qtd:0,aprovados:0,ganhos:0,perdidos:0,vol:0,volGanho:0,margemSum:0,margemCnt:0};
-    porCons[c].qtd++;porCons[c].vol+=val;
-    if(o.st==='aprovado') porCons[c].aprovados++;
-    if(cs==='ganha'){porCons[c].ganhos++;porCons[c].volGanho+=val;}
-    if(cs==='perdida') porCons[c].perdidos++;
-    porCons[c].margemSum+=margPct;porCons[c].margemCnt++;
-  });
-
-  var taxaConv=cntAprov>0?Math.round(cntGanho/cntAprov*100):0;
-  var ticketMedio=cntAprov>0?volAprov/cntAprov:0;
-  var margemMedia=margens.length>0?Math.round(margens.reduce(function(t,m){return t+m.marg;},0)/margens.length):0;
-  var semImp=dados.filter(function(o){return o.st==='aprovado'&&!(o.dados&&o.dados.finImposto);}).length;
-  var semEtapa=dados.filter(function(o){var cs=(o.dados&&o.dados.comercialStatus)||'';return o.st==='aprovado'&&!cs;}).length;
-
-  function kpi(lbl,val,sub,cor){
-    return '<div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:8px;padding:12px 14px">'
-      +'<div style="font-size:17px;font-weight:900;color:'+(cor||'#fff')+'">'+val+'</div>'
-      +'<div style="font-size:10px;color:#888;margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">'+lbl+'</div>'
-      +(sub?'<div style="font-size:9px;color:#555;margin-top:1px">'+sub+'</div>':'')
-      +'</div>';
-  }
-
-  var html='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px">';
-  html+=kpi(cntTotal+' orçamentos | Volume Total',fmt(volTotal),'período selecionado','#fff');
-  html+=kpi(cntAprov+' aprovados | Vol. Aprovado',fmt(volAprov),Math.round(cntTotal>0?cntAprov/cntTotal*100:0)+'% do total','#66bb6a');
-  html+=kpi(cntGanho+' ganhos | Vol. Vendido',fmt(volGanho),'conv: '+taxaConv+'% dos aprov.','#42a5f5');
-  html+=kpi(cntPerdido+' perdidos | Vol. Perdido',fmt(volPerdido),'','#ef5350');
-  html+=kpi('Ticket Médio (aprovados)',fmt(ticketMedio),'','#ffa726');
-  html+=kpi('Margem Média',margemMedia+'%','sobre todos os orçamentos',margemMedia>=40?'#66bb6a':margemMedia>=25?'#ffa726':'#ef5350');
-  html+='</div>';
-
-  // Insights
-  function ins(ico,txt,cor){return '<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;background:#0d0d0d;border-radius:6px;border-left:3px solid '+(cor||'#555')+'">'+'<span>'+ico+'</span><span style="font-size:11px;color:#ccc;line-height:1.4">'+txt+'</span></div>';}
-  html+='<div style="background:#0a0f0a;border:1px solid #1e3a1e;border-radius:8px;padding:14px;margin-bottom:18px">';
-  html+='<div style="font-size:12px;font-weight:900;color:#66bb6a;margin-bottom:10px">🧠 Insights Gerenciais</div>';
-  html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">';
-  if(taxaConv>=60) html+=ins('🏆','Excelente taxa de conversão: '+taxaConv+'%','#66bb6a');
-  else if(taxaConv>=40) html+=ins('👍','Taxa de conversão: '+taxaConv+'% — há espaço para crescer','#ffa726');
-  else html+=ins('⚠️','Taxa de conversão baixa: '+taxaConv+'% — revisar abordagem e follow-up','#ef5350');
-  if(margemMedia>=45) html+=ins('💹','Margem média saudável: '+margemMedia+'%','#66bb6a');
-  else if(margemMedia>=30) html+=ins('🔶','Margem média de '+margemMedia+'% — monitorar descontos e custos','#ffa726');
-  else html+=ins('🚨','Margem média baixa: '+margemMedia+'% — revisar precificação com urgência','#ef5350');
-  var consArr=Object.values(porCons).sort(function(a,b){return b.volGanho-a.volGanho;});
-  if(consArr.length>0&&consArr[0].ganhos>0) html+=ins('🌟','Top: <b style="color:#fff">'+eh(consArr[0].nome)+'</b> — '+consArr[0].ganhos+' vendas · '+fmt(consArr[0].volGanho),'#42a5f5');
-  if(semImp>0) html+=ins('⚠️',''+semImp+' orçamento(s) aprovado(s) sem tipo de imposto definido no financeiro','#e65100');
-  if(semEtapa>0) html+=ins('📌',''+semEtapa+' orçamento(s) aprovado(s) sem etapa do funil','#e65100');
-  html+='</div></div>';
-
-  // Tabela consultores
-  html+='<div style="font-size:11px;font-weight:900;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">👤 Performance por Consultor</div>';
-  html+='<div style="overflow-x:auto;margin-bottom:18px"><table style="width:100%;border-collapse:collapse;font-size:11px">';
-  html+='<thead><tr style="background:#0d0d0d;color:#888;font-size:10px"><th style="padding:8px 10px;text-align:left;border-bottom:1px solid #1e1e1e">Consultor</th><th style="padding:8px 10px;text-align:center;border-bottom:1px solid #1e1e1e">Orç.</th><th style="padding:8px 10px;text-align:center;border-bottom:1px solid #1e1e1e">Aprov.</th><th style="padding:8px 10px;text-align:center;border-bottom:1px solid #1e1e1e">Ganhos</th><th style="padding:8px 10px;text-align:center;border-bottom:1px solid #1e1e1e">Conv.</th><th style="padding:8px 10px;text-align:right;border-bottom:1px solid #1e1e1e">Vol.Total</th><th style="padding:8px 10px;text-align:right;border-bottom:1px solid #1e1e1e">Vol.Ganho</th><th style="padding:8px 10px;text-align:center;border-bottom:1px solid #1e1e1e">Margem</th></tr></thead><tbody>';
-  consArr.forEach(function(c,i){
-    var conv=c.aprovados>0?Math.round(c.ganhos/c.aprovados*100):0;
-    var marg=c.margemCnt>0?Math.round(c.margemSum/c.margemCnt):0;
-    var mc=marg>=45?'#66bb6a':marg>=30?'#ffa726':'#ef5350';
-    var cc=conv>=60?'#66bb6a':conv>=40?'#ffa726':'#ef5350';
-    html+='<tr style="border-bottom:1px solid #1a1a1a;background:'+(i%2===0?'#080808':'#0a0a0a')+'">'
-      +'<td style="padding:8px 10px;font-weight:700;color:#fff">'+eh(c.nome)+'</td>'
-      +'<td style="padding:8px 10px;text-align:center;color:#888">'+c.qtd+'</td>'
-      +'<td style="padding:8px 10px;text-align:center;color:#888">'+c.aprovados+'</td>'
-      +'<td style="padding:8px 10px;text-align:center;color:#66bb6a;font-weight:800">'+c.ganhos+'</td>'
-      +'<td style="padding:8px 10px;text-align:center;font-weight:800;color:'+cc+'">'+conv+'%</td>'
-      +'<td style="padding:8px 10px;text-align:right;color:#ccc">'+fmt(c.vol)+'</td>'
-      +'<td style="padding:8px 10px;text-align:right;font-weight:800;color:#42a5f5">'+fmt(c.volGanho)+'</td>'
-      +'<td style="padding:8px 10px;text-align:center;font-weight:900;color:'+mc+'">'+marg+'%</td>'
-      +'</tr>';
-  });
-  html+='</tbody></table></div>';
-
-  // Top orçamentos por margem
-  var sortedMarg=margens.slice().sort(function(a,b){return b.marg-a.marg;});
-  if(sortedMarg.length){
-    html+='<div style="font-size:11px;font-weight:900;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📈 Orçamentos por Margem</div>';
-    html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">';
-    html+='<thead><tr style="background:#0d0d0d;color:#888;font-size:10px"><th style="padding:7px 10px;text-align:left;border-bottom:1px solid #1e1e1e">Orç.</th><th style="padding:7px 10px;text-align:left;border-bottom:1px solid #1e1e1e">Cliente</th><th style="padding:7px 10px;text-align:left;border-bottom:1px solid #1e1e1e">Consultor</th><th style="padding:7px 10px;text-align:left;border-bottom:1px solid #1e1e1e">Status</th><th style="padding:7px 10px;text-align:right;border-bottom:1px solid #1e1e1e">Valor</th><th style="padding:7px 10px;text-align:center;border-bottom:1px solid #1e1e1e">Margem</th></tr></thead><tbody>';
-    sortedMarg.slice(0,20).forEach(function(m,i){
-      var mc=m.marg>=45?'#66bb6a':m.marg>=30?'#ffa726':'#ef5350';
-      var csSI=FUNIL_SI[m.cs]||null;
-      var csL=csSI?'<span style="padding:1px 6px;border-radius:8px;background:'+csSI.bg+';color:'+csSI.tx+';font-size:9px;font-weight:800">'+csSI.label+'</span>':'<span style="color:#555;font-size:9px">—</span>';
-      html+='<tr style="border-bottom:1px solid #111;background:'+(i%2===0?'#080808':'#0a0a0a')+'">'
-        +'<td style="padding:7px 10px;color:#888;font-size:10px">'+eh(m.num)+'</td>'
-        +'<td style="padding:7px 10px;font-weight:700;color:#ccc">'+eh(m.nome)+'</td>'
-        +'<td style="padding:7px 10px;color:#888">'+eh(m.cons)+'</td>'
-        +'<td style="padding:7px 10px">'+csL+'</td>'
-        +'<td style="padding:7px 10px;text-align:right;font-weight:800;color:#fff">'+fmt(m.val)+'</td>'
-        +'<td style="padding:7px 10px;text-align:center;font-weight:900;color:'+mc+'">'+m.marg+'%</td>'
-        +'</tr>';
-    });
-    html+='</tbody></table></div>';
-  }
-  corpo.innerHTML=html;
-}
-
 </script>
 </body>
 </html>
