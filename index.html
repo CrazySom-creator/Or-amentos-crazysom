@@ -4186,8 +4186,11 @@ async function abrirRelatorios(){
 function relFiltrarPorData(de,ate,campo){
   return _relDados.filter(function(o){
     var dt=o.form&&o.form[campo||'f-data']||'';
-    if(de&&dt&&dt<de)return false;
-    if(ate&&dt&&dt>ate)return false;
+    if(de||ate){
+      if(!dt) return false;
+      if(de&&dt<de) return false;
+      if(ate&&dt>ate) return false;
+    }
     return true;
   });
 }
@@ -4891,8 +4894,11 @@ function dashFiltrar(){
   var funil = document.getElementById('dash-funil') ? document.getElementById('dash-funil').value : '';
   return _dashDados.filter(function(o){
     var dt = o.form && o.form['f-data'] || '';
-    if(de  && dt && dt < de)  return false;
-    if(ate && dt && dt > ate) return false;
+    if(de||ate){
+      if(!dt) return false;
+      if(de && dt < de) return false;
+      if(ate && dt > ate) return false;
+    }
     if(cons && (o.form && o.form['f-cons']) !== cons) return false;
     if(funil){
       var cs = o.dados && o.dados.comercialStatus || '';
@@ -4966,8 +4972,11 @@ function dashElabFiltrar(){
   var cons = document.getElementById('dash-elab-cons').value;
   return _dashDados.filter(function(o){
     var dt = o.form&&o.form['f-data']||'';
-    if(de  && dt && dt < de)  return false;
-    if(ate && dt && dt > ate) return false;
+    if(de||ate){
+      if(!dt) return false;
+      if(de && dt < de) return false;
+      if(ate && dt > ate) return false;
+    }
     if(cons && (o.form&&o.form['f-cons']) !== cons) return false;
     return true;
   });
@@ -5123,7 +5132,8 @@ function dashRenderizar(){
   var dados  = dashFiltrar();
   var hoje   = new Date().toISOString().split('T')[0];
   var total  = _dashDados.length;
-  document.getElementById('dash-sub').textContent = total+' orçamentos carregados';
+  var _semData=_dashDados.filter(function(o){return !(o.form&&o.form['f-data']);}).length;
+  document.getElementById('dash-sub').textContent = total+' orçamentos carregados'+(_semData>0?' (⚠️ '+_semData+' s/ data)':'');
 
   var COM_COR = {enviada:'#1565c0',negociacao:'#e65100',standby:'#5d4037',ganha:'#2e7d32',perdida:'#c62828'};
   var COM_LBL = {enviada:'📤 Proposta Enviada',negociacao:'🤝 Em Negociação',standby:'⏸️ Standby',ganha:'🏆 Venda Ganha',perdida:'❌ Venda Perdida'};
@@ -5652,7 +5662,20 @@ function metasRenderizar(){
 }
 
 function metasRenderizarAba(aba){
-  var ganhosDash=_dashDados.filter(function(o){return (o.dados&&o.dados.comercialStatus)==='ganha';});
+  // Usar mesmo filtro de periodo do Dashboard Comercial para consistencia
+  var _mDe=(document.getElementById('dash-de')||{}).value||'';
+  var _mAte=(document.getElementById('dash-ate')||{}).value||'';
+  var _mBase=_dashDados.filter(function(o){
+    if(o.st!=='aprovado') return false;
+    var dt=o.form&&o.form['f-data']||'';
+    if(_mDe||_mAte){
+      if(!dt) return false;
+      if(_mDe&&dt<_mDe) return false;
+      if(_mAte&&dt>_mAte) return false;
+    }
+    return true;
+  });
+  var ganhosDash=_mBase.filter(function(o){return (o.dados&&o.dados.comercialStatus)==='ganha';});
   var totalGanho=ganhosDash.reduce(function(t,o){return t+dashValOrc(o);},0);
   var CONS=['Fabiano Santos','Giovana Borges','Jéssica Elisandra','Rafael Oliveira','Wagner Wolff'];
 
@@ -7409,8 +7432,11 @@ function dashGerFiltrar(){
   var cons=(document.getElementById('dash-ger-cons')||{}).value||'';
   return _dashDados.filter(function(o){
     var dt=o.form&&o.form['f-data']||'';
-    if(de&&dt&&dt<de) return false;
-    if(ate&&dt&&dt>ate) return false;
+    if(de||ate){
+      if(!dt) return false;
+      if(de&&dt<de) return false;
+      if(ate&&dt>ate) return false;
+    }
     if(cons&&(o.form&&o.form['f-cons'])!==cons) return false;
     return true;
   });
