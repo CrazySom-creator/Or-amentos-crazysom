@@ -1581,11 +1581,11 @@ async function logout(){
     var ir=confirm('⚠️ "'+cli+'" não foi salvo no Drive.\n\nDeseja descartar as alterações e sair?');
     if(!ir)return;
   }
-  // Liberar lock ao sair — capturar id antes de zerar variáveis
-  var _idParaLiberar=driveIdAtual;
+  // Liberar lock ao sair
+  var _idLogout=driveIdAtual;
   lockPararHeartbeat();
   desativarModoLeitura();
-  if(_idParaLiberar&&!_modoLeitura) await lockLiberar(_idParaLiberar);
+  if(_idLogout&&!_modoLeitura) await lockLiberar(_idLogout);
   usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];snapshotAnterior=null;finParcelas=[];finObs='';driveIdAtual=null;driveNumAtual=null;
   // Resetar funil
   _funilCache=[];_funilCarregado=false;_funilCarregando=false;
@@ -2576,16 +2576,32 @@ function lockMostrarModal(lock,id,nome,onForcar,onSomenteLeitura){
 async function lockModalForcar(){
   var m=document.getElementById('lock-modal');if(m)m.remove();
   var d=window._lockModalDados;if(!d)return;
-  // Forçar: gravar nosso lock diretamente via Apps Script
-  var res=await lockOp('acquire',d.id,{forcar:true});
-  if(!res.ok){
-    // Fallback: sobrescrever no arquivo local de locks
-    _locks[d.id]={usuarioId:usuarioAtual.id,usuarioNome:usuarioAtual.nome,
-      desde:new Date().toLocaleString('pt-BR'),desdeTs:Date.now(),expira:Date.now()+LOCK_TTL};
-    await _lockFallbackSalvar();
+  driveStatus('⏳ Forçando abertura...','');
+  try{
+    // Passo 1: liberar o lock preso enviando release em nome do dono atual
+    var lockPreso=d.lock;
+    if(lockPreso&&lockPreso.usuarioId){
+      await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
+        action:'lock',lockAction:'release',
+        driveId:d.id,
+        usuarioId:lockPreso.usuarioId,
+        usuarioNome:lockPreso.usuarioNome,
+        ttl:LOCK_TTL
+      })});
+    }
+    // Passo 2: adquirir o lock como nós mesmos
+    var res=await lockOp('acquire',d.id);
+    if(!res.ok){
+      driveStatus('⚠️ Não foi possível forçar o lock — tente novamente','err');
+      return;
+    }
+  }catch(e2){
+    driveStatus('⚠️ Erro ao forçar: '+e2.message,'err');
+    return;
   }
   await _driveCarregarDados(d.id,d.nome,false);
   lockIniciarHeartbeat(d.id);
+  driveStatus('🔓 Abertura forçada com sucesso','ok');
 }
 
 async function lockModalLeitura(){
@@ -2711,9 +2727,7 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
     setTimeout(aplicarPermissoes, 150);
     driveStatus('✅ Carregado: '+nome,'ok');
-    // Nota: ativarModoLeitura é chamado pelo caller (lockModalLeitura ou driveCarregar)
-    // com o objeto lock correto. Não chamamos aqui para evitar ativar com _locks[id] indefinido
-    // quando o Apps Script gerencia o lock (não o fallback local).
+    // ativarModoLeitura é chamado pelo caller com o lock correto
   }catch(e){driveStatus('Erro: '+e.message,'err');}
   finally{setTimeout(function(){_carregandoOrc=false;},400);}
 }
@@ -2817,11 +2831,11 @@ async function limpar(){
   }else{
     if(!confirm('Iniciar Novo Orçamento? Todos os dados serão limpos.'))return;
   }
-  // Liberar lock do orçamento atual — capturar id antes de zerar variáveis
-  var _idParaLiberar=driveIdAtual;
+  // Liberar lock do orçamento atual
+  var _idLimpar=driveIdAtual;
   lockPararHeartbeat();
   desativarModoLeitura();
-  if(_idParaLiberar&&!_modoLeitura) await lockLiberar(_idParaLiberar);
+  if(_idLimpar&&!_modoLeitura) await lockLiberar(_idLimpar);
   SECS.forEach(function(s){state[s]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{default:[]}};});
   FORM_IDS.filter(function(id){return ['desc-pct','desc-rs','val-liq','f-pgto','f-svinc'].indexOf(id)<0;}).forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('f-cons').value='';
@@ -2850,7 +2864,6 @@ window.addEventListener('beforeunload',function(e){
   }
   // Liberar lock (síncrono — usando sendBeacon para garantir envio)
   if(driveIdAtual&&!_modoLeitura&&usuarioAtual){
-    // Liberar via Apps Script (endpoint de lock, atômico)
     try{
       navigator.sendBeacon(SCRIPT_URL,JSON.stringify({
         action:'lock',lockAction:'release',
@@ -2860,7 +2873,6 @@ window.addEventListener('beforeunload',function(e){
         ttl:LOCK_TTL
       }));
     }catch(e2){}
-    // Também limpar cache local do fallback se existir
     if(_locks[driveIdAtual]) delete _locks[driveIdAtual];
   }
 });
