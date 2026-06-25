@@ -1085,7 +1085,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 <div class="card">
   <div class="st">📋 Identificação</div>
   <div class="g4">
-    <div><label>Nº do Orçamento</label><input id="f-num" placeholder="20260042" oninput="document.getElementById('orc-disp').textContent=this.value||'—';marcarAlterado()"></div>
+    <div><label>Nº do Orçamento</label><input id="f-num" placeholder="20260042" oninput="document.getElementById('orc-disp').textContent=this.value||'—';marcarAlterado()" onblur="verificarNumDuplicado(this.value)"></div>
     <div><label>Data</label><input type="date" id="f-data" oninput="marcarAlterado()"></div>
     <div><label>Validade</label><input type="date" id="f-val" oninput="marcarAlterado()"></div>
     <div><label>Consultor</label>
@@ -2410,6 +2410,33 @@ async function salvarNoDrive(opts){
   }
   var num=gv('f-num')||'SN',cli=gv('f-cliente')||'SemCliente',dt=gv('f-data')||new Date().toISOString().split('T')[0];
   if(driveIdAtual&&driveNumAtual&&driveNumAtual!==num&&!opts.forcarNovoId)driveIdAtual=null;
+
+  // Verificar número de orçamento duplicado
+  if(num&&num!=='SN'){
+    var _numNorm=num.toString().trim().toLowerCase();
+    var _duplo=_driveListaCache.filter(function(x){
+      // O nome do arquivo tem formato: "NUM - CLIENTE - DATA"
+      var _nomeNum=(x.nome||'').split(' - ')[0].trim().toLowerCase();
+      return _nomeNum===_numNorm && x.id!==driveIdAtual;
+    });
+    if(_duplo.length>0){
+      var _dupNome=_duplo[0].nome||'';
+      var _dupCliente=_dupNome.split(' - ').slice(1,-1).join(' - ')||'outro orçamento';
+      driveStatus('⚠️ Número '+num+' já existe!','err');
+      var _elNum=document.getElementById('f-num');
+      if(_elNum){
+        _elNum.style.borderColor='#c0001a';
+        _elNum.style.boxShadow='0 0 0 3px rgba(192,0,26,.4)';
+        setTimeout(function(){_elNum.style.borderColor='';_elNum.style.boxShadow='';},4000);
+        _elNum.focus();
+        var _card=_elNum.closest('.card');
+        if(_card) _card.scrollIntoView({behavior:'smooth',block:'center'});
+      }
+      alert('⚠️ Número de orçamento "'+num+'" já está em uso por:\n\n'+_dupCliente+'\n\nAlbere o número antes de salvar.');
+      return null;
+    }
+  }
+
   if(opts.mostrarStatus!==false) driveStatus('⏳ Salvando...','');
 
   // Verificar conflito de versão antes de salvar
@@ -7550,6 +7577,36 @@ function dashGerRenderizar(){
     html+='</tbody></table></div>';
   }
   corpo.innerHTML=html;
+}
+
+
+// Verificar número de orçamento duplicado em tempo real (ao sair do campo)
+function verificarNumDuplicado(num){
+  if(!num||num==='SN') return;
+  var _el=document.getElementById('f-num');
+  var _aviso=document.getElementById('f-num-aviso');
+  if(!_aviso){
+    _aviso=document.createElement('div');
+    _aviso.id='f-num-aviso';
+    _aviso.style.cssText='font-size:10px;margin-top:3px;font-weight:700;display:none';
+    if(_el&&_el.parentNode) _el.parentNode.appendChild(_aviso);
+  }
+  if(!_driveListaCache||!_driveListaCache.length){_aviso.style.display='none';return;}
+  var _norm=num.toString().trim().toLowerCase();
+  var _dup=_driveListaCache.filter(function(x){
+    var _n=(x.nome||'').split(' - ')[0].trim().toLowerCase();
+    return _n===_norm && x.id!==driveIdAtual;
+  });
+  if(_dup.length>0){
+    var _cli=(_dup[0].nome||'').split(' - ').slice(1,-1).join(' - ')||'outro orçamento';
+    _aviso.style.display='block';
+    _aviso.style.color='#ef5350';
+    _aviso.textContent='⚠️ Número já usado por: '+_cli;
+    if(_el){_el.style.borderColor='#c0001a';_el.style.boxShadow='0 0 0 2px rgba(192,0,26,.3)';}
+  } else {
+    _aviso.style.display='none';
+    if(_el){_el.style.borderColor='';_el.style.boxShadow='';}
+  }
 }
 
 </script>
