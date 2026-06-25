@@ -2409,6 +2409,21 @@ function getDadosCompletos(){
 async function salvarNoDrive(opts){
   opts=opts||{};
   if(_modoLeitura){driveStatus('⛔ Modo somente leitura — salvar bloqueado','err');return;}
+  // Validar número do orçamento obrigatório
+  var _num=gv('f-num')||'';
+  if(!_num.trim()){
+    driveStatus('⚠️ Informe o Número do Orçamento antes de salvar.','err');
+    var _elNum0=document.getElementById('f-num');
+    if(_elNum0){
+      _elNum0.style.borderColor='#c0001a';
+      _elNum0.style.boxShadow='0 0 0 3px rgba(192,0,26,.4)';
+      _elNum0.focus();
+      setTimeout(function(){_elNum0.style.borderColor='';_elNum0.style.boxShadow='';},3000);
+      var _card0=_elNum0.closest('.card');
+      if(_card0) _card0.scrollIntoView({behavior:'smooth',block:'center'});
+    }
+    return null;
+  }
   var _cons=gv('f-cons')||'';
   if(!_cons.trim()){
     driveStatus('⚠️ Selecione o Consultor Responsável antes de salvar.','err');
