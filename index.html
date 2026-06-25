@@ -1653,8 +1653,8 @@ async function doLogin(){
   else{funilEsconderCard();}
   // Aplicar permissões nos campos (excluindo funil-card)
   setTimeout(aplicarPermissoes, 150);
-  // Carregar locks do Drive
-  locksCarregar();
+  // Pré-carregar lista de orçamentos no cache silenciosamente
+  driveListarSilencioso();
 }
 async function logout(){
   if(_naoSalvo){
@@ -2451,8 +2451,13 @@ async function salvarNoDrive(opts){
   var _driveIdParaDupCheck=driveIdAtual;
   if(driveIdAtual&&driveNumAtual&&driveNumAtual!==num&&!opts.forcarNovoId)driveIdAtual=null;
 
-  // Verificar número duplicado — busca atualizada diretamente do Drive
-  if(num&&num!=='SN'){
+  // Verificar número duplicado APENAS quando:
+  // - É orçamento novo (sem ID no Drive), OU
+  // - O usuário alterou o número desde o carregamento
+  // Se o número é o mesmo do arquivo carregado: NUNCA é duplicata do próprio arquivo
+  var _numMudou = driveNumAtual && num && driveNumAtual.toString().trim() !== num.toString().trim();
+  var _ehNovo = !_driveIdParaDupCheck;
+  if(num&&num!=='SN'&&(_ehNovo||_numMudou)){
     driveStatus('🔍 Verificando número...','');
     try{
       var _rLista=await fetch(SCRIPT_URL+'?action=list&q='+encodeURIComponent(num));
@@ -5117,14 +5122,14 @@ async function abrirDashElab(){
   var elAte=document.getElementById('dash-elab-ate');
   if(elDe&&!elDe.value) elDe.value=inicioMes;
   if(elAte&&!elAte.value) elAte.value=fimHoje;
-  if(!_dashDados.length) await dashCarregarDados();
+  if(!_dashDados.length) await dashAtualizar();
   dashElabRenderizar();
 }
 
 async function dashElabAtualizar(){
   _dashDados=[];
   document.getElementById('dash-elab-corpo').innerHTML='<div class="dash-loading">⏳ Carregando orçamentos do Drive...</div>';
-  await dashCarregarDados();
+  await dashAtualizar();
   dashElabRenderizar();
 }
 
@@ -5757,7 +5762,7 @@ async function abrirMetas(){
   // Carregar dados se necessário
   if(!_dashDados.length){
     document.getElementById('metas-sub').textContent='Carregando dados...';
-    await dashCarregarDados();
+    await dashAtualizar();
   }
   document.getElementById('metas-sub').textContent=_dashDados.length+' orçamentos carregados';
   // Preencher inputs existentes
@@ -7567,13 +7572,13 @@ async function abrirDashGerencial(){
   var deEl=document.getElementById('dash-ger-de'),ateEl=document.getElementById('dash-ger-ate');
   if(deEl&&!deEl.value) deEl.value=ini.toISOString().split('T')[0];
   if(ateEl&&!ateEl.value) ateEl.value=hoje.toISOString().split('T')[0];
-  if(!_dashDados.length) await dashCarregarDados();
+  if(!_dashDados.length) await dashAtualizar();
   dashGerRenderizar();
 }
 async function dashGerAtualizar(){
   _dashDados=[];
   document.getElementById('dash-ger-corpo').innerHTML='<div class="dash-loading">Recarregando...</div>';
-  await dashCarregarDados();
+  await dashAtualizar();
   dashGerRenderizar();
 }
 function dashGerFiltrar(){
