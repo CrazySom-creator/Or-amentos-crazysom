@@ -1546,26 +1546,48 @@ function setDS(){try{var d=new Date(gv('f-dia')+'T12:00:00');document.getElement
 function setDSFim(){try{var d=new Date(gv('f-dia-fim')+'T12:00:00');document.getElementById('f-sem-fim').value=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d.getDay()]||'';}catch(e){}}
 function getDiasEvento(){var ini=gv('f-dia'),fim=gv('f-dia-fim');if(!ini)return 1;var d1=new Date(ini+'T12:00:00'),d2=fim?new Date(fim+'T12:00:00'):d1;return Math.max(1,Math.round((d2-d1)/(1000*60*60*24))+1);}
 function getDiariasEquip(){var d=getDiasEvento();return d===1?1:1+(d-1)*0.5;}
+// Armazena o último valor de dEquip calculado automaticamente
+// para detectar se o usuário editou manualmente uma diária
+var _ultimoDEquipAuto = null;
+var _ultimoDiasAuto = null;
+
 function calcDiariasAuto(){
   var dias=getDiasEvento(), dEquip=getDiariasEquip();
   var el=document.getElementById('f-dias-ev');
   var el2=document.getElementById('f-diarias-equip');
   if(el) el.value=dias+(dias===1?' dia':' dias');
   if(el2) el2.value=dEquip.toFixed(1)+(dEquip===1?' diária':' diárias');
-  // Atualizar diárias nos itens (só se state estiver populado)
+  // Atualizar diárias nos itens SOMENTE nas linhas que ainda têm o valor automático
+  // (preserva edições manuais feitas pelo usuário linha a linha)
   try{
+    var prevDEquip=_ultimoDEquipAuto;
+    var prevDias=_ultimoDiasAuto;
     ['som','video','luz','estrutura','extra'].forEach(function(s){
       if(!state[s]||!state[s].rows) return;
       Object.values(state[s].rows).forEach(function(arr){
-        arr.forEach(function(r){r.diaria=dEquip;});
+        arr.forEach(function(r){
+          // Só atualiza se a diária atual é igual ao valor automático anterior
+          // (ou se é a primeira vez — prevDEquip===null)
+          if(prevDEquip===null||Math.abs(r.diaria-prevDEquip)<0.01){
+            r.diaria=dEquip;
+          }
+        });
       });
     });
     if(state.logistica&&state.logistica.rows){
       Object.values(state.logistica.rows).forEach(function(arr){arr.forEach(function(r){r.diaria=1;});});
     }
     if(state.servico&&state.servico.rows){
-      Object.values(state.servico.rows).forEach(function(arr){arr.forEach(function(r){r.diaria=dias;});});
+      Object.values(state.servico.rows).forEach(function(arr){
+        arr.forEach(function(r){
+          if(prevDias===null||Math.abs(r.diaria-prevDias)<0.01){
+            r.diaria=dias;
+          }
+        });
+      });
     }
+    _ultimoDEquipAuto=dEquip;
+    _ultimoDiasAuto=dias;
     SECS.forEach(function(s){try{renderRows(s);}catch(e){}});
     calc();
   }catch(e){}
@@ -1986,17 +2008,10 @@ async function aprovAcaoLista(idx,novo,ev){
 
 async function abrirOrcDrive(idx,ev){
   ev.stopPropagation();var orc=_listaAprov[idx];if(!orc)return;
-  if(!confirm('Abrir "'+orc.nome+'"?\nDados não salvos serão perdidos.'))return;
   document.getElementById('aprov-ov').classList.remove('open');
-  _carregandoOrc=true;
-  var dados=orc.dados;
-  if(dados.state){SECS.forEach(function(s){if(dados.state[s]){state[s].ambientes=dados.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=dados.state[s].ambAtiva||'default';state[s].rows=dados.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
-  if(dados.form)setForm(dados.form);
-  aprovStatus=dados.aprovStatus||'rascunho';aprovHist=dados.aprovHist||[];
-  driveIdAtual=orc.driveId;driveNumAtual=dados.form&&dados.form['f-num']?dados.form['f-num']:null;
-  buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
-  setTimeout(function(){selImpVenda('cimp');_preencherValLiqCalculado();},50);
-  setTimeout(function(){_carregandoOrc=false;document.getElementById('status-orc-card').scrollIntoView({behavior:'smooth',block:'start'});},400);
+  // CORRIGIDO: usar driveCarregar() para ter lock correto e dados completos do Drive
+  await driveCarregar(orc.driveId, orc.nome);
+  setTimeout(function(){document.getElementById('status-orc-card').scrollIntoView({behavior:'smooth',block:'start'});},400);
 }
 
 function buildTabs(){
@@ -2879,6 +2894,8 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     _comercialStatusSelecionado=''; // limpar seleção pendente ao carregar novo orçamento
     driveIdAtual=id;driveNumAtual=dados.form&&dados.form['f-num']?dados.form['f-num']:null;
     _naoSalvo=false;
+    // Resetar cache de diárias automáticas para forçar aplicação correta ao carregar
+    _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
     buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
     setTimeout(function(){selImpVenda(finImposto||'cimp');_preencherValLiqCalculado();},50);
     setTimeout(aplicarPermissoes, 150);
@@ -2973,6 +2990,7 @@ function carregar(input){
       if(data.state){SECS.forEach(function(s){if(data.state[s]){state[s].ambientes=data.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=data.state[s].ambAtiva||'default';state[s].rows=data.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
       if(data.form)setForm(data.form);
       aprovStatus=data.aprovStatus||'rascunho';aprovHist=data.aprovHist||[];comercialStatus=data.comercialStatus||'';comercialHist=data.comercialHist||[];snapshotAnterior=data.snapshotAnterior||null;finParcelas=data.finParcelas||[];finObs=data.finObs||'';finImposto=data.finImposto||'cimp';finNumVenda=data.finNumVenda||'';
+      _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
       buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();alert('✅ Carregado!');
     }catch(err){alert('⚠️ Arquivo inválido: '+err.message);}
     finally{setTimeout(function(){_carregandoOrc=false;},400);}
@@ -3005,6 +3023,7 @@ async function limpar(){
   _naoSalvo=false;
   aprovStatus='rascunho';aprovHist=[];
   comercialStatus='';comercialHist=[];
+  _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
   finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';
   buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
@@ -3047,7 +3066,9 @@ function selImpVenda(t){
   if(bsimp){bsimp.style.borderColor=t==='simp'?'#2e7d32':'#333';bsimp.style.background=t==='simp'?'#031403':'#111';}
   if(rcimp){rcimp.innerHTML=t==='cimp'?'<span style="width:7px;height:7px;background:#fff;border-radius:50%;display:block"></span>':'';rcimp.style.background=t==='cimp'?'#c0001a':'transparent';rcimp.style.borderColor=t==='cimp'?'#c0001a':'#555';}
   if(rsimp){rsimp.innerHTML=t==='simp'?'<span style="width:7px;height:7px;background:#fff;border-radius:50%;display:block"></span>':'';rsimp.style.background=t==='simp'?'#2e7d32':'transparent';rsimp.style.borderColor=t==='simp'?'#2e7d32':'#555';}
-  marcarAlterado();calc();
+  // Não marcar como alterado ao selecionar tipo de imposto programaticamente durante carregamento
+  if(!_carregandoOrc) marcarAlterado();
+  calc();
 }
 
 function _preencherValLiqCalculado(){
