@@ -1594,7 +1594,7 @@ async function doLogin(){
   if(!u){err.textContent='❌ Usuário "'+uid+'" não encontrado.';document.getElementById('l-pass').value='';return;}
   if(u.senha!==hs(pwd)){err.textContent='❌ Senha incorreta.';document.getElementById('l-pass').value='';document.getElementById('l-pass').focus();return;}
   try{
-    var _sR=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'lock',lockAction:'session-check',usuarioId:u.id,usuarioNome:u.nome,ttl:8*60*60*1000})});
+    var _sR=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'lock',lockAction:'session-check',usuarioId:u.id,usuarioNome:u.nome,ttl:35*60*1000})});
     var _sD=await _sR.json();
     if(_sD&&_sD.ok===false&&_sD.sessao){
       var _s=_sD.sessao;
@@ -1605,8 +1605,9 @@ async function doLogin(){
     }
   }catch(e5){}
   try{
-    await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'lock',lockAction:'session-start',usuarioId:u.id,usuarioNome:u.nome,ttl:8*60*60*1000})});
+    await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'lock',lockAction:'session-start',usuarioId:u.id,usuarioNome:u.nome,ttl:35*60*1000})});
   }catch(e6){}
+  sessionIniciarHeartbeat(); // Manter sessão ativa enquanto logado
   usuarioAtual=u;aprovStatus='rascunho';aprovHist=[];
   permCarregar();
   carregarExcluidosDrive();
@@ -1644,7 +1645,14 @@ async function logout(){
   lockPararHeartbeat();
   desativarModoLeitura();
   if(_idLogout&&!_modoLeitura) await lockLiberar(_idLogout);
-  if(_uLogout){try{navigator.sendBeacon(SCRIPT_URL,JSON.stringify({action:'lock',lockAction:'session-end',usuarioId:_uLogout.id}));}catch(e4){}}
+  sessionPararHeartbeat();
+  if(_uLogout){
+    try{
+      await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
+        action:'lock',lockAction:'session-end',usuarioId:_uLogout.id
+      })});
+    }catch(e4){}
+  }
   usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];snapshotAnterior=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';driveIdAtual=null;driveNumAtual=null;
   // Resetar funil
   _funilCache=[];_funilCarregado=false;_funilCarregando=false;
@@ -2633,7 +2641,33 @@ function lockIniciarHeartbeat(driveId){
   _lockHeartbeat=setInterval(function(){
     if(!driveIdAtual||driveIdAtual!==driveId){lockPararHeartbeat();return;}
     lockRenovar(driveId);
+    // Renovar sessão de usuário junto com o heartbeat do lock
+    sessionRenovar();
   }, HEARTBEAT_INTERVAL);
+}
+
+// Renovar sessão periodicamente (evita expirar enquanto logado)
+function sessionRenovar(){
+  if(!usuarioAtual) return;
+  fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
+    action:'lock',lockAction:'session-start',
+    usuarioId:usuarioAtual.id,usuarioNome:usuarioAtual.nome,
+    ttl:35*60*1000
+  })}).catch(function(){});
+}
+
+var _sessionHeartbeat=null;
+
+function sessionIniciarHeartbeat(){
+  sessionPararHeartbeat();
+  _sessionHeartbeat=setInterval(function(){
+    if(!usuarioAtual){sessionPararHeartbeat();return;}
+    sessionRenovar();
+  }, 5*60*1000); // Renovar sessão a cada 5 min
+}
+
+function sessionPararHeartbeat(){
+  if(_sessionHeartbeat){clearInterval(_sessionHeartbeat);_sessionHeartbeat=null;}
 }
 
 function lockPararHeartbeat(){
@@ -2916,6 +2950,7 @@ async function limpar(){
   }
   var _idLimpar=driveIdAtual;
   lockPararHeartbeat();
+  // Não parar sessionHeartbeat no limpar (usuário ainda está logado)
   desativarModoLeitura();
   if(_idLimpar&&!_modoLeitura) await lockLiberar(_idLimpar);
   SECS.forEach(function(s){state[s]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{default:[]}};});
