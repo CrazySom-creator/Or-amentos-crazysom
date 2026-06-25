@@ -2447,6 +2447,8 @@ async function salvarNoDrive(opts){
     return null;
   }
   var num=gv('f-num')||'SN',cli=gv('f-cliente')||'SemCliente',dt=gv('f-data')||new Date().toISOString().split('T')[0];
+  // Guardar o ID atual ANTES de potencialmente zerá-lo (usado na verificação de duplicata)
+  var _driveIdParaDupCheck=driveIdAtual;
   if(driveIdAtual&&driveNumAtual&&driveNumAtual!==num&&!opts.forcarNovoId)driveIdAtual=null;
 
   // Verificar número duplicado — busca atualizada diretamente do Drive
@@ -2464,7 +2466,11 @@ async function salvarNoDrive(opts){
         var _numNorm=num.toString().trim().toLowerCase();
         var _duplo=_dLista.lista.filter(function(x){
           var _nomeNum=(x.nome||'').split(' - ')[0].trim().toLowerCase();
-          return _nomeNum===_numNorm && x.id!==driveIdAtual;
+          // Ignorar o próprio arquivo (por ID atual OU pelo ID antes de eventual reset)
+          if(_nomeNum!==_numNorm) return false;
+          if(driveIdAtual&&x.id===driveIdAtual) return false;
+          if(_driveIdParaDupCheck&&x.id===_driveIdParaDupCheck) return false;
+          return true;
         });
         if(_duplo.length>0){
           var _dupNome=_duplo[0].nome||'';
@@ -2488,7 +2494,10 @@ async function salvarNoDrive(opts){
       var _numNorm2=num.toString().trim().toLowerCase();
       var _duplo2=_driveListaCache.filter(function(x){
         var _nomeNum=(x.nome||'').split(' - ')[0].trim().toLowerCase();
-        return _nomeNum===_numNorm2 && x.id!==driveIdAtual;
+        if(_nomeNum!==_numNorm2) return false;
+        if(driveIdAtual&&x.id===driveIdAtual) return false;
+        if(_driveIdParaDupCheck&&x.id===_driveIdParaDupCheck) return false;
+        return true;
       });
       if(_duplo2.length>0){
         var _dupCliente2=(_duplo2[0].nome||'').split(' - ').slice(1,-1).join(' - ')||'outro orçamento';
@@ -7699,7 +7708,11 @@ async function verificarNumDuplicado(num){
   }
   var _dup=_lista.filter(function(x){
     var _n=(x.nome||'').split(' - ')[0].trim().toLowerCase();
-    return _n===_norm && x.id!==driveIdAtual;
+    if(_n!==_norm) return false;
+    // Ignorar o próprio arquivo aberto (por ID ou por número igual ao atual)
+    if(driveIdAtual&&x.id===driveIdAtual) return false;
+    if(driveNumAtual&&driveNumAtual.toString().trim().toLowerCase()===_norm&&x.id) return false;
+    return true;
   });
   if(_dup.length>0){
     var _cli=(_dup[0].nome||'').split(' - ').slice(1,-1).join(' - ')||'outro orçamento';
