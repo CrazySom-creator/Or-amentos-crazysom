@@ -2905,7 +2905,7 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     if(dados.state){SECS.forEach(function(s){if(dados.state[s]){state[s].ambientes=dados.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=dados.state[s].ambAtiva||'default';state[s].rows=dados.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
     if(dados.form)setForm(dados.form);
     aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();snapshotAnterior=dados.snapshotAnterior||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
-    _comercialStatusSelecionado=''; // limpar seleção pendente ao carregar novo orçamento
+    _limparCamposComercialDOM(); // limpar campos DOM ao carregar novo orçamento
     driveIdAtual=id;driveNumAtual=dados.form&&dados.form['f-num']?dados.form['f-num']:null;
     _naoSalvo=false;
     // Resetar cache de diárias automáticas para forçar aplicação correta ao carregar
@@ -3005,6 +3005,7 @@ function carregar(input){
       if(data.form)setForm(data.form);
       aprovStatus=data.aprovStatus||'rascunho';aprovHist=data.aprovHist||[];comercialStatus=data.comercialStatus||'';comercialHist=data.comercialHist||[];snapshotAnterior=data.snapshotAnterior||null;finParcelas=data.finParcelas||[];finObs=data.finObs||'';finImposto=data.finImposto||'cimp';finNumVenda=data.finNumVenda||'';
       _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
+      _limparCamposComercialDOM();
       buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();alert('✅ Carregado!');
     }catch(err){alert('⚠️ Arquivo inválido: '+err.message);}
     finally{setTimeout(function(){_carregandoOrc=false;},400);}
@@ -3037,6 +3038,7 @@ async function limpar(){
   _naoSalvo=false;
   aprovStatus='rascunho';aprovHist=[];
   comercialStatus='';comercialHist=[];
+  _limparCamposComercialDOM();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
   finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';
@@ -3688,6 +3690,23 @@ function renderComercial(){
 
 // Status selecionado na UI (pendente de confirmação via Registrar)
 var _comercialStatusSelecionado = '';
+
+// Limpa campos DOM da seção comercial (evita texto de outro orçamento persistir)
+function _limparCamposComercialDOM(){
+  var elObs=document.getElementById('com-obs');
+  if(elObs)elObs.value='';
+  var elMot=document.getElementById('com-motivo');
+  if(elMot){elMot.value='';elMot.style.display='none';}
+  var elMotLbl=document.getElementById('com-motivo-label');
+  if(elMotLbl)elMotLbl.style.display='none';
+  var elPend=document.getElementById('com-pendente');
+  if(elPend)elPend.style.display='none';
+  _comercialStatusSelecionado='';
+  ['enviada','negociacao','standby','ganha','perdida'].forEach(function(id){
+    var btn=document.getElementById('cbtn-'+id);
+    if(btn){btn.style.boxShadow='none';btn.style.transform='scale(1)';btn.style.opacity='1';}
+  });
+}
 
 function setComercial(status){
   // Apenas marca seleção visual — NÃO altera comercialStatus ainda
