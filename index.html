@@ -1450,7 +1450,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 50% até 03 dias antes da montagem.</textarea>
   </div>
   <div class="grand">
-    <div><span>TOTAL FINAL (c/ impostos)</span><div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:1px" id="desc-label"></div></div>
+    <div><span id="grand-label">TOTAL FINAL (c/ impostos)</span><div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:1px" id="desc-label"></div></div>
     <b id="r-total">R$ 0,00</b>
   </div>
 
@@ -2456,6 +2456,11 @@ function calc(){
   }
   sv('r-bruto',fmt(bruto));sv('r-imp',fmt(imp));sv('r-cimp',fmt(cImp));
   sv('r-dv','-'+fmt(dv));sv('r-vdsi',fmt(vdsi));sv('r-vdci',fmt(vdci));sv('r-total',fmt(total));
+  // Atualizar label do total final conforme modo de imposto selecionado
+  (function(){
+    var gl=document.getElementById('grand-label');
+    if(gl) gl.textContent=modoSimp?'TOTAL FINAL (s/ impostos)':'TOTAL FINAL (c/ impostos)';
+  })();
   sv('m-sd',fmt(msd));sv('m-cd',fmt(mcd));sv('m-sd-pct',fmtN(msdP)+'%');sv('m-cd-pct',fmtN(mcdP)+'%');
   (function(){var elci=document.getElementById('val-liq');if(elci)elci.placeholder=vdci>0?Math.round(vdci).toString():'0';var elsi=document.getElementById('val-liq-si');if(elsi)elsi.placeholder=vdsi>0?Math.round(vdsi).toString():'0';})();
   var dl=document.getElementById('desc-label');if(dl){var modoLabel=modoSimp?'s/ imposto':'c/ imposto';dl.textContent=dv>0?'Desconto: -'+fmt(dv)+' ('+modoLabel+')':(total>0&&(vlSimp>0||vlCimp>0)?'Valor ajustado — '+modoLabel:'');}
@@ -4661,12 +4666,17 @@ function fecharFinanceiro(){
 }
 
 function finGetTotal(){
-  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
-  var cImp=bruto*(1+IMP);
+  // MESMA lógica do calc(): desconto sobre bruto, total respeita modo s/imp ou c/imp
+  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+(_bvStorage||parseFloat(gv('f-bv'))||0);
   var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
-  var dv=drs>0?drs:cImp*(dpct/100);
-  var vl=parseFloat(gv('val-liq'))||0;
-  return vl>0?vl:cImp-dv;
+  var dv=drs>0?drs:bruto*(dpct/100);
+  var vdsi=bruto-dv;            // sem imposto com desconto
+  var vdci=vdsi*(1+IMP);        // com imposto com desconto
+  var vlSimp=parseFloat(gv('val-liq-si'))||0;
+  var vlCimp=parseFloat(gv('val-liq'))||0;
+  var modoSimp=(impAtual==='simp'||finImposto==='simp');
+  if(modoSimp) return vlSimp>0?vlSimp:vdsi;
+  else         return vlCimp>0?vlCimp:vdci;
 }
 
 function finAtualizarResumo(){
