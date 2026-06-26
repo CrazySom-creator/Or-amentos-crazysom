@@ -2415,7 +2415,9 @@ function delRow(s,aid,id){state[s].rows[aid]=state[s].rows[aid].filter(function(
 
 function syncDesc(from){
   // Desconto calculado sobre BRUTO (sem imposto) — consistente com calc()
-  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
+  // Inclui BV no bruto, igual ao calc()
+  var _bvVal=_bvStorage||parseFloat(gv('f-bv'))||0;
+  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+_bvVal;
   if(from==='pct') document.getElementById('desc-rs').value=(bruto*(parseFloat(gv('desc-pct'))||0)/100).toFixed(2);
   else document.getElementById('desc-pct').value=(bruto>0?((parseFloat(gv('desc-rs'))||0)/bruto*100):0).toFixed(2);
   calc();
@@ -3602,7 +3604,13 @@ async function salvarESair(){
   try{
     var resultado = await salvarNoDrive({mostrarStatus:true});
     if(resultado !== null){ // null = usuário cancelou (ex: número duplicado)
-      // Salvo com sucesso — voltar para home
+      // Liberar lock antes de sair — garante que outros usuários possam abrir o orçamento
+      var _idSair = driveIdAtual;
+      if(_idSair && !_modoLeitura){
+        lockPararHeartbeat();
+        try{ await lockLiberar(_idSair); }catch(e){}
+      }
+      desativarModoLeitura();
       abrirHome();
     }
   }catch(e){
@@ -3751,14 +3759,18 @@ function buildPDF(tipo){
   var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+bvBruto;
   var imp=bruto*IMP,cImp=bruto+imp;
   var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
-  var dv=drs>0?drs:cImp*(dpct/100);
+  // Desconto calculado sobre BRUTO (sem imposto) — igual ao calc()
+  var dv=drs>0?drs:bruto*(dpct/100);
+  var vdsiPdf=bruto-dv;         // sem imposto com desconto
+  var vdciPdf=vdsiPdf*(1+IMP);  // com imposto com desconto
+  // descFrac: fração do desconto sobre o bruto (para aplicar proporcionalmente por item no PDF)
+  var descFrac=bruto>0?dv/bruto:0;
   var vl=parseFloat(gv('val-liq'))||0;          // valor líquido c/ imposto
   var vlsi=parseFloat(gv('val-liq-si'))||0;     // valor líquido s/ imposto
-  var descFrac=cImp>0?dv/cImp:0;
-  // totalFinal: c/ imposto usa val-liq; s/ imposto usa val-liq-si (ou desconto aplicado sobre bruto)
+  // totalFinal: c/ imposto usa val-liq (ou vdci); s/ imposto usa val-liq-si (ou vdsi)
   var totalFinal=impAtual==='cimp'
-    ?(vl>0?vl:cImp-dv)
-    :(vlsi>0?vlsi:bruto-bruto*descFrac);
+    ?(vl>0?vl:vdciPdf)
+    :(vlsi>0?vlsi:vdsiPdf);
   var incLines=getSvinc().split('\n').map(function(l){return l.trim();}).filter(Boolean);
   var endCli=[gv('f-end'),gv('f-endnum'),gv('f-bairro'),gv('f-cidade')].filter(Boolean).join(', ');
   var endEv=[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
@@ -4128,12 +4140,16 @@ function tirarSnapshot(){
   ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
     totais[s]=secTotAll(s);
   });
-  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
+  var _bvOS=_bvStorage||parseFloat(gv('f-bv'))||0;
+  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+_bvOS;
   var cImp=bruto*(1+IMP);
   var drs=parseFloat(form['desc-rs'])||0,dpct=parseFloat(form['desc-pct'])||0;
-  var dv=drs>0?drs:cImp*(dpct/100);
+  // Desconto sobre BRUTO (sem imposto) — igual ao calc()
+  var dv=drs>0?drs:bruto*(dpct/100);
+  var vdsiOS=bruto-dv;
+  var vdciOS=vdsiOS*(1+IMP);
   var vl=parseFloat(form['val-liq'])||0;
-  var total=vl>0?vl:cImp-dv;
+  var total=vl>0?vl:(impAtual==='cimp'?vdciOS:vdsiOS);
   // Capturar itens de cada seção
   var itens={};
   ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
@@ -5752,9 +5768,12 @@ function dashValOrc(o){
   }catch(e){}
   var cImp=bruto*(1+IMP);
   var drs=parseFloat(form['desc-rs'])||0,dpct=parseFloat(form['desc-pct'])||0;
-  var dv=drs>0?drs:cImp*(dpct/100);
-  if(fimp==='simp') return bruto-bruto*(cImp>0?dv/cImp:0);
-  return cImp-dv;
+  // Desconto sobre BRUTO (sem imposto) — igual ao calc()
+  var dv=drs>0?drs:bruto*(dpct/100);
+  var vdsiF=bruto-dv;
+  var vdciF=vdsiF*(1+IMP);
+  if(fimp==='simp') return vdsiF;
+  return vdciF;
 }
 
 async function abrirDashElab(){
