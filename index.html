@@ -2414,12 +2414,27 @@ function updRow(s,aid,id,field,val){
 function delRow(s,aid,id){state[s].rows[aid]=state[s].rows[aid].filter(function(x){return x.id!==id;});renderRows(s);calc();marcarAlterado();}
 
 function syncDesc(from){
-  // Desconto calculado sobre BRUTO (sem imposto) — consistente com calc()
-  // Inclui BV no bruto, igual ao calc()
+  // desc-pct: sempre % sobre BRUTO (base comercial interna)
+  // desc-rs:  no modo c/imp = desconto sobre cImp; no modo s/imp = desconto sobre bruto
+  // Assim: o consultor digita R$ e o total calculado = referência visível - desconto digitado
   var _bvVal=_bvStorage||parseFloat(gv('f-bv'))||0;
   var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+_bvVal;
-  if(from==='pct') document.getElementById('desc-rs').value=(bruto*(parseFloat(gv('desc-pct'))||0)/100).toFixed(2);
-  else document.getElementById('desc-pct').value=(bruto>0?((parseFloat(gv('desc-rs'))||0)/bruto*100):0).toFixed(2);
+  var cImp=bruto*(1+IMP);
+  var modoSimp=(impAtual==='simp'||finImposto==='simp');
+  if(from==='pct'){
+    // pct -> rs: converter % (do bruto) para R$ sobre a base do modo atual
+    var dv_bruto=bruto*(parseFloat(gv('desc-pct'))||0)/100;
+    var vdsi_calc=bruto-dv_bruto;
+    var vdci_calc=vdsi_calc*(1+IMP);
+    // desc-rs exibe o desconto em R$ sobre a base visível ao consultor
+    var rs_exibir=modoSimp?dv_bruto:(cImp-vdci_calc);
+    document.getElementById('desc-rs').value=rs_exibir.toFixed(2);
+  } else {
+    // rs -> pct: o R$ digitado é sobre a base visível; converter para % do bruto
+    var drs=parseFloat(gv('desc-rs'))||0;
+    var dv_bruto2=modoSimp?drs:drs/(1+IMP);
+    document.getElementById('desc-pct').value=(bruto>0?dv_bruto2/bruto*100:0).toFixed(2);
+  }
   calc();
 }
 function calc(){
@@ -2432,33 +2447,48 @@ function calc(){
   var bruto=MAIN.reduce(function(t,s){return t+secTotAll(s);},0)+_bvVal;
   var imp=bruto*IMP,cImp=bruto+imp;
   var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
-  // Desconto calculado SOBRE O BRUTO (sem imposto) — mais intuitivo para o consultor
-  var dv=safe(drs>0?drs:bruto*(dpct/100));
-  // Valor sem imposto com desconto: bruto - desconto
-  var vdsi=safe(bruto-dv);
-  // Valor com imposto com desconto: aplica imposto sobre (bruto - desconto)
-  var vdci=safe(vdsi*(1+IMP));
+  var modoSimp=(impAtual==='simp'||finImposto==='simp');
+  // Desconto em R$ sobre a base visível conforme modo:
+  //   c/imp: desc-rs é desconto sobre cImp  → vdci = cImp - drs
+  //   s/imp: desc-rs é desconto sobre bruto → vdsi = bruto - drs
+  // Se desc-rs vazio, usa desc-pct (% sempre do bruto) para calcular dv_bruto
+  var vdsi, vdci, dv_display;
+  if(drs>0){
+    if(modoSimp){
+      // desc-rs é sobre bruto
+      vdsi=safe(bruto-drs);
+      vdci=safe(vdsi*(1+IMP));
+      dv_display=safe(drs);
+    } else {
+      // desc-rs é sobre cImp
+      vdci=safe(cImp-drs);
+      vdsi=safe(vdci/(1+IMP));
+      dv_display=safe(drs);
+    }
+  } else {
+    // sem desc-rs: usa pct (% do bruto)
+    var dv_bruto=safe(bruto*(dpct/100));
+    vdsi=safe(bruto-dv_bruto);
+    vdci=safe(vdsi*(1+IMP));
+    dv_display=modoSimp?dv_bruto:safe(cImp-vdci);
+  }
   var xc=safe(Object.values(state.extra.rows).reduce(function(t,arr){return t+arr.reduce(function(a,r){return a+r.qty*r.val*r.diaria;},0);},0));
   var bvVal=_bvVal;
   var srv=secTotAll('servico')+bvVal,log=secTotAll('logistica');
-  // Margem: calculada sobre bruto sem desconto proporcional
-  var dsi=dv; // desconto é direto sobre bruto
-  var msd=safe(bruto-dsi-srv-log-xc),msdP=safe(bruto>0?msd/bruto*100:0);
-  var mcd=safe(vdci-srv*( 1+IMP)-log*(1+IMP)-xc*(1+IMP)),mcdP=safe(vdci>0?mcd/vdci*100:0);
-  // Total final: respeita o modo de imposto selecionado (simp = sem imposto, cimp = com imposto)
-  var vlSimp=parseFloat(gv('val-liq-si'))||0; // campo "Sem Imposto"
-  var vlCimp=parseFloat(gv('val-liq'))||0;    // campo "Com Imposto"
-  var modoSimp=(impAtual==='simp'||finImposto==='simp');
+  // Margem: baseada no vdsi (sem imposto) e vdci (com imposto)
+  var msd=safe(vdsi-srv-log-xc),msdP=safe(vdsi>0?msd/vdsi*100:0);
+  var mcd=safe(vdci-srv*(1+IMP)-log*(1+IMP)-xc*(1+IMP)),mcdP=safe(vdci>0?mcd/vdci*100:0);
+  // Total final: respeita o modo e o val-liq manual se preenchido
+  var vlSimp=parseFloat(gv('val-liq-si'))||0;
+  var vlCimp=parseFloat(gv('val-liq'))||0;
   var total;
   if(modoSimp){
-    // Modo sem imposto: usa val-liq-si se preenchido, senão vdsi calculado
     total=safe(vlSimp>0?vlSimp:vdsi);
   } else {
-    // Modo com imposto: usa val-liq se preenchido, senão vdci calculado
     total=safe(vlCimp>0?vlCimp:vdci);
   }
   sv('r-bruto',fmt(bruto));sv('r-imp',fmt(imp));sv('r-cimp',fmt(cImp));
-  sv('r-dv','-'+fmt(dv));sv('r-vdsi',fmt(vdsi));sv('r-vdci',fmt(vdci));sv('r-total',fmt(total));
+  sv('r-dv','-'+fmt(dv_display));sv('r-vdsi',fmt(vdsi));sv('r-vdci',fmt(vdci));sv('r-total',fmt(total));
   // Atualizar label do total final conforme modo de imposto selecionado
   (function(){
     var gl=document.getElementById('grand-label');
@@ -2466,7 +2496,7 @@ function calc(){
   })();
   sv('m-sd',fmt(msd));sv('m-cd',fmt(mcd));sv('m-sd-pct',fmtN(msdP)+'%');sv('m-cd-pct',fmtN(mcdP)+'%');
   (function(){var elci=document.getElementById('val-liq');if(elci)elci.placeholder=vdci>0?Math.round(vdci).toString():'0';var elsi=document.getElementById('val-liq-si');if(elsi)elsi.placeholder=vdsi>0?Math.round(vdsi).toString():'0';})();
-  var dl=document.getElementById('desc-label');if(dl){var modoLabel=modoSimp?'s/ imposto':'c/ imposto';dl.textContent=dv>0?'Desconto: -'+fmt(dv)+' ('+modoLabel+')':(total>0&&(vlSimp>0||vlCimp>0)?'Valor ajustado — '+modoLabel:'');}
+  var dl=document.getElementById('desc-label');if(dl){var modoLabel=modoSimp?'s/ imposto':'c/ imposto';dl.textContent=dv_display>0?'Desconto: -'+fmt(dv_display)+' ('+modoLabel+')':(total>0&&(vlSimp>0||vlCimp>0)?'Valor ajustado — '+modoLabel:'');}
   var todosAmbs=[],ambIdsC={};
   ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){state[s].ambientes.forEach(function(a){if(!ambIdsC[a.id]){ambIdsC[a.id]=true;todosAmbs.push({id:a.id,nome:a.nome});}});});
   var subGeral=document.getElementById('subtot-geral-ambientes');
@@ -3722,10 +3752,16 @@ function _preencherValLiqCalculado(){
   try{
     var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+(_bvStorage||parseFloat(gv('f-bv'))||0);
     var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
-    // Desconto sobre bruto (mesma lógica do calc())
-    var dv=drs>0?drs:bruto*(dpct/100);
-    var vdsi=bruto-dv;
-    var vdci=vdsi*(1+IMP);
+    var cImpPVL=bruto*(1+IMP);
+    var modoSimpPVL=(impAtual==='simp'||finImposto==='simp');
+    var vdsi,vdci;
+    if(drs>0){
+      if(modoSimpPVL){vdsi=bruto-drs;vdci=vdsi*(1+IMP);}
+      else{vdci=cImpPVL-drs;vdsi=vdci/(1+IMP);}
+    } else {
+      var dv_pvl=bruto*(dpct/100);
+      vdsi=bruto-dv_pvl;vdci=vdsi*(1+IMP);
+    }
     var elci=document.getElementById('val-liq'),elsi=document.getElementById('val-liq-si');
     if(elci) elci.placeholder=vdci>0?Math.round(vdci).toString():'0';
     if(elsi) elsi.placeholder=vdsi>0?Math.round(vdsi).toString():'0';
@@ -3759,18 +3795,22 @@ function buildPDF(tipo){
   var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+bvBruto;
   var imp=bruto*IMP,cImp=bruto+imp;
   var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
-  // Desconto calculado sobre BRUTO (sem imposto) — igual ao calc()
-  var dv=drs>0?drs:bruto*(dpct/100);
-  var vdsiPdf=bruto-dv;         // sem imposto com desconto
-  var vdciPdf=vdsiPdf*(1+IMP);  // com imposto com desconto
-  // descFrac: fração do desconto sobre o bruto (para aplicar proporcionalmente por item no PDF)
-  var descFrac=bruto>0?dv/bruto:0;
-  var vl=parseFloat(gv('val-liq'))||0;          // valor líquido c/ imposto
-  var vlsi=parseFloat(gv('val-liq-si'))||0;     // valor líquido s/ imposto
-  // totalFinal: c/ imposto usa val-liq (ou vdci); s/ imposto usa val-liq-si (ou vdsi)
-  var totalFinal=impAtual==='cimp'
-    ?(vl>0?vl:vdciPdf)
-    :(vlsi>0?vlsi:vdsiPdf);
+  var vl=parseFloat(gv('val-liq'))||0;
+  var vlsi=parseFloat(gv('val-liq-si'))||0;
+  var modoSimpPDF=(impAtual==='simp');
+  // Mesma logica do calc(): desc-rs sobre cImp no modo c/imp, sobre bruto no modo s/imp
+  var vdsiPdf,vdciPdf;
+  if(drs>0){
+    if(modoSimpPDF){vdsiPdf=bruto-drs;vdciPdf=vdsiPdf*(1+IMP);}
+    else{vdciPdf=cImp-drs;vdsiPdf=vdciPdf/(1+IMP);}
+  } else {
+    var dv_bruto_pdf=bruto*(dpct/100);
+    vdsiPdf=bruto-dv_bruto_pdf;vdciPdf=vdsiPdf*(1+IMP);
+  }
+  // descFrac: proporcao do desconto sobre o bruto (para aplicar por item no PDF)
+  var descFrac=bruto>0?(bruto-vdsiPdf)/bruto:0;
+  // totalFinal
+  var totalFinal=modoSimpPDF?(vlsi>0?vlsi:vdsiPdf):(vl>0?vl:vdciPdf);
   var incLines=getSvinc().split('\n').map(function(l){return l.trim();}).filter(Boolean);
   var endCli=[gv('f-end'),gv('f-endnum'),gv('f-bairro'),gv('f-cidade')].filter(Boolean).join(', ');
   var endEv=[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
@@ -3937,9 +3977,10 @@ function buildPDF(tipo){
     });
   }
 
-  // Mostrar desconto APENAS se há desconto real preenchido (não arredondamento de val-liq)
-  var difDesc=dv>0.01?(impAtual==='cimp'?(cImp-totalFinal):(bruto-totalFinal)):0;
-  if(dv>0.01&&difDesc>0.01)res+='<tr class="drow2"><td style="text-align:right">Desconto</td><td class="r">– '+fmt(difDesc)+'</td></tr>';
+  // Mostrar desconto APENAS se ha desconto real (comparando total sem desconto vs totalFinal)
+  var semDescPDF=modoSimpPDF?bruto:cImp;
+  var difDesc=semDescPDF-totalFinal;
+  if(difDesc>0.01)res+='<tr class="drow2"><td style="text-align:right">Desconto</td><td class="r">– '+fmt(difDesc)+'</td></tr>';
 
   res+='<tr class="lrow">'
     +'<td>'+totalLabel+'</td>'
@@ -4144,12 +4185,18 @@ function tirarSnapshot(){
   var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+_bvOS;
   var cImp=bruto*(1+IMP);
   var drs=parseFloat(form['desc-rs'])||0,dpct=parseFloat(form['desc-pct'])||0;
-  // Desconto sobre BRUTO (sem imposto) — igual ao calc()
-  var dv=drs>0?drs:bruto*(dpct/100);
-  var vdsiOS=bruto-dv;
-  var vdciOS=vdsiOS*(1+IMP);
+  var cImpOS=bruto*(1+IMP);
+  var modoSimpOS=(impAtual==='simp');
+  var vdsiOS,vdciOS;
+  if(drs>0){
+    if(modoSimpOS){vdsiOS=bruto-drs;vdciOS=vdsiOS*(1+IMP);}
+    else{vdciOS=cImpOS-drs;vdsiOS=vdciOS/(1+IMP);}
+  } else {
+    var dv_os=bruto*(dpct/100);
+    vdsiOS=bruto-dv_os;vdciOS=vdsiOS*(1+IMP);
+  }
   var vl=parseFloat(form['val-liq'])||0;
-  var total=vl>0?vl:(impAtual==='cimp'?vdciOS:vdsiOS);
+  var total=vl>0?vl:(modoSimpOS?vdsiOS:vdciOS);
   // Capturar itens de cada seção
   var itens={};
   ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
@@ -4714,15 +4761,21 @@ function fecharFinanceiro(){
 }
 
 function finGetTotal(){
-  // MESMA lógica do calc(): desconto sobre bruto, total respeita modo s/imp ou c/imp
+  // Mesma logica do calc(): desc-rs e sobre cImp no modo c/imp, sobre bruto no modo s/imp
   var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+(_bvStorage||parseFloat(gv('f-bv'))||0);
+  var cImp=bruto*(1+IMP);
   var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
-  var dv=drs>0?drs:bruto*(dpct/100);
-  var vdsi=bruto-dv;            // sem imposto com desconto
-  var vdci=vdsi*(1+IMP);        // com imposto com desconto
   var vlSimp=parseFloat(gv('val-liq-si'))||0;
   var vlCimp=parseFloat(gv('val-liq'))||0;
   var modoSimp=(impAtual==='simp'||finImposto==='simp');
+  var vdsi,vdci;
+  if(drs>0){
+    if(modoSimp){vdsi=bruto-drs;vdci=vdsi*(1+IMP);}
+    else{vdci=cImp-drs;vdsi=vdci/(1+IMP);}
+  } else {
+    var dv_bruto=bruto*(dpct/100);
+    vdsi=bruto-dv_bruto;vdci=vdsi*(1+IMP);
+  }
   if(modoSimp) return vlSimp>0?vlSimp:vdsi;
   else         return vlCimp>0?vlCimp:vdci;
 }
@@ -5768,11 +5821,17 @@ function dashValOrc(o){
   }catch(e){}
   var cImp=bruto*(1+IMP);
   var drs=parseFloat(form['desc-rs'])||0,dpct=parseFloat(form['desc-pct'])||0;
-  // Desconto sobre BRUTO (sem imposto) — igual ao calc()
-  var dv=drs>0?drs:bruto*(dpct/100);
-  var vdsiF=bruto-dv;
-  var vdciF=vdsiF*(1+IMP);
-  if(fimp==='simp') return vdsiF;
+  var cImpF=bruto*(1+IMP);
+  var modoSimpF=(fimp==='simp');
+  var vdsiF,vdciF;
+  if(drs>0){
+    if(modoSimpF){vdsiF=bruto-drs;vdciF=vdsiF*(1+IMP);}
+    else{vdciF=cImpF-drs;vdsiF=vdciF/(1+IMP);}
+  } else {
+    var dv_f=bruto*(dpct/100);
+    vdsiF=bruto-dv_f;vdciF=vdsiF*(1+IMP);
+  }
+  if(modoSimpF) return vdsiF;
   return vdciF;
 }
 
