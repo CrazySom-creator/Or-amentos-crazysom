@@ -1536,6 +1536,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <button class="btn btn-o" onclick="abrirHome()" style="border-color:#555;color:#ccc">☰ Menu</button>
     <button class="btn btn-o" onclick="limpar()" style="border-color:#444;color:#bbb">📄 Novo</button>
     <button class="btn btn-clone" id="btn-clonar" onclick="clonarOrcamento()" title="Clonar este orçamento para um novo">📋 Clonar</button>
+    <button class="btn btn-g" onclick="salvarESair()" title="Salva no Drive e volta para o Menu principal" style="font-weight:800">💾 Salvar e Sair</button>
     <button class="btn btn-r" onclick="abrirTipo()">📄 PDF</button>
     <button class="btn btn-d" onclick="downloadPDF()">⬇️ Download</button>
   </div>
@@ -3582,6 +3583,28 @@ function homeAbrirElab(){
   homeFecharBusca();
   fecharHome();
   abrirDashElab();
+}
+
+// ── Salvar no Drive e voltar para home ───────────────────────────
+async function salvarESair(){
+  if(!usuarioAtual){
+    alert('Você precisa estar logado para salvar.');
+    return;
+  }
+  // Desabilitar botão durante o processo
+  var btns = document.querySelectorAll('button[onclick="salvarESair()"]');
+  btns.forEach(function(b){ b.disabled=true; b.textContent='💾 Salvando...'; });
+  try{
+    var resultado = await salvarNoDrive({mostrarStatus:true});
+    if(resultado !== null){ // null = usuário cancelou (ex: número duplicado)
+      // Salvo com sucesso — voltar para home
+      abrirHome();
+    }
+  }catch(e){
+    driveStatus('⚠️ Erro ao salvar: '+e.message,'err');
+  }finally{
+    btns.forEach(function(b){ b.disabled=false; b.textContent='💾 Salvar e Sair'; });
+  }
 }
 
 // ── Sair sem salvar — descarta orçamento local e volta para home ──
