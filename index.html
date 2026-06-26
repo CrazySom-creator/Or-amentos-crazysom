@@ -1537,6 +1537,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <button class="btn btn-o" onclick="limpar()" style="border-color:#444;color:#bbb">📄 Novo</button>
     <button class="btn btn-clone" id="btn-clonar" onclick="clonarOrcamento()" title="Clonar este orçamento para um novo">📋 Clonar</button>
     <button class="btn btn-g" onclick="salvarESair()" title="Salva no Drive e volta para o Menu principal" style="font-weight:800">💾 Salvar e Sair</button>
+    <button class="btn btn-o" onclick="homeSairSemSalvar()" title="Sair sem salvar — descarta alteracoes nao salvas" style="border-color:#c0001a;color:#ff6060;font-weight:700">✕ Sair</button>
     <button class="btn btn-r" onclick="abrirTipo()">📄 PDF</button>
     <button class="btn btn-d" onclick="downloadPDF()">⬇️ Download</button>
   </div>
@@ -2497,13 +2498,27 @@ function calc(){
   sv('m-sd',fmt(msd));sv('m-cd',fmt(mcd));sv('m-sd-pct',fmtN(msdP)+'%');sv('m-cd-pct',fmtN(mcdP)+'%');
   (function(){var elci=document.getElementById('val-liq');if(elci)elci.placeholder=vdci>0?Math.round(vdci).toString():'0';var elsi=document.getElementById('val-liq-si');if(elsi)elsi.placeholder=vdsi>0?Math.round(vdsi).toString():'0';})();
   var dl=document.getElementById('desc-label');if(dl){var modoLabel=modoSimp?'s/ imposto':'c/ imposto';dl.textContent=dv_display>0?'Desconto: -'+fmt(dv_display)+' ('+modoLabel+')':(total>0&&(vlSimp>0||vlCimp>0)?'Valor ajustado — '+modoLabel:'');}
-  var todosAmbs=[],ambIdsC={};
-  ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){state[s].ambientes.forEach(function(a){if(!ambIdsC[a.id]){ambIdsC[a.id]=true;todosAmbs.push({id:a.id,nome:a.nome});}});});
+  // Agrupa subtotal por NOME do ambiente somando todas as secoes (evita repeticao de ambientes iguais entre secoes)
+  var ambTotPorNome={},ambOrdem=[];
+  ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+    state[s].ambientes.forEach(function(a){
+      var nome=a.nome||'Geral';
+      var t=(state[s].rows[a.id]||[]).reduce(function(acc,r){return acc+rowTot(r);},0);
+      if(t>0){
+        if(!ambTotPorNome[nome]){ambTotPorNome[nome]=0;ambOrdem.push(nome);}
+        ambTotPorNome[nome]+=t;
+      }
+    });
+  });
   var subGeral=document.getElementById('subtot-geral-ambientes');
   if(subGeral){
-    if(todosAmbs.length>1){
+    var temMultiplosAmbNomes=ambOrdem.length>1||(ambOrdem.length===1&&ambOrdem[0]!=='Geral');
+    if(temMultiplosAmbNomes&&ambOrdem.length>0){
       var shtml='<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#aaa;margin-bottom:8px;font-weight:700">📍 Subtotal por Ambiente</div>';
-      todosAmbs.forEach(function(amb){var t=['som','video','luz','estrutura','servico','logistica'].reduce(function(tot,s){return tot+(state[s].rows[amb.id]||[]).reduce(function(a,r){return a+rowTot(r);},0);},0);if(t>0)shtml+='<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #222;font-size:12px"><span style="color:#ccc">🏢 '+amb.nome+'</span><span style="color:#fff;font-weight:700">'+fmt(t)+' <span style="color:#999;font-size:10px">| c/imp '+fmt(t*(1+IMP))+'</span></span></div>';});
+      ambOrdem.forEach(function(nome){
+        var t=ambTotPorNome[nome];
+        shtml+='<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #222;font-size:12px"><span style="color:#ccc">🏢 '+nome+'</span><span style="color:#fff;font-weight:700">'+fmt(t)+' <span style="color:#999;font-size:10px">| c/imp '+fmt(t*(1+IMP))+'</span></span></div>';
+      });
       subGeral.innerHTML=shtml;subGeral.style.display='block';
     }else{subGeral.style.display='none';}
   }
