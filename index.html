@@ -592,19 +592,13 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
       <div class="home-card primary" onclick="homeNovoOrcamento()">
         <div class="home-card-ico">➕</div>
         <div class="home-card-title">Novo Orçamento</div>
-        <div class="home-card-desc">Criar orçamento em branco com número automático</div>
+        <div class="home-card-desc">Criar orçamento em branco com numeração automática</div>
       </div>
 
-      <div class="home-card teal" id="home-btn-clonar" style="display:none" onclick="homeClonarOrcamento()">
-        <div class="home-card-ico">📋</div>
-        <div class="home-card-title">Clonar Orçamento</div>
-        <div class="home-card-desc">Copiar itens do orçamento atual para um novo</div>
-      </div>
-
-      <div class="home-card green" onclick="homeBuscarOrcamento()">
+      <div class="home-card green" onclick="homeAbrirBusca()">
         <div class="home-card-ico">🔍</div>
         <div class="home-card-title">Abrir / Buscar</div>
-        <div class="home-card-desc">Localizar orçamento salvo no Drive pelo nome ou número</div>
+        <div class="home-card-desc">Buscar por número, cliente, data, consultor…</div>
       </div>
 
       <div class="home-card blue" id="home-btn-aprov" onclick="homeAbrirAprovacoes()">
@@ -616,10 +610,29 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 
       <div class="home-card" style="border-color:#37474f;background:#0d1214" id="home-btn-elab" onclick="homeAbrirElab()">
         <div class="home-card-ico">📐</div>
-        <div class="home-card-title">Elaboração</div>
-        <div class="home-card-desc">Orçamentos em elaboração técnica</div>
+        <div class="home-card-title">Dashboard Elaboração</div>
+        <div class="home-card-desc">Pipeline com tempo de elaboração até o fechamento do orçamento</div>
       </div>
 
+    </div>
+
+    <!-- BUSCA INLINE (oculta por padrão) -->
+    <div id="home-busca-panel" style="display:none;margin-bottom:8px">
+      <div style="background:#1c1c1c;border:1px solid #333;border-radius:10px;padding:18px 20px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <span style="color:#fff;font-size:13px;font-weight:800">🔍 Buscar Orçamento</span>
+          <button onclick="homeFecharBusca()" style="margin-left:auto;background:none;border:1px solid #444;color:#aaa;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:11px">✕ Fechar</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <input id="home-busca-input" type="text" placeholder="Número, cliente, data, consultor, local…"
+            style="flex:1;padding:10px 13px;border:1px solid #444;border-radius:6px;background:#111;color:#fff;font-size:13px"
+            oninput="homeFiltrarBusca(this.value)"
+            onkeydown="if(event.key==='Escape')homeFecharBusca()">
+          <button onclick="homeExecutarBusca()" style="background:var(--R);color:#fff;border:none;border-radius:6px;padding:10px 18px;font-size:12px;font-weight:700;cursor:pointer">Buscar</button>
+        </div>
+        <div id="home-busca-status" style="font-size:10px;color:#888;margin-bottom:8px"></div>
+        <div id="home-busca-lista" style="max-height:320px;overflow-y:auto;border:1px solid #2a2a2a;border-radius:6px"></div>
+      </div>
     </div>
 
     <!-- GESTÃO COMERCIAL -->
@@ -646,8 +659,8 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 
       <div class="home-card purple" id="home-btn-ger" style="display:none" onclick="abrirDashGerencial();fecharHome()">
         <div class="home-card-ico">📊</div>
-        <div class="home-card-title">Gerencial</div>
-        <div class="home-card-desc">Visão gerencial e análise de performance</div>
+        <div class="home-card-title">Dashboard Gerencial</div>
+        <div class="home-card-desc">Análise de performance, margem e resultados gerenciais</div>
       </div>
 
     </div>
@@ -709,7 +722,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   <div class="modal-box" style="max-width:780px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div><h2 style="margin-bottom:2px">⚙️ Administração</h2><p class="sub" style="margin:0">Usuários, Permissões e Acessos</p></div>
-      <button class="btn btn-o btn-sm" onclick="document.getElementById('adm-ov').classList.remove('open')">✕</button>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('adm-ov').classList.remove('open');abrirHome()">✕</button>
     </div>
     <div class="rel-tabs" style="margin-bottom:12px">
       <div class="rel-tab active" onclick="admAba('usuarios')">👤 Usuários</div>
@@ -759,7 +772,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
       </div>
       <div style="display:flex;gap:7px;align-items:center">
         <button class="btn btn-r btn-sm" onclick="dashFinAtualizar()">🔄 Atualizar</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('dashfin-ov').classList.remove('open')">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('dashfin-ov').classList.remove('open');abrirHome()">✕</button>
       </div>
     </div>
     <div class="dash-filtros">
@@ -791,7 +804,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
       </div>
       <div style="display:flex;gap:7px">
         <button class="btn btn-r btn-sm" onclick="metasRenderizar()">🔄 Atualizar</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('metas-ov').classList.remove('open')">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('metas-ov').classList.remove('open');abrirHome()">✕</button>
       </div>
     </div>
 
@@ -855,7 +868,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
       </div>
       <div style="display:flex;gap:7px;align-items:center">
         <button class="btn btn-r btn-sm" onclick="dashElabAtualizar()">🔄 Atualizar</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('dash-elab-ov').classList.remove('open')">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('dash-elab-ov').classList.remove('open');abrirHome()">✕</button>
       </div>
     </div>
     <div class="dash-filtros">
@@ -884,7 +897,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
       </div>
       <div style="display:flex;gap:7px;align-items:center">
         <button class="btn btn-r btn-sm" onclick="dashAtualizar()">🔄 Atualizar</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('dash-ov').classList.remove('open')">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('dash-ov').classList.remove('open');abrirHome()">✕</button>
       </div>
     </div>
 
@@ -924,7 +937,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
         <h2 style="margin-bottom:2px">📋 Ordens de Serviço</h2>
         <p class="sub" id="os-mod-sub" style="margin:0">Filtre por data do evento e imprima as OS</p>
       </div>
-      <button class="btn btn-o btn-sm" onclick="document.getElementById('os-mod-ov').classList.remove('open')">✕</button>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('os-mod-ov').classList.remove('open');abrirHome()">✕</button>
     </div>
 
     <!-- Filtros -->
@@ -979,7 +992,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   <div class="modal-box rel-modal">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <h2>📊 Relatórios</h2>
-      <button class="btn btn-o btn-sm" onclick="document.getElementById('rel-ov').classList.remove('open')">✕ Fechar</button>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('rel-ov').classList.remove('open');abrirHome()">✕ Fechar</button>
     </div>
     <p class="sub" id="rel-sub">Carregando orçamentos do Drive...</p>
 
@@ -1103,7 +1116,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
       <div style="display:flex;gap:7px;flex-wrap:wrap">
         <button class="btn btn-sm" onclick="relExportarExcel()" style="background:#1d6f42;color:#fff">📗 Exportar Excel</button>
         <button class="btn btn-sm" onclick="relExportarPDF()" style="background:#c0001a;color:#fff">📄 Exportar PDF</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('rel-ov').classList.remove('open')">✕ Fechar</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('rel-ov').classList.remove('open');abrirHome()">✕ Fechar</button>
       </div>
     </div>
 
@@ -1521,9 +1534,10 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   </div>
   <div style="display:flex;gap:8px;margin-top:9px;justify-content:flex-end;flex-wrap:wrap">
     <button class="btn btn-o" onclick="abrirHome()" style="border-color:#555;color:#ccc">☰ Menu</button>
+    <button class="btn btn-o" onclick="limpar()" style="border-color:#444;color:#bbb">📄 Novo</button>
     <button class="btn btn-clone" id="btn-clonar" onclick="clonarOrcamento()" title="Clonar este orçamento para um novo">📋 Clonar</button>
-    <button class="btn btn-r" onclick="abrirTipo()">📄 Visualizar PDF</button>
-    <button class="btn btn-d" onclick="downloadPDF()">⬇️ Download PDF</button>
+    <button class="btn btn-r" onclick="abrirTipo()">📄 PDF</button>
+    <button class="btn btn-d" onclick="downloadPDF()">⬇️ Download</button>
   </div>
 </div>
 
@@ -2199,7 +2213,7 @@ async function aprovAcaoLista(idx,novo,ev){
 
 async function abrirOrcDrive(idx,ev){
   ev.stopPropagation();var orc=_listaAprov[idx];if(!orc)return;
-  document.getElementById('aprov-ov').classList.remove('open');
+  document.getElementById('aprov-ov').classList.remove('open');abrirHome();
   // CORRIGIDO: usar driveCarregar() para ter lock correto e dados completos do Drive
   await driveCarregar(orc.driveId, orc.nome);
   setTimeout(function(){document.getElementById('status-orc-card').scrollIntoView({behavior:'smooth',block:'start'});},400);
@@ -2469,6 +2483,11 @@ async function driveListar(){
 }
 
 // Versão silenciosa — após saves, só atualiza cache se lista já estiver aberta com itens
+function _homeInvalidarCacheBusca(){
+  _homeBuscaCarregada = false;
+  _homeBuscaCache = [];
+}
+
 async function driveListarSilencioso(){
   try{
     var r=await fetch(SCRIPT_URL+'?action=list&q=');
@@ -3138,7 +3157,7 @@ async function driveDeletar(id,nome){
       driveStatus('🗑️ Excluído — salvando histórico...','');
       renderExcluidosHist();
       await salvarExcluidosDrive();
-      driveStatus('🗑️ Excluído com sucesso','ok');
+      driveStatus('🗑️ Excluído com sucesso','ok');_homeInvalidarCacheBusca();
       driveListar();
     }catch(e){driveStatus('Erro: '+e.message,'err');}
   } else {
@@ -3368,22 +3387,25 @@ function _renderizarHome(){
   var hn=document.getElementById('home-user-nome');if(hn)hn.textContent=uNome;
   var hc=document.getElementById('home-user-cargo');if(hc)hc.textContent=uCargo;
 
-  // Orçamento em aberto
+    // Orçamento em aberto
   var wrap=document.getElementById('home-orc-atual-wrap');
   if(wrap){
     var numAtual=gv('f-num');var cliAtual=gv('f-cliente');
     if(numAtual||cliAtual){
       var dtAtual=gv('f-data')?fD(gv('f-data')):'';
       var consAtual=gv('f-cons')||'';
-      var naoSalvoTag=_naoSalvo?'<span style="color:#ff5555;font-size:10px;font-weight:700;margin-left:8px">● não salvo</span>':'';
+      var naoSalvoTag=_naoSalvo?'<span style="color:#ff5555;font-size:10px;font-weight:700;margin-left:6px">● não salvo</span>':'';
       wrap.innerHTML='<div class="home-section-title">📄 Orçamento em aberto</div>'
-        +'<div class="home-orc-atual" onclick="fecharHome()" title="Voltar ao orçamento">'
+        +'<div class="home-orc-atual" style="cursor:default;display:block">'
         +'<div class="home-orc-atual-info">'
         +'<div class="home-orc-atual-num">'+(numAtual||'Sem número')+naoSalvoTag+'</div>'
         +'<div class="home-orc-atual-cli">'+(cliAtual||'Cliente não preenchido')+'</div>'
-        +'<div class="home-orc-atual-det">'+(dtAtual?dtAtual+' · ':'')+(consAtual||'')+'</div>'
+        +'<div class="home-orc-atual-det">'+(dtAtual?dtAtual+' · ':'')+( consAtual||'')+'</div>'
+        +'<div style="display:flex;gap:8px;margin-top:12px">'
+        +'<button onclick="fecharHome()" style="flex:1;padding:10px;background:var(--R);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;letter-spacing:.3px">↩ Retornar ao Orçamento</button>'
+        +'<button onclick="homeExcluirOrcAtual()" style="padding:10px 16px;background:#1a0000;color:#ff5555;border:1px solid #c62828;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">🗑️ Excluir</button>'
         +'</div>'
-        +'<div class="home-orc-atual-seta">›</div>'
+        +'</div>'
         +'</div>';
     } else {
       wrap.innerHTML='';
@@ -3402,9 +3424,7 @@ function _renderizarHome(){
   _homeShow('home-btn-os', dashTemAcesso('mod-os'));
   _homeShow('home-btn-rel', true);
   _homeShow('home-btn-com', dashTemAcesso('dash-com')||tudo);
-  // Clonar só aparece se houver orçamento aberto
-  var temOrc=!!(gv('f-num')||gv('f-cliente')||driveIdAtual);
-  _homeShow('home-btn-clonar', temOrc);
+  // (home-btn-clonar removido — clonar está apenas na tela do orçamento)
 }
 
 function _homeShow(id, show){
@@ -3413,35 +3433,152 @@ function _homeShow(id, show){
 }
 
 function homeNovoOrcamento(){
+  homeFecharBusca();
   fecharHome();
   limpar();
 }
 
 function homeClonarOrcamento(){
+  homeFecharBusca();
   fecharHome();
   clonarOrcamento();
 }
 
-function homeBuscarOrcamento(){
-  fecharHome();
-  // Abrir painel Drive e acionar busca
-  var drivePanel=document.getElementById('drive-panel');
-  if(drivePanel) drivePanel.style.display='block';
-  driveListar();
-  // Scroll até o painel
+// ── Busca inline na home ─────────────────────────────────────────
+var _homeBuscaCache = [];
+var _homeBuscaCarregada = false;
+
+function homeAbrirBusca(){
+  var panel = document.getElementById('home-busca-panel');
+  if(!panel) return;
+  panel.style.display = 'block';
+  // Carregar lista do Drive se ainda não carregada
+  if(!_homeBuscaCarregada) homeCarregarBusca();
   setTimeout(function(){
-    if(drivePanel) drivePanel.scrollIntoView({behavior:'smooth',block:'center'});
-  },200);
+    var inp = document.getElementById('home-busca-input');
+    if(inp){ inp.focus(); inp.value=''; }
+    panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }, 100);
+}
+
+function homeFecharBusca(){
+  var panel = document.getElementById('home-busca-panel');
+  if(panel) panel.style.display = 'none';
+}
+
+async function homeCarregarBusca(){
+  var st = document.getElementById('home-busca-status');
+  var lista = document.getElementById('home-busca-lista');
+  if(st) st.textContent = '⏳ Carregando orçamentos do Drive...';
+  if(lista) lista.innerHTML = '';
+  try{
+    var r = await fetch(SCRIPT_URL+'?action=list&q=');
+    var d = await r.json();
+    if(!d.ok) throw new Error(d.erro||'Erro ao carregar');
+    var INTERNOS = ['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM'];
+    _homeBuscaCache = (d.lista||[]).filter(function(x){
+      return !INTERNOS.some(function(n){ return x.nome&&x.nome.indexOf(n)>=0; });
+    });
+    _homeBuscaCarregada = true;
+    if(st) st.textContent = _homeBuscaCache.length+' orçamentos encontrados. Digite para filtrar.';
+    homeRenderBusca(_homeBuscaCache);
+  }catch(e){
+    if(st) st.textContent = '⚠️ Erro: '+e.message;
+  }
+}
+
+function homeExecutarBusca(){
+  var inp = document.getElementById('home-busca-input');
+  var q = inp ? inp.value.trim() : '';
+  if(!_homeBuscaCarregada){ homeCarregarBusca(); return; }
+  homeFiltrarBusca(q);
+}
+
+function homeFiltrarBusca(q){
+  if(!_homeBuscaCarregada) return;
+  var st = document.getElementById('home-busca-status');
+  q = (q||'').toLowerCase().trim();
+  var filtrados = q ? _homeBuscaCache.filter(function(x){
+    var nome = (x.nome||'').toLowerCase();
+    return nome.indexOf(q) >= 0;
+  }) : _homeBuscaCache;
+  if(st) st.textContent = filtrados.length+' resultado(s)'+(q?' para "'+q+'"':'');
+  homeRenderBusca(filtrados);
+}
+
+function homeRenderBusca(lista){
+  var el = document.getElementById('home-busca-lista');
+  if(!el) return;
+  if(!lista||!lista.length){
+    el.innerHTML='<div style="padding:18px;text-align:center;color:#666;font-size:12px">Nenhum orçamento encontrado</div>';
+    return;
+  }
+  var exibir = lista.slice(0,80);
+  el.innerHTML = exibir.map(function(x){
+    var partes = (x.nome||'').split(' - ');
+    var num = partes[0]||'—';
+    var cli = partes.slice(1, partes.length-1).join(' - ')||partes[1]||'—';
+    var dt  = partes[partes.length-1]||'';
+    var driveId = (x.id||x.driveId||'').replace(/"/g,'');
+    var nomeEsc = (x.nome||'').replace(/"/g,'&quot;');
+    return '<div class="home-busca-item" data-id="'+driveId+'" data-nome="'+nomeEsc+'" style="'
+      +'display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #222;cursor:pointer">'
+      +'<div style="min-width:72px;font-size:13px;font-weight:800;color:var(--R)">'+eh(num)+'</div>'
+      +'<div style="flex:1">'
+      +'<div style="color:#fff;font-size:12px;font-weight:600">'+eh(cli)+'</div>'
+      +'<div style="color:#666;font-size:10px;margin-top:1px">'+eh(dt)+'</div>'
+      +'</div>'
+      +'<div style="color:#555;font-size:16px">›</div>'
+      +'</div>';
+  }).join('');
+  if(lista.length > 80){
+    el.innerHTML += '<div style="padding:10px 14px;color:#666;font-size:10px;text-align:center">Mostrando 80 de '+lista.length+'. Refine a busca.</div>';
+  }
+  // Adicionar listeners de clique usando data-attrs (evita conflito de aspas)
+  el.querySelectorAll('.home-busca-item').forEach(function(row){
+    row.addEventListener('mouseover',function(){this.style.background='#1a1a1a';});
+    row.addEventListener('mouseout',function(){this.style.background='';});
+    row.addEventListener('click',function(){
+      homeAbrirOrc(this.dataset.id, this.dataset.nome);
+    });
+  });
+}
+
+
+async function homeAbrirOrc(driveId, nome){
+  homeFecharBusca();
+  fecharHome();
+  await driveCarregar(driveId, nome);
 }
 
 function homeAbrirAprovacoes(){
+  homeFecharBusca();
   fecharHome();
   abrirAprovacoes();
 }
 
 function homeAbrirElab(){
+  homeFecharBusca();
   fecharHome();
   abrirDashElab();
+}
+
+// ── Excluir orçamento em aberto direto da home ───────────────────
+async function homeExcluirOrcAtual(){
+  var num=gv('f-num')||'sem número';
+  var cli=gv('f-cliente')||'este orçamento';
+  if(!confirm('⚠️ Excluir o orçamento "'+num+' - '+cli+'"?\n\nEsta ação não pode ser desfeita.'))return;
+  if(driveIdAtual){
+    // Já está salvo no Drive — usar driveDeletar
+    var id=driveIdAtual; var nome=num+' - '+cli;
+    fecharHome();
+    await driveDeletar(id, nome);
+    // Se excluiu com sucesso, limpar e voltar para home
+    if(!driveIdAtual) { await limpar(); abrirHome(); }
+  } else {
+    // Apenas local: limpar o form e voltar para home
+    await limpar();
+  }
 }
 
 // Liberar lock ao fechar a aba/janela
@@ -7928,7 +8065,7 @@ async function aprovarExclusaoModal(idx){
     renderAdmExclusoes();
     await driveListar();
     // Fechar modal de aprovações e retornar à lista
-    document.getElementById('aprov-ov').classList.remove('open');
+    document.getElementById('aprov-ov').classList.remove('open');abrirHome();
   }catch(e){driveStatus('Erro: '+e.message,'err');}
 }
 
@@ -8177,8 +8314,13 @@ async function gerarNumeroAuto(){
     }
 
     // Garantir que o próximo não seja menor que o mínimo do ano
-    if(anoAtual === 2026 && proximo <= BASE_ANO_CORRENTE){
-      proximo = BASE_ANO_CORRENTE + 1;
+    // Para 2026: mínimo absoluto é 20266001 (nunca abaixo de 20266000)
+    if(anoAtual === 2026){
+      if(proximo <= BASE_ANO_CORRENTE) proximo = BASE_ANO_CORRENTE + 1;
+    } else {
+      // Para demais anos: mínimo AAAA0001
+      var minAno = parseInt(prefixoAno + '0001');
+      if(proximo < minAno) proximo = minAno;
     }
 
     // Verificar se o número gerado já está em uso (loop de segurança)
