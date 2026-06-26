@@ -8317,108 +8317,81 @@ async function gerarNumeroAuto(){
   if(btn){ btn.textContent='⏳'; btn.disabled=true; }
 
   try{
-    // Buscar TODA a lista do Drive para encontrar o maior número do ano atual
     var anoAtual = new Date().getFullYear();
-    var prefixoAno = String(anoAtual); // ex: "2026"
-
-    // Número mínimo: ex: 20266000 para 2026 (sempre começa em AAAA6000)
-    // Formato: AAAA + 4 dígitos sequenciais a partir de 6001
-    // Ex: 2026 → 20266001, 20266002 ...
-    //     2027 → 20270001, 20270002 ...
-    var BASE_ANO_CORRENTE = parseInt(prefixoAno + '6000'); // 20266000 para 2026
-    var BASE_ANO_SEGUINTE = parseInt(String(anoAtual + 1) + '0001'); // 20270001 para virada de ano
+    var prefixoAno = String(anoAtual);           // ex: "2026"
+    var MINIMO_2026 = 20266001;                  // primeiro número válido de 2026
+    var minAbsoluto = anoAtual === 2026
+      ? MINIMO_2026
+      : parseInt(prefixoAno + '0001');           // ex: 20270001 para 2027
 
     driveStatus('🔢 Buscando próximo número...','');
 
-    // Buscar especificamente por orçamentos do ano atual para garantir lista completa
-    // (q='' pode retornar limitado; q=anoAtual filtra e traz todos do ano)
+    // Buscar todos os orçamentos do ano atual no Drive
     var r = await fetch(SCRIPT_URL+'?action=list&q='+encodeURIComponent(prefixoAno));
     var d = await r.json();
     if(!d.ok) throw new Error(d.erro||'Erro ao consultar Drive');
 
-    var NOMES_INTERNOS = ['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM'];
-    var lista = (d.lista||[]).filter(function(x){
-      return !NOMES_INTERNOS.some(function(n){ return x.nome&&x.nome.indexOf(n)>=0; });
-    });
+    var INTERNOS = ['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao',
+                    '_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM'];
 
-    // Extrair todos os números numéricos dos nomes de arquivo
-    var numeros = [];
-    lista.forEach(function(x){
+    // Extrair APENAS números com exatamente 8 dígitos que começam com o ano atual
+    // Isso evita que números corrompidos (9+ dígitos) contaminem o cálculo
+    var numerosValidos = [];
+    (d.lista||[]).forEach(function(x){
+      if(INTERNOS.some(function(n){ return x.nome&&x.nome.indexOf(n)>=0; })) return;
       var parte = (x.nome||'').split(' - ')[0].trim();
-      var n = parseInt(parte);
-      if(!isNaN(n) && n > 0) numeros.push(n);
+      // Validar: exatamente 8 dígitos E começa com o ano atual
+      if(/^\d{8}$/.test(parte) && parte.startsWith(prefixoAno)){
+        numerosValidos.push(parseInt(parte));
+      }
     });
 
-    // Também incluir o cache desta sessão para evitar duplicata
-    // se o usuário gerar vários sem salvar
-    if(_numAutoCache) numeros.push(_numAutoCache);
-
-    // Determinar o próximo número:
-    // 1. Filtrar apenas números do ano atual (começam com prefixoAno)
-    var numerosDoAno = numeros.filter(function(n){
-      return String(n).startsWith(prefixoAno);
-    });
+    // Incluir cache da sessão (também valida formato)
+    if(_numAutoCache && String(_numAutoCache).length === 8
+       && String(_numAutoCache).startsWith(prefixoAno)){
+      numerosValidos.push(_numAutoCache);
+    }
 
     var proximo;
-    if(numerosDoAno.length > 0){
-      // Maior número do ano + 1
-      var maior = Math.max.apply(null, numerosDoAno);
+    if(numerosValidos.length > 0){
+      var maior = Math.max.apply(null, numerosValidos);
       proximo = maior + 1;
     } else {
-      // Nenhum orçamento do ano ainda
-      // Se for o ano da base (2026): começa em 20266001
-      // Se for outro ano futuro: começa em AAAA0001
-      if(anoAtual === 2026){
-        proximo = BASE_ANO_CORRENTE + 1; // 20266001
-      } else {
-        proximo = parseInt(prefixoAno + '0001');
-      }
+      proximo = minAbsoluto;
     }
 
-    // Garantia ABSOLUTA do mínimo — executada SEMPRE independente do que vier do Drive
-    if(anoAtual === 2026){
-      // 2026: nunca gerar número menor ou igual a 20266000
-      if(proximo <= BASE_ANO_CORRENTE) proximo = BASE_ANO_CORRENTE + 1;
-    } else {
-      // Outros anos: mínimo AAAA0001
-      var minAno = parseInt(prefixoAno + '0001');
-      if(proximo < minAno) proximo = minAno;
-    }
-    // Segurança extra: se ainda estiver errado, forçar mínimo do ano
-    var minAbsoluto = anoAtual === 2026 ? BASE_ANO_CORRENTE + 1 : parseInt(prefixoAno + '0001');
+    // GARANTIA ABSOLUTA: nunca gerar abaixo do mínimo
     if(proximo < minAbsoluto) proximo = minAbsoluto;
 
-    // Verificar se o número gerado já está em uso (loop de segurança)
+    // GARANTIA DE FORMATO: deve ter exatamente 8 dígitos
+    // Se por algum motivo ficou com 9+, resetar para o mínimo
+    if(String(proximo).length !== 8) proximo = minAbsoluto;
+
+    // Verificar colisão (loop de segurança)
     var tentativas = 0;
-    while(tentativas < 50){
-      var proxStr = String(proximo);
-      var jaExiste = numeros.some(function(n){ return n === proximo; });
-      if(!jaExiste) break;
+    while(tentativas < 100){
+      if(!numerosValidos.some(function(n){ return n === proximo; })) break;
       proximo++;
       tentativas++;
     }
 
-    // Aplicar o número no campo
+    // Última verificação de formato
+    if(String(proximo).length !== 8) proximo = minAbsoluto;
+
+    // Aplicar no campo
     var elNum = document.getElementById('f-num');
     if(elNum){
       elNum.value = String(proximo);
       elNum.dispatchEvent(new Event('input'));
-      // Feedback visual
       elNum.style.borderColor = '#2e7d32';
       elNum.style.boxShadow = '0 0 0 3px rgba(46,125,50,.3)';
       setTimeout(function(){ elNum.style.borderColor=''; elNum.style.boxShadow=''; }, 2500);
     }
 
-    // Atualizar display e marcar alterado
     sv('orc-disp', String(proximo));
     marcarAlterado();
-
-    // Guardar no cache da sessão
     _numAutoCache = proximo;
-
     driveStatus('✅ Número gerado: '+proximo,'ok');
-
-    // Verificar duplicata em segundo plano
     setTimeout(function(){ verificarNumDuplicado(String(proximo)); }, 500);
 
   }catch(e){
