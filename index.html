@@ -50,6 +50,8 @@ table.it input,table.it select{padding:2px 5px;font-size:11px}
 .btn-g{background:#2e7d32;color:#fff}
 .btn-b{background:#1565c0;color:#fff}
 .btn-o{background:#fff;color:var(--R);border:1px solid var(--R)}
+.btn-clone{background:#00695c;color:#fff;border:2px solid #004d40;font-weight:700;letter-spacing:.3px}
+.btn-clone:hover{background:#00796b}
 .btn-sm{padding:3px 8px;font-size:10px}
 .bdel{background:#e53935;color:#fff;padding:2px 7px;font-size:10px;border:none;border-radius:3px;cursor:pointer}
 .add-bar{display:flex;gap:6px;margin-top:7px;align-items:flex-end;flex-wrap:wrap}
@@ -1336,6 +1338,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   </div>
   <div style="display:flex;gap:8px;margin-top:9px;justify-content:flex-end;flex-wrap:wrap">
     <button class="btn btn-o" onclick="limpar()">📄 Novo Orçamento</button>
+    <button class="btn btn-clone" id="btn-clonar" onclick="clonarOrcamento()" title="Copia todos os itens e dados do cliente para um novo orçamento, zerando aprovações e histórico comercial" style="display:none">📋 Clonar Orçamento</button>
     <button class="btn btn-r" onclick="abrirTipo()">📄 Visualizar PDF</button>
     <button class="btn btn-d" onclick="downloadPDF()">⬇️ Download PDF</button>
   </div>
@@ -1630,6 +1633,7 @@ async function doLogin(){
     await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'lock',lockAction:'session-start',usuarioId:u.id,usuarioNome:u.nome,ttl:35*60*1000})});
   }catch(e6){}
   sessionIniciarHeartbeat(); // Manter sessão ativa enquanto logado
+  setTimeout(_atualizarBtnClonar, 200);
   usuarioAtual=u;aprovStatus='rascunho';aprovHist=[];
   permCarregar();
   carregarExcluidosDrive();
@@ -1676,6 +1680,7 @@ async function logout(){
     }catch(e4){}
   }
   usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];snapshotAnterior=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';driveIdAtual=null;driveNumAtual=null;
+  _atualizarBtnClonar();
   // Resetar funil
   _funilCache=[];_funilCarregado=false;_funilCarregando=false;
   funilEsconderCard();
@@ -2914,6 +2919,7 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     setTimeout(function(){selImpVenda(finImposto||'cimp');_preencherValLiqCalculado();},50);
     setTimeout(aplicarPermissoes, 150);
     driveStatus('✅ Carregado: '+nome,'ok');
+    _atualizarBtnClonar();
     // ativarModoLeitura chamado pelo caller com o lock correto
   }catch(e){driveStatus('Erro: '+e.message,'err');}
   finally{setTimeout(function(){_carregandoOrc=false;},400);}
@@ -3043,6 +3049,121 @@ async function limpar(){
   snapshotAnterior=null;
   finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';
   buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+  _atualizarBtnClonar();
+}
+
+// ════════════════════════════════════════════════════════
+//  CLONAR ORÇAMENTO
+// ════════════════════════════════════════════════════════
+async function clonarOrcamento(){
+  if(!gv('f-cliente')&&!driveIdAtual){
+    alert('Não há orçamento aberto para clonar.');
+    return;
+  }
+  var cli=gv('f-cliente')||'este orçamento';
+  var numAtual=gv('f-num')||'SN';
+  if(!confirm('📋 Clonar orçamento de "'+cli+'"?\n\nSerá criado um orçamento novo com:\n✅ Todos os itens e quantidades\n✅ Dados do cliente e do evento\n✅ Forma de pagamento e observações\n\n🚫 Serão zerados:\n• Número do orçamento\n• Data (hoje)\n• Aprovações e histórico\n• Funil de vendas / status comercial\n• Desconto e parcelas financeiras'))return;
+
+  // ── Capturar state atual (deep copy para não contaminar o original)
+  var stateClone={};
+  SECS.forEach(function(s){
+    stateClone[s]={
+      ambientes:(state[s].ambientes||[{id:'default',nome:'Geral'}]).map(function(a){return Object.assign({},a);}),
+      ambAtiva:state[s].ambAtiva||'default',
+      rows:{}
+    };
+    Object.keys(state[s].rows||{}).forEach(function(aid){
+      stateClone[s].rows[aid]=(state[s].rows[aid]||[]).map(function(r){return Object.assign({},r);});
+    });
+  });
+
+  // ── Capturar form atual (campos a manter)
+  var formAtual=getForm();
+
+  // ── Campos que serão ZERADOS no clone (não copiados)
+  var CAMPOS_ZERAR=['f-num','f-data','f-val',
+    'desc-pct','desc-rs','val-liq','val-liq-si','f-bv'];
+
+  // ── Liberar lock do orçamento atual se houver
+  var _idAnterior=driveIdAtual;
+  if(_idAnterior&&!_modoLeitura){
+    lockPararHeartbeat();
+    desativarModoLeitura();
+    await lockLiberar(_idAnterior);
+  }
+
+  // ── Resetar identificadores e status do orçamento
+  driveIdAtual=null;
+  driveNumAtual=null;
+  _naoSalvo=true; // clone ainda não foi salvo
+  _versaoAtual=null;
+
+  // ── Restaurar state clonado
+  SECS.forEach(function(s){
+    state[s].ambientes=stateClone[s].ambientes;
+    state[s].ambAtiva=stateClone[s].ambAtiva;
+    state[s].rows=stateClone[s].rows;
+  });
+
+  // ── Restaurar form, zerando os campos que não devem ser copiados
+  CAMPOS_ZERAR.forEach(function(id){formAtual[id]='';});
+  // Data: hoje
+  formAtual['f-data']=new Date().toISOString().split('T')[0];
+  // Validade: 7 dias a partir de hoje
+  var valDate=new Date();valDate.setDate(valDate.getDate()+7);
+  formAtual['f-val']=valDate.toISOString().split('T')[0];
+  setForm(formAtual);
+  sv('orc-disp','—');
+
+  // ── Desconto: zerar
+  var dpct=document.getElementById('desc-pct');if(dpct)dpct.value=0;
+  var drs=document.getElementById('desc-rs');if(drs)drs.value=0;
+  var vl=document.getElementById('val-liq');if(vl)vl.value='';
+  var vlsi=document.getElementById('val-liq-si');if(vlsi)vlsi.value='';
+  _bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value='';
+
+  // ── Zerar aprovações, funil e financeiro
+  aprovStatus='rascunho';aprovHist=[];
+  comercialStatus='';comercialHist=[];
+  _limparCamposComercialDOM();
+  snapshotAnterior=null;
+  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';
+  _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
+
+  // ── Manter forma de pagamento padrão se não havia (campo f-pgto já copiado do form original)
+  // ── Renderizar tudo
+  buildTabs();setDS();setDSFim();calcDiariasAuto();calc();
+  renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+  setTimeout(function(){selImpVenda('cimp');_preencherValLiqCalculado();},50);
+  setTimeout(aplicarPermissoes,150);
+
+  // Focar campo de número para o usuário digitar o novo número
+  setTimeout(function(){
+    var elNum=document.getElementById('f-num');
+    if(elNum){
+      elNum.focus();
+      elNum.select();
+      elNum.style.borderColor='#00695c';
+      elNum.style.boxShadow='0 0 0 3px rgba(0,105,92,.4)';
+      setTimeout(function(){elNum.style.borderColor='';elNum.style.boxShadow='';},4000);
+    }
+    // Mostrar toast informativo
+    driveStatus('📋 Clonado de "'+numAtual+'" — preencha o Nº do Orçamento antes de salvar','ok');
+    // Scroll para o topo
+    var card=document.getElementById('f-num');
+    if(card){var c=card.closest('.card');if(c)c.scrollIntoView({behavior:'smooth',block:'center'});}
+  },200);
+
+  // Atualizar visibilidade do botão clonar
+  _atualizarBtnClonar();
+}
+
+// Controla visibilidade do botão Clonar (só aparece quando há orçamento carregado)
+function _atualizarBtnClonar(){
+  var btn=document.getElementById('btn-clonar');
+  if(!btn)return;
+  var temOrc=!!(driveIdAtual||gv('f-cliente')||gv('f-num'));
+  btn.style.display=temOrc&&usuarioAtual?'inline-block':'none';
 }
 
 // Liberar lock ao fechar a aba/janela
