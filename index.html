@@ -2413,10 +2413,10 @@ function updRow(s,aid,id,field,val){
 function delRow(s,aid,id){state[s].rows[aid]=state[s].rows[aid].filter(function(x){return x.id!==id;});renderRows(s);calc();marcarAlterado();}
 
 function syncDesc(from){
+  // Desconto calculado sobre BRUTO (sem imposto) — consistente com calc()
   var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
-  var cImp=bruto*(1+IMP);
-  if(from==='pct')document.getElementById('desc-rs').value=(cImp*(parseFloat(gv('desc-pct'))||0)/100).toFixed(2);
-  else document.getElementById('desc-pct').value=(cImp>0?((parseFloat(gv('desc-rs'))||0)/cImp*100):0).toFixed(2);
+  if(from==='pct') document.getElementById('desc-rs').value=(bruto*(parseFloat(gv('desc-pct'))||0)/100).toFixed(2);
+  else document.getElementById('desc-pct').value=(bruto>0?((parseFloat(gv('desc-rs'))||0)/bruto*100):0).toFixed(2);
   calc();
 }
 function calc(){
@@ -2429,20 +2429,36 @@ function calc(){
   var bruto=MAIN.reduce(function(t,s){return t+secTotAll(s);},0)+_bvVal;
   var imp=bruto*IMP,cImp=bruto+imp;
   var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
-  var dv=safe(drs>0?drs:cImp*(dpct/100));
-  var vdsi=safe(cImp>0?bruto-bruto*(dv/cImp):bruto),vdci=safe(cImp-dv);
+  // Desconto calculado SOBRE O BRUTO (sem imposto) — mais intuitivo para o consultor
+  var dv=safe(drs>0?drs:bruto*(dpct/100));
+  // Valor sem imposto com desconto: bruto - desconto
+  var vdsi=safe(bruto-dv);
+  // Valor com imposto com desconto: aplica imposto sobre (bruto - desconto)
+  var vdci=safe(vdsi*(1+IMP));
   var xc=safe(Object.values(state.extra.rows).reduce(function(t,arr){return t+arr.reduce(function(a,r){return a+r.qty*r.val*r.diaria;},0);},0));
   var bvVal=_bvVal;
   var srv=secTotAll('servico')+bvVal,log=secTotAll('logistica');
-  var dsi=safe(cImp>0?bruto*(dv/cImp):0);
+  // Margem: calculada sobre bruto sem desconto proporcional
+  var dsi=dv; // desconto é direto sobre bruto
   var msd=safe(bruto-dsi-srv-log-xc),msdP=safe(bruto>0?msd/bruto*100:0);
-  var mcd=safe(cImp-imp-dsi-srv-log-xc),mcdP=safe(cImp>0?mcd/cImp*100:0);
-  var vl=parseFloat(gv('val-liq'))||0,total=safe(vl>0?vl:vdci);
+  var mcd=safe(vdci-srv*( 1+IMP)-log*(1+IMP)-xc*(1+IMP)),mcdP=safe(vdci>0?mcd/vdci*100:0);
+  // Total final: respeita o modo de imposto selecionado (simp = sem imposto, cimp = com imposto)
+  var vlSimp=parseFloat(gv('val-liq-si'))||0; // campo "Sem Imposto"
+  var vlCimp=parseFloat(gv('val-liq'))||0;    // campo "Com Imposto"
+  var modoSimp=(impAtual==='simp'||finImposto==='simp');
+  var total;
+  if(modoSimp){
+    // Modo sem imposto: usa val-liq-si se preenchido, senão vdsi calculado
+    total=safe(vlSimp>0?vlSimp:vdsi);
+  } else {
+    // Modo com imposto: usa val-liq se preenchido, senão vdci calculado
+    total=safe(vlCimp>0?vlCimp:vdci);
+  }
   sv('r-bruto',fmt(bruto));sv('r-imp',fmt(imp));sv('r-cimp',fmt(cImp));
   sv('r-dv','-'+fmt(dv));sv('r-vdsi',fmt(vdsi));sv('r-vdci',fmt(vdci));sv('r-total',fmt(total));
   sv('m-sd',fmt(msd));sv('m-cd',fmt(mcd));sv('m-sd-pct',fmtN(msdP)+'%');sv('m-cd-pct',fmtN(mcdP)+'%');
   (function(){var elci=document.getElementById('val-liq');if(elci)elci.placeholder=vdci>0?Math.round(vdci).toString():'0';var elsi=document.getElementById('val-liq-si');if(elsi)elsi.placeholder=vdsi>0?Math.round(vdsi).toString():'0';})();
-  var dl=document.getElementById('desc-label');if(dl)dl.textContent=dv>0?'Desconto: -'+fmt(dv):(vl>0?'Valor ajustado manualmente':'');
+  var dl=document.getElementById('desc-label');if(dl){var modoLabel=modoSimp?'s/ imposto':'c/ imposto';dl.textContent=dv>0?'Desconto: -'+fmt(dv)+' ('+modoLabel+')':(total>0&&(vlSimp>0||vlCimp>0)?'Valor ajustado — '+modoLabel:'');}
   var todosAmbs=[],ambIdsC={};
   ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){state[s].ambientes.forEach(function(a){if(!ambIdsC[a.id]){ambIdsC[a.id]=true;todosAmbs.push({id:a.id,nome:a.nome});}});});
   var subGeral=document.getElementById('subtot-geral-ambientes');
@@ -3403,7 +3419,7 @@ function _renderizarHome(){
         +'<div class="home-orc-atual-det">'+(dtAtual?dtAtual+' · ':'')+( consAtual||'')+'</div>'
         +'<div style="display:flex;gap:8px;margin-top:12px">'
         +'<button onclick="fecharHome()" style="flex:1;padding:10px;background:var(--R);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;letter-spacing:.3px">↩ Retornar ao Orçamento</button>'
-        +'<button onclick="homeExcluirOrcAtual()" style="padding:10px 16px;background:#1a0000;color:#ff5555;border:1px solid #c62828;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">🗑️ Excluir</button>'
+        +'<button onclick="homeSairSemSalvar()" style="padding:10px 16px;background:#1a1a00;color:#ffcc00;border:1px solid #aa8800;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">⚠️ Sair sem salvar</button>'
         +'</div>'
         +'</div>'
         +'</div>';
@@ -3563,6 +3579,40 @@ function homeAbrirElab(){
   abrirDashElab();
 }
 
+// ── Sair sem salvar — descarta orçamento local e volta para home ──
+async function homeSairSemSalvar(){
+  var num=gv('f-num')||'sem número';
+  var cli=gv('f-cliente')||'este orçamento';
+  var msg='⚠️ Sair sem salvar "'+num+(cli&&cli!=='sem número'?' - '+cli:'')+'"?\n\nTodas as alterações não salvas serão perdidas.';
+  if(!confirm(msg))return;
+  // Liberar lock se houver
+  if(driveIdAtual&&!_modoLeitura){
+    try{await lockLiberar(driveIdAtual);}catch(e){}
+  }
+  lockPararHeartbeat();
+  desativarModoLeitura();
+  // Limpar estado sem confirmação adicional
+  SECS.forEach(function(s){state[s]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{default:[]}};});
+  FORM_IDS.filter(function(id){return ['desc-pct','desc-rs','val-liq','f-pgto','f-svinc'].indexOf(id)<0;}).forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+  document.getElementById('f-cons').value='';
+  document.getElementById('desc-pct').value=0;document.getElementById('desc-rs').value=0;
+  document.getElementById('val-liq').value='';
+  var vlsi=document.getElementById('val-liq-si');if(vlsi)vlsi.value='';
+  _bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value='';
+  document.getElementById('f-pgto').value='50% na contratação;\n50% até 03 dias antes da montagem.';
+  sv('orc-disp','—');
+  driveIdAtual=null;driveNumAtual=null;_naoSalvo=false;_versaoAtual=null;
+  aprovStatus='rascunho';aprovHist=[];
+  comercialStatus='';comercialHist=[];
+  _limparCamposComercialDOM();
+  _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
+  snapshotAnterior=null;
+  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';
+  buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+  _atualizarBtnClonar();
+  _renderizarHome(); // Atualiza home (remove card de orçamento em aberto)
+}
+
 // ── Excluir orçamento em aberto direto da home ───────────────────
 async function homeExcluirOrcAtual(){
   var num=gv('f-num')||'sem número';
@@ -3626,10 +3676,11 @@ function selImpVenda(t){
 function _preencherValLiqCalculado(){
   try{
     var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+(_bvStorage||parseFloat(gv('f-bv'))||0);
-    var cImp=bruto*(1+IMP);
     var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
-    var dv=drs>0?drs:cImp*(dpct/100);
-    var vdci=cImp-dv,vdsi=bruto-bruto*(cImp>0?dv/cImp:0);
+    // Desconto sobre bruto (mesma lógica do calc())
+    var dv=drs>0?drs:bruto*(dpct/100);
+    var vdsi=bruto-dv;
+    var vdci=vdsi*(1+IMP);
     var elci=document.getElementById('val-liq'),elsi=document.getElementById('val-liq-si');
     if(elci) elci.placeholder=vdci>0?Math.round(vdci).toString():'0';
     if(elsi) elsi.placeholder=vdsi>0?Math.round(vdsi).toString():'0';
@@ -8269,8 +8320,9 @@ async function gerarNumeroAuto(){
 
     driveStatus('🔢 Buscando próximo número...','');
 
-    // Buscar lista completa do Drive
-    var r = await fetch(SCRIPT_URL+'?action=list&q=');
+    // Buscar especificamente por orçamentos do ano atual para garantir lista completa
+    // (q='' pode retornar limitado; q=anoAtual filtra e traz todos do ano)
+    var r = await fetch(SCRIPT_URL+'?action=list&q='+encodeURIComponent(prefixoAno));
     var d = await r.json();
     if(!d.ok) throw new Error(d.erro||'Erro ao consultar Drive');
 
@@ -8313,15 +8365,18 @@ async function gerarNumeroAuto(){
       }
     }
 
-    // Garantir que o próximo não seja menor que o mínimo do ano
-    // Para 2026: mínimo absoluto é 20266001 (nunca abaixo de 20266000)
+    // Garantia ABSOLUTA do mínimo — executada SEMPRE independente do que vier do Drive
     if(anoAtual === 2026){
+      // 2026: nunca gerar número menor ou igual a 20266000
       if(proximo <= BASE_ANO_CORRENTE) proximo = BASE_ANO_CORRENTE + 1;
     } else {
-      // Para demais anos: mínimo AAAA0001
+      // Outros anos: mínimo AAAA0001
       var minAno = parseInt(prefixoAno + '0001');
       if(proximo < minAno) proximo = minAno;
     }
+    // Segurança extra: se ainda estiver errado, forçar mínimo do ano
+    var minAbsoluto = anoAtual === 2026 ? BASE_ANO_CORRENTE + 1 : parseInt(prefixoAno + '0001');
+    if(proximo < minAbsoluto) proximo = minAbsoluto;
 
     // Verificar se o número gerado já está em uso (loop de segurança)
     var tentativas = 0;
