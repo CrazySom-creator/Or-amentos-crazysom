@@ -2214,8 +2214,8 @@ async function aprovAcaoLista(idx,novo,ev){
 
 async function abrirOrcDrive(idx,ev){
   ev.stopPropagation();var orc=_listaAprov[idx];if(!orc)return;
-  document.getElementById('aprov-ov').classList.remove('open');abrirHome();
-  // CORRIGIDO: usar driveCarregar() para ter lock correto e dados completos do Drive
+  document.getElementById('aprov-ov').classList.remove('open');
+  // Apenas fecha o painel de aprovações e abre o orçamento (sem ir para home)
   await driveCarregar(orc.driveId, orc.nome);
   setTimeout(function(){document.getElementById('status-orc-card').scrollIntoView({behavior:'smooth',block:'start'});},400);
 }
@@ -3416,7 +3416,12 @@ function _renderizarHome(){
     if(numAtual||cliAtual){
       var dtAtual=gv('f-data')?fD(gv('f-data')):'';
       var consAtual=gv('f-cons')||'';
-      var naoSalvoTag=_naoSalvo?'<span style="color:#ff5555;font-size:10px;font-weight:700;margin-left:6px">● não salvo</span>':'';
+      // Mostrar tag "não salvo" apenas se realmente há alterações pendentes
+      var naoSalvoTag=_naoSalvo?'<span style="color:#ff5555;font-size:10px;font-weight:700;margin-left:6px">● não salvo</span>':'<span style="color:#4caf50;font-size:10px;font-weight:700;margin-left:6px">● salvo</span>';
+      // Botão de ação secundária: só mostra "Sair sem salvar" se há alterações não salvas
+      var btnSecundario = _naoSalvo
+        ? '<button onclick="homeSairSemSalvar()" style="padding:10px 16px;background:#1a1a00;color:#ffcc00;border:1px solid #aa8800;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">⚠️ Sair sem salvar</button>'
+        : '<button onclick="homeSairSemSalvar()" style="padding:10px 16px;background:#1a1a1a;color:#888;border:1px solid #333;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer">✕ Fechar</button>';
       wrap.innerHTML='<div class="home-section-title">📄 Orçamento em aberto</div>'
         +'<div class="home-orc-atual" style="cursor:default;display:block">'
         +'<div class="home-orc-atual-info">'
@@ -3425,7 +3430,7 @@ function _renderizarHome(){
         +'<div class="home-orc-atual-det">'+(dtAtual?dtAtual+' · ':'')+( consAtual||'')+'</div>'
         +'<div style="display:flex;gap:8px;margin-top:12px">'
         +'<button onclick="fecharHome()" style="flex:1;padding:10px;background:var(--R);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;letter-spacing:.3px">↩ Retornar ao Orçamento</button>'
-        +'<button onclick="homeSairSemSalvar()" style="padding:10px 16px;background:#1a1a00;color:#ffcc00;border:1px solid #aa8800;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">⚠️ Sair sem salvar</button>'
+        +btnSecundario
         +'</div>'
         +'</div>'
         +'</div>';
@@ -3611,8 +3616,11 @@ async function salvarESair(){
 async function homeSairSemSalvar(){
   var num=gv('f-num')||'sem número';
   var cli=gv('f-cliente')||'este orçamento';
-  var msg='⚠️ Sair sem salvar "'+num+(cli&&cli!=='sem número'?' - '+cli:'')+'"?\n\nTodas as alterações não salvas serão perdidas.';
-  if(!confirm(msg))return;
+  // Só pede confirmação se há alterações não salvas
+  if(_naoSalvo){
+    var label=num+(cli&&cli!=='este orçamento'?' - '+cli:'');
+    if(!confirm('⚠️ Sair sem salvar "'+label+'"?\n\nTodas as alterações não salvas serão perdidas.'))return;
+  }
   // Liberar lock se houver
   if(driveIdAtual&&!_modoLeitura){
     try{await lockLiberar(driveIdAtual);}catch(e){}
@@ -3638,8 +3646,9 @@ async function homeSairSemSalvar(){
   finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';
   buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
   _atualizarBtnClonar();
-  _renderizarHome(); // Atualiza home (remove card de orçamento em aberto)
+  _renderizarHome();
 }
+
 
 // ── Excluir orçamento em aberto direto da home ───────────────────
 async function homeExcluirOrcAtual(){
@@ -8148,8 +8157,8 @@ async function aprovarExclusaoModal(idx){
     renderExclusivoModal();
     renderAdmExclusoes();
     await driveListar();
-    // Fechar modal de aprovações e retornar à lista
-    document.getElementById('aprov-ov').classList.remove('open');abrirHome();
+    // Recarregar lista de aprovações para refletir a exclusão aprovada
+    carregarListaAprov(abaAprovAtual);
   }catch(e){driveStatus('Erro: '+e.message,'err');}
 }
 
