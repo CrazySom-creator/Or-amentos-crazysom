@@ -183,6 +183,62 @@ table.it input,table.it select{padding:2px 5px;font-size:11px}
 .drive-status{font-size:10px;margin-top:5px;min-height:14px}
 .drive-status.ok{color:#2e7d32}
 .drive-status.err{color:#c0001a}
+/* ══ HOME SCREEN ══ */
+.home-ov{position:fixed;inset:0;background:#111;z-index:88000;display:flex;flex-direction:column;overflow-y:auto}
+.home-ov.hidden{display:none}
+.home-top{background:var(--R);padding:22px 32px 18px;display:flex;align-items:center;gap:18px;flex-shrink:0}
+.home-top-logo{display:flex;flex-direction:column}
+.home-top-logo h1{color:#fff;font-size:22px;font-weight:900;letter-spacing:2px;line-height:1}
+.home-top-logo p{color:rgba(255,255,255,.65);font-size:11px;margin-top:3px;letter-spacing:.5px}
+.home-top-user{margin-left:auto;text-align:right}
+.home-top-user span{color:#fff;font-size:13px;font-weight:700;display:block}
+.home-top-user small{color:rgba(255,255,255,.6);font-size:10px}
+.home-top-user .ubtn{margin-top:6px}
+.home-body{flex:1;padding:28px 32px;max-width:1000px;width:100%;margin:0 auto}
+.home-section-title{color:#aaa;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;margin-top:24px;padding-bottom:6px;border-bottom:1px solid #222}
+.home-section-title:first-child{margin-top:0}
+.home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:8px}
+.home-card{background:#1c1c1c;border:1px solid #2a2a2a;border-radius:10px;padding:20px 18px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;gap:6px;position:relative;overflow:hidden}
+.home-card:hover{background:#222;border-color:#444;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.home-card:active{transform:translateY(0)}
+.home-card.primary{border-color:var(--R);background:#1a0005}
+.home-card.primary:hover{background:#200008;border-color:#ff3352}
+.home-card.primary::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--R)}
+.home-card.green{border-color:#2e7d32;background:#0a1f0a}
+.home-card.green:hover{background:#0d260d;border-color:#43a047}
+.home-card.green::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:#2e7d32}
+.home-card.blue{border-color:#1565c0;background:#050d1f}
+.home-card.blue:hover{background:#071228;border-color:#1976d2}
+.home-card.blue::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:#1565c0}
+.home-card.orange{border-color:#e65100;background:#1a0d00}
+.home-card.orange:hover{background:#201000;border-color:#f57c00}
+.home-card.orange::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:#e65100}
+.home-card.purple{border-color:#6a1b9a;background:#100918}
+.home-card.purple:hover{background:#150c20;border-color:#8e24aa}
+.home-card.purple::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:#6a1b9a}
+.home-card.teal{border-color:#00695c;background:#00100d}
+.home-card.teal:hover{background:#00150f;border-color:#00897b}
+.home-card.teal::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:#00695c}
+.home-card-ico{font-size:28px;line-height:1;margin-bottom:4px}
+.home-card-title{color:#fff;font-size:13px;font-weight:800;letter-spacing:.3px}
+.home-card-desc{color:#888;font-size:10px;line-height:1.5}
+.home-card-badge{position:absolute;top:12px;right:12px;background:var(--R);color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;display:none}
+.home-card-badge.show{display:block}
+.home-orc-atual{background:#1c1c1c;border:1px solid #333;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:16px;cursor:pointer;transition:all .18s;margin-bottom:16px}
+.home-orc-atual:hover{background:#222;border-color:#555}
+.home-orc-atual-info{flex:1}
+.home-orc-atual-num{color:var(--R);font-size:18px;font-weight:900}
+.home-orc-atual-cli{color:#fff;font-size:13px;font-weight:700;margin-top:2px}
+.home-orc-atual-det{color:#888;font-size:10px;margin-top:2px}
+.home-orc-atual-seta{color:#555;font-size:22px}
+.home-no-orc{color:#555;font-size:12px;font-style:italic;padding:4px 0}
+@media(max-width:600px){
+  .home-top{padding:16px 18px}
+  .home-body{padding:16px 18px}
+  .home-grid{grid-template-columns:1fr 1fr}
+  .home-top-logo h1{font-size:17px}
+}
+
 .pov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;overflow-y:auto;padding:18px;flex-direction:column;align-items:center;gap:11px}
 .pov.open{display:flex}
 .pbar{background:#1e1e1e;border-radius:7px;padding:9px 14px;width:100%;max-width:210mm;display:flex;gap:9px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:10}
@@ -504,6 +560,125 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 </head>
 <body>
 <div class="wrap">
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  HOME SCREEN                                           -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="home-ov hidden" id="home-ov">
+
+  <!-- Topo da home -->
+  <div class="home-top">
+    <div class="home-top-logo">
+      <h1>CRAZY SOM</h1>
+      <p>Audiovisual e Estrutura — Sistema Comercial</p>
+    </div>
+    <div class="home-top-user">
+      <span id="home-user-nome">—</span>
+      <small id="home-user-cargo">—</small>
+      <br>
+      <button class="ubtn" onclick="logout()" style="margin-top:6px">Sair</button>
+    </div>
+  </div>
+
+  <div class="home-body">
+
+    <!-- Orçamento em aberto -->
+    <div id="home-orc-atual-wrap"></div>
+
+    <!-- ORÇAMENTOS -->
+    <div class="home-section-title">📄 Orçamentos</div>
+    <div class="home-grid">
+
+      <div class="home-card primary" onclick="homeNovoOrcamento()">
+        <div class="home-card-ico">➕</div>
+        <div class="home-card-title">Novo Orçamento</div>
+        <div class="home-card-desc">Criar orçamento em branco com número automático</div>
+      </div>
+
+      <div class="home-card teal" id="home-btn-clonar" style="display:none" onclick="homeClonarOrcamento()">
+        <div class="home-card-ico">📋</div>
+        <div class="home-card-title">Clonar Orçamento</div>
+        <div class="home-card-desc">Copiar itens do orçamento atual para um novo</div>
+      </div>
+
+      <div class="home-card green" onclick="homeBuscarOrcamento()">
+        <div class="home-card-ico">🔍</div>
+        <div class="home-card-title">Abrir / Buscar</div>
+        <div class="home-card-desc">Localizar orçamento salvo no Drive pelo nome ou número</div>
+      </div>
+
+      <div class="home-card blue" id="home-btn-aprov" onclick="homeAbrirAprovacoes()">
+        <div class="home-card-ico">📋</div>
+        <div class="home-card-title">Aprovações</div>
+        <div class="home-card-desc">Painel de aprovação de orçamentos por etapa</div>
+        <div class="home-card-badge" id="home-badge-aprov">!</div>
+      </div>
+
+      <div class="home-card" style="border-color:#37474f;background:#0d1214" id="home-btn-elab" onclick="homeAbrirElab()">
+        <div class="home-card-ico">📐</div>
+        <div class="home-card-title">Elaboração</div>
+        <div class="home-card-desc">Orçamentos em elaboração técnica</div>
+      </div>
+
+    </div>
+
+    <!-- GESTÃO COMERCIAL -->
+    <div class="home-section-title">📈 Gestão Comercial</div>
+    <div class="home-grid">
+
+      <div class="home-card orange" id="home-btn-com" onclick="abrirDashboard();fecharHome()">
+        <div class="home-card-ico">📈</div>
+        <div class="home-card-title">Dashboard Comercial</div>
+        <div class="home-card-desc">Pipeline, conversão e resultados de vendas</div>
+      </div>
+
+      <div class="home-card green" id="home-btn-metas" onclick="abrirMetas();fecharHome()">
+        <div class="home-card-ico">🎯</div>
+        <div class="home-card-title">Metas</div>
+        <div class="home-card-desc">Acompanhamento de metas por consultor</div>
+      </div>
+
+      <div class="home-card blue" id="home-btn-fin" onclick="abrirDashFin();fecharHome()">
+        <div class="home-card-ico">💰</div>
+        <div class="home-card-title">Financeiro</div>
+        <div class="home-card-desc">Parcelas, recebimentos e controle financeiro</div>
+      </div>
+
+      <div class="home-card purple" id="home-btn-ger" style="display:none" onclick="abrirDashGerencial();fecharHome()">
+        <div class="home-card-ico">📊</div>
+        <div class="home-card-title">Gerencial</div>
+        <div class="home-card-desc">Visão gerencial e análise de performance</div>
+      </div>
+
+    </div>
+
+    <!-- OPERACIONAL -->
+    <div class="home-section-title">⚙️ Operacional</div>
+    <div class="home-grid">
+
+      <div class="home-card" style="border-color:#37474f;background:#0d1214" id="home-btn-rel" onclick="abrirRelatorios();fecharHome()">
+        <div class="home-card-ico">📊</div>
+        <div class="home-card-title">Relatórios</div>
+        <div class="home-card-desc">Relatórios de vendas, perdas, OS e comissões</div>
+      </div>
+
+      <div class="home-card" style="border-color:#37474f;background:#0d1214" id="home-btn-os" onclick="abrirModuloOS();fecharHome()">
+        <div class="home-card-ico">🗂️</div>
+        <div class="home-card-title">Ordens de Serviço</div>
+        <div class="home-card-desc">Gestão e impressão de ordens de serviço</div>
+      </div>
+
+      <div class="home-card" style="border-color:#555;background:#111" id="home-btn-adm" style="display:none" onclick="abrirAdm();fecharHome()">
+        <div class="home-card-ico">⚙️</div>
+        <div class="home-card-title">Administração</div>
+        <div class="home-card-desc">Usuários, permissões e configurações do sistema</div>
+      </div>
+
+    </div>
+
+    <div style="height:32px"></div>
+  </div>
+</div>
 
 <div class="login-ov" id="login-ov">
   <div class="login-box">
@@ -1071,16 +1246,19 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   <div class="orc-n"><small>Nº Orçamento</small><b id="orc-disp">—</b></div>
   <div class="user-badge" id="user-badge" style="display:none">
     <div><span id="user-nome">—</span><small id="user-cargo">—</small></div>
-    <button class="ubtn" id="btn-aprovacoes" onclick="abrirAprovacoes()">📋 Aprovações</button>
-    <button class="ubtn" onclick="abrirDashElab()" id="btn-dash-elab">📋 Elaboração</button>
-    <button class="ubtn" onclick="abrirDashboard()" id="btn-dash-com">📈 Comercial</button>
-    <button class="ubtn" onclick="abrirMetas()" id="btn-metas">🎯 Metas</button>
-    <button class="ubtn" onclick="abrirDashFin()" id="btn-dash-fin">💰 Financeiro</button>
-    <button class="ubtn" onclick="abrirRelatorios()">📊 Relatórios</button>
-    <button class="ubtn" onclick="abrirDashGerencial()" id="btn-dash-ger" style="display:none">📊 Gerencial</button>
-    <button class="ubtn" onclick="abrirModuloOS()" id="btn-mod-os">📋 Ordens de Serviço</button>
-    <button class="ubtn" id="btn-adm" onclick="abrirAdm()" style="display:none">⚙️ ADM</button>
-    <button class="ubtn" onclick="logout()">Sair</button>
+    <!-- Botões ocultos mantidos para compatibilidade com permissões/dashTemAcesso -->
+    <button style="display:none" id="btn-aprovacoes" onclick="abrirAprovacoes()"></button>
+    <button style="display:none" onclick="abrirDashElab()" id="btn-dash-elab"></button>
+    <button style="display:none" onclick="abrirDashboard()" id="btn-dash-com"></button>
+    <button style="display:none" onclick="abrirMetas()" id="btn-metas"></button>
+    <button style="display:none" onclick="abrirDashFin()" id="btn-dash-fin"></button>
+    <button style="display:none" onclick="abrirRelatorios()"></button>
+    <button style="display:none" onclick="abrirDashGerencial()" id="btn-dash-ger"></button>
+    <button style="display:none" onclick="abrirModuloOS()" id="btn-mod-os"></button>
+    <button style="display:none" id="btn-adm" onclick="abrirAdm()"></button>
+    <!-- Botão principal do menu -->
+    <button class="ubtn" onclick="abrirHome()" style="font-size:13px;padding:6px 14px;font-weight:800;letter-spacing:.5px">☰ Menu</button>
+    <button class="ubtn" onclick="logout()" style="background:rgba(255,255,255,.15)">Sair</button>
   </div>
 </div>
 
@@ -1342,8 +1520,8 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <button class="btn btn-d btn-sm" onclick="gerarOS()">📋 OS</button>
   </div>
   <div style="display:flex;gap:8px;margin-top:9px;justify-content:flex-end;flex-wrap:wrap">
-    <button class="btn btn-o" onclick="limpar()">📄 Novo Orçamento</button>
-    <button class="btn btn-clone" id="btn-clonar" onclick="clonarOrcamento()" title="Copia todos os itens e dados do cliente para um novo orçamento, zerando aprovações e histórico comercial">📋 Clonar Orçamento</button>
+    <button class="btn btn-o" onclick="abrirHome()" style="border-color:#555;color:#ccc">☰ Menu</button>
+    <button class="btn btn-clone" id="btn-clonar" onclick="clonarOrcamento()" title="Clonar este orçamento para um novo">📋 Clonar</button>
     <button class="btn btn-r" onclick="abrirTipo()">📄 Visualizar PDF</button>
     <button class="btn btn-d" onclick="downloadPDF()">⬇️ Download PDF</button>
   </div>
@@ -1647,6 +1825,8 @@ async function doLogin(){
   document.getElementById('user-badge').style.display='flex';
   document.getElementById('user-nome').textContent=u.nome;
   document.getElementById('user-cargo').textContent=u.cargo||(NIVEIS[u.nivel]||u.nivel);
+  // Abrir home screen após login
+  setTimeout(function(){ abrirHome(); }, 350);
   document.getElementById('btn-adm').style.display=u.nivel==='adm'?'inline-block':'none';
   var _bG=document.getElementById('btn-dash-ger');if(_bG)_bG.style.display=['adm','gerente','diretor'].includes(u.nivel)?'inline-block':'none';
   // Aplicar visibilidade dos botões de dashboard conforme cargo
@@ -1686,6 +1866,7 @@ async function logout(){
   }
   usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];snapshotAnterior=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';driveIdAtual=null;driveNumAtual=null;
   _atualizarBtnClonar();
+  fecharHome();
   // Resetar funil
   _funilCache=[];_funilCarregado=false;_funilCarregando=false;
   funilEsconderCard();
@@ -3162,6 +3343,105 @@ function _atualizarBtnClonar(){
   if(!btn)return;
   var temOrc=!!(driveIdAtual||gv('f-cliente')||gv('f-num'));
   btn.style.display=temOrc&&usuarioAtual?'inline-block':'none';
+  // Manter home sincronizada se estiver aberta
+  var homeOv=document.getElementById('home-ov');
+  if(homeOv&&!homeOv.classList.contains('hidden')) _renderizarHome();
+}
+
+// ════════════════════════════════════════════════════════
+//  HOME SCREEN — navegação principal
+// ════════════════════════════════════════════════════════
+
+function abrirHome(){
+  document.getElementById('home-ov').classList.remove('hidden');
+  _renderizarHome();
+}
+
+function fecharHome(){
+  document.getElementById('home-ov').classList.add('hidden');
+}
+
+function _renderizarHome(){
+  // Usuário
+  var uNome=usuarioAtual?usuarioAtual.nome:'—';
+  var uCargo=usuarioAtual?(usuarioAtual.cargo||(NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel)):'—';
+  var hn=document.getElementById('home-user-nome');if(hn)hn.textContent=uNome;
+  var hc=document.getElementById('home-user-cargo');if(hc)hc.textContent=uCargo;
+
+  // Orçamento em aberto
+  var wrap=document.getElementById('home-orc-atual-wrap');
+  if(wrap){
+    var numAtual=gv('f-num');var cliAtual=gv('f-cliente');
+    if(numAtual||cliAtual){
+      var dtAtual=gv('f-data')?fD(gv('f-data')):'';
+      var consAtual=gv('f-cons')||'';
+      var naoSalvoTag=_naoSalvo?'<span style="color:#ff5555;font-size:10px;font-weight:700;margin-left:8px">● não salvo</span>':'';
+      wrap.innerHTML='<div class="home-section-title">📄 Orçamento em aberto</div>'
+        +'<div class="home-orc-atual" onclick="fecharHome()" title="Voltar ao orçamento">'
+        +'<div class="home-orc-atual-info">'
+        +'<div class="home-orc-atual-num">'+(numAtual||'Sem número')+naoSalvoTag+'</div>'
+        +'<div class="home-orc-atual-cli">'+(cliAtual||'Cliente não preenchido')+'</div>'
+        +'<div class="home-orc-atual-det">'+(dtAtual?dtAtual+' · ':'')+(consAtual||'')+'</div>'
+        +'</div>'
+        +'<div class="home-orc-atual-seta">›</div>'
+        +'</div>';
+    } else {
+      wrap.innerHTML='';
+    }
+  }
+
+  // Visibilidade dos cards por nível
+  var nivel=usuarioAtual?usuarioAtual.nivel:'';
+  var tudo=['adm','gerente','diretor'].includes(nivel);
+  _homeShow('home-btn-ger', tudo||dashTemAcesso('dash-ger'));
+  _homeShow('home-btn-adm', nivel==='adm');
+  _homeShow('home-btn-aprov', true);
+  _homeShow('home-btn-elab', dashTemAcesso('dash-elab'));
+  _homeShow('home-btn-metas', dashTemAcesso('dash-metas'));
+  _homeShow('home-btn-fin', dashTemAcesso('dash-fin'));
+  _homeShow('home-btn-os', dashTemAcesso('mod-os'));
+  _homeShow('home-btn-rel', true);
+  _homeShow('home-btn-com', dashTemAcesso('dash-com')||tudo);
+  // Clonar só aparece se houver orçamento aberto
+  var temOrc=!!(gv('f-num')||gv('f-cliente')||driveIdAtual);
+  _homeShow('home-btn-clonar', temOrc);
+}
+
+function _homeShow(id, show){
+  var el=document.getElementById(id);
+  if(el) el.style.display=show?'':'none';
+}
+
+function homeNovoOrcamento(){
+  fecharHome();
+  limpar();
+}
+
+function homeClonarOrcamento(){
+  fecharHome();
+  clonarOrcamento();
+}
+
+function homeBuscarOrcamento(){
+  fecharHome();
+  // Abrir painel Drive e acionar busca
+  var drivePanel=document.getElementById('drive-panel');
+  if(drivePanel) drivePanel.style.display='block';
+  driveListar();
+  // Scroll até o painel
+  setTimeout(function(){
+    if(drivePanel) drivePanel.scrollIntoView({behavior:'smooth',block:'center'});
+  },200);
+}
+
+function homeAbrirAprovacoes(){
+  fecharHome();
+  abrirAprovacoes();
+}
+
+function homeAbrirElab(){
+  fecharHome();
+  abrirDashElab();
 }
 
 // Liberar lock ao fechar a aba/janela
