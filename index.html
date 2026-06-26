@@ -639,6 +639,12 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <div class="home-section-title">📈 Gestão Comercial</div>
     <div class="home-grid">
 
+      <div class="home-card green" id="home-btn-funil" onclick="abrirFunilHome()">
+        <div class="home-card-ico">📊</div>
+        <div class="home-card-title">Funil de Vendas</div>
+        <div class="home-card-desc">Acompanhamento comercial por etapa do funil</div>
+      </div>
+
       <div class="home-card orange" id="home-btn-com" onclick="abrirDashboard();fecharHome()">
         <div class="home-card-ico">📈</div>
         <div class="home-card-title">Dashboard Comercial</div>
@@ -690,6 +696,59 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     </div>
 
     <div style="height:32px"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  FUNIL DE VENDAS — OVERLAY DA HOME                     -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="funil-home-ov" style="display:none;position:fixed;inset:0;background:#111;z-index:89000;flex-direction:column;overflow-y:auto">
+  <!-- Topo -->
+  <div style="background:#1b5e20;padding:12px 18px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10;border-bottom:2px solid #2e7d32">
+    <span style="font-size:16px;font-weight:900;color:#fff;letter-spacing:.5px">📊 FUNIL DE VENDAS — ACOMPANHAMENTO COMERCIAL</span>
+    <button onclick="fecharFunilHome()" style="margin-left:auto;background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:6px;padding:6px 16px;font-size:12px;font-weight:800;cursor:pointer">✕ Fechar</button>
+  </div>
+
+  <div style="padding:18px 20px;max-width:1100px;width:100%;margin:0 auto;box-sizing:border-box">
+
+    <!-- Contadores por etapa -->
+    <div id="funil-home-counters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px"></div>
+
+    <!-- Filtros -->
+    <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end;background:#1c1c1c;border:1px solid #2a2a2a;border-radius:6px;padding:10px 14px;margin-bottom:12px">
+      <div style="flex:1;min-width:170px">
+        <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">Etapa do Funil</label>
+        <select id="funil-home-filtro-etapa" onchange="funilHomeFiltrarLista()" style="width:100%;padding:7px 9px;border:1px solid #333;border-radius:4px;font-size:12px;color:#fff;background:#111">
+          <option value="__sem_etapa__">&#9888;&#65039; Aprovados sem Etapa</option>
+          <option value="enviada">&#128228; Proposta Enviada</option>
+          <option value="negociacao">&#129309; Em Negociacao</option>
+          <option value="standby">&#9208;&#65039; Standby</option>
+          <option value="ganha" selected>&#127942; Venda Ganha</option>
+          <option value="perdida">&#10060; Venda Perdida</option>
+          <option value="__todos__">&#128203; Todos os aprovados</option>
+        </select>
+      </div>
+      <div style="min-width:160px">
+        <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">Consultor</label>
+        <select id="funil-home-filtro-cons" onchange="funilHomeFiltrarLista()" style="width:100%;padding:7px 9px;border:1px solid #333;border-radius:4px;font-size:12px;color:#fff;background:#111">
+          <option value="">Todos</option>
+          <option>Fabiano Santos</option><option>Giovana Borges</option>
+          <option>Jessica Elisandra</option><option>Rafael Oliveira</option>
+          <option>Wagner Wolff</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">&nbsp;</label>
+        <button onclick="funilHomeRecarregar()" style="padding:7px 16px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap">&#128260; Atualizar</button>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div id="funil-home-lista-status" style="font-size:11px;color:#aaa;margin-bottom:8px;min-height:16px"></div>
+
+    <!-- Lista -->
+    <div id="funil-home-lista" style="border:1px solid #2a2a2a;border-radius:6px;overflow:hidden;background:#fff;max-height:calc(100vh - 260px);overflow-y:auto"></div>
+
   </div>
 </div>
 
@@ -3498,6 +3557,7 @@ function _renderizarHome(){
   _homeShow('home-btn-os', dashTemAcesso('mod-os'));
   _homeShow('home-btn-rel', true);
   _homeShow('home-btn-com', dashTemAcesso('dash-com')||tudo);
+  _homeShow('home-btn-funil', tudo||['adm','gerente','diretor','consultor','assistente'].includes(nivel)||dashTemAcesso('funil-card'));
   // (home-btn-clonar removido — clonar está apenas na tela do orçamento)
 }
 
@@ -4753,6 +4813,239 @@ async function funilAbrirOrcamento(driveId, nome){
   window.scrollTo({top:0, behavior:'smooth'});
   await driveCarregar(driveId, nome);
   // Após carregar, rolar para a seção de Acompanhamento Comercial
+  setTimeout(function(){
+    var comPanel = document.getElementById('com-panel');
+    if(comPanel && comPanel.style.display !== 'none'){
+      comPanel.scrollIntoView({behavior:'smooth', block:'start'});
+    }
+  }, 800);
+}
+
+// ════════════════════════════════════════════════════════
+//  FUNIL DE VENDAS — OVERLAY DA HOME
+// ════════════════════════════════════════════════════════
+
+function abrirFunilHome(){
+  var ov = document.getElementById('funil-home-ov');
+  if(!ov) return;
+  ov.style.display = 'flex';
+  // Popular consultores dinamicamente igual ao funil principal
+  funilHomePopularConsultores();
+  // Carregar dados (reusar cache do funil principal se disponível)
+  if(_funilCarregado && _funilCache.length > 0){
+    funilHomeRenderCounters();
+    funilHomeFiltrarLista();
+  } else {
+    funilHomeCarregarDados();
+  }
+}
+
+function fecharFunilHome(){
+  var ov = document.getElementById('funil-home-ov');
+  if(ov) ov.style.display = 'none';
+}
+
+function funilHomePopularConsultores(){
+  var sel = document.getElementById('funil-home-filtro-cons');
+  if(!sel || !usuarioAtual) return;
+  // Sincronizar lista de consultores com o filtro do funil principal
+  var selOriginal = document.getElementById('funil-filtro-cons');
+  if(selOriginal){
+    var atualVal = sel.value;
+    sel.innerHTML = selOriginal.innerHTML;
+    sel.value = atualVal || '';
+  }
+}
+
+function funilHomeRecarregar(){
+  _driveCacheClear();
+  _funilCarregado = false;
+  _funilCarregando = false;
+  funilHomeCarregarDados();
+}
+
+async function funilHomeCarregarDados(){
+  if(_funilCarregando) return;
+  if(_funilCarregado){
+    funilHomeRenderCounters();
+    funilHomeFiltrarLista();
+    return;
+  }
+  _funilCarregando = true;
+  var stEl = document.getElementById('funil-home-lista-status');
+  var listaEl = document.getElementById('funil-home-lista');
+  if(stEl) stEl.textContent = 'Carregando orcamentos...';
+  if(listaEl) listaEl.innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:12px">'
+    + 'Buscando...'
+    + '<div style="background:#e0e0e0;border-radius:4px;height:5px;margin-top:10px;overflow:hidden">'
+    + '<div id="funil-home-prog" style="height:100%;background:#c0001a;width:0%;transition:width .3s;border-radius:4px"></div>'
+    + '</div></div>';
+  try{
+    var r = await fetch(SCRIPT_URL+'?action=list&q=');
+    var d = await r.json();
+    if(!d.ok) throw new Error(d.erro||'Erro ao listar');
+    var INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM'];
+    var itens=(d.lista||[]).filter(function(x){
+      return !INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
+    });
+    if(stEl) stEl.textContent = 'Carregando ' + itens.length + ' orcamento(s)...';
+    var todos = await fetchProgressivo(itens, 15, function(parciais, total){
+      var pct=Math.round(parciais.length/total*100);
+      var pb=document.getElementById('funil-home-prog');
+      if(pb) pb.style.width=pct+'%';
+      if(stEl) stEl.textContent = parciais.length+' / '+total+' carregados...';
+      var aprov=parciais.filter(function(o){return o&&o.st==='aprovado';});
+      if(aprov.length>0){ _funilCache=aprov; funilHomeRenderCounters(); }
+    });
+    _funilCache = todos.filter(Boolean).filter(function(o){ return o.st === 'aprovado'; });
+    _funilCarregado = true;
+    // Sincronizar com funil principal
+    funilRenderCounters();
+    funilHomeRenderCounters();
+    funilHomeFiltrarLista();
+    if(stEl) stEl.textContent = _funilCache.length + ' orcamento(s) aprovado(s)';
+  }catch(e){
+    if(stEl) stEl.textContent = 'Erro: ' + e.message;
+    if(listaEl) listaEl.innerHTML = '<div style="padding:20px;text-align:center;color:#c0001a;font-size:12px">&#9888; ' + e.message + '</div>';
+  }finally{
+    _funilCarregando = false;
+  }
+}
+
+function funilHomeRenderCounters(){
+  var el = document.getElementById('funil-home-counters');
+  if(!el) return;
+  var semEtapa = _funilCache.filter(function(o){
+    var cs = (o.dados&&o.dados.comercialStatus)||'';
+    return !['enviada','negociacao','standby','ganha','perdida'].includes(cs);
+  }).length;
+  var html = '';
+  if(semEtapa > 0){
+    html += '<span onclick="funilHomeSelecionarEtapa(\'__sem_etapa__\')" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:800;background:#e65100;color:#fff;border:2px solid #e65100">'
+      + 'Sem Etapa: ' + semEtapa + '</span>';
+  }
+  ['enviada','negociacao','standby','ganha','perdida'].forEach(function(k){
+    var si = FUNIL_SI[k];
+    var n = _funilCache.filter(function(o){ return (o.dados&&o.dados.comercialStatus)===k; }).length;
+    html += '<span onclick="funilHomeSelecionarEtapa(\''+k+'\')" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:800;background:'+si.bg+';color:'+si.tx+';border:2px solid '+si.bg+'">'
+      + si.label + ': ' + n + '</span>';
+  });
+  var total = _funilCache.length;
+  html += '<span onclick="funilHomeSelecionarEtapa(\'__todos__\')" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:700;background:#333;color:#ccc;border:2px solid #444">'
+    + 'Todos: ' + total + '</span>';
+  el.innerHTML = html;
+}
+
+function funilHomeSelecionarEtapa(etapa){
+  var sel = document.getElementById('funil-home-filtro-etapa');
+  if(sel) sel.value = etapa;
+  funilHomeFiltrarLista();
+}
+
+function funilHomeFiltrarLista(){
+  var etapa = (document.getElementById('funil-home-filtro-etapa')||{}).value || '__sem_etapa__';
+  var cons  = (document.getElementById('funil-home-filtro-cons')||{}).value  || '';
+  var stEl  = document.getElementById('funil-home-lista-status');
+  var listaEl = document.getElementById('funil-home-lista');
+  if(!listaEl) return;
+  if(!_funilCarregado){ funilHomeCarregarDados(); return; }
+
+  var isSemEtapa = etapa === '__sem_etapa__';
+  var isTodos    = etapa === '__todos__';
+
+  var filtrados = _funilCache.filter(function(o){
+    if(cons && (o.form&&o.form['f-cons']) !== cons) return false;
+    var cs = (o.dados&&o.dados.comercialStatus)||'';
+    if(isSemEtapa) return !['enviada','negociacao','standby','ganha','perdida'].includes(cs);
+    if(isTodos) return true;
+    return cs === etapa;
+  });
+
+  filtrados.sort(function(a,b){
+    var da=(a.form&&(a.form['f-dia']||a.form['f-data']))||'';
+    var db=(b.form&&(b.form['f-dia']||b.form['f-data']))||'';
+    return da<db?-1:da>db?1:0;
+  });
+
+  var si = isSemEtapa
+    ? {label:'Aprovados sem Etapa', lbg:'#fff3e0', ltx:'#e65100', lbd:'#ffb74d'}
+    : isTodos
+      ? {label:'Todos os Aprovados', lbg:'#f5f5f5', ltx:'#333', lbd:'#ddd'}
+      : FUNIL_SI[etapa];
+
+  var total = filtrados.length;
+  var totalVal = filtrados.reduce(function(t,o){ return t+dashValOrc(o); }, 0);
+
+  if(stEl){
+    var aviso = isSemEtapa && total > 0
+      ? ' &nbsp;<span style="color:#e65100;font-weight:800">Cobrar classificacao dos consultores!</span>' : '';
+    stEl.innerHTML = '<b style="color:#ccc">' + (si?si.label:'') + '</b> &mdash; '
+      + total + ' orcamento(s) &nbsp;&middot;&nbsp; Total: <b style="color:#c0001a">' + fmt(totalVal) + '</b>' + aviso;
+  }
+
+  if(!filtrados.length){
+    listaEl.innerHTML = '<div style="padding:28px;text-align:center;color:#888;font-size:12px">'
+      + (isSemEtapa ? 'Todos os aprovados ja tem etapa definida!' : 'Nenhum orcamento nesta etapa.')
+      + '</div>';
+    return;
+  }
+
+  var cabBg = si?si.lbg:'#f5f5f5';
+  var cabTx = si?si.ltx:'#333';
+  var cabBd = si?si.lbd:'#ddd';
+  var header = '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:'+cabBg+';border-bottom:2px solid '+cabBd+'">'
+    + '<span style="font-size:11px;font-weight:800;color:'+cabTx+'">'+(si?si.label:'')+'</span>'
+    + '<span style="margin-left:auto;font-size:10px;color:'+cabTx+';opacity:.7">'+total+' orc. &middot; '+fmt(totalVal)+'</span>'
+    + '</div>';
+
+  var rows = filtrados.map(function(o){
+    var f = o.form||{};
+    var cs = (o.dados&&o.dados.comercialStatus)||'';
+    var siCs = FUNIL_SI[cs];
+    var etapaBadge = siCs
+      ? '<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:'+siCs.bg+';color:'+siCs.tx+';font-weight:800;white-space:nowrap;flex-shrink:0">'+siCs.label+'</span>'
+      : '<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:#fff3cd;color:#856404;border:1px solid #ffc107;font-weight:800;white-space:nowrap;flex-shrink:0">Sem Etapa</span>';
+    var val = dashValOrc(o);
+    var dataOrc = f['f-data']?fD(f['f-data']):'--';
+    var dataEv  = f['f-dia'] ?fD(f['f-dia']) :null;
+    var histCom = (o.dados&&o.dados.comercialHist)||[];
+    var ult = histCom.length?histCom[histCom.length-1]:null;
+    var ultObs = ult&&ult.obs
+      ? '<div style="font-size:9px;color:#888;font-style:italic;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(ult.obs)+'</div>' : '';
+    var ultData = ult ? '<span style="font-size:9px;color:#aaa"> &middot; ult. reg: '+ult.data+'</span>' : '';
+    var driveId = o.driveId||'';
+    return '<div onclick="funilHomeAbrirOrcamento(\''+driveId+'\',\''+eh(o.nome||'')+'\')" '
+      + 'style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f0f0f0;cursor:pointer;transition:background .12s;background:#fff" '
+      + 'onmouseover="this.style.background=\'#f9f9f9\'" onmouseout="this.style.background=\'#fff\'">'
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="font-size:12px;font-weight:700;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'--')+'</div>'
+      + '<div style="font-size:10px;color:#888;margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+      + '<span style="color:#555;font-weight:700">'+eh(f['f-num']||'--')+'</span>'
+      + (f['f-cons']?'<span>&middot; '+eh(f['f-cons'])+'</span>':'')
+      + '<span>&middot; Orc: '+dataOrc+'</span>'
+      + (dataEv?'<span style="color:#1565c0;font-weight:700">&middot; Evento: '+dataEv+'</span>':'')
+      + ultData
+      + '</div>'
+      + ultObs
+      + '</div>'
+      + etapaBadge
+      + '<div style="text-align:right;flex-shrink:0;min-width:90px">'
+      + '<div style="font-size:12px;font-weight:800;color:#222">'+fmt(val)+'</div>'
+      + '<div style="font-size:9px;color:#aaa;margin-top:1px">clique p/ abrir</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+
+  listaEl.innerHTML = header + rows;
+}
+
+async function funilHomeAbrirOrcamento(driveId, nome){
+  if(!driveId){ alert('ID do orcamento nao encontrado.'); return; }
+  if(!confirm('Abrir orcamento "'+nome+'"?')) return;
+  fecharFunilHome();
+  fecharHome();
+  window.scrollTo({top:0, behavior:'smooth'});
+  await driveCarregar(driveId, nome);
   setTimeout(function(){
     var comPanel = document.getElementById('com-panel');
     if(comPanel && comPanel.style.display !== 'none'){
