@@ -7143,11 +7143,11 @@ var _permDriveId = null;
 
 async function permCarregar(){
   try{
-    var rL=await fetch(SCRIPT_URL+'?action=list&q=');
+    var rL=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'list',q:''})});
     var dL=await rL.json();
     var cfg=(dL.lista||[]).find(function(x){return x.nome&&x.nome.includes('_CONFIG_PERMISSOES');});
     if(cfg){
-      var rC=await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
+      var rC=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'load',id:cfg.id})});
       var dC=await rC.json();
       if(dC.ok&&dC.dados&&dC.dados._tipo==='config-permissoes'){
         _permDriveId=cfg.id;
@@ -7408,11 +7408,11 @@ async function usuariosSalvarStorage(){
 async function usuariosCarregarStorage(){
   // 1) Tentar Drive
   try{
-    var rL=await fetch(SCRIPT_URL+'?action=list&q=');
+    var rL=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'list',q:''})});
     var dL=await rL.json();
     var cfg=(dL.lista||[]).find(function(x){return x.nome&&x.nome.includes('_CONFIG_USUARIOS');});
     if(cfg){
-      var rC=await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
+      var rC=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'load',id:cfg.id})});
       var dC=await rC.json();
       if(dC.ok&&dC.dados&&dC.dados._tipo==='config-usuarios'&&Array.isArray(dC.dados.usuarios)){
         _usuariosDriveId=cfg.id;
