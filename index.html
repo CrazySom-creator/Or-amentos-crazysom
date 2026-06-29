@@ -1599,6 +1599,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <button class="btn btn-o" onclick="homeSairSemSalvar()" title="Sair sem salvar — descarta alteracoes nao salvas" style="border-color:#c0001a;color:#ff6060;font-weight:700">✕ Sair</button>
     <button class="btn btn-r" onclick="abrirTipo()">📄 PDF</button>
     <button class="btn btn-d" onclick="downloadPDF()">⬇️ Download</button>
+    <button class="btn" onclick="gerarContrato()" style="background:#1a3a5c;color:#fff;border:none;font-weight:800" title="Gerar contrato em PDF preenchido com os dados do orçamento">📝 Contrato</button>
   </div>
 </div>
 
@@ -4272,6 +4273,7 @@ function gerarOS(){
     +(endEv?'<tr><td class="lbl">Endereço:</td><td colspan="3">'+endEv+'</td></tr>':'')
     +'<tr><td class="lbl">Data/Hora:</td><td>'+(horEv||'—')+'</td><td class="lbl">Público:</td><td>'+(gv('f-pub')?parseInt(gv('f-pub')).toLocaleString('pt-BR')+' pessoas':'—')+'</td></tr>'
     +(mStr?'<tr><td class="lbl">Montagem:</td><td>'+mStr+'</td><td class="lbl">Desmontagem:</td><td>'+(dStr||'—')+'</td></tr>':'')
+    +(gv('f-resp')?'<tr><td class="lbl">Resp. no Local:</td><td colspan="3"><b>'+eh(gv('f-resp'))+'</b></td></tr>':'')
     +'</table></div>'
     +'<table class="eq"><thead><tr><th style="width:48px">QTD</th><th>EQUIPAMENTO / SERVIÇO</th><th style="width:30px;text-align:center">✓</th></tr></thead><tbody>'+corpoOS+'</tbody></table>'
     +'<div class="xt">📝 MATERIAIS EXTRAS</div><div class="xh">Cabos, adaptadores, consumíveis e demais itens:</div>'
@@ -7902,6 +7904,7 @@ function osModGerarOS(lista){
       +(endEv?'<tr><td class="lbl">Endereço:</td><td colspan="3">'+eh(endEv)+'</td></tr>':'')
       +'<tr><td class="lbl">Data/Hora:</td><td>'+horEv+'</td><td class="lbl">Público:</td><td>'+(f['f-pub']?parseInt(f['f-pub']).toLocaleString('pt-BR')+' pessoas':'—')+'</td></tr>'
       +(mStr?'<tr><td class="lbl">Montagem:</td><td>'+mStr+'</td><td class="lbl">Desmontagem:</td><td>'+(dStr||'—')+'</td></tr>':'')
+      +(f['f-resp']?'<tr><td class="lbl">Resp. no Local:</td><td colspan="3"><b>'+eh(f['f-resp'])+'</b></td></tr>':'')
       +'</table></div>'
       +'<table class="eq"><thead><tr><th style="width:48px">QTD</th><th>EQUIPAMENTO / SERVIÇO</th><th style="width:30px;text-align:center">✓</th></tr></thead><tbody>'+corpoOS+'</tbody></table>'
       +'<div class="xt">📝 MATERIAIS EXTRAS</div><div class="xh">Cabos, adaptadores, consumíveis e demais itens:</div>'
@@ -8965,6 +8968,264 @@ async function verificarNumDuplicado(num){
     _aviso.style.display='none';
     if(_el){_el.style.borderColor='';_el.style.boxShadow='';}
   }
+}
+
+
+// ════════════════════════════════════════════════════════
+//  GERADOR DE CONTRATO PDF — v3 (versão consolidada)
+// ════════════════════════════════════════════════════════
+function gerarContrato(){
+  // ── Coletar valor real (value, placeholder ou cálculo) ──
+  var _elLiq   = document.getElementById('val-liq');
+  var _elLiqSI = document.getElementById('val-liq-si');
+  var valorLiq = parseFloat((_elLiq   && (_elLiq.value   || _elLiq.placeholder))  || 0)
+              || parseFloat((_elLiqSI && (_elLiqSI.value || _elLiqSI.placeholder)) || 0)
+              || 0;
+
+  // ── Validação de campos obrigatórios ──
+  var camposFaltando = [];
+  if(!gv('f-cliente'))   camposFaltando.push('Nome / Razão Social do cliente');
+  if(!gv('f-doc'))       camposFaltando.push('CPF / CNPJ do cliente');
+  if(!gv('f-end'))       camposFaltando.push('Endereço do cliente');
+  if(!gv('f-cidade'))    camposFaltando.push('Cidade / UF do cliente');
+  if(!gv('f-local'))     camposFaltando.push('Local do evento');
+  if(!gv('f-dia'))       camposFaltando.push('Data de início do evento');
+  if(!valorLiq)          camposFaltando.push('Valor total (calcule o orçamento primeiro)');
+
+  if(camposFaltando.length > 0){
+    alert('⚠️ DADOS INCOMPLETOS PARA EMISSÃO DO CONTRATO\n\nOs seguintes campos precisam ser preenchidos:\n\n• ' + camposFaltando.join('\n• ') + '\n\nPreencha os dados e tente novamente.');
+    return;
+  }
+
+  function _iniciarGeracao(){
+    if(typeof window.jspdf === 'undefined' && typeof window.jsPDF === 'undefined'){
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      s.onload = function(){ _buildContratoPDF(); };
+      s.onerror = function(){ alert('Erro ao carregar biblioteca PDF. Verifique sua conexão.'); };
+      document.head.appendChild(s);
+    } else { _buildContratoPDF(); }
+  }
+
+  function _buildContratoPDF(){
+    var jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    var numOrc    = gv('f-num')    || 'S/N';
+    var cli       = gv('f-cliente')|| '';
+    var docCli    = gv('f-doc')    || '';
+    var telCli    = gv('f-tel')    || '';
+    var endCli    = [gv('f-end'), gv('f-endnum')].filter(Boolean).join(', ');
+    var bairroCli = gv('f-bairro') || '';
+    var cidadeCli = gv('f-cidade') || '';
+    var endCliCompleto = [endCli, bairroCli, cidadeCli].filter(Boolean).join(', ');
+    var localEv   = gv('f-local')     || '';
+    var tipoEv    = gv('f-tipo')      || '';
+    var endEvRua  = [gv('f-end-ev'), gv('f-num-ev')].filter(Boolean).join(', ');
+    var bairroEv  = gv('f-bairro-ev') || '';
+    var cidadeEv  = gv('f-cid-ev')    || '';
+    var endEvCompleto = [endEvRua, bairroEv, cidadeEv].filter(Boolean).join(', ');
+    var diaIni = gv('f-dia')||''; var diaFim = gv('f-dia-fim')||'';
+    var semIni = gv('f-sem')||''; var semFim = gv('f-sem-fim')||'';
+    var hiEv = gv('f-hi')||''; var hfEv = gv('f-hf')||'';
+    var dmData = gv('f-dm')||''; var dmHora = gv('f-hm')||'';
+    var ddData = gv('f-dd')||''; var ddHora = gv('f-hd')||'';
+    var pgtoText = gv('f-pgto')||'';
+    var consultor = gv('f-cons')||'';
+
+    function fmtData(d){ if(!d)return ''; var p=d.split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d; }
+    var dataInicioFmt = fmtData(diaIni)+(semIni?' ('+semIni+')':'');
+    var dataFimFmt    = (diaFim&&diaFim!==diaIni)?fmtData(diaFim)+(semFim?' ('+semFim+')':''):'';
+    var datasEvento   = dataFimFmt?dataInicioFmt+' a '+dataFimFmt:dataInicioFmt;
+    var horarioEv     = (hiEv&&hfEv)?hiEv+' as '+hfEv:(hiEv||hfEv||'');
+    var valorFmt = 'R$ '+valorLiq.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+    var hoje = new Date();
+    var meses = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+    var dataContrato = hoje.getDate()+' de '+meses[hoje.getMonth()]+' de '+hoje.getFullYear();
+
+    // Condições de pagamento
+    var linhasPgto = [];
+    if(typeof finParcelas!=='undefined'&&finParcelas.length>0){
+      finParcelas.forEach(function(p){
+        var l='';
+        if(p.desc) l+=p.desc;
+        if(p.valor){var vF='R$ '+parseFloat(p.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});l+=(l?' — ':'')+vF;}
+        if(p.data)  l+=(l?' — venc. ':'')+fmtData(p.data);
+        if(p.forma) l+=(l?' | ':'')+p.forma;
+        if(l) linhasPgto.push(l);
+      });
+    }
+    if(!linhasPgto.length&&pgtoText) linhasPgto=pgtoText.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+    if(!linhasPgto.length) linhasPgto=['50% na contratacao','50% ate 03 dias antes da montagem'];
+
+    // Equipamentos (mesma lógica do PDF do orçamento)
+    var SECS_C=['som','video','luz','estrutura','servico','logistica','extra'];
+    var SEC_N={som:'Sonorizacao',video:'Video / LED',luz:'Iluminacao',estrutura:'Estrutura',servico:'Servico / Equipe Tecnica',logistica:'Logistica',extra:'Custos Extras'};
+    var todosAmbNomes={};
+    SECS_C.forEach(function(s){var st=state[s];if(!st)return;st.ambientes.forEach(function(a){if(!todosAmbNomes[a.nome])todosAmbNomes[a.nome]={nome:a.nome,ids:[]};if(todosAmbNomes[a.nome].ids.indexOf(a.id)<0)todosAmbNomes[a.nome].ids.push(a.id);});});
+    var ambList=Object.values(todosAmbNomes);
+    var multiAmb=ambList.length>1||ambList.some(function(a){return a.nome!=='Geral';});
+    var linhasAnexo=[];
+    function descFromRow(r){var d=r.name||'';if(r.painel&&r.larg&&r.alt){d+=' '+Number(r.larg).toFixed(2)+'x'+Number(r.alt).toFixed(2)+'m';if(r.elev>0)d+=' (Elev. '+Number(r.elev).toFixed(2)+'m)';}if(r.palco||(typeof isPalco==='function'&&isPalco(r.name))){if(r.larg&&r.prof)d+=' '+r.larg+'x'+r.prof+'m';}return d;}
+    if(multiAmb){
+      ambList.forEach(function(amb){
+        var temItens=SECS_C.some(function(s){var st=state[s];if(!st)return false;return amb.ids.some(function(aid){return(st.rows[aid]||[]).filter(function(r){return typeof isOcult==='function'?!isOcult(r.name):true;}).length>0;});});
+        if(!temItens)return;
+        linhasAnexo.push({tipo:'ambiente',nome:amb.nome});
+        SECS_C.forEach(function(s){var st=state[s];if(!st)return;amb.ids.forEach(function(aid){var rows=(st.rows[aid]||[]).filter(function(r){return typeof isOcult==='function'?!isOcult(r.name):true;});if(!rows.length)return;linhasAnexo.push({tipo:'secao',nome:SEC_N[s]});rows.forEach(function(r){linhasAnexo.push({tipo:'item',qty:r.qty,desc:descFromRow(r),diaria:r.diaria||1});});});});
+      });
+    }else{
+      SECS_C.forEach(function(s){var st=state[s];if(!st)return;var rows=[];st.ambientes.forEach(function(a){(st.rows[a.id]||[]).filter(function(r){return typeof isOcult==='function'?!isOcult(r.name):true;}).forEach(function(r){rows.push(r);});});if(!rows.length)return;linhasAnexo.push({tipo:'secao',nome:SEC_N[s]});rows.forEach(function(r){linhasAnexo.push({tipo:'item',qty:r.qty,desc:descFromRow(r),diaria:r.diaria||1});});});
+    }
+
+    // ── PDF ──
+    var doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    var pw=210,ph=297,ml=18,mr=18,mt=20,cw=174,y=mt;
+    var C={vm:[192,0,26],pt:[15,15,15],cesc:[55,55,55],cmed:[100,100,100],clt:[220,220,220],br:[255,255,255],cinzaf:[245,245,245]};
+    function rgb(c){doc.setTextColor(c[0],c[1],c[2]);}
+    function fill(c){doc.setFillColor(c[0],c[1],c[2]);}
+    function draw(c){doc.setDrawColor(c[0],c[1],c[2]);}
+    function font(f,s){doc.setFont('helvetica',f);doc.setFontSize(s);}
+    function checkY(m){if(y>ph-(m||25)){doc.addPage();y=mt;}}
+    function txtLine(txt,x,mW,lH){lH=lH||5;var ls=doc.splitTextToSize(String(txt||''),mW||cw);ls.forEach(function(l){checkY(18);doc.text(l,x||ml,y);y+=lH;});}
+    function campo(label,valor,xOff,mVW){xOff=xOff||0;mVW=mVW||(cw-38-xOff);checkY(14);font('bold',7.5);rgb(C.cmed);doc.text(label+':',ml+xOff,y);font('normal',8);rgb(C.pt);var lw=doc.getTextWidth(label+': ')+2;var vL=doc.splitTextToSize(valor||'—',mVW);vL.forEach(function(l,i){if(i>0){y+=5;checkY(12);}doc.text(l,ml+xOff+lw,y);});y+=5.5;}
+    function campo2(l1,v1,l2,v2){checkY(14);var half=cw/2-4;font('bold',7.5);rgb(C.cmed);doc.text(l1+':',ml,y);font('normal',8);rgb(C.pt);doc.text(doc.splitTextToSize(v1||'—',half-doc.getTextWidth(l1+': ')-1)[0],ml+doc.getTextWidth(l1+': ')+1,y);if(l2){font('bold',7.5);rgb(C.cmed);doc.text(l2+':',ml+cw/2+2,y);font('normal',8);rgb(C.pt);doc.text(doc.splitTextToSize(v2||'—',half-doc.getTextWidth(l2+': ')-1)[0],ml+cw/2+2+doc.getTextWidth(l2+': ')+1,y);}y+=5.5;}
+    function clausula(num,titulo){checkY(20);y+=3;fill(C.pt);doc.rect(ml,y-4.5,cw,7.5,'F');fill(C.vm);doc.rect(ml,y-4.5,2.5,7.5,'F');rgb(C.br);font('bold',8.5);doc.text('CLAUSULA '+num+' — '+titulo.toUpperCase(),ml+5,y);y+=5;rgb(C.cesc);font('normal',8.5);}
+    function assinBlock(col1,col2,larg){draw(C.cesc);doc.line(col1,y,col1+larg,y);doc.line(col2,y,col2+larg,y);y+=5;font('bold',8);rgb(C.pt);doc.text('CONTRATANTE',col1,y);doc.text('CONTRATADA',col2,y);y+=4;font('normal',7.5);rgb(C.cesc);doc.text(doc.splitTextToSize(cli,larg)[0],col1,y);doc.text('Fabiano Santos',col2,y);y+=4;doc.text('CPF/CNPJ: '+(docCli||'—'),col1,y);doc.text('CPF: 821.578.980-34',col2,y);y+=4;draw(C.clt);doc.line(col1,y,col1+larg,y);doc.line(col2,y,col2+larg,y);y+=3;font('normal',7);rgb(C.cmed);doc.text('Assinatura / Data',col1,y);doc.text('Assinatura / Data',col2,y);}
+
+    var col1=ml,col2=ml+cw/2+6,larg=cw/2-10;
+
+    // ── Cabeçalho ──
+    fill(C.pt);doc.rect(0,0,pw,22,'F');fill(C.vm);doc.rect(0,19,pw,3.5,'F');
+    rgb(C.br);font('bold',13);doc.text('CRAZY SOM AUDIOVISUAIS',ml,10);
+    font('normal',7);rgb([180,180,180]);doc.text('CRAZY COMERCIO E LOCACAO DE EQUIPAMENTOS LTDA. — CNPJ: 10.909.827/0001-76',ml,15.5);
+    font('bold',8);rgb(C.br);doc.text('N. '+numOrc,pw-mr,10,{align:'right'});
+    font('normal',7);rgb([180,180,180]);doc.text('Contrato',pw-mr,15,{align:'right'});
+    y=28;
+    rgb(C.pt);font('bold',11);doc.text('CONTRATO DE PRESTACAO DE SERVICOS',pw/2,y,{align:'center'});y+=5.5;
+    font('normal',8.5);rgb(C.cesc);doc.text('Locacao e Operacao de Equipamentos Audiovisuais',pw/2,y,{align:'center'});y+=9;
+
+    // Partes
+    fill(C.clt);doc.rect(ml,y-3.5,cw,27,'F');fill(C.vm);doc.rect(ml,y-3.5,2.5,27,'F');
+    font('bold',8.5);rgb(C.pt);doc.text('CONTRATADA',ml+5,y);font('normal',7.5);rgb(C.cesc);
+    doc.text('CRAZY COMERCIO E LOCACAO DE EQUIPAMENTOS LTDA.',ml+5,y+5);
+    doc.text('CNPJ: 10.909.827/0001-76',ml+5,y+10);
+    doc.text('Rua Osvaldo Cruz, n. 36 — Bairro Niteroi — Canoas/RS',ml+5,y+15);
+    doc.text('Representante: Fabiano Santos — CPF: 821.578.980-34',ml+5,y+20);
+    y+=30;
+    fill(C.cinzaf);doc.rect(ml,y-3.5,cw,27,'F');fill(C.vm);doc.rect(ml,y-3.5,2.5,27,'F');
+    font('bold',8.5);rgb(C.pt);doc.text('CONTRATANTE',ml+5,y);font('normal',7.5);rgb(C.cesc);
+    doc.text(cli,ml+5,y+5);
+    doc.text('CPF/CNPJ: '+(docCli||'—'),ml+5,y+10);
+    doc.text(doc.splitTextToSize('Endereco: '+(endCliCompleto||'—'),cw-8)[0],ml+5,y+15);
+    if(telCli)doc.text('Contato: '+telCli,ml+5,y+20);
+    y+=32;
+
+    // Cláusulas
+    clausula('1','OBJETO DO CONTRATO');y+=2;
+    txtLine('O presente contrato tem por objeto a locacao de equipamentos audiovisuais e/ou prestacao de servicos tecnicos, incluindo transporte, montagem, instalacao, operacao tecnica e desmontagem dos equipamentos para o evento abaixo especificado.');
+    txtLine('A lista detalhada dos equipamentos e equipe tecnica consta no Anexo 1, parte integrante e inseparavel deste contrato.');y+=2;
+
+    clausula('2','LOCAL, DATA E HORARIOS');y+=2;
+    campo('Local do Evento',localEv+(tipoEv?' — '+tipoEv:''));
+    if(endEvCompleto)campo('Endereco do Evento',endEvCompleto);
+    campo2('Data(s) do Evento',datasEvento,'Horario',horarioEv||'—');
+    campo2('Montagem',dmData?fmtData(dmData)+(dmHora?' as '+dmHora:''):'—','Desmontagem',ddData?fmtData(ddData)+(ddHora?' as '+ddHora:''):'—');y+=2;
+
+    clausula('3','EQUIPAMENTOS E SERVICOS');y+=2;
+    txtLine('A CONTRATADA disponibilizara os equipamentos e servicos especificados no Anexo 1 em perfeito estado de funcionamento, com equipe tecnica qualificada para montagem, operacao e desmontagem.');y+=2;
+
+    clausula('4','VALOR E FORMA DE PAGAMENTO');y+=2;
+    checkY(35);fill(C.vm);doc.rect(ml,y-3,cw,10,'F');rgb(C.br);font('bold',10.5);
+    doc.text('VALOR TOTAL DO CONTRATO: '+valorFmt,pw/2,y+3,{align:'center'});y+=13;
+    rgb(C.pt);font('bold',8);txtLine('Condicoes de Pagamento:');
+    font('normal',8);rgb(C.cesc);
+    linhasPgto.forEach(function(p){txtLine('• '+p,ml,cw-4,5);});y+=2;
+    checkY(30);fill([248,248,248]);doc.rect(ml,y-3,cw,26,'F');draw(C.clt);doc.rect(ml,y-3,cw,26,'S');
+    font('bold',7.5);rgb(C.cesc);doc.text('DADOS BANCARIOS:',ml+3,y);font('normal',7.5);
+    doc.text('Chave PIX (CNPJ): 10909827000176',ml+3,y+5);
+    doc.text('Caixa Economica Federal (104): Agencia 0433 | Operacao 003 | Conta 1414-0',ml+3,y+10);
+    doc.text('Itau Unibanco (341): Agencia 0296 | Conta 23740-7',ml+3,y+15);
+    doc.text('Favorecido: Crazy Comercio e Locacao de Equipamentos LTDA.',ml+3,y+20);
+    y+=30;font('italic',7.5);rgb(C.cmed);txtLine('Em caso de atraso: multa de 2% + juros de 1% ao mes.');font('normal',8.5);y+=1;
+
+    clausula('5','OBRIGACOES DAS PARTES');y+=2;
+    font('bold',8);rgb(C.pt);txtLine('Obrigacoes da CONTRATADA:');font('normal',8);rgb(C.cesc);
+    ['Garantir a qualidade, entrega e operacao adequada dos equipamentos.','Disponibilizar equipe tecnica qualificada para montagem, operacao e desmontagem.','Respeitar os prazos e horarios acordados.'].forEach(function(t){txtLine('• '+t);});y+=1;
+    font('bold',8);rgb(C.pt);txtLine('Obrigacoes da CONTRATANTE:');font('normal',8);rgb(C.cesc);
+    ['Disponibilizar acesso ao local para entrega, montagem e retirada.','Garantir a seguranca dos equipamentos durante o evento.','Efetuar os pagamentos nas condicoes e prazos previstos.'].forEach(function(t){txtLine('• '+t);});y+=2;
+
+    clausula('6','RESPONSABILIDADE');y+=2;txtLine('A CONTRATANTE sera responsavel por danos aos equipamentos causados por negligencia, mau uso ou terceiros. A CONTRATADA nao se responsabiliza por atrasos causados por forca maior ou caso fortuito.');y+=2;
+    clausula('7','CANCELAMENTO');y+=2;
+    font('bold',8);rgb(C.pt);txtLine('Cancelamento pela CONTRATANTE:');font('normal',8);rgb(C.cesc);
+    txtLine('• Ate 15 dias antes: devolucao de 50% do valor pago.');txtLine('• Menos de 15 dias: sem devolucao.');
+    font('bold',8);rgb(C.pt);txtLine('Cancelamento pela CONTRATADA:');font('normal',8);rgb(C.cesc);txtLine('Reembolso integral dos valores pagos.');y+=2;
+    clausula('8','FALHAS NOS EQUIPAMENTOS');y+=2;txtLine('Os equipamentos passam por manutencoes preventivas antes dos eventos. Em caso de falha essencial, a CONTRATADA resolve no menor tempo possivel ou concede desconto proporcional. A CONTRATANTE deve informar imediatamente a equipe tecnica qualquer falha.');y+=2;
+    clausula('9','INFRAESTRUTURA E ENERGIA');y+=2;txtLine('A CONTRATANTE e responsavel por infraestrutura eletrica adequada. A CONTRATADA fornecera as especificacoes tecnicas antes do evento. Custos com geradores sao de responsabilidade da CONTRATANTE.');y+=2;
+    clausula('10','DISPOSICOES GERAIS');y+=2;txtLine('Quaisquer alteracoes devem ser feitas por escrito e assinadas por ambas as partes. Foro: Comarca de Canoas/RS.');y+=2;
+
+    // Assinaturas contrato
+    checkY(52);y+=3;rgb(C.pt);font('normal',8.5);doc.text('Canoas/RS, '+dataContrato+'.',ml,y);y+=10;
+    assinBlock(col1,col2,larg);
+
+    // ── ANEXO 1 ──
+    doc.addPage();y=mt;
+    fill(C.pt);doc.rect(0,0,pw,22,'F');fill(C.vm);doc.rect(0,19,pw,3.5,'F');
+    rgb(C.br);font('bold',11);doc.text('ANEXO 1 — LISTA DE EQUIPAMENTOS E SERVICOS',pw/2,10,{align:'center'});
+    font('normal',7);rgb([180,180,180]);doc.text('Contrato N. '+numOrc+' | '+cli,pw/2,16,{align:'center'});
+    y=28;
+    fill(C.cinzaf);doc.rect(ml,y-3,cw,14,'F');draw(C.clt);doc.rect(ml,y-3,cw,14,'S');
+    font('bold',7.5);rgb(C.cmed);doc.text('Local:',ml+3,y+1);font('normal',7.5);rgb(C.pt);doc.text(localEv||endEvCompleto||'—',ml+16,y+1);
+    font('bold',7.5);rgb(C.cmed);doc.text('Data:',ml+3,y+6);font('normal',7.5);rgb(C.pt);doc.text(datasEvento||'—',ml+16,y+6);
+    font('bold',7.5);rgb(C.cmed);doc.text('Horario:',ml+3,y+11);font('normal',7.5);rgb(C.pt);doc.text(horarioEv||'—',ml+20,y+11);
+    if(consultor){font('bold',7.5);rgb(C.cmed);doc.text('Consultor:',ml+cw/2,y+1);font('normal',7.5);rgb(C.pt);doc.text(consultor,ml+cw/2+20,y+1);}
+    y+=18;
+
+    // Tabela
+    var ALT_HDR=8,ALT_SEC=7,ALT_ITEM=7,PAD=4.5;
+    if(linhasAnexo.length===0){rgb(C.cmed);font('normal',8);doc.text('Nenhum equipamento cadastrado.',ml,y);y+=8;}
+    else{
+      fill(C.pt);doc.rect(ml,y,cw,ALT_HDR,'F');rgb(C.br);font('bold',8);
+      doc.text('QTD',ml+3,y+PAD);doc.text('DESCRICAO DO EQUIPAMENTO / SERVICO',ml+18,y+PAD);doc.text('DIARIAS',pw-mr-2,y+PAD,{align:'right'});
+      y+=ALT_HDR+1;
+      var par=false;
+      linhasAnexo.forEach(function(item){
+        checkY(18);
+        if(item.tipo==='ambiente'){
+          y+=2;fill(C.vm);doc.rect(ml,y,cw,ALT_SEC,'F');rgb(C.br);font('bold',8.5);
+          doc.text('  AMBIENTE: '+item.nome.toUpperCase(),ml+3,y+PAD);y+=ALT_SEC+1;par=false;
+        }else if(item.tipo==='secao'){
+          y+=1;fill(C.vm);doc.rect(ml,y,cw,ALT_SEC-1,'F');fill(C.pt);doc.rect(ml,y,3,ALT_SEC-1,'F');
+          rgb(C.br);font('bold',7.5);doc.text('  '+item.nome.toUpperCase(),ml+6,y+3.5);y+=ALT_SEC;par=false;
+        }else{
+          var descLines=doc.splitTextToSize(item.desc||'—',cw-32);
+          var itemH=ALT_ITEM+(descLines.length>1?(descLines.length-1)*5:0);
+          if(par){fill([255,245,245]);doc.rect(ml,y,cw,itemH,'F');}
+          draw([230,230,230]);doc.line(ml,y+itemH,ml+cw,y+itemH);
+          rgb(C.pt);font('bold',8);doc.text(String(item.qty).padStart(2,'0'),ml+4,y+PAD);
+          font('normal',8);descLines.forEach(function(dl,di){rgb(C.pt);doc.text(dl,ml+18,y+PAD+(di*5));});
+          if(item.diaria&&item.diaria>1){rgb(C.vm);font('bold',7.5);doc.text(String(item.diaria)+'x',pw-mr-2,y+PAD,{align:'right'});}
+          y+=itemH+0.5;par=!par;
+        }
+      });
+      draw(C.clt);doc.line(ml,y,ml+cw,y);y+=2;
+    }
+
+    // Assinaturas Anexo 1
+    checkY(52);y+=6;draw(C.clt);doc.line(ml,y,pw-mr,y);y+=4;
+    font('italic',7);rgb(C.cmed);doc.text('Este Anexo e parte integrante e inseparavel do Contrato N. '+numOrc+'.',ml,y);y+=9;
+    assinBlock(col1,col2,larg);
+
+    // Rodapé todas as páginas
+    var totalPag=doc.internal.getNumberOfPages();
+    for(var p=1;p<=totalPag;p++){
+      doc.setPage(p);fill(C.vm);doc.rect(0,ph-9,pw,9,'F');
+      rgb(C.br);font('normal',6);
+      doc.text('Crazy Som Audiovisuais — Rua Osvaldo Cruz, 36 — Canoas/RS — CNPJ: 10.909.827/0001-76',pw/2,ph-4,{align:'center'});
+      doc.text('Pag. '+p+' / '+totalPag,pw-mr,ph-4,{align:'right'});
+    }
+    var nomeArq='Contrato_'+numOrc+'_'+(cli||'cliente').replace(/[^a-zA-Z0-9\s]/g,'').trim().replace(/\s+/g,'_')+'.pdf';
+    doc.save(nomeArq);
+  }
+  _iniciarGeracao();
 }
 
 </script>
