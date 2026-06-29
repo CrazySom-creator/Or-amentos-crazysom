@@ -1599,7 +1599,6 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <button class="btn btn-o" onclick="homeSairSemSalvar()" title="Sair sem salvar — descarta alteracoes nao salvas" style="border-color:#c0001a;color:#ff6060;font-weight:700">✕ Sair</button>
     <button class="btn btn-r" onclick="abrirTipo()">📄 PDF</button>
     <button class="btn btn-d" onclick="downloadPDF()">⬇️ Download</button>
-    <button class="btn" onclick="gerarContrato()" style="background:#1a3a5c;color:#fff;border:none;font-weight:800" title="Gerar contrato em PDF preenchido com os dados do orçamento">📝 Contrato</button>
   </div>
 </div>
 
@@ -1819,32 +1818,26 @@ function calcDiariasAuto(){
   var el2=document.getElementById('f-diarias-equip');
   if(el) el.value=dias+(dias===1?' dia':' dias');
   if(el2) el2.value=dEquip.toFixed(1)+(dEquip===1?' diária':' diárias');
-  // Atualizar diárias nos itens SOMENTE nas linhas que ainda têm o valor automático
-  // (preserva edições manuais feitas pelo usuário linha a linha)
+  // Atualizar diárias SOMENTE nos itens com diaria_auto===true (contagem automática ativada)
+  // Itens com diaria_auto===false têm valor manual — nunca são tocados aqui
   try{
-    var prevDEquip=_ultimoDEquipAuto;
-    var prevDias=_ultimoDiasAuto;
     ['som','video','luz','estrutura','extra'].forEach(function(s){
       if(!state[s]||!state[s].rows) return;
       Object.values(state[s].rows).forEach(function(arr){
         arr.forEach(function(r){
-          // Só atualiza se a diária atual é igual ao valor automático anterior
-          // (ou se é a primeira vez — prevDEquip===null)
-          if(prevDEquip===null||Math.abs(r.diaria-prevDEquip)<0.01){
-            r.diaria=dEquip;
-          }
+          if(r.diaria_auto !== false) r.diaria = dEquip;
         });
       });
     });
     if(state.logistica&&state.logistica.rows){
-      Object.values(state.logistica.rows).forEach(function(arr){arr.forEach(function(r){r.diaria=1;});});
+      Object.values(state.logistica.rows).forEach(function(arr){
+        arr.forEach(function(r){ r.diaria=1; });
+      });
     }
     if(state.servico&&state.servico.rows){
       Object.values(state.servico.rows).forEach(function(arr){
         arr.forEach(function(r){
-          if(prevDias===null||Math.abs(r.diaria-prevDias)<0.01){
-            r.diaria=dias;
-          }
+          if(r.diaria_auto !== false) r.diaria = dias;
         });
       });
     }
@@ -2370,10 +2363,36 @@ function addRow(s,name,val,custom){
   var st=state[s],aid=st.ambAtiva;if(!st.rows[aid])st.rows[aid]=[];
   var painel=s==='video'&&isPainel(name),palco=s==='estrutura'&&isPalco(name);
   var dAuto=s==='servico'?getDiasEvento():s==='logistica'?1:getDiariasEquip();
-  st.rows[aid].push({id:uid(),name:name,val:val,qty:1,diaria:dAuto,custom:custom,painel:painel,larg:painel?3:palco?4:null,alt:painel?2:null,prof:palco?2:null,elev:painel?0:null,elObj:palco?ELEV[0]:null,palco:palco,carp:palco?false:null,carpT:palco?'novo':null,carpC:palco?'':null,marg:20});
+  st.rows[aid].push({id:uid(),name:name,val:val,qty:1,diaria:dAuto,diaria_auto:true,custom:custom,painel:painel,larg:painel?3:palco?4:null,alt:painel?2:null,prof:palco?2:null,elev:painel?0:null,elObj:palco?ELEV[0]:null,palco:palco,carp:palco?false:null,carpT:palco?'novo':null,carpC:palco?'':null,marg:20});
   renderRows(s);calc();marcarAlterado();
 }
-function rowTot(r){if(r.painel)return safe(r.larg*r.alt*r.val*r.diaria*r.qty);if(r.palco||isPalco(r.name))return safe(calcPalco(r).total*r.diaria*r.qty);return safe(r.qty*r.val*r.diaria);}
+// ── Helper: célula de diária com toggle automático/manual ──────────────────
+function diariaCell(s,aid,r){
+  var isAuto = (r.diaria_auto !== false); // padrão true para itens antigos sem a flag
+  var step   = (s==='servico') ? 1 : 0.5;
+  var cbId   = 'dcb_'+r.id;
+  // Checkbox: "A" = automático; quando marcado, o input fica readonly e cinza
+  var inputStyle = isAuto
+    ? 'width:44px;background:#1a1a1a;color:#777;border-color:#333'
+    : 'width:44px';
+  var cb = '<label title="'+(isAuto?'Automático — clique para definir manualmente':'Manual — clique para usar contagem automática')+'" style="display:flex;align-items:center;gap:3px;cursor:pointer;margin:0">'
+         + '<input type="checkbox" id="'+cbId+'" '+(isAuto?'checked':'')+' style="width:12px;height:12px;accent-color:#c0001a;cursor:pointer" '
+         + 'onchange="toggleDiariaAuto(\''+s+'\',\''+aid+'\',\''+r.id+'\',this.checked)">'
+         + '<span style="font-size:9px;color:'+(isAuto?'#c0001a':'#999')+'">A</span>'
+         + '</label>';
+  var inp = '<input type="number" id="dinp_'+r.id+'" value="'+r.diaria+'" min="1" step="'+step+'" '
+          + 'style="'+inputStyle+'" '
+          + (isAuto ? 'readonly ' : '')
+          + 'onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'diaria\',this.value)">';
+  return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px">'+inp+cb+'</div>';
+}
+
+function toggleDiariaAuto(s,aid,id,checked){
+  updRow(s,aid,id,'diaria_auto', checked);
+  renderRows(s); calc(); marcarAlterado();
+}
+
+if(r.painel)return safe(r.larg*r.alt*r.val*r.diaria*r.qty);if(r.palco||isPalco(r.name))return safe(calcPalco(r).total*r.diaria*r.qty);return safe(r.qty*r.val*r.diaria);}
 function secTotAll(s){return Object.values(state[s].rows).reduce(function(t,arr){return t+arr.reduce(function(a,r){return a+rowTot(r);},0);},0);}
 
 function renderRows(s){
@@ -2394,7 +2413,7 @@ function renderRows(s){
         +'Elev:<input type="number" value="'+r.elev+'" min="0" step="0.1" style="width:48px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'elev\',this.value)">m '
         +'<span style="color:var(--R);font-weight:700">'+m2+'m²</span><span style="color:#555">'+pxW+'×'+pxH+'px</span>'
         +'</div></td>'
-        +'<td><input type="number" value="'+r.diaria+'" min="0.5" step="0.5" style="width:48px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'diaria\',this.value)"></td>'
+        +'<td>'+diariaCell(s,aid,r)+'</td>'
         +'<td><input type="number" value="'+r.val+'" min="0" step="0.01" style="width:76px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'val\',this.value)"> /m²</td>'
         +'<td style="font-weight:700">'+fmt(tot)+'</td><td style="color:#999;font-size:10px">'+fmt(tot*(1+IMP))+'</td>'
         +'<td><button class="bdel" onclick="delRow(\''+s+'\',\''+aid+'\',\''+r.id+'\')">✕</button></td>';
@@ -2410,7 +2429,7 @@ function renderRows(s){
         +'Elev:<select style="width:70px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'elObj\',this.value)">'+eOpts+'</select>'
         +'<span style="color:var(--R);font-weight:700">'+c.area.toFixed(2)+'m² → '+c.np+' prat.</span></div>'
         +'<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;font-size:10px">Carpete:'+carpeteSel+carpeteExtra+'</div></td>'
-        +'<td><input type="number" value="'+r.diaria+'" min="0.5" step="0.5" style="width:48px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'diaria\',this.value)"></td>'
+        +'<td>'+diariaCell(s,aid,r)+'</td>'
         +'<td style="font-size:10px;color:#777">'+fmt(c.np*(r.elObj?r.elObj.v:100))+(c.tc>0?'<br><span style="color:#e53935;font-size:9px">+carpet. '+fmt(c.tc)+'</span>':'')+'</td>'
         +'<td style="font-weight:700">'+fmt(tot)+'</td><td style="color:#999;font-size:10px">'+fmt(tot*(1+IMP))+'</td>'
         +'<td><button class="bdel" onclick="delRow(\''+s+'\',\''+aid+'\',\''+r.id+'\')">✕</button></td>';
@@ -2418,7 +2437,7 @@ function renderRows(s){
       var custo=r.qty*r.val*r.diaria,cob=custo*(1+r.marg/100);
       tr.innerHTML=mv+'<td><input type="number" value="'+r.qty+'" min="1" style="width:42px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'qty\',this.value)"></td>'
         +'<td>'+(r.custom?'<input type="text" value="'+eh(r.name)+'" placeholder="Descrição" style="min-width:145px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'name\',this.value)"><span class="ctag">CUSTOM</span>':'<span>'+r.name+'</span>')+'</td>'
-        +'<td><input type="number" value="'+r.diaria+'" min="0.5" step="0.5" style="width:48px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'diaria\',this.value)"></td>'
+        +'<td>'+diariaCell(s,aid,r)+'</td>'
         +'<td><input type="number" value="'+r.val+'" min="0" step="0.01" style="width:73px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'val\',this.value)"></td>'
         +'<td style="color:#e53935;font-weight:700">'+fmt(custo)+'</td>'
         +'<td><input type="number" value="'+r.marg+'" min="0" step="1" style="width:48px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'marg\',this.value)">%</td>'
@@ -2433,7 +2452,7 @@ function renderRows(s){
     }else{
       tr.innerHTML=mv+'<td><input type="number" value="'+r.qty+'" min="1" style="width:46px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'qty\',this.value)"></td>'
         +'<td>'+(r.custom?'<input type="text" value="'+eh(r.name)+'" placeholder="Nome" style="min-width:175px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'name\',this.value)"><span class="ctag">CUSTOM</span>':'<span>'+r.name+'</span>')+'</td>'
-        +'<td><input type="number" value="'+r.diaria+'" min="0.5" step="'+(s==='servico'?1:0.5)+'" style="width:48px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'diaria\',this.value)"></td>'
+        +'<td>'+diariaCell(s,aid,r)+'</td>'
         +'<td><input type="number" value="'+r.val+'" min="0" step="0.01" style="width:76px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'val\',this.value)"></td>'
         +'<td style="font-weight:700">'+fmt(tot)+'</td><td style="color:#999;font-size:10px">'+fmt(tot*(1+IMP))+'</td>'
         +'<td><button class="bdel" onclick="delRow(\''+s+'\',\''+aid+'\',\''+r.id+'\')">✕</button></td>';
@@ -2464,7 +2483,8 @@ function updRow(s,aid,id,field,val){
   var arr=state[s].rows[aid];if(!arr)return;
   var r=arr.find(function(x){return x.id===id;});if(!r)return;
   if(['qty','val','marg','larg','alt','elev','prof'].indexOf(field)>=0)r[field]=parseFloat(val)||0;
-  else if(field==='diaria')r[field]=parseFloat(val)||0.5;
+  else if(field==='diaria'){r[field]=parseFloat(val)||0.5; r.diaria_auto=false;}
+  else if(field==='diaria_auto'){r.diaria_auto=(val===true||val==='true'); if(r.diaria_auto){var _dA=getDiariasEquip();if(s==='servico')_dA=getDiasEvento();r.diaria=_dA;}}
   else if(field==='elObj')r.elObj=ELEV.find(function(e){return e.l===val;})||ELEV[0];
   else if(field==='carp')r.carp=(val==='true');
   else r[field]=val;
@@ -3346,7 +3366,19 @@ function carregar(input){
       aprovStatus=data.aprovStatus||'rascunho';aprovHist=data.aprovHist||[];comercialStatus=data.comercialStatus||'';comercialHist=data.comercialHist||[];snapshotAnterior=data.snapshotAnterior||null;finParcelas=data.finParcelas||[];finObs=data.finObs||'';finImposto=data.finImposto||'cimp';finNumVenda=data.finNumVenda||'';
       _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
       _limparCamposComercialDOM();
-      buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();alert('✅ Carregado!');
+      buildTabs();setDS();setDSFim();
+  // Migrar orçamentos antigos: garantir flag diaria_auto em todos os rows
+  try{
+    SECS.forEach(function(s){
+      if(!state[s]||!state[s].rows) return;
+      Object.values(state[s].rows).forEach(function(arr){
+        arr.forEach(function(r){
+          if(typeof r.diaria_auto === 'undefined') r.diaria_auto = true;
+        });
+      });
+    });
+  }catch(e){}
+  calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();alert('✅ Carregado!');
     }catch(err){alert('⚠️ Arquivo inválido: '+err.message);}
     finally{setTimeout(function(){_carregandoOrc=false;},400);}
   };
@@ -8861,638 +8893,6 @@ async function verificarNumDuplicado(num){
     if(_el){_el.style.borderColor='';_el.style.boxShadow='';}
   }
 }
-
-
-
-// ════════════════════════════════════════════════════════
-//  GERADOR DE CONTRATO PDF — v2
-//  Usa jsPDF (CDN) — funciona 100% no navegador
-// ════════════════════════════════════════════════════════
-function gerarContrato(){
-  // ── 1. Coletar valor real (value ou placeholder ou cálculo direto) ──
-  var _elLiq   = document.getElementById('val-liq');
-  var _elLiqSI = document.getElementById('val-liq-si');
-  var valorLiq = parseFloat((_elLiq   && (_elLiq.value   || _elLiq.placeholder))  || 0)
-              || parseFloat((_elLiqSI && (_elLiqSI.value || _elLiqSI.placeholder)) || 0)
-              || 0;
-  // fallback: somar seções diretamente
-  if(!valorLiq && typeof secTotAll === 'function'){
-    try{
-      valorLiq = ['som','video','luz','estrutura','servico','logistica','extra']
-        .reduce(function(t,s){ return t + secTotAll(s); }, 0);
-      if(valorLiq && typeof IMP !== 'undefined'){
-        var impAtualChk = (typeof finImposto!=='undefined') ? finImposto : 'cimp';
-        if(impAtualChk === 'cimp') valorLiq = valorLiq * (1 + IMP);
-      }
-    }catch(e){}
-  }
-
-  // ── 2. Validação de campos obrigatórios ─────────────
-  var camposFaltando = [];
-  if(!gv('f-cliente'))   camposFaltando.push('Nome / Razão Social do cliente');
-  if(!gv('f-doc'))       camposFaltando.push('CPF / CNPJ do cliente');
-  if(!gv('f-end'))       camposFaltando.push('Endereço do cliente');
-  if(!gv('f-cidade'))    camposFaltando.push('Cidade / UF do cliente');
-  if(!gv('f-local'))     camposFaltando.push('Local do evento');
-  if(!gv('f-dia'))       camposFaltando.push('Data de início do evento');
-  if(!valorLiq)          camposFaltando.push('Valor total (calcule o orçamento primeiro)');
-
-  if(camposFaltando.length > 0){
-    alert('⚠️ DADOS INCOMPLETOS PARA EMISSÃO DO CONTRATO\n\nOs seguintes campos precisam ser preenchidos:\n\n• ' + camposFaltando.join('\n• ') + '\n\nPreencha os dados e tente novamente.');
-    return;
-  }
-
-  // ── 2. Carregar jsPDF e gerar ────────────────────────
-  function _iniciarGeracao(){
-    if(typeof window.jspdf === 'undefined' && typeof window.jsPDF === 'undefined'){
-      var script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-      script.onload = function(){ _buildContratoPDF(); };
-      script.onerror = function(){ alert('Erro ao carregar biblioteca PDF. Verifique sua conexão.'); };
-      document.head.appendChild(script);
-    } else {
-      _buildContratoPDF();
-    }
-  }
-
-  function _buildContratoPDF(){
-    var jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
-
-    // ── Dados do orçamento ───────────────────────────────
-    var numOrc    = gv('f-num')    || 'S/N';
-    var cli       = gv('f-cliente')|| '';
-    var docCli    = gv('f-doc')    || '';
-    var telCli    = gv('f-tel')    || '';
-    var endCli    = [gv('f-end'), gv('f-endnum')].filter(Boolean).join(', ');
-    var bairroCli = gv('f-bairro') || '';
-    var cidadeCli = gv('f-cidade') || '';
-    var endCliCompleto = [endCli, bairroCli, cidadeCli].filter(Boolean).join(', ');
-
-    var localEv   = gv('f-local')     || '';
-    var tipoEv    = gv('f-tipo')      || '';
-    var endEvRua  = [gv('f-end-ev'), gv('f-num-ev')].filter(Boolean).join(', ');
-    var bairroEv  = gv('f-bairro-ev') || '';
-    var cidadeEv  = gv('f-cid-ev')    || '';
-    var endEvCompleto = [endEvRua, bairroEv, cidadeEv].filter(Boolean).join(', ');
-
-    var diaIni    = gv('f-dia')     || '';
-    var diaFim    = gv('f-dia-fim') || '';
-    var semIni    = gv('f-sem')     || '';
-    var semFim    = gv('f-sem-fim') || '';
-    var hiEv      = gv('f-hi')      || '';
-    var hfEv      = gv('f-hf')      || '';
-    var dmData    = gv('f-dm')      || '';
-    var dmHora    = gv('f-hm')      || '';
-    var ddData    = gv('f-dd')      || '';
-    var ddHora    = gv('f-hd')      || '';
-    var pgtoText  = gv('f-pgto')    || '';
-    var consultor = gv('f-cons')    || '';
-
-    function fmtData(d){
-      if(!d) return '';
-      var p = d.split('-');
-      return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : d;
-    }
-
-    var dataInicioFmt = fmtData(diaIni) + (semIni ? ' ('+semIni+')' : '');
-    var dataFimFmt    = (diaFim && diaFim !== diaIni) ? fmtData(diaFim)+(semFim?' ('+semFim+')':'') : '';
-    var datasEvento   = dataFimFmt ? dataInicioFmt+' a '+dataFimFmt : dataInicioFmt;
-    var horarioEv     = (hiEv && hfEv) ? hiEv+' as '+hfEv : (hiEv || hfEv || '');
-
-    // Valor total — já calculado no escopo externo (valorLiq)
-    var impAtual = (typeof finImposto!=='undefined') ? finImposto : 'cimp';
-    var totalFinal = valorLiq;
-    var valorFmt = 'R$ ' + totalFinal.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-
-    // ── Condições de pagamento a partir de finParcelas ──
-    // Se há parcelas cadastradas no bloco financeiro, usá-las
-    // Caso contrário, usar o campo f-pgto (texto livre)
-    var linhasPgto = [];
-    if(typeof finParcelas !== 'undefined' && finParcelas.length > 0){
-      finParcelas.forEach(function(p){
-        var linha = '';
-        if(p.desc) linha += p.desc;
-        if(p.valor){
-          var vFmt = 'R$ ' + parseFloat(p.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-          linha += (linha?' — ':'')+vFmt;
-        }
-        if(p.data) linha += (linha?' — venc. ':'')+fmtData(p.data);
-        if(p.forma) linha += (linha?' | ':'')+p.forma;
-        if(linha) linhasPgto.push(linha);
-      });
-    }
-    // fallback: texto do campo f-pgto
-    if(!linhasPgto.length && pgtoText){
-      linhasPgto = pgtoText.split('\n').map(function(l){return l.trim();}).filter(Boolean);
-    }
-    // fallback final
-    if(!linhasPgto.length){
-      linhasPgto = ['50% na contratacao', '50% ate 03 dias antes da montagem'];
-    }
-
-    // Data do contrato
-    var hoje = new Date();
-    var meses = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
-    var dataContrato = hoje.getDate()+' de '+meses[hoje.getMonth()]+' de '+hoje.getFullYear();
-
-    // ── Coletar equipamentos (mesma lógica do PDF do orçamento) ──
-    var SECS_CONT = ['som','video','luz','estrutura','servico','logistica','extra'];
-    var SEC_NOMES_CONT = {
-      som:'Sonorizacao', video:'Video / LED', luz:'Iluminacao',
-      estrutura:'Estrutura', servico:'Servico / Equipe Tecnica',
-      logistica:'Logistica', extra:'Custos Extras'
-    };
-    var SEC_ICOS_CONT = {
-      som:'SOM', video:'VIDEO', luz:'LUZ',
-      estrutura:'ESTRUTURA', servico:'SERVICO',
-      logistica:'LOGISTICA', extra:'EXTRAS'
-    };
-
-    // Checar se há múltiplos ambientes (excluindo 'Geral')
-    var todosAmbNomes = {};
-    SECS_CONT.forEach(function(s){
-      var st = state[s]; if(!st) return;
-      st.ambientes.forEach(function(a){
-        if(!todosAmbNomes[a.nome]) todosAmbNomes[a.nome] = {nome:a.nome, ids:[]};
-        if(todosAmbNomes[a.nome].ids.indexOf(a.id) < 0) todosAmbNomes[a.nome].ids.push(a.id);
-      });
-    });
-    var ambientes = Object.values(todosAmbNomes);
-    var multiAmb  = ambientes.length > 1 || ambientes.some(function(a){return a.nome !== 'Geral';});
-
-    // Estrutura de items para o anexo
-    // Cada item: {tipo: 'ambiente'|'secao'|'item', nome?, qty?, desc?, obs?}
-    var linhasAnexo = [];
-
-    function descFromRow(r){
-      var d = r.name || '';
-      if(r.painel && r.larg && r.alt){
-        d += ' ' + Number(r.larg).toFixed(2) + 'x' + Number(r.alt).toFixed(2) + 'm';
-        if(r.elev > 0) d += ' (Elev. ' + Number(r.elev).toFixed(2) + 'm)';
-      }
-      if(r.palco || (typeof isPalco === 'function' && isPalco(r.name))){
-        if(r.larg && r.prof) d += ' ' + r.larg + 'x' + r.prof + 'm';
-      }
-      return d;
-    }
-
-    if(multiAmb){
-      ambientes.forEach(function(amb){
-        var temItens = SECS_CONT.some(function(s){
-          var st = state[s]; if(!st) return false;
-          return amb.ids.some(function(aid){
-            return (st.rows[aid]||[]).filter(function(r){return !isOcult(r.name);}).length > 0;
-          });
-        });
-        if(!temItens) return;
-        linhasAnexo.push({tipo:'ambiente', nome: amb.nome});
-        SECS_CONT.forEach(function(s){
-          var st = state[s]; if(!st) return;
-          amb.ids.forEach(function(aid){
-            var rows = (st.rows[aid]||[]).filter(function(r){return !isOcult(r.name);});
-            if(!rows.length) return;
-            linhasAnexo.push({tipo:'secao', nome: SEC_NOMES_CONT[s]});
-            rows.forEach(function(r){
-              linhasAnexo.push({tipo:'item', qty:r.qty, desc: descFromRow(r), diaria: r.diaria||1});
-            });
-          });
-        });
-      });
-    } else {
-      SECS_CONT.forEach(function(s){
-        var st = state[s]; if(!st) return;
-        var rows = [];
-        st.ambientes.forEach(function(a){
-          (st.rows[a.id]||[]).filter(function(r){return !isOcult(r.name);}).forEach(function(r){rows.push(r);});
-        });
-        if(!rows.length) return;
-        linhasAnexo.push({tipo:'secao', nome: SEC_NOMES_CONT[s]});
-        rows.forEach(function(r){
-          linhasAnexo.push({tipo:'item', qty:r.qty, desc: descFromRow(r), diaria: r.diaria||1});
-        });
-      });
-    }
-
-    // ── Inicializar jsPDF ────────────────────────────────
-    var doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
-    var pw=210, ph=297, ml=18, mr=18, mt=20;
-    var cw = pw - ml - mr; // 174mm
-    var y = mt;
-
-    // Cores
-    var C = {
-      vm: [192,0,26], pt: [15,15,15], cesc: [55,55,55],
-      cmed: [100,100,100], clt: [220,220,220], br: [255,255,255],
-      azul: [26,58,92], azullt: [240,245,250], cinzaf: [245,245,245]
-    };
-    function rgb(c){ doc.setTextColor(c[0],c[1],c[2]); }
-    function fill(c){ doc.setFillColor(c[0],c[1],c[2]); }
-    function draw(c){ doc.setDrawColor(c[0],c[1],c[2]); }
-    function font(f,s){ doc.setFont('helvetica',f); doc.setFontSize(s); }
-
-    // ─── Helper: nova página com controle de Y ───────────
-    function checkY(minSpace){
-      if(y > ph - (minSpace||25)){ doc.addPage(); y = mt; }
-    }
-
-    // ─── Helper: linha de texto com quebra automática ────
-    function txtLine(txt, x, maxW, lineH){
-      lineH = lineH || 5;
-      var lines = doc.splitTextToSize(String(txt||''), maxW||cw);
-      lines.forEach(function(l){
-        checkY(18);
-        doc.text(l, x||ml, y);
-        y += lineH;
-      });
-    }
-
-    // ─── Helper: campo label + valor ────────────────────
-    function campo(label, valor, xOff, maxValW){
-      xOff = xOff || 0;
-      maxValW = maxValW || (cw - 38 - xOff);
-      checkY(14);
-      font('bold', 7.5); rgb(C.cmed);
-      doc.text((label+':'), ml+xOff, y);
-      font('normal', 8); rgb(C.pt);
-      var lw = doc.getTextWidth(label+': ') + 2;
-      var vLines = doc.splitTextToSize(valor||'—', maxValW);
-      vLines.forEach(function(l, i){
-        if(i > 0){ y += 5; checkY(12); }
-        doc.text(l, ml + xOff + lw, y);
-      });
-      y += 5.5;
-    }
-
-    // ─── Helper: dois campos lado a lado ────────────────
-    function campo2(l1, v1, l2, v2){
-      checkY(14);
-      var half = cw/2 - 4;
-      font('bold',7.5); rgb(C.cmed);
-      doc.text(l1+':', ml, y);
-      font('normal',8); rgb(C.pt);
-      doc.text(doc.splitTextToSize(v1||'—', half-doc.getTextWidth(l1+': ')-1)[0], ml+doc.getTextWidth(l1+': ')+1, y);
-      if(l2){
-        font('bold',7.5); rgb(C.cmed);
-        doc.text(l2+':', ml+cw/2+2, y);
-        font('normal',8); rgb(C.pt);
-        doc.text(doc.splitTextToSize(v2||'—', half-doc.getTextWidth(l2+': ')-1)[0], ml+cw/2+2+doc.getTextWidth(l2+': ')+1, y);
-      }
-      y += 5.5;
-    }
-
-    // ─── Helper: cabeçalho de cláusula ──────────────────
-    function clausula(num, titulo){
-      checkY(20);
-      y += 3;
-      fill(C.pt); doc.rect(ml, y-4.5, cw, 7.5, 'F');
-      fill(C.vm); doc.rect(ml, y-4.5, 2.5, 7.5, 'F');
-      rgb(C.br); font('bold', 8.5);
-      doc.text('CLAUSULA '+num+' — '+titulo.toUpperCase(), ml+5, y);
-      y += 5;
-      rgb(C.cesc); font('normal', 8.5);
-    }
-
-    // ═══════════════════════════════════════════════════
-    // PÁGINA 1 — CABEÇALHO
-    // ═══════════════════════════════════════════════════
-    fill(C.pt); doc.rect(0,0,pw,22,'F');
-    fill(C.vm); doc.rect(0,19,pw,3.5,'F');
-    rgb(C.br); font('bold',13);
-    doc.text('CRAZY SOM AUDIOVISUAIS', ml, 10);
-    font('normal',7); rgb([180,180,180]);
-    doc.text('CRAZY COMERCIO E LOCACAO DE EQUIPAMENTOS LTDA. — CNPJ: 10.909.827/0001-76', ml, 15.5);
-    font('bold',8); rgb(C.br);
-    doc.text('N. '+numOrc, pw-mr, 10, {align:'right'});
-    font('normal',7); rgb([180,180,180]);
-    doc.text('Contrato', pw-mr, 15, {align:'right'});
-    y = 28;
-
-    // Título
-    rgb(C.pt); font('bold',11);
-    doc.text('CONTRATO DE PRESTACAO DE SERVICOS', pw/2, y, {align:'center'}); y += 5.5;
-    font('normal',8.5); rgb(C.cesc);
-    doc.text('Locacao e Operacao de Equipamentos Audiovisuais', pw/2, y, {align:'center'}); y += 9;
-
-    // ─── Bloco CONTRATADA ────────────────────────────────
-    fill(C.clt); doc.rect(ml, y-3.5, cw, 27, 'F');
-    fill(C.vm);  doc.rect(ml, y-3.5, 2.5, 27, 'F');
-    font('bold',8.5); rgb(C.pt);
-    doc.text('CONTRATADA', ml+5, y);
-    font('normal',7.5); rgb(C.cesc);
-    doc.text('CRAZY COMERCIO E LOCACAO DE EQUIPAMENTOS LTDA.', ml+5, y+5);
-    doc.text('CNPJ: 10.909.827/0001-76', ml+5, y+10);
-    doc.text('Rua Osvaldo Cruz, n. 36 — Bairro Niteroi — Canoas/RS — CEP: 92110-470', ml+5, y+15);
-    doc.text('Representante: Fabiano Santos — CPF: 821.578.980-34', ml+5, y+20);
-    y += 30;
-
-    // ─── Bloco CONTRATANTE ───────────────────────────────
-    fill(C.cinzaf); doc.rect(ml, y-3.5, cw, 27, 'F');
-    fill(C.vm);   doc.rect(ml, y-3.5, 2.5, 27, 'F');
-    font('bold',8.5); rgb(C.pt);
-    doc.text('CONTRATANTE', ml+5, y);
-    font('normal',7.5); rgb(C.cesc);
-    var cliLines = doc.splitTextToSize(cli, cw-8);
-    doc.text(cliLines[0]||cli, ml+5, y+5);
-    doc.text('CPF / CNPJ: '+(docCli||'—'), ml+5, y+10);
-    var endCliLine = doc.splitTextToSize('Endereco: '+(endCliCompleto||'—'), cw-8);
-    doc.text(endCliLine[0], ml+5, y+15);
-    if(endCliLine[1]) doc.text(endCliLine[1], ml+5, y+20);
-    if(telCli) doc.text('Contato: '+telCli, ml+5, y+(endCliLine[1]?20:15)+5);
-    y += 32;
-
-    // ─── Cláusula 1 — Objeto ────────────────────────────
-    clausula('1','OBJETO DO CONTRATO'); y += 2;
-    txtLine('O presente contrato tem por objeto a locacao de equipamentos audiovisuais e/ou prestacao de servicos tecnicos, incluindo transporte, montagem, instalacao, operacao tecnica e desmontagem dos equipamentos para o evento abaixo especificado.');
-    y += 1;
-    txtLine('A lista detalhada dos equipamentos e equipe tecnica designada consta no Anexo 1, parte integrante e inseparavel deste contrato.');
-    y += 2;
-
-    // ─── Cláusula 2 — Local, Data e Horários ────────────
-    clausula('2','LOCAL, DATA E HORARIOS'); y += 2;
-    campo('Local do Evento', localEv + (tipoEv ? ' — '+tipoEv : ''));
-    if(endEvCompleto) campo('Endereco do Evento', endEvCompleto);
-    campo2('Data(s) do Evento', datasEvento, 'Horario', horarioEv||'—');
-    campo2('Montagem', dmData ? fmtData(dmData)+(dmHora?' as '+dmHora:'') : '—',
-           'Desmontagem', ddData ? fmtData(ddData)+(ddHora?' as '+ddHora:'') : '—');
-    y += 1;
-
-    // ─── Cláusula 3 — Equipamentos ──────────────────────
-    clausula('3','EQUIPAMENTOS E SERVICOS'); y += 2;
-    txtLine('A CONTRATADA disponibilizara os equipamentos e servicos especificados no Anexo 1 deste contrato, entregues em perfeito estado de funcionamento, com equipe tecnica qualificada para montagem, operacao e desmontagem com seguranca e eficiencia.');
-    y += 2;
-
-    // ─── Cláusula 4 — Valor e Pagamento ─────────────────
-    clausula('4','VALOR E FORMA DE PAGAMENTO'); y += 2;
-
-    // Destaque valor total
-    checkY(35);
-    fill(C.vm); doc.rect(ml, y-3, cw, 10, 'F');
-    rgb(C.br); font('bold',10.5);
-    doc.text('VALOR TOTAL DO CONTRATO: '+valorFmt, pw/2, y+3, {align:'center'});
-    y += 13;
-
-    // Condições de pagamento
-    rgb(C.pt); font('bold',8); 
-    txtLine('Condicoes de Pagamento:');
-    font('normal',8); rgb(C.cesc);
-    linhasPgto.forEach(function(p){
-      txtLine('• '+p, ml, cw-4, 5);
-    });
-    y += 2;
-
-    // Dados bancários
-    checkY(28);
-    fill([248,248,248]); doc.rect(ml, y-3, cw, 26, 'F');
-    draw(C.clt); doc.rect(ml, y-3, cw, 26, 'S');
-    font('bold',7.5); rgb(C.cesc);
-    doc.text('DADOS BANCARIOS:', ml+3, y);
-    font('normal',7.5); rgb(C.cesc);
-    doc.text('Chave PIX (CNPJ): 10909827000176', ml+3, y+5);
-    doc.text('Caixa Economica Federal (104): Agencia 0433 | Operacao 003 | Conta 1414-0', ml+3, y+10);
-    doc.text('Itau Unibanco (341): Agencia 0296 | Conta 23740-7', ml+3, y+15);
-    doc.text('Favorecido: Crazy Comercio e Locacao de Equipamentos LTDA.', ml+3, y+20);
-    y += 30;
-
-    font('italic',7.5); rgb(C.cmed);
-    txtLine('Em caso de atraso: multa de 2% + juros de 1% ao mes sobre o valor em aberto.');
-    font('normal',8.5); y += 1;
-
-    // ─── Cláusula 5 — Obrigações ────────────────────────
-    clausula('5','OBRIGACOES DAS PARTES'); y += 2;
-    font('bold',8); rgb(C.pt); txtLine('Obrigacoes da CONTRATADA:');
-    font('normal',8); rgb(C.cesc);
-    ['Garantir a qualidade, entrega e operacao adequada dos equipamentos.',
-     'Disponibilizar equipe tecnica qualificada para montagem, operacao e desmontagem.',
-     'Respeitar os prazos e horarios acordados.'].forEach(function(t){ txtLine('• '+t); });
-    y += 1;
-    font('bold',8); rgb(C.pt); txtLine('Obrigacoes da CONTRATANTE:');
-    font('normal',8); rgb(C.cesc);
-    ['Disponibilizar acesso ao local para entrega, montagem e retirada dos equipamentos.',
-     'Garantir a seguranca dos equipamentos durante todo o periodo do evento.',
-     'Efetuar os pagamentos nas condicoes e prazos previstos neste contrato.'].forEach(function(t){ txtLine('• '+t); });
-    y += 1;
-
-    // ─── Cláusula 6 — Responsabilidade ──────────────────
-    clausula('6','RESPONSABILIDADE'); y += 2;
-    txtLine('A CONTRATANTE sera responsavel por quaisquer danos aos equipamentos causados por negligencia, mau uso ou terceiros durante o evento. A CONTRATADA nao se responsabiliza por atrasos ou problemas causados por forca maior ou caso fortuito.');
-    y += 1;
-
-    // ─── Cláusula 7 — Cancelamento ──────────────────────
-    clausula('7','CANCELAMENTO'); y += 2;
-    font('bold',8); rgb(C.pt); txtLine('Cancelamento pela CONTRATANTE:');
-    font('normal',8); rgb(C.cesc);
-    txtLine('• Ate 15 dias antes do evento: devolucao de 50% do valor pago.');
-    txtLine('• Menos de 15 dias antes do evento: sem devolucao.');
-    font('bold',8); rgb(C.pt); txtLine('Cancelamento pela CONTRATADA:');
-    font('normal',8); rgb(C.cesc);
-    txtLine('Reembolso integral de todos os valores pagos pela CONTRATANTE.');
-    y += 1;
-
-    // ─── Cláusula 8 — Falhas ────────────────────────────
-    clausula('8','FALHAS NO FUNCIONAMENTO DOS EQUIPAMENTOS'); y += 2;
-    txtLine('Todos os equipamentos passam por manutencoes preventivas e testes rigorosos antes dos eventos. Em caso de falha em equipamento essencial, a CONTRATADA se compromete a resolver no menor tempo possivel ou conceder desconto proporcional ao tempo de inatividade. A CONTRATANTE devera informar imediatamente a equipe tecnica qualquer falha percebida durante o evento.');
-    y += 1;
-
-    // ─── Cláusula 9 — Energia ───────────────────────────
-    clausula('9','INFRAESTRUTURA E ENERGIA ELETRICA'); y += 2;
-    txtLine('A CONTRATANTE e responsavel por garantir infraestrutura eletrica adequada para todos os equipamentos contratados. A CONTRATADA fornecera as especificacoes tecnicas de consumo antes do evento. Custos com geradores ou fontes alternativas de energia sao de inteira responsabilidade da CONTRATANTE.');
-    y += 1;
-
-    // ─── Cláusula 10 — Disposições Gerais ───────────────
-    clausula('10','DISPOSICOES GERAIS'); y += 2;
-    txtLine('Quaisquer alteracoes neste contrato deverao ser feitas por escrito e assinadas por ambas as partes. Fica eleito o Foro da Comarca de Canoas/RS para dirimir quaisquer duvidas ou litigios decorrentes deste contrato.');
-    y += 2;
-
-    // ─── Assinaturas — Contrato ──────────────────────────
-    checkY(52);
-    y += 3;
-    rgb(C.pt); font('normal',8.5);
-    doc.text('Canoas/RS, '+dataContrato+'.', ml, y); y += 10;
-
-    var col1=ml, col2=ml+cw/2+6, larg=cw/2-10;
-    draw(C.cesc);
-    doc.line(col1, y, col1+larg, y);
-    doc.line(col2, y, col2+larg, y);
-    y += 5;
-    font('bold',8); rgb(C.pt);
-    doc.text('CONTRATANTE', col1, y);
-    doc.text('CONTRATADA', col2, y);
-    y += 4;
-    font('normal',7.5); rgb(C.cesc);
-    doc.text(doc.splitTextToSize(cli, larg)[0], col1, y);
-    doc.text('Fabiano Santos', col2, y);
-    y += 4;
-    doc.text('CPF/CNPJ: '+(docCli||'—'), col1, y);
-    doc.text('CPF: 821.578.980-34', col2, y);
-    y += 4;
-    draw(C.clt); doc.line(col1, y, col1+larg, y);
-    doc.line(col2, y, col2+larg, y);
-    y += 3;
-    font('normal',7); rgb(C.cmed);
-    doc.text('Assinatura / Data', col1, y);
-    doc.text('Assinatura / Data', col2, y);
-
-    // ═══════════════════════════════════════════════════
-    // PÁGINA ANEXO 1
-    // ═══════════════════════════════════════════════════
-    doc.addPage(); y = mt;
-
-    // Cabeçalho do Anexo
-    fill(C.pt); doc.rect(0,0,pw,22,'F');
-    fill(C.vm); doc.rect(0,19,pw,3.5,'F');
-    rgb(C.br); font('bold',11);
-    doc.text('ANEXO 1 — LISTA DE EQUIPAMENTOS E SERVICOS', pw/2, 10, {align:'center'});
-    font('normal',7); rgb([180,180,180]);
-    doc.text('Contrato N. '+numOrc+' | '+cli, pw/2, 16, {align:'center'});
-    y = 28;
-
-    // Info do evento no Anexo
-    fill(C.cinzaf); doc.rect(ml, y-3, cw, 14, 'F');
-    draw(C.clt); doc.rect(ml, y-3, cw, 14, 'S');
-    font('bold',7.5); rgb(C.cmed);
-    doc.text('Local:', ml+3, y+1);
-    font('normal',7.5); rgb(C.pt);
-    doc.text(localEv||endEvCompleto||'—', ml+16, y+1);
-    font('bold',7.5); rgb(C.cmed);
-    doc.text('Data:', ml+3, y+6);
-    font('normal',7.5); rgb(C.pt);
-    doc.text(datasEvento||'—', ml+16, y+6);
-    font('bold',7.5); rgb(C.cmed);
-    doc.text('Horario:', ml+3, y+11);
-    font('normal',7.5); rgb(C.pt);
-    doc.text(horarioEv||'—', ml+20, y+11);
-    if(consultor){
-      font('bold',7.5); rgb(C.cmed);
-      doc.text('Consultor:', ml+cw/2, y+1);
-      font('normal',7.5); rgb(C.pt);
-      doc.text(consultor, ml+cw/2+20, y+1);
-    }
-    y += 18;
-
-    // Tabela de equipamentos
-    var ALT_HDR  = 8;   // altura do cabeçalho da tabela (mm)
-    var ALT_SEC  = 7;   // altura das linhas de seção
-    var ALT_ITEM = 7;   // altura de cada linha de item
-    var PAD_TXT  = 4.5; // deslocamento Y do texto dentro da célula
-
-    if(linhasAnexo.length === 0){
-      rgb(C.cmed); font('normal',8);
-      doc.text('Nenhum equipamento cadastrado no orcamento.', ml, y); y += 8;
-    } else {
-      // ── Cabeçalho da tabela: PRETO com texto branco ──
-      fill(C.pt); doc.rect(ml, y, cw, ALT_HDR, 'F');
-      rgb(C.br); font('bold',8);
-      doc.text('QTD', ml+3, y+PAD_TXT);
-      doc.text('DESCRICAO DO EQUIPAMENTO / SERVICO', ml+18, y+PAD_TXT);
-      doc.text('DIARIAS', pw-mr-2, y+PAD_TXT, {align:'right'});
-      y += ALT_HDR + 1; // espaço extra entre cabeçalho e primeira linha
-
-      var par = false;
-      linhasAnexo.forEach(function(item){
-        checkY(18);
-        if(item.tipo === 'ambiente'){
-          // Ambiente: VERMELHO com texto branco (mais largo que seção)
-          y += 2;
-          fill(C.vm); doc.rect(ml, y, cw, ALT_SEC, 'F');
-          rgb(C.br); font('bold',8.5);
-          doc.text('  AMBIENTE: '+item.nome.toUpperCase(), ml+3, y+PAD_TXT);
-          y += ALT_SEC + 1; par = false;
-
-        } else if(item.tipo === 'secao'){
-          // Seção: VERMELHO escurecido com texto branco
-          y += 1;
-          fill(C.vm); doc.rect(ml, y, cw, ALT_SEC-1, 'F');
-          // Faixa preta fina à esquerda para diferençar do ambiente
-          fill(C.pt); doc.rect(ml, y, 3, ALT_SEC-1, 'F');
-          rgb(C.br); font('bold',7.5);
-          doc.text('  '+item.nome.toUpperCase(), ml+6, y+3.5);
-          y += ALT_SEC; par = false;
-
-        } else {
-          // Item: alternado branco / vermelho muito claro
-          var yItem = y;
-          var itemH = ALT_ITEM;
-          // pré-calcular quantas linhas o texto ocupa
-          var descLines = doc.splitTextToSize(item.desc||'—', cw-32);
-          if(descLines.length > 1) itemH = ALT_ITEM + (descLines.length-1)*5;
-
-          if(par){
-            fill([255,245,245]); // vermelho bem claro
-            doc.rect(ml, yItem, cw, itemH, 'F');
-          }
-          // Borda inferior leve
-          draw([230,230,230]); doc.line(ml, yItem+itemH, ml+cw, yItem+itemH);
-
-          rgb(C.pt); font('bold',8);
-          doc.text(String(item.qty).padStart(2,'0'), ml+4, yItem+PAD_TXT);
-
-          font('normal',8);
-          descLines.forEach(function(dl, di){
-            rgb(C.pt);
-            doc.text(dl, ml+18, yItem+PAD_TXT+(di*5));
-          });
-
-          // Diárias: só mostrar se >1
-          if(item.diaria && item.diaria > 1){
-            rgb(C.vm); font('bold',7.5);
-            doc.text(String(item.diaria)+'x', pw-mr-2, yItem+PAD_TXT, {align:'right'});
-          }
-          y += itemH + 0.5;
-          par = !par;
-        }
-      });
-      // Linha de fechamento da tabela
-      draw(C.clt); doc.line(ml, y, ml+cw, y);
-      y += 2;
-    }
-
-    // ─── Assinaturas — Anexo 1 ──────────────────────────
-    checkY(52);
-    y += 6;
-    draw(C.clt); doc.line(ml, y, pw-mr, y); y += 4;
-    font('italic',7); rgb(C.cmed);
-    doc.text('Este Anexo e parte integrante e inseparavel do Contrato N. '+numOrc+'.', ml, y); y += 9;
-
-    draw(C.cesc);
-    doc.line(col1, y, col1+larg, y);
-    doc.line(col2, y, col2+larg, y);
-    y += 5;
-    font('bold',8); rgb(C.pt);
-    doc.text('CONTRATANTE', col1, y);
-    doc.text('CONTRATADA', col2, y);
-    y += 4;
-    font('normal',7.5); rgb(C.cesc);
-    doc.text(doc.splitTextToSize(cli, larg)[0], col1, y);
-    doc.text('Fabiano Santos', col2, y);
-    y += 4;
-    doc.text('CPF/CNPJ: '+(docCli||'—'), col1, y);
-    doc.text('CPF: 821.578.980-34', col2, y);
-    y += 4;
-    draw(C.clt); doc.line(col1, y, col1+larg, y);
-    doc.line(col2, y, col2+larg, y);
-    y += 3;
-    font('normal',7); rgb(C.cmed);
-    doc.text('Assinatura / Data', col1, y);
-    doc.text('Assinatura / Data', col2, y);
-
-    // ─── Rodapé em todas as páginas ─────────────────────
-    var totalPag = doc.internal.getNumberOfPages();
-    for(var p=1; p<=totalPag; p++){
-      doc.setPage(p);
-      fill(C.vm); doc.rect(0, ph-9, pw, 9, 'F');
-      rgb(C.br); font('normal',6);
-      doc.text('Crazy Som Audiovisuais — Rua Osvaldo Cruz, 36 — Canoas/RS — CNPJ: 10.909.827/0001-76', pw/2, ph-4, {align:'center'});
-      doc.text('Pag. '+p+' / '+totalPag, pw-mr, ph-4, {align:'right'});
-    }
-
-    // ─── Download ────────────────────────────────────────
-    var nomeArq = 'Contrato_'+numOrc+'_'+(cli||'cliente').replace(/[^a-zA-Z0-9\s]/g,'').trim().replace(/\s+/g,'_')+'.pdf';
-    doc.save(nomeArq);
-  }
-
-  _iniciarGeracao();
-}
-
 
 </script>
 </body>
