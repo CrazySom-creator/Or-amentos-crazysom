@@ -8869,7 +8869,25 @@ async function verificarNumDuplicado(num){
 //  Usa jsPDF (CDN) — funciona 100% no navegador
 // ════════════════════════════════════════════════════════
 function gerarContrato(){
-  // ── 1. Validação de campos obrigatórios ─────────────
+  // ── 1. Coletar valor real (value ou placeholder ou cálculo direto) ──
+  var _elLiq   = document.getElementById('val-liq');
+  var _elLiqSI = document.getElementById('val-liq-si');
+  var valorLiq = parseFloat((_elLiq   && (_elLiq.value   || _elLiq.placeholder))  || 0)
+              || parseFloat((_elLiqSI && (_elLiqSI.value || _elLiqSI.placeholder)) || 0)
+              || 0;
+  // fallback: somar seções diretamente
+  if(!valorLiq && typeof secTotAll === 'function'){
+    try{
+      valorLiq = ['som','video','luz','estrutura','servico','logistica','extra']
+        .reduce(function(t,s){ return t + secTotAll(s); }, 0);
+      if(valorLiq && typeof IMP !== 'undefined'){
+        var impAtualChk = (typeof finImposto!=='undefined') ? finImposto : 'cimp';
+        if(impAtualChk === 'cimp') valorLiq = valorLiq * (1 + IMP);
+      }
+    }catch(e){}
+  }
+
+  // ── 2. Validação de campos obrigatórios ─────────────
   var camposFaltando = [];
   if(!gv('f-cliente'))   camposFaltando.push('Nome / Razão Social do cliente');
   if(!gv('f-doc'))       camposFaltando.push('CPF / CNPJ do cliente');
@@ -8877,7 +8895,6 @@ function gerarContrato(){
   if(!gv('f-cidade'))    camposFaltando.push('Cidade / UF do cliente');
   if(!gv('f-local'))     camposFaltando.push('Local do evento');
   if(!gv('f-dia'))       camposFaltando.push('Data de início do evento');
-  var valorLiq = parseFloat(gv('val-liq'))||parseFloat(gv('val-liq-si'))||0;
   if(!valorLiq)          camposFaltando.push('Valor total (calcule o orçamento primeiro)');
 
   if(camposFaltando.length > 0){
@@ -8942,7 +8959,7 @@ function gerarContrato(){
     var datasEvento   = dataFimFmt ? dataInicioFmt+' a '+dataFimFmt : dataInicioFmt;
     var horarioEv     = (hiEv && hfEv) ? hiEv+' as '+hfEv : (hiEv || hfEv || '');
 
-    // Valor total
+    // Valor total — já calculado no escopo externo (valorLiq)
     var impAtual = (typeof finImposto!=='undefined') ? finImposto : 'cimp';
     var totalFinal = valorLiq;
     var valorFmt = 'R$ ' + totalFinal.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
