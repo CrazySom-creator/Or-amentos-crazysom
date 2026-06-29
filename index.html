@@ -1865,10 +1865,11 @@ var PRECOS={
 };
 
 async function doLogin(){
-  usuariosCarregarStorage(); // carregar alterações salvas (novos cargos, senhas, etc.)
+  var err=document.getElementById('l-err');
+  err.textContent='⏳ Verificando credenciais...';
+  await usuariosCarregarStorage(); // carregar do Drive (funciona em qualquer PC)
   var uid=(document.getElementById('l-user').value||'').trim().toLowerCase();
   var pwd=document.getElementById('l-pass').value||'';
-  var err=document.getElementById('l-err');
   err.textContent='';
   if(!uid){err.textContent='⚠️ Digite seu usuário.';return;}
   if(!pwd){err.textContent='⚠️ Digite sua senha.';return;}
@@ -1893,7 +1894,7 @@ async function doLogin(){
   sessionIniciarHeartbeat(); // Manter sessão ativa enquanto logado
   setTimeout(_atualizarBtnClonar, 200);
   usuarioAtual=u;aprovStatus='rascunho';aprovHist=[];
-  permCarregar();
+  await permCarregar();
   carregarExcluidosDrive();
   carregarSolExclusaoDrive();
   document.getElementById('login-ov').style.display='none';
@@ -2041,7 +2042,7 @@ async function aprovAcaoInline(novo){
   }
 }
 
-function abrirAdm(){permCarregar();usuariosCarregarStorage();renderAdmList();renderAdmExclusoes();document.getElementById('adm-ov').classList.add('open');admAba('usuarios');}
+async function abrirAdm(){await permCarregar();await usuariosCarregarStorage();renderAdmList();renderAdmExclusoes();document.getElementById('adm-ov').classList.add('open');admAba('usuarios');}
 function abrirAprovacoes(){
   document.getElementById('aprov-ov').classList.add('open');
   carregarSolExclusaoDrive().then(function(){
@@ -7102,7 +7103,33 @@ var DASH_MODULOS = [
 var _permissoes = {};
 var _dashAcessos = {};
 
-function permCarregar(){
+// ════════════════════════════════════════════════════════
+//  PERMISSÕES — persistência no Google Drive
+// ════════════════════════════════════════════════════════
+var _permDriveId = null;
+
+async function permCarregar(){
+  // 1) Tentar Drive
+  try{
+    var rL = await fetch(SCRIPT_URL+'?action=list&q=_CONFIG_PERMISSOES');
+    var dL = await rL.json();
+    var itens = dL.itens || dL.files || [];
+    var cfg = itens.find(function(x){ return x.nome&&x.nome.includes('_CONFIG_PERMISSOES'); });
+    if(cfg){
+      var rC = await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
+      var dC = await rC.json();
+      if(dC.ok && dC.dados && dC.dados._tipo==='config-permissoes'){
+        _permDriveId = cfg.id;
+        if(dC.dados.permissoes) _permissoes = dC.dados.permissoes;
+        if(dC.dados.dashAcessos) _dashAcessos = dC.dados.dashAcessos;
+        // Cache local
+        try{ localStorage.setItem('crazySomPerm', JSON.stringify(_permissoes)); }catch(e){}
+        try{ localStorage.setItem('crazySomDashAcesso', JSON.stringify(_dashAcessos)); }catch(e){}
+        return;
+      }
+    }
+  }catch(e){ console.warn('permCarregar Drive:', e); }
+  // 2) Fallback localStorage
   try{
     var d=localStorage.getItem('crazySomPerm');
     if(d) _permissoes=JSON.parse(d);
@@ -7111,23 +7138,44 @@ function permCarregar(){
   }catch(e){}
 }
 
-function permSalvar(){
+async function _permSalvarDrive(){
+  try{
+    var r = await fetch(SCRIPT_URL, {method:'POST', body:JSON.stringify({
+      action: 'save',
+      id: _permDriveId || null,
+      numero: '_CONFIG_PERMISSOES',
+      cliente: '_SISTEMA',
+      data: new Date().toISOString().split('T')[0],
+      dados: { _tipo:'config-permissoes', permissoes: _permissoes, dashAcessos: _dashAcessos }
+    })});
+    var d = await r.json();
+    if(d.ok){ _permDriveId = d.id; }
+    return d.ok;
+  }catch(e){ console.warn('_permSalvarDrive:', e); return false; }
+}
+
+async function permSalvar(){
   var cargo=document.getElementById('perm-cargo-sel').value;
   if(!cargo){alert('Selecione um cargo.');return;}
   if(!_permissoes[cargo]) _permissoes[cargo]={};
   document.querySelectorAll('.perm-cb').forEach(function(cb){
     _permissoes[cargo][cb.dataset.campo]=cb.checked;
   });
-  try{
-    localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes));
-    // Feedback visual no botão
-    var btn=document.querySelector('#admpane-permissoes button[onclick="permSalvar()"]');
-    if(btn){var orig=btn.textContent;btn.textContent='✅ Salvo!';btn.style.background='#2e7d32';setTimeout(function(){btn.textContent=orig;btn.style.background='#c0001a';},1500);}
-    else{alert('✅ Permissões do cargo "'+cargo+'" salvas!');}
-  }catch(e){alert('⚠️ Erro ao salvar: '+e.message);}
+  // Cache local imediato
+  try{ localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes)); }catch(e){}
+  // Salvar no Drive
+  var btn=document.querySelector('#admpane-permissoes button[onclick="permSalvar()"]');
+  if(btn){btn.textContent='⏳ Salvando...';btn.disabled=true;}
+  var ok = await _permSalvarDrive();
+  if(btn){
+    btn.textContent = ok ? '✅ Salvo!' : '⚠️ Salvo local';
+    btn.style.background = ok ? '#2e7d32' : '#e65100';
+    btn.disabled = false;
+    setTimeout(function(){btn.textContent='💾 Salvar';btn.style.background='#c0001a';},2000);
+  }
 }
 
-function dashAcessoSalvar(){
+async function dashAcessoSalvar(){
   document.querySelectorAll('.dash-acesso-cargo').forEach(function(bloco){
     var cargo=bloco.dataset.cargo;
     if(!_dashAcessos[cargo]) _dashAcessos[cargo]={};
@@ -7135,12 +7183,18 @@ function dashAcessoSalvar(){
       _dashAcessos[cargo][cb.dataset.dash]=cb.checked;
     });
   });
-  try{
-    localStorage.setItem('crazySomDashAcesso',JSON.stringify(_dashAcessos));
-    var btn=document.querySelector('#admpane-dashboards button[onclick="dashAcessoSalvar()"]');
-    if(btn){var orig=btn.textContent;btn.textContent='✅ Salvo!';btn.style.background='#2e7d32';setTimeout(function(){btn.textContent=orig;btn.style.background='#c0001a';},1500);}
-    else{alert('✅ Acessos a dashboards salvos!');}
-  }catch(e){alert('⚠️ Erro ao salvar: '+e.message);}
+  // Cache local imediato
+  try{ localStorage.setItem('crazySomDashAcesso',JSON.stringify(_dashAcessos)); }catch(e){}
+  // Salvar no Drive
+  var btn=document.querySelector('#admpane-dashboards button[onclick="dashAcessoSalvar()"]');
+  if(btn){btn.textContent='⏳ Salvando...';btn.disabled=true;}
+  var ok = await _permSalvarDrive();
+  if(btn){
+    btn.textContent = ok ? '✅ Salvo!' : '⚠️ Salvo local';
+    btn.style.background = ok ? '#2e7d32' : '#e65100';
+    btn.disabled = false;
+    setTimeout(function(){btn.textContent='💾 Salvar';btn.style.background='#c0001a';},2000);
+  }
 }
 
 function permTemAcesso(campo){
@@ -7309,27 +7363,68 @@ function dashAcessoRenderizar(){
   document.getElementById('dash-acesso-corpo').innerHTML=html;
 }
 
-function usuariosSalvarStorage(){
+// ════════════════════════════════════════════════════════
+//  USUÁRIOS — persistência no Google Drive (funciona em qualquer PC)
+//  Arquivo especial: _CRAZYSOM_CONFIG_USUARIOS no Drive
+// ════════════════════════════════════════════════════════
+var _usuariosDriveId = null; // ID do arquivo de config no Drive
+var _usuariosCarregadosDrive = false;
+
+async function usuariosSalvarStorage(){
+  // 1) Salvar no localStorage como cache local (fallback)
+  try{ localStorage.setItem('crazySomUsuarios', JSON.stringify(USUARIOS)); }catch(e){}
+  // 2) Salvar no Drive (fonte de verdade para todos os PCs)
   try{
-    // Salvar lista sem as senhas de usuários padrão (segurança mínima)
-    localStorage.setItem('crazySomUsuarios', JSON.stringify(USUARIOS));
-  }catch(e){}
+    var r = await fetch(SCRIPT_URL, {method:'POST', body:JSON.stringify({
+      action: 'save',
+      id: _usuariosDriveId || null,
+      numero: '_CONFIG_USUARIOS',
+      cliente: '_SISTEMA',
+      data: new Date().toISOString().split('T')[0],
+      dados: { _tipo:'config-usuarios', usuarios: USUARIOS }
+    })});
+    var d = await r.json();
+    if(d.ok){ _usuariosDriveId = d.id; }
+  }catch(e){ console.warn('usuariosSalvarStorage Drive:', e); }
 }
 
-function usuariosCarregarStorage(){
+async function usuariosCarregarStorage(){
+  // 1) Tentar carregar do Drive (fonte de verdade)
   try{
-    var d=localStorage.getItem('crazySomUsuarios');
-    if(d){
-      var arr=JSON.parse(d);
-      if(Array.isArray(arr)&&arr.length>0) {
-        // Mesclar: manter entradas da lista padrão para usuários que sumiram
+    // Buscar arquivo de config pelo número especial
+    var rL = await fetch(SCRIPT_URL+'?action=list&q=_CONFIG_USUARIOS');
+    var dL = await rL.json();
+    var itens = dL.itens || dL.files || [];
+    var cfg = itens.find(function(x){ return x.nome&&x.nome.includes('_CONFIG_USUARIOS'); });
+    if(cfg){
+      var rC = await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
+      var dC = await rC.json();
+      if(dC.ok && dC.dados && dC.dados._tipo==='config-usuarios' && Array.isArray(dC.dados.usuarios)){
+        _usuariosDriveId = cfg.id;
+        var arr = dC.dados.usuarios;
         arr.forEach(function(u){
-          var idx=USUARIOS.findIndex(function(x){return x.id===u.id;});
-          if(idx>=0){
-            USUARIOS[idx]=Object.assign({},USUARIOS[idx],u);
-          } else {
-            USUARIOS.push(u);
-          }
+          var idx = USUARIOS.findIndex(function(x){ return x.id===u.id; });
+          if(idx>=0){ USUARIOS[idx] = Object.assign({}, USUARIOS[idx], u); }
+          else { USUARIOS.push(u); }
+        });
+        // Atualizar cache local
+        try{ localStorage.setItem('crazySomUsuarios', JSON.stringify(USUARIOS)); }catch(e){}
+        _usuariosCarregadosDrive = true;
+        return; // sucesso — não precisa do localStorage
+      }
+    }
+  }catch(e){ console.warn('usuariosCarregarStorage Drive:', e); }
+
+  // 2) Fallback: localStorage (quando Drive indisponível)
+  try{
+    var d = localStorage.getItem('crazySomUsuarios');
+    if(d){
+      var arr = JSON.parse(d);
+      if(Array.isArray(arr)&&arr.length>0){
+        arr.forEach(function(u){
+          var idx = USUARIOS.findIndex(function(x){ return x.id===u.id; });
+          if(idx>=0){ USUARIOS[idx] = Object.assign({}, USUARIOS[idx], u); }
+          else { USUARIOS.push(u); }
         });
       }
     }
@@ -7379,33 +7474,37 @@ function renderAdmList(){
   }).join('');
 }
 
-function admSalvar(i){
+async function admSalvar(i){
   var nome=document.getElementById('an'+i).value.trim();
   var id=document.getElementById('ai'+i).value.trim().toLowerCase().replace(/\s+/g,'.');
   var pass=document.getElementById('ap'+i).value;
   var nivel=document.getElementById('al'+i).value;
   var cargo=document.getElementById('ac'+i).value||'';
   if(!nome||!id){alert('Nome e login obrigatórios.');return;}
-  // Verificar login duplicado
   var duplicado=USUARIOS.some(function(u,j){return j!==i&&u.id===id;});
   if(duplicado){alert('⚠️ Este login já está em uso por outro usuário.');return;}
   USUARIOS[i]=Object.assign({},USUARIOS[i],{nome:nome,id:id,nivel:nivel,cargo:cargo});
   if(pass.trim()) USUARIOS[i].senha=hs(pass.trim());
-  usuariosSalvarStorage();
+  var btn=document.querySelector('#adm-list .adm-save');
+  // Feedback visual enquanto salva no Drive
+  var btnEl=document.getElementById('an'+i) && document.getElementById('an'+i).closest('div[style]') &&
+            document.getElementById('an'+i).closest('div[style]').querySelector('button[onclick^="admSalvar"]');
+  if(btnEl){btnEl.textContent='⏳ Salvando...';btnEl.disabled=true;}
+  await usuariosSalvarStorage();
   renderAdmList();
   alert('✅ Usuário "'+nome+'" salvo com sucesso!');
 }
 
-function admDel(i){
+async function admDel(i){
   if(!confirm('Excluir o usuário "'+USUARIOS[i].nome+'"?\nEsta ação não pode ser desfeita.'))return;
   USUARIOS.splice(i,1);
-  usuariosSalvarStorage();
+  await usuariosSalvarStorage();
   renderAdmList();
 }
 
-function admNovo(){
+async function admNovo(){
   USUARIOS.push({id:'novo.usuario',nome:'Novo Usuário',nivel:'consultor',cargo:'',senha:hs('crazy@2026')});
-  usuariosSalvarStorage();
+  await usuariosSalvarStorage();
   renderAdmList();
   setTimeout(function(){document.getElementById('adm-list').lastElementChild.scrollIntoView({behavior:'smooth'});},100);
 }
@@ -8577,9 +8676,8 @@ async function rejeitarExclusaoModal(idx){
 
 buildTabs();
 document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
-// Carregar dados persistidos ao iniciar
-usuariosCarregarStorage();
-permCarregar();
+// Pré-carregar dados do Drive em background (não bloqueia a página)
+// O doLogin() faz o carregamento definitivo com await antes de autenticar
 calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
 // Auto-save a cada 3 minutos se houver alterações não salvas e orçamento já tiver ID no Drive
 setInterval(function(){
