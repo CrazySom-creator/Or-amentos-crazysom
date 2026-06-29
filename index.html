@@ -9170,7 +9170,7 @@ function gerarContrato(){
 
     // ─── Bloco CONTRATANTE ───────────────────────────────
     fill(C.cinzaf); doc.rect(ml, y-3.5, cw, 27, 'F');
-    fill(C.azul);   doc.rect(ml, y-3.5, 2.5, 27, 'F');
+    fill(C.vm);   doc.rect(ml, y-3.5, 2.5, 27, 'F');
     font('bold',8.5); rgb(C.pt);
     doc.text('CONTRATANTE', ml+5, y);
     font('normal',7.5); rgb(C.cesc);
@@ -9353,52 +9353,80 @@ function gerarContrato(){
     y += 18;
 
     // Tabela de equipamentos
+    var ALT_HDR  = 8;   // altura do cabeçalho da tabela (mm)
+    var ALT_SEC  = 7;   // altura das linhas de seção
+    var ALT_ITEM = 7;   // altura de cada linha de item
+    var PAD_TXT  = 4.5; // deslocamento Y do texto dentro da célula
+
     if(linhasAnexo.length === 0){
       rgb(C.cmed); font('normal',8);
       doc.text('Nenhum equipamento cadastrado no orcamento.', ml, y); y += 8;
     } else {
-      // Cabeçalho da tabela
-      fill(C.azul); doc.rect(ml, y-4, cw, 7, 'F');
+      // ── Cabeçalho da tabela: PRETO com texto branco ──
+      fill(C.pt); doc.rect(ml, y, cw, ALT_HDR, 'F');
       rgb(C.br); font('bold',8);
-      doc.text('QTD', ml+3, y);
-      doc.text('DESCRICAO DO EQUIPAMENTO / SERVICO', ml+18, y);
-      doc.text('DIARIAS', pw-mr-2, y, {align:'right'});
-      y += 5;
+      doc.text('QTD', ml+3, y+PAD_TXT);
+      doc.text('DESCRICAO DO EQUIPAMENTO / SERVICO', ml+18, y+PAD_TXT);
+      doc.text('DIARIAS', pw-mr-2, y+PAD_TXT, {align:'right'});
+      y += ALT_HDR + 1; // espaço extra entre cabeçalho e primeira linha
 
       var par = false;
       linhasAnexo.forEach(function(item){
-        checkY(16);
+        checkY(18);
         if(item.tipo === 'ambiente'){
+          // Ambiente: VERMELHO com texto branco (mais largo que seção)
           y += 2;
-          fill(C.vm); doc.rect(ml, y-4, cw, 7, 'F');
+          fill(C.vm); doc.rect(ml, y, cw, ALT_SEC, 'F');
           rgb(C.br); font('bold',8.5);
-          doc.text('  AMBIENTE: '+item.nome.toUpperCase(), ml+3, y);
-          y += 5; par = false;
+          doc.text('  AMBIENTE: '+item.nome.toUpperCase(), ml+3, y+PAD_TXT);
+          y += ALT_SEC + 1; par = false;
+
         } else if(item.tipo === 'secao'){
-          if(par){ y += 1; }
-          fill([40,40,40]); doc.rect(ml, y-3.5, cw, 6.5, 'F');
-          rgb([200,200,200]); font('bold',7.5);
-          doc.text('  '+item.nome.toUpperCase(), ml+3, y);
-          y += 5; par = false;
-        } else { // item
-          if(par){ fill([248,248,248]); doc.rect(ml, y-4, cw, 6.5, 'F'); }
-          rgb(C.pt); font('normal',8);
-          doc.text(String(item.qty).padStart(2,'0'), ml+3, y);
-          var descLines = doc.splitTextToSize(item.desc||'—', cw-35);
-          descLines.forEach(function(dl, di){
-            if(di > 0){ y += 5; checkY(12); if(par){ fill([248,248,248]); doc.rect(ml, y-4, cw, 6.5, 'F'); } }
-            rgb(C.pt); font('normal',8);
-            doc.text(dl, ml+18, y);
-          });
-          // Diárias (só mostrar se >1)
-          if(item.diaria && item.diaria > 1){
-            rgb(C.cmed); font('normal',7);
-            doc.text(String(item.diaria)+'x', pw-mr-2, y, {align:'right'});
+          // Seção: VERMELHO escurecido com texto branco
+          y += 1;
+          fill(C.vm); doc.rect(ml, y, cw, ALT_SEC-1, 'F');
+          // Faixa preta fina à esquerda para diferençar do ambiente
+          fill(C.pt); doc.rect(ml, y, 3, ALT_SEC-1, 'F');
+          rgb(C.br); font('bold',7.5);
+          doc.text('  '+item.nome.toUpperCase(), ml+6, y+3.5);
+          y += ALT_SEC; par = false;
+
+        } else {
+          // Item: alternado branco / vermelho muito claro
+          var yItem = y;
+          var itemH = ALT_ITEM;
+          // pré-calcular quantas linhas o texto ocupa
+          var descLines = doc.splitTextToSize(item.desc||'—', cw-32);
+          if(descLines.length > 1) itemH = ALT_ITEM + (descLines.length-1)*5;
+
+          if(par){
+            fill([255,245,245]); // vermelho bem claro
+            doc.rect(ml, yItem, cw, itemH, 'F');
           }
-          y += 6.5;
+          // Borda inferior leve
+          draw([230,230,230]); doc.line(ml, yItem+itemH, ml+cw, yItem+itemH);
+
+          rgb(C.pt); font('bold',8);
+          doc.text(String(item.qty).padStart(2,'0'), ml+4, yItem+PAD_TXT);
+
+          font('normal',8);
+          descLines.forEach(function(dl, di){
+            rgb(C.pt);
+            doc.text(dl, ml+18, yItem+PAD_TXT+(di*5));
+          });
+
+          // Diárias: só mostrar se >1
+          if(item.diaria && item.diaria > 1){
+            rgb(C.vm); font('bold',7.5);
+            doc.text(String(item.diaria)+'x', pw-mr-2, yItem+PAD_TXT, {align:'right'});
+          }
+          y += itemH + 0.5;
           par = !par;
         }
       });
+      // Linha de fechamento da tabela
+      draw(C.clt); doc.line(ml, y, ml+cw, y);
+      y += 2;
     }
 
     // ─── Assinaturas — Anexo 1 ──────────────────────────
