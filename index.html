@@ -1599,6 +1599,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <button class="btn btn-o" onclick="homeSairSemSalvar()" title="Sair sem salvar — descarta alteracoes nao salvas" style="border-color:#c0001a;color:#ff6060;font-weight:700">✕ Sair</button>
     <button class="btn btn-r" onclick="abrirTipo()">📄 PDF</button>
     <button class="btn btn-d" onclick="downloadPDF()">⬇️ Download</button>
+    <button class="btn" onclick="gerarContrato()" style="background:#1a3a5c;color:#fff;border:none;font-weight:800" title="Gerar contrato em PDF preenchido com os dados do orçamento">📝 Contrato</button>
   </div>
 </div>
 
@@ -1865,11 +1866,10 @@ var PRECOS={
 };
 
 async function doLogin(){
-  var err=document.getElementById('l-err');
-  err.textContent='⏳ Verificando credenciais...';
-  await usuariosCarregarStorage(); // carregar do Drive (funciona em qualquer PC)
+  usuariosCarregarStorage(); // carregar alterações salvas (novos cargos, senhas, etc.)
   var uid=(document.getElementById('l-user').value||'').trim().toLowerCase();
   var pwd=document.getElementById('l-pass').value||'';
+  var err=document.getElementById('l-err');
   err.textContent='';
   if(!uid){err.textContent='⚠️ Digite seu usuário.';return;}
   if(!pwd){err.textContent='⚠️ Digite sua senha.';return;}
@@ -1894,7 +1894,7 @@ async function doLogin(){
   sessionIniciarHeartbeat(); // Manter sessão ativa enquanto logado
   setTimeout(_atualizarBtnClonar, 200);
   usuarioAtual=u;aprovStatus='rascunho';aprovHist=[];
-  await permCarregar();
+  permCarregar();
   carregarExcluidosDrive();
   carregarSolExclusaoDrive();
   document.getElementById('login-ov').style.display='none';
@@ -2042,7 +2042,7 @@ async function aprovAcaoInline(novo){
   }
 }
 
-async function abrirAdm(){await permCarregar();await usuariosCarregarStorage();renderAdmList();renderAdmExclusoes();document.getElementById('adm-ov').classList.add('open');admAba('usuarios');}
+function abrirAdm(){permCarregar();usuariosCarregarStorage();renderAdmList();renderAdmExclusoes();document.getElementById('adm-ov').classList.add('open');admAba('usuarios');}
 function abrirAprovacoes(){
   document.getElementById('aprov-ov').classList.add('open');
   carregarSolExclusaoDrive().then(function(){
@@ -7103,33 +7103,7 @@ var DASH_MODULOS = [
 var _permissoes = {};
 var _dashAcessos = {};
 
-// ════════════════════════════════════════════════════════
-//  PERMISSÕES — persistência no Google Drive
-// ════════════════════════════════════════════════════════
-var _permDriveId = null;
-
-async function permCarregar(){
-  // 1) Tentar Drive
-  try{
-    var rL = await fetch(SCRIPT_URL+'?action=list&q=_CONFIG_PERMISSOES');
-    var dL = await rL.json();
-    var itens = dL.itens || dL.files || [];
-    var cfg = itens.find(function(x){ return x.nome&&x.nome.includes('_CONFIG_PERMISSOES'); });
-    if(cfg){
-      var rC = await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
-      var dC = await rC.json();
-      if(dC.ok && dC.dados && dC.dados._tipo==='config-permissoes'){
-        _permDriveId = cfg.id;
-        if(dC.dados.permissoes) _permissoes = dC.dados.permissoes;
-        if(dC.dados.dashAcessos) _dashAcessos = dC.dados.dashAcessos;
-        // Cache local
-        try{ localStorage.setItem('crazySomPerm', JSON.stringify(_permissoes)); }catch(e){}
-        try{ localStorage.setItem('crazySomDashAcesso', JSON.stringify(_dashAcessos)); }catch(e){}
-        return;
-      }
-    }
-  }catch(e){ console.warn('permCarregar Drive:', e); }
-  // 2) Fallback localStorage
+function permCarregar(){
   try{
     var d=localStorage.getItem('crazySomPerm');
     if(d) _permissoes=JSON.parse(d);
@@ -7138,44 +7112,23 @@ async function permCarregar(){
   }catch(e){}
 }
 
-async function _permSalvarDrive(){
-  try{
-    var r = await fetch(SCRIPT_URL, {method:'POST', body:JSON.stringify({
-      action: 'save',
-      id: _permDriveId || null,
-      numero: '_CONFIG_PERMISSOES',
-      cliente: '_SISTEMA',
-      data: new Date().toISOString().split('T')[0],
-      dados: { _tipo:'config-permissoes', permissoes: _permissoes, dashAcessos: _dashAcessos }
-    })});
-    var d = await r.json();
-    if(d.ok){ _permDriveId = d.id; }
-    return d.ok;
-  }catch(e){ console.warn('_permSalvarDrive:', e); return false; }
-}
-
-async function permSalvar(){
+function permSalvar(){
   var cargo=document.getElementById('perm-cargo-sel').value;
   if(!cargo){alert('Selecione um cargo.');return;}
   if(!_permissoes[cargo]) _permissoes[cargo]={};
   document.querySelectorAll('.perm-cb').forEach(function(cb){
     _permissoes[cargo][cb.dataset.campo]=cb.checked;
   });
-  // Cache local imediato
-  try{ localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes)); }catch(e){}
-  // Salvar no Drive
-  var btn=document.querySelector('#admpane-permissoes button[onclick="permSalvar()"]');
-  if(btn){btn.textContent='⏳ Salvando...';btn.disabled=true;}
-  var ok = await _permSalvarDrive();
-  if(btn){
-    btn.textContent = ok ? '✅ Salvo!' : '⚠️ Salvo local';
-    btn.style.background = ok ? '#2e7d32' : '#e65100';
-    btn.disabled = false;
-    setTimeout(function(){btn.textContent='💾 Salvar';btn.style.background='#c0001a';},2000);
-  }
+  try{
+    localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes));
+    // Feedback visual no botão
+    var btn=document.querySelector('#admpane-permissoes button[onclick="permSalvar()"]');
+    if(btn){var orig=btn.textContent;btn.textContent='✅ Salvo!';btn.style.background='#2e7d32';setTimeout(function(){btn.textContent=orig;btn.style.background='#c0001a';},1500);}
+    else{alert('✅ Permissões do cargo "'+cargo+'" salvas!');}
+  }catch(e){alert('⚠️ Erro ao salvar: '+e.message);}
 }
 
-async function dashAcessoSalvar(){
+function dashAcessoSalvar(){
   document.querySelectorAll('.dash-acesso-cargo').forEach(function(bloco){
     var cargo=bloco.dataset.cargo;
     if(!_dashAcessos[cargo]) _dashAcessos[cargo]={};
@@ -7183,18 +7136,12 @@ async function dashAcessoSalvar(){
       _dashAcessos[cargo][cb.dataset.dash]=cb.checked;
     });
   });
-  // Cache local imediato
-  try{ localStorage.setItem('crazySomDashAcesso',JSON.stringify(_dashAcessos)); }catch(e){}
-  // Salvar no Drive
-  var btn=document.querySelector('#admpane-dashboards button[onclick="dashAcessoSalvar()"]');
-  if(btn){btn.textContent='⏳ Salvando...';btn.disabled=true;}
-  var ok = await _permSalvarDrive();
-  if(btn){
-    btn.textContent = ok ? '✅ Salvo!' : '⚠️ Salvo local';
-    btn.style.background = ok ? '#2e7d32' : '#e65100';
-    btn.disabled = false;
-    setTimeout(function(){btn.textContent='💾 Salvar';btn.style.background='#c0001a';},2000);
-  }
+  try{
+    localStorage.setItem('crazySomDashAcesso',JSON.stringify(_dashAcessos));
+    var btn=document.querySelector('#admpane-dashboards button[onclick="dashAcessoSalvar()"]');
+    if(btn){var orig=btn.textContent;btn.textContent='✅ Salvo!';btn.style.background='#2e7d32';setTimeout(function(){btn.textContent=orig;btn.style.background='#c0001a';},1500);}
+    else{alert('✅ Acessos a dashboards salvos!');}
+  }catch(e){alert('⚠️ Erro ao salvar: '+e.message);}
 }
 
 function permTemAcesso(campo){
@@ -7363,68 +7310,27 @@ function dashAcessoRenderizar(){
   document.getElementById('dash-acesso-corpo').innerHTML=html;
 }
 
-// ════════════════════════════════════════════════════════
-//  USUÁRIOS — persistência no Google Drive (funciona em qualquer PC)
-//  Arquivo especial: _CRAZYSOM_CONFIG_USUARIOS no Drive
-// ════════════════════════════════════════════════════════
-var _usuariosDriveId = null; // ID do arquivo de config no Drive
-var _usuariosCarregadosDrive = false;
-
-async function usuariosSalvarStorage(){
-  // 1) Salvar no localStorage como cache local (fallback)
-  try{ localStorage.setItem('crazySomUsuarios', JSON.stringify(USUARIOS)); }catch(e){}
-  // 2) Salvar no Drive (fonte de verdade para todos os PCs)
+function usuariosSalvarStorage(){
   try{
-    var r = await fetch(SCRIPT_URL, {method:'POST', body:JSON.stringify({
-      action: 'save',
-      id: _usuariosDriveId || null,
-      numero: '_CONFIG_USUARIOS',
-      cliente: '_SISTEMA',
-      data: new Date().toISOString().split('T')[0],
-      dados: { _tipo:'config-usuarios', usuarios: USUARIOS }
-    })});
-    var d = await r.json();
-    if(d.ok){ _usuariosDriveId = d.id; }
-  }catch(e){ console.warn('usuariosSalvarStorage Drive:', e); }
+    // Salvar lista sem as senhas de usuários padrão (segurança mínima)
+    localStorage.setItem('crazySomUsuarios', JSON.stringify(USUARIOS));
+  }catch(e){}
 }
 
-async function usuariosCarregarStorage(){
-  // 1) Tentar carregar do Drive (fonte de verdade)
+function usuariosCarregarStorage(){
   try{
-    // Buscar arquivo de config pelo número especial
-    var rL = await fetch(SCRIPT_URL+'?action=list&q=_CONFIG_USUARIOS');
-    var dL = await rL.json();
-    var itens = dL.itens || dL.files || [];
-    var cfg = itens.find(function(x){ return x.nome&&x.nome.includes('_CONFIG_USUARIOS'); });
-    if(cfg){
-      var rC = await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
-      var dC = await rC.json();
-      if(dC.ok && dC.dados && dC.dados._tipo==='config-usuarios' && Array.isArray(dC.dados.usuarios)){
-        _usuariosDriveId = cfg.id;
-        var arr = dC.dados.usuarios;
-        arr.forEach(function(u){
-          var idx = USUARIOS.findIndex(function(x){ return x.id===u.id; });
-          if(idx>=0){ USUARIOS[idx] = Object.assign({}, USUARIOS[idx], u); }
-          else { USUARIOS.push(u); }
-        });
-        // Atualizar cache local
-        try{ localStorage.setItem('crazySomUsuarios', JSON.stringify(USUARIOS)); }catch(e){}
-        _usuariosCarregadosDrive = true;
-        return; // sucesso — não precisa do localStorage
-      }
-    }
-  }catch(e){ console.warn('usuariosCarregarStorage Drive:', e); }
-
-  // 2) Fallback: localStorage (quando Drive indisponível)
-  try{
-    var d = localStorage.getItem('crazySomUsuarios');
+    var d=localStorage.getItem('crazySomUsuarios');
     if(d){
-      var arr = JSON.parse(d);
-      if(Array.isArray(arr)&&arr.length>0){
+      var arr=JSON.parse(d);
+      if(Array.isArray(arr)&&arr.length>0) {
+        // Mesclar: manter entradas da lista padrão para usuários que sumiram
         arr.forEach(function(u){
-          var idx = USUARIOS.findIndex(function(x){ return x.id===u.id; });
-          if(idx>=0){ USUARIOS[idx] = Object.assign({}, USUARIOS[idx], u); }
-          else { USUARIOS.push(u); }
+          var idx=USUARIOS.findIndex(function(x){return x.id===u.id;});
+          if(idx>=0){
+            USUARIOS[idx]=Object.assign({},USUARIOS[idx],u);
+          } else {
+            USUARIOS.push(u);
+          }
         });
       }
     }
@@ -7474,37 +7380,33 @@ function renderAdmList(){
   }).join('');
 }
 
-async function admSalvar(i){
+function admSalvar(i){
   var nome=document.getElementById('an'+i).value.trim();
   var id=document.getElementById('ai'+i).value.trim().toLowerCase().replace(/\s+/g,'.');
   var pass=document.getElementById('ap'+i).value;
   var nivel=document.getElementById('al'+i).value;
   var cargo=document.getElementById('ac'+i).value||'';
   if(!nome||!id){alert('Nome e login obrigatórios.');return;}
+  // Verificar login duplicado
   var duplicado=USUARIOS.some(function(u,j){return j!==i&&u.id===id;});
   if(duplicado){alert('⚠️ Este login já está em uso por outro usuário.');return;}
   USUARIOS[i]=Object.assign({},USUARIOS[i],{nome:nome,id:id,nivel:nivel,cargo:cargo});
   if(pass.trim()) USUARIOS[i].senha=hs(pass.trim());
-  var btn=document.querySelector('#adm-list .adm-save');
-  // Feedback visual enquanto salva no Drive
-  var btnEl=document.getElementById('an'+i) && document.getElementById('an'+i).closest('div[style]') &&
-            document.getElementById('an'+i).closest('div[style]').querySelector('button[onclick^="admSalvar"]');
-  if(btnEl){btnEl.textContent='⏳ Salvando...';btnEl.disabled=true;}
-  await usuariosSalvarStorage();
+  usuariosSalvarStorage();
   renderAdmList();
   alert('✅ Usuário "'+nome+'" salvo com sucesso!');
 }
 
-async function admDel(i){
+function admDel(i){
   if(!confirm('Excluir o usuário "'+USUARIOS[i].nome+'"?\nEsta ação não pode ser desfeita.'))return;
   USUARIOS.splice(i,1);
-  await usuariosSalvarStorage();
+  usuariosSalvarStorage();
   renderAdmList();
 }
 
-async function admNovo(){
+function admNovo(){
   USUARIOS.push({id:'novo.usuario',nome:'Novo Usuário',nivel:'consultor',cargo:'',senha:hs('crazy@2026')});
-  await usuariosSalvarStorage();
+  usuariosSalvarStorage();
   renderAdmList();
   setTimeout(function(){document.getElementById('adm-list').lastElementChild.scrollIntoView({behavior:'smooth'});},100);
 }
@@ -8676,8 +8578,9 @@ async function rejeitarExclusaoModal(idx){
 
 buildTabs();
 document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
-// Pré-carregar dados do Drive em background (não bloqueia a página)
-// O doLogin() faz o carregamento definitivo com await antes de autenticar
+// Carregar dados persistidos ao iniciar
+usuariosCarregarStorage();
+permCarregar();
 calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
 // Auto-save a cada 3 minutos se houver alterações não salvas e orçamento já tiver ID no Drive
 setInterval(function(){
@@ -8957,6 +8860,303 @@ async function verificarNumDuplicado(num){
     _aviso.style.display='none';
     if(_el){_el.style.borderColor='';_el.style.boxShadow='';}
   }
+}
+
+
+// ════════════════════════════════════════════════════════
+//  GERADOR DE CONTRATO PDF
+//  Usa jsPDF (CDN) — funciona 100% no navegador, sem servidor
+// ════════════════════════════════════════════════════════
+function gerarContrato(){
+  var cli = gv('f-cliente')||'';
+  if(!cli){ alert('Preencha o nome do cliente antes de gerar o contrato.'); return; }
+  var valorLiq = parseFloat(gv('val-liq'))||parseFloat(gv('val-liq-si'))||0;
+  if(!valorLiq){ alert('O valor do orçamento precisa estar calculado.'); return; }
+
+  function _iniciarGeracao(){
+    if(typeof window.jspdf === 'undefined' && typeof window.jsPDF === 'undefined'){
+      var script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      script.onload = function(){ _buildContratoPDF(); };
+      script.onerror = function(){ alert('Erro ao carregar biblioteca de PDF. Verifique sua conexão.'); };
+      document.head.appendChild(script);
+    } else {
+      _buildContratoPDF();
+    }
+  }
+
+  function _buildContratoPDF(){
+    var jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    var numOrc    = gv('f-num')    || 'S/N';
+    var docCli    = gv('f-doc')    || '';
+    var endCli    = [gv('f-end'), gv('f-endnum')].filter(Boolean).join(', ');
+    var bairroCli = gv('f-bairro') || '';
+    var cidadeCli = gv('f-cidade') || '';
+    var endCliCompleto = [endCli, bairroCli, cidadeCli].filter(Boolean).join(' — ');
+    var localEv   = gv('f-local')     || '';
+    var endEvRua  = [gv('f-end-ev'), gv('f-num-ev')].filter(Boolean).join(', ');
+    var bairroEv  = gv('f-bairro-ev') || '';
+    var cidadeEv  = gv('f-cid-ev')    || '';
+    var endEvCompleto = [endEvRua, bairroEv, cidadeEv].filter(Boolean).join(' — ');
+    var diaIni    = gv('f-dia')     || '';
+    var diaFim    = gv('f-dia-fim') || '';
+    var semIni    = gv('f-sem')     || '';
+    var semFim    = gv('f-sem-fim') || '';
+    var hiEv      = gv('f-hi')      || '';
+    var hfEv      = gv('f-hf')      || '';
+    var dmData    = gv('f-dm')      || '';
+    var dmHora    = gv('f-hm')      || '';
+    var ddData    = gv('f-dd')      || '';
+    var ddHora    = gv('f-hd')      || '';
+    var pgto      = gv('f-pgto')    || '';
+
+    function fmtData(d){ if(!d)return ''; var p=d.split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d; }
+    var dataInicioFmt = fmtData(diaIni) + (semIni?' ('+semIni+')':'');
+    var dataFimFmt    = diaFim && diaFim!==diaIni ? fmtData(diaFim)+(semFim?' ('+semFim+')':'') : '';
+    var datasEvento   = dataFimFmt ? dataInicioFmt+' a '+dataFimFmt : dataInicioFmt;
+    var valorFmt = 'R$ ' + valorLiq.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+    var sinal    = valorLiq * 0.5;
+    var saldo    = valorLiq * 0.5;
+    var sinalFmt = 'R$ ' + sinal.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+    var saldoFmt = 'R$ ' + saldo.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+    var hoje = new Date();
+    var meses = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+    var dataContrato = hoje.getDate()+' de '+meses[hoje.getMonth()]+' de '+hoje.getFullYear();
+
+    var linhasEq = [];
+    var secNames = {som:'Sonorizacao',video:'Video / LED',luz:'Iluminacao',estrutura:'Estrutura',servico:'Servicos / Equipe',logistica:'Logistica',extra:'Custos Extras'};
+    Object.keys(secNames).forEach(function(s){
+      var st = state[s]; if(!st) return;
+      var todasRows = [];
+      st.ambientes.forEach(function(a){ (st.rows[a.id]||[]).forEach(function(r){ if(r.desc && r.qty>0) todasRows.push(r); }); });
+      if(todasRows.length>0){
+        linhasEq.push({tipo:'secao', nome:secNames[s]});
+        todasRows.forEach(function(r){ linhasEq.push({tipo:'item', qty:r.qty, desc:r.desc}); });
+      }
+    });
+
+    var tecAudio=0,tecLuz=0,tecVideo=0,tecCoord=0;
+    var stServ = state['servico'];
+    if(stServ){ stServ.ambientes.forEach(function(a){ (stServ.rows[a.id]||[]).forEach(function(r){
+      var d=(r.desc||'').toLowerCase(); var q=r.qty||0;
+      if(d.includes('udio')||d.includes('som')) tecAudio+=q;
+      else if(d.includes('luz')||d.includes('ilum')) tecLuz+=q;
+      else if(d.includes('ideo')||d.includes('led')||d.includes('m')) tecVideo+=q;
+      else if(d.includes('coord')||d.includes('diretor')) tecCoord+=q;
+    }); }); }
+
+    var doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    var pw=210,ph=297,ml=20,mr=20,mt=18,cw=170;
+    var y=mt;
+
+    function setC(r,g,b){doc.setTextColor(r,g,b);}
+    function setFC(r,g,b){doc.setFillColor(r,g,b);}
+    function setDC(r,g,b){doc.setDrawColor(r,g,b);}
+
+    // Cabecalho
+    setFC(20,20,20); doc.rect(0,0,pw,22,'F');
+    setFC(192,0,26); doc.rect(0,19,pw,3,'F');
+    setC(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(13);
+    doc.text('CRAZY SOM AUDIOVISUAIS',ml,10);
+    doc.setFontSize(7.5); doc.setFont('helvetica','normal');
+    doc.text('CRAZY COMERCIO E LOCACAO DE EQUIPAMENTOS LTDA. — CNPJ: 10.909.827/0001-76',ml,15.5);
+    doc.text('N. '+numOrc,pw-mr,10,{align:'right'});
+    y=28;
+
+    setC(20,20,20); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.text('CONTRATO DE PRESTACAO DE SERVICOS',pw/2,y,{align:'center'}); y+=5;
+    doc.setFontSize(9);
+    doc.text('LOCACAO E OPERACAO DE EQUIPAMENTOS AUDIOVISUAIS',pw/2,y,{align:'center'}); y+=8;
+
+    function clausulaTitulo(num,titulo){
+      if(y>ph-40){doc.addPage();y=mt;}
+      setFC(20,20,20); doc.rect(ml,y-4.5,cw,7,'F');
+      setC(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+      doc.text('CLAUSULA '+num+' — '+titulo.toUpperCase(),ml+3,y); y+=5;
+      setC(60,60,60); doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+    }
+
+    function linha(txt,indent){
+      indent=indent||0;
+      if(y>ph-25){doc.addPage();y=mt;}
+      var ls=doc.splitTextToSize(txt,cw-indent);
+      ls.forEach(function(l){if(y>ph-25){doc.addPage();y=mt;} doc.text(l,ml+indent,y);y+=5;});
+    }
+
+    function campoDuplo(l1,v1,l2,v2){
+      if(y>ph-25){doc.addPage();y=mt;}
+      doc.setFont('helvetica','bold');doc.setFontSize(7.5);setC(100,100,100);
+      doc.text(l1+':',ml,y); doc.setFont('helvetica','normal');setC(20,20,20); doc.text(v1||'—',ml+32,y);
+      if(l2){doc.setFont('helvetica','bold');setC(100,100,100);doc.text(l2+':',ml+cw/2,y);doc.setFont('helvetica','normal');setC(20,20,20);doc.text(v2||'—',ml+cw/2+32,y);}
+      y+=5.5;
+    }
+
+    function campoSingle(label,val){
+      if(y>ph-25){doc.addPage();y=mt;}
+      doc.setFont('helvetica','bold');doc.setFontSize(7.5);setC(100,100,100);
+      doc.text(label+':',ml,y); doc.setFont('helvetica','normal');setC(20,20,20);
+      var ls=doc.splitTextToSize(val||'—',cw-35);
+      ls.forEach(function(l,i){if(i===0)doc.text(l,ml+35,y);else{y+=5;doc.text(l,ml+35,y);}}); y+=5.5;
+    }
+
+    // Partes
+    setFC(230,230,230); doc.rect(ml,y-3,cw,28,'F');
+    setC(20,20,20);doc.setFont('helvetica','bold');doc.setFontSize(8.5);
+    doc.text('CONTRATADA:',ml+3,y+1);
+    doc.setFont('helvetica','normal');doc.setFontSize(8);
+    doc.text('CRAZY COMERCIO E LOCACAO DE EQUIPAMENTOS LTDA., CNPJ 10.909.827/0001-76',ml+3,y+6);
+    doc.text('Rua Osvaldo Cruz, n. 36, Bairro Niteroi, Canoas/RS',ml+3,y+11);
+    doc.text('Representada por: Fabiano Santos  —  CPF: 821.578.980-34',ml+3,y+16);
+    y+=23;
+    setFC(245,245,245);doc.rect(ml,y-3,cw,22,'F');
+    setC(20,20,20);doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.text('CONTRATANTE:',ml+3,y+1);
+    doc.setFont('helvetica','normal');doc.setFontSize(8);
+    doc.text(cli||'—',ml+3,y+6);
+    doc.text('CPF/CNPJ: '+(docCli||'—')+'   |   Endereco: '+(endCliCompleto||'—'),ml+3,y+11);
+    y+=22;
+
+    clausulaTitulo('1','OBJETO DO CONTRATO'); y+=2;
+    linha('O presente contrato tem por objeto a locacao de equipamentos audiovisuais e/ou prestacao de servicos tecnicos para o evento abaixo especificado, incluindo transporte, montagem, instalacao, operacao tecnica e desmontagem.');
+    linha('A lista detalhada dos equipamentos e tecnicos consta no Anexo 1 deste contrato.',4); y+=2;
+
+    clausulaTitulo('2','LOCAL, DATA E HORARIOS'); y+=2;
+    campoSingle('Local do Evento',localEv||endEvCompleto);
+    if(endEvCompleto&&localEv) campoSingle('Endereco',endEvCompleto);
+    campoDuplo('Data(s)',datasEvento,'Horario',(hiEv&&hfEv)?hiEv+' as '+hfEv:'—');
+    campoDuplo('Montagem',dmData?fmtData(dmData)+(dmHora?' as '+dmHora:''):'—','Desmontagem',ddData?fmtData(ddData)+(ddHora?' as '+ddHora:''):'—'); y+=2;
+
+    clausulaTitulo('3','EQUIPAMENTOS E SERVICOS'); y+=2;
+    linha('A CONTRATADA disponibilizara os equipamentos e servicos especificados no Anexo 1, em perfeito estado de funcionamento, com equipe tecnica qualificada para montagem, operacao e desmontagem.'); y+=2;
+
+    clausulaTitulo('4','VALOR E FORMA DE PAGAMENTO'); y+=2;
+    if(y>ph-35){doc.addPage();y=mt;}
+    setFC(192,0,26);doc.rect(ml,y-3,cw,9,'F');
+    setC(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(9.5);
+    doc.text('VALOR TOTAL DO CONTRATO: '+valorFmt,pw/2,y+2.5,{align:'center'}); y+=10;
+    setC(20,20,20);doc.setFont('helvetica','normal');doc.setFontSize(8.5);
+    campoDuplo('Sinal (50%) — na assinatura',sinalFmt,'Saldo — ate 1 dia antes do evento',saldoFmt);
+    if(pgto){campoSingle('Condicoes adicionais',pgto);}
+    y+=2;
+    doc.setFont('helvetica','bold');doc.setFontSize(8);setC(60,60,60);
+    linha('DADOS BANCARIOS:');
+    doc.setFont('helvetica','normal');
+    linha('Chave PIX (CNPJ): 10909827000176');
+    linha('Caixa (104): Agencia 0433 | Operacao 003 | Conta 1414-0');
+    linha('Itau (341): Agencia 0296 | Conta 23740-7');
+    linha('Titular: Crazy Comercio e Locacao de Equipamentos LTDA.');
+    y+=2; setC(80,80,80);doc.setFont('helvetica','italic');doc.setFontSize(7.5);
+    linha('Em caso de atraso no pagamento: multa de 2% + juros de 1% ao mes.');
+    doc.setFont('helvetica','normal'); y+=2;
+
+    clausulaTitulo('5','OBRIGACOES DAS PARTES'); y+=2;
+    doc.setFont('helvetica','bold');setC(20,20,20);linha('CONTRATADA:');
+    doc.setFont('helvetica','normal');setC(60,60,60);
+    linha('• Garantir a qualidade, entrega e operacao adequada dos equipamentos.',3);
+    linha('• Disponibilizar equipe tecnica qualificada para montagem, operacao e desmontagem.',3);
+    linha('• Respeitar os prazos e horarios acordados.',3); y+=2;
+    doc.setFont('helvetica','bold');setC(20,20,20);linha('CONTRATANTE:');
+    doc.setFont('helvetica','normal');setC(60,60,60);
+    linha('• Disponibilizar acesso ao local para entrega, montagem e retirada dos equipamentos.',3);
+    linha('• Garantir a seguranca dos equipamentos durante o evento.',3);
+    linha('• Efetuar os pagamentos nas condicoes previstas neste contrato.',3); y+=2;
+
+    clausulaTitulo('6','RESPONSABILIDADE'); y+=2; setC(60,60,60);
+    linha('A CONTRATANTE e responsavel por danos aos equipamentos causados por negligencia, mau uso ou terceiros durante o evento.');
+    linha('A CONTRATADA nao se responsabiliza por atrasos causados por forca maior ou caso fortuito.'); y+=2;
+
+    clausulaTitulo('7','CANCELAMENTO'); y+=2; setC(60,60,60);
+    linha('Cancelamento pela CONTRATANTE:');
+    linha('• Ate 15 dias antes do evento: devolucao de 50% do valor pago.',4);
+    linha('• Menos de 15 dias antes do evento: nao havera devolucao.',4);
+    linha('Cancelamento pela CONTRATADA: reembolso integral dos valores pagos.'); y+=2;
+
+    clausulaTitulo('8','FALHAS NO FUNCIONAMENTO DOS EQUIPAMENTOS'); y+=2; setC(60,60,60);
+    linha('Todos os equipamentos passam por manutencoes preventivas antes dos eventos. Em caso de falha em equipamento essencial, a CONTRATADA se compromete a resolver no menor tempo possivel ou conceder desconto proporcional ao tempo de inatividade.');
+    linha('A CONTRATANTE deve informar imediatamente a equipe tecnica qualquer falha percebida durante o evento.'); y+=2;
+
+    clausulaTitulo('9','INFRAESTRUTURA E ENERGIA ELETRICA'); y+=2; setC(60,60,60);
+    linha('A CONTRATANTE e responsavel por garantir infraestrutura eletrica adequada para os equipamentos. A CONTRATADA fornecera as especificacoes tecnicas antes do evento. Custos com geradores sao de responsabilidade da CONTRATANTE.'); y+=2;
+
+    clausulaTitulo('10','DISPOSICOES GERAIS'); y+=2; setC(60,60,60);
+    linha('Quaisquer alteracoes deverao ser feitas por escrito e assinadas por ambas as partes. Fica eleito o Foro da Comarca de Canoas/RS para dirimir quaisquer litigios.'); y+=2;
+
+    // Assinaturas
+    if(y>ph-55){doc.addPage();y=mt;}
+    y+=4; setC(20,20,20); doc.setFont('helvetica','normal');doc.setFontSize(8.5);
+    doc.text('Canoas/RS, '+dataContrato+'.',ml,y); y+=12;
+    var col1=ml,col2=ml+cw/2+5,larg=cw/2-10;
+    setDC(100,100,100);
+    doc.line(col1,y,col1+larg,y); doc.line(col2,y,col2+larg,y); y+=5;
+    doc.setFont('helvetica','bold');doc.setFontSize(8);
+    doc.text('CONTRATANTE',col1,y); doc.text('CONTRATADA',col2,y); y+=4;
+    doc.setFont('helvetica','normal');doc.setFontSize(7.5);setC(60,60,60);
+    doc.text(cli,col1,y); doc.text('Fabiano Santos',col2,y); y+=4;
+    doc.text('CPF/CNPJ: '+(docCli||'—'),col1,y); doc.text('CPF: 821.578.980-34',col2,y);
+
+    // ANEXO 1
+    doc.addPage(); y=mt;
+    setFC(20,20,20);doc.rect(0,0,pw,22,'F');
+    setFC(192,0,26);doc.rect(0,19,pw,3,'F');
+    setC(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(11);
+    doc.text('ANEXO 1 — LISTA DE EQUIPAMENTOS E SERVICOS',pw/2,11,{align:'center'});
+    doc.setFontSize(7.5);doc.setFont('helvetica','normal');
+    doc.text('Contrato N. '+numOrc+' — '+cli,pw/2,16,{align:'center'});
+    y=30;
+
+    if(linhasEq.length===0){
+      setC(100,100,100);doc.setFontSize(8);
+      doc.text('Nenhum equipamento cadastrado no orcamento.',ml,y);y+=8;
+    } else {
+      setFC(26,58,92);doc.rect(ml,y-4,cw,7,'F');
+      setC(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(8);
+      doc.text('QTD',ml+3,y);doc.text('DESCRICAO DO EQUIPAMENTO / SERVICO',ml+18,y);y+=5;
+      var par=false;
+      linhasEq.forEach(function(item){
+        if(y>ph-20){doc.addPage();y=mt;}
+        if(item.tipo==='secao'){
+          y+=2; setFC(40,40,40);doc.rect(ml,y-4,cw,6.5,'F');
+          setC(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(8);
+          doc.text('  '+item.nome.toUpperCase(),ml+3,y); y+=4.5; par=false;
+        } else {
+          if(par){setFC(248,248,248);doc.rect(ml,y-4,cw,6,'F');}
+          setC(20,20,20);doc.setFont('helvetica','normal');doc.setFontSize(8);
+          doc.text(String(item.qty),ml+3,y);
+          var ls=doc.splitTextToSize(item.desc,cw-25);
+          ls.forEach(function(ld,i){if(i>0){y+=4.5;if(par){setFC(248,248,248);doc.rect(ml,y-3.5,cw,6,'F');}} doc.text(ld,ml+18,y);});
+          y+=6; par=!par;
+        }
+      });
+    }
+
+    y+=6;
+    if(y>ph-40){doc.addPage();y=mt;}
+    setFC(26,58,92);doc.rect(ml,y-4,cw,7,'F');
+    setC(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(8);
+    doc.text('EQUIPE TECNICA',ml+3,y); y+=5;
+    [[tecAudio,'Tecnico de Audio'],[tecLuz,'Tecnico de Iluminacao'],[tecVideo,'Tecnico de Video / LED'],[tecCoord,'Coordenador Tecnico']].forEach(function(t){
+      setC(20,20,20);doc.setFont('helvetica','normal');doc.setFontSize(8);
+      doc.text(String(t[0]),ml+3,y); doc.text(t[1],ml+18,y); y+=6;
+    });
+
+    y+=6; setDC(230,230,230);doc.line(ml,y,pw-mr,y); y+=5;
+    setC(120,120,120);doc.setFont('helvetica','italic');doc.setFontSize(7);
+    doc.text('Este Anexo e parte integrante e inseparavel do Contrato N. '+numOrc+'.',ml,y); y+=4;
+    doc.text('Crazy Comercio e Locacao de Equipamentos LTDA. — CNPJ: 10.909.827/0001-76',ml,y);
+
+    var totalPag=doc.internal.getNumberOfPages();
+    for(var p=1;p<=totalPag;p++){
+      doc.setPage(p);
+      setDC(192,0,26);doc.line(0,ph-8,pw,ph-8);
+      setC(120,120,120);doc.setFont('helvetica','normal');doc.setFontSize(6.5);
+      doc.text('Crazy Som Audiovisuais — Rua Osvaldo Cruz, 36 — Canoas/RS — CNPJ: 10.909.827/0001-76',pw/2,ph-4,{align:'center'});
+      doc.text('Pagina '+p+' de '+totalPag,pw-mr,ph-4,{align:'right'});
+    }
+
+    var nomeArq='Contrato_'+numOrc+'_'+(cli||'cliente').replace(/[^a-zA-Z0-9\s]/g,'').trim().replace(/\s+/g,'_')+'.pdf';
+    doc.save(nomeArq);
+  }
+
+  _iniciarGeracao();
 }
 
 </script>
