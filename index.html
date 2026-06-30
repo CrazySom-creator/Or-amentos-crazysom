@@ -2289,7 +2289,7 @@ async function fetchComLimite(itens, limite){
 async function fetchProgressivo(itens, limite, onProgress){
   var resultados = [];
   limite = Math.max(limite||12, 12);
-  var INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'];
+  var INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_CONFIG_CLIENTES','_CONFIG_USUARIOS','_CONFIG_PERMISSOES','_LOCKS_CRAZYSOM'];
   itens = itens.filter(function(x){return !INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});});
 
   for(var i=0;i<itens.length;i+=limite){
@@ -2355,7 +2355,7 @@ async function carregarListaAprov(aba){
     var r=await fetch(SCRIPT_URL+'?action=list&q=');var d=await r.json();
     if(!d.ok)throw new Error(d.erro||'Erro ao listar');
     var itens=(d.lista||[]).filter(function(x){
-      return !['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'].some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
+      return !['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_CONFIG_CLIENTES','_CONFIG_USUARIOS','_CONFIG_PERMISSOES','_LOCKS_CRAZYSOM'].some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
     });
     // Remover duplicatas de itens pelo ID do Drive (mesmo arquivo listado mais de uma vez)
     itens=_dedupPorDriveId(itens.map(function(x){return {driveId:x.id,nome:x.nome,modificado:x.modificado};})).map(function(x){return {id:x.driveId,nome:x.nome,modificado:x.modificado};});
@@ -2818,7 +2818,7 @@ async function driveListar(){
     var r=await fetch(SCRIPT_URL+'?action=list&q=');
     var d=await r.json();
     if(!d.ok) throw new Error(d.erro);
-    var NOMES_INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM','_CONFIG_USUARIOS','_CONFIG_PERMISSOES'];
+    var NOMES_INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM','_CONFIG_USUARIOS','_CONFIG_PERMISSOES','_CONFIG_CLIENTES'];
     var totalBruto=(d.lista||[]).length;
     var lista=(d.lista||[]).filter(function(x){
       return !NOMES_INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
@@ -2843,7 +2843,7 @@ async function driveListarSilencioso(){
     var r=await fetch(SCRIPT_URL+'?action=list&q=');
     var d=await r.json();
     if(!d.ok) return;
-    var NOMES_INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM','_CONFIG_USUARIOS','_CONFIG_PERMISSOES'];
+    var NOMES_INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM','_CONFIG_USUARIOS','_CONFIG_PERMISSOES','_CONFIG_CLIENTES'];
     var novaLista=(d.lista||[]).filter(function(x){
       return !NOMES_INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
     });
@@ -3851,7 +3851,7 @@ async function homeCarregarBusca(){
     var r = await fetch(SCRIPT_URL+'?action=list&q=');
     var d = await r.json();
     if(!d.ok) throw new Error(d.erro||'Erro ao carregar');
-    var INTERNOS = ['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM'];
+    var INTERNOS = ['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM','_CONFIG_CLIENTES','_CONFIG_USUARIOS','_CONFIG_PERMISSOES'];
     _homeBuscaCache = (d.lista||[]).filter(function(x){
       return !INTERNOS.some(function(n){ return x.nome&&x.nome.indexOf(n)>=0; });
     });
@@ -4880,7 +4880,7 @@ async function funilCarregarDados(forcar){
     var d = await r.json();
     if(!d.ok) throw new Error(d.erro||'Erro ao listar');
     // Filtrar arquivos internos do sistema
-    var INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM'];
+    var INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM','_CONFIG_CLIENTES','_CONFIG_USUARIOS','_CONFIG_PERMISSOES'];
     var itens=(d.lista||[]).filter(function(x){
       return !INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
     });
@@ -5143,7 +5143,7 @@ async function funilHomeCarregarDados(){
     var r = await fetch(SCRIPT_URL+'?action=list&q=');
     var d = await r.json();
     if(!d.ok) throw new Error(d.erro||'Erro ao listar');
-    var INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM'];
+    var INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM','_CONFIG_CLIENTES','_CONFIG_USUARIOS','_CONFIG_PERMISSOES'];
     var itens=(d.lista||[]).filter(function(x){
       return !INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
     });
@@ -6315,7 +6315,7 @@ async function dashAtualizar(){
     var d = await r.json();
     if(!d.ok) throw new Error(d.erro);
     var lista = (d.lista||[]).filter(function(x){
-      return !['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'].some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
+      return !['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_CONFIG_CLIENTES','_CONFIG_USUARIOS','_CONFIG_PERMISSOES','_LOCKS_CRAZYSOM'].some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
     });
     document.getElementById('dash-sub').textContent = 'Carregando '+lista.length+' orçamentos...';
     _dashDados = (await fetchProgressivo(lista, 15, function(parciais, total){
@@ -8240,7 +8240,7 @@ async function osModCarregarDados(){
     var r=await fetch(SCRIPT_URL+'?action=list&q=');
     var d=await r.json();
     if(!d.ok) throw new Error(d.erro||'Erro ao listar');
-    var INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'];
+    var INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_CONFIG_CLIENTES','_CONFIG_USUARIOS','_CONFIG_PERMISSOES','_LOCKS_CRAZYSOM'];
     var itens=(d.lista||[]).filter(function(x){
       return !INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
     });
@@ -8578,7 +8578,7 @@ async function dashFinAtualizar(){
     var d = await r.json();
     if(!d.ok) throw new Error(d.erro);
     var lista = (d.lista||[]).filter(function(x){
-      return !['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'].some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
+      return !['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_CONFIG_CLIENTES','_CONFIG_USUARIOS','_CONFIG_PERMISSOES','_LOCKS_CRAZYSOM'].some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
     });
     document.getElementById('dashfin-sub').textContent = 'Carregando '+lista.length+' orçamentos...';
     _dashFinDados = (await fetchProgressivo(lista, 15, function(parciais, total){
@@ -9061,7 +9061,7 @@ async function carregarSolExclusaoDrive(){
     var dl=await rl.json();
     if(!dl.ok||!dl.lista||!dl.lista.length) return;
     var itens=dl.lista.filter(function(x){
-      return !['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES'].some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
+      return !['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_CONFIG_CLIENTES','_CONFIG_USUARIOS','_CONFIG_PERMISSOES','_LOCKS_CRAZYSOM'].some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
     });
     var encontradas=[];
     var paraLimpar=[];
@@ -9449,7 +9449,7 @@ async function gerarNumeroAuto(){
     if(!d.ok) throw new Error(d.erro||'Erro ao consultar Drive');
 
     var INTERNOS = ['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao',
-                    '_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM'];
+                    '_excluidos_crazysom','HISTORICO_EXCLUSOES','_LOCKS_CRAZYSOM','_CONFIG_CLIENTES','_CONFIG_USUARIOS','_CONFIG_PERMISSOES'];
 
     // Extrair APENAS números com exatamente 8 dígitos que começam com o ano atual
     // Isso evita que números corrompidos (9+ dígitos) contaminem o cálculo
