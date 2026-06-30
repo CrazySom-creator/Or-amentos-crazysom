@@ -7663,23 +7663,29 @@ async function usuariosCarregarStorage(){
       return new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5]).getTime();
     }
     candidatos.sort(function(a,b){return _parseDataBr(b.modificado)-_parseDataBr(a.modificado);});
-    var cfg=candidatos[0];
-    if(cfg){
-      var rC=await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
-      var dC=await rC.json();
-      if(dC.ok&&dC.dados&&dC.dados._tipo==='config-usuarios'&&Array.isArray(dC.dados.usuarios)&&dC.dados.usuarios.length>0){
-        _usuariosDriveId=cfg.id;
-        dC.dados.usuarios.forEach(function(u){
-          var idx=USUARIOS.findIndex(function(x){return x.id===u.id;});
-          if(idx>=0) USUARIOS[idx]=Object.assign({},USUARIOS[idx],u);
-          else USUARIOS.push(u);
-        });
-        try{ localStorage.setItem('crazySomUsuarios',JSON.stringify(USUARIOS)); }catch(e){}
-        return;
-      }
-      // Arquivo existe no Drive mas está vazio/corrompido — usar como destino para re-semear abaixo
-      if(cfg) _usuariosDriveId=cfg.id;
+    // Tenta no máximo os 2 candidatos mais recentes — evita uma cascata de tentativas sequenciais
+    // quando o Drive está sob carga (múltiplos usuários logando ao mesmo tempo).
+    var limiteTentativas=Math.min(candidatos.length,2);
+    for(var ci=0; ci<limiteTentativas; ci++){
+      var cfg=candidatos[ci];
+      try{
+        var rC=await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
+        var dC=await rC.json();
+        if(dC.ok&&dC.dados&&dC.dados._tipo==='config-usuarios'&&Array.isArray(dC.dados.usuarios)&&dC.dados.usuarios.length>0){
+          _usuariosDriveId=cfg.id;
+          dC.dados.usuarios.forEach(function(u){
+            var idx=USUARIOS.findIndex(function(x){return x.id===u.id;});
+            if(idx>=0) USUARIOS[idx]=Object.assign({},USUARIOS[idx],u);
+            else USUARIOS.push(u);
+          });
+          try{ localStorage.setItem('crazySomUsuarios',JSON.stringify(USUARIOS)); }catch(e){}
+          return;
+        }
+      }catch(eCand){ console.warn('usuariosCarregarStorage: falha ao tentar candidato', cfg.id, eCand); }
     }
+    // Nenhum dos candidatos tentados funcionou agora — NÃO grava nada no Drive neste caso
+    // (pode ser apenas uma falha de rede passageira). Apenas usa o ID existente como referência.
+    if(candidatos.length>0){ _usuariosDriveId=candidatos[0].id; }
   }catch(e){ console.warn('usuariosCarregarStorage Drive:',e); }
   // 2) Fallback localStorage (dados reais deste navegador, inclusive senhas alteradas localmente)
   var _tinhaLocal=false;
@@ -7697,7 +7703,10 @@ async function usuariosCarregarStorage(){
       }
     }
   }catch(e){}
-  // 3) Auto-semear o Drive com os dados reais deste navegador (corrige login em outros computadores)
+  // 3) Auto-semear o Drive SOMENTE se nenhum arquivo de configuração existir de verdade
+  //    (evita que múltiplos usuários, sob falha passageira, disparem gravações simultâneas
+  //    que sobrecarregam o backend e travam o login de todos).
+  if(_usuariosDriveId){ return; }
   try{ await usuariosSalvarStorage(); }catch(e){}
 }
 
