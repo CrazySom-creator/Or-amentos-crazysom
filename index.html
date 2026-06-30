@@ -108,6 +108,15 @@ table.it input,table.it select{padding:2px 5px;font-size:11px}
 .modal-tabs{display:flex;gap:8px;margin-bottom:16px}
 .modal-tab{flex:1;padding:10px;border:2px solid #333;background:#111;color:#aaa;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;text-align:center}
 .modal-tab.active{border-color:var(--R);background:#1a0006;color:#fff}
+#cliente-form-ov label,#clientes-ov label{color:#aaa}
+#cliente-form-ov input,#cliente-form-ov select,#cliente-form-ov textarea{background:#111;color:#fff;border:1px solid #333}
+#cliente-form-ov input:focus,#cliente-form-ov select:focus,#cliente-form-ov textarea:focus{border-color:var(--R)}
+.cli-sugest{position:absolute;z-index:500;background:#1c1c1c;border:1px solid #333;border-radius:6px;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.6);width:100%}
+.cli-sugest-item{padding:8px 12px;cursor:pointer;border-bottom:1px solid #2a2a2a;font-size:12px}
+.cli-sugest-item:last-child{border-bottom:none}
+.cli-sugest-item:hover{background:#2a2a2a}
+.cli-sugest-item b{color:#fff;display:block;font-size:12px}
+.cli-sugest-item small{color:#888;font-size:10px}
 .orc-card{background:#111;border-radius:8px;padding:12px 14px;border-left:4px solid #555;margin-bottom:8px;cursor:pointer}
 .orc-card:hover{background:#1a1a1a}
 .orc-card.analise{border-color:#1565c0}
@@ -675,6 +684,12 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <div class="home-section-title">⚙️ Operacional</div>
     <div class="home-grid">
 
+      <div class="home-card" style="border-color:#37474f;background:#0d1214" id="home-btn-clientes" onclick="abrirClientes();fecharHome()">
+        <div class="home-card-ico">👥</div>
+        <div class="home-card-title">Cadastro de Clientes</div>
+        <div class="home-card-desc">Cadastro completo de clientes (PF/PJ) com busca por nome, CNPJ/CPF e e-mail</div>
+      </div>
+
       <div class="home-card" style="border-color:#37474f;background:#0d1214" id="home-btn-rel" onclick="abrirRelatorios();fecharHome()">
         <div class="home-card-ico">📊</div>
         <div class="home-card-title">Relatórios</div>
@@ -821,6 +836,88 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
       <p style="font-size:11px;color:#888;margin-bottom:10px">Defina quais dashboards e relatórios cada cargo pode acessar.</p>
       <div id="dash-acesso-corpo"></div>
       <button onclick="dashAcessoSalvar()" style="margin-top:12px;padding:7px 18px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Acessos</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  MODAL CADASTRO DE CLIENTES (LISTA)                    -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="clientes-ov">
+  <div class="modal-box" style="max-width:780px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <div><h2 style="margin-bottom:2px">👥 Cadastro de Clientes</h2><p class="sub" style="margin:0">Clientes cadastrados (PF/PJ)</p></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-g btn-sm" onclick="clienteNovo()">+ Novo Cliente</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('clientes-ov').classList.remove('open')">✕</button>
+      </div>
+    </div>
+    <input id="clientes-busca" type="text" placeholder="🔍 Buscar por nome, CNPJ/CPF ou e-mail..." style="width:100%;padding:9px 12px;border:1px solid #333;border-radius:6px;background:#111;color:#fff;font-size:12px;margin:12px 0 10px" oninput="clientesRenderLista(this.value)">
+    <div id="clientes-lista" style="max-height:440px;overflow-y:auto;border:1px solid #2a2a2a;border-radius:6px"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  MODAL FORMULÁRIO DE CLIENTE (NOVO/EDITAR)             -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="cliente-form-ov">
+  <div class="modal-box" style="max-width:700px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <h2 style="margin-bottom:2px" id="cliente-form-titulo">👤 Novo Cliente</h2>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('cliente-form-ov').classList.remove('open')">✕</button>
+    </div>
+    <p class="sub" style="margin:0 0 12px">Preencha os dados do cliente — campos com 🔍 buscam automaticamente</p>
+    <input type="hidden" id="cf-id">
+    <div class="g3">
+      <div><label>Tipo de Cliente</label>
+        <select id="cf-tipo" onchange="cfAtualizarLabels()">
+          <option value="PJ">Pessoa Jurídica</option>
+          <option value="PF">Pessoa Física</option>
+        </select>
+      </div>
+      <div><label>CNPJ / CPF</label><div class="irow"><input id="cf-doc" placeholder="00.000.000/0001-00" oninput="fmtDoc(this)"><button type="button" class="btn btn-o btn-sm" onclick="cfBuscaCNPJ()">🔍</button></div><div class="hint" id="cf-doc-st"></div></div>
+      <div><label id="cf-nome-label">Razão Social</label><input id="cf-nome" placeholder="Nome ou Razão Social"></div>
+    </div>
+    <div class="g3">
+      <div><label id="cf-fantasia-label">Nome Fantasia</label><input id="cf-fantasia" placeholder="Nome Fantasia"></div>
+      <div><label id="cf-ie-label">Inscrição Estadual</label><input id="cf-ie" placeholder="Isento ou nº da IE"></div>
+      <div><label>E-mail</label><input id="cf-email" type="email" placeholder="cliente@empresa.com.br"></div>
+    </div>
+    <div class="g3">
+      <div><label>Telefone / WhatsApp</label><input id="cf-tel" placeholder="(51) 99999-9999"></div>
+      <div><label>Contato Responsável</label><input id="cf-contato" placeholder="Nome do contato"></div>
+      <div><label>Origem</label>
+        <select id="cf-origem">
+          <option value="">Selecione a origem...</option>
+          <option value="Cliente Ativo">🔁 Cliente Ativo</option>
+          <option value="Contato pelo Site">🌐 Contato pelo Site</option>
+          <option value="Contato por E-mail">📧 Contato por E-mail</option>
+          <option value="Contato por Telefone">📞 Contato por Telefone</option>
+          <option value="Feiras e Eventos">🎪 Feiras e Eventos</option>
+          <option value="Instagram">📸 Instagram</option>
+          <option value="Google">🔍 Google</option>
+          <option value="Indicação">🤝 Indicação</option>
+          <option value="Prospecção">🎯 Prospecção</option>
+          <option value="Outros">📝 Outros</option>
+        </select>
+      </div>
+    </div>
+    <div class="g4">
+      <div><label>CEP</label><div class="irow"><input id="cf-cep" placeholder="00000-000" maxlength="9" oninput="fmtCep(this)"><button type="button" class="btn btn-o btn-sm" onclick="buscaCEP('cf-cep','cf-end','cf-endnum','cf-cidade','cf-cep-st','cf-bairro')">🔍</button></div><div class="hint" id="cf-cep-st"></div></div>
+      <div><label>Logradouro</label><input id="cf-end" placeholder="Rua, Av..."></div>
+      <div><label>Nº / Complemento</label><input id="cf-endnum" placeholder="123 / Sala 1"></div>
+      <div><label>Bairro</label><input id="cf-bairro" placeholder="Centro"></div>
+    </div>
+    <div class="g3">
+      <div style="grid-column:span 2"><label>Cidade / UF</label><input id="cf-cidade" placeholder="Porto Alegre / RS"></div>
+    </div>
+    <div style="margin-bottom:10px"><label>Observações</label><textarea id="cf-obs" placeholder="Observações gerais sobre o cliente..."></textarea></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+      <button class="btn btn-sm" id="cf-btn-excluir" style="background:#c62828;color:#fff;display:none" onclick="clienteExcluirAtual()">🗑️ Excluir Cliente</button>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('cliente-form-ov').classList.remove('open')">Cancelar</button>
+        <button class="btn btn-g btn-sm" onclick="clienteSalvar()">💾 Salvar Cliente</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1374,18 +1471,25 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 <div class="card">
   <div class="st">👤 Dados do Cliente</div>
   <div class="g3">
-    <div><label>Nome / Razão Social</label><input id="f-cliente" placeholder="Nome ou Razão Social" oninput="marcarAlterado()"></div>
-    <div><label>CNPJ / CPF</label><div class="irow"><input id="f-doc" placeholder="00.000.000/0001-00" oninput="fmtDoc(this);marcarAlterado()"><button class="btn btn-o btn-sm" onclick="buscaCNPJ()">🔍</button></div><div class="hint" id="doc-st"></div></div>
+    <div style="position:relative"><label>Nome / Razão Social</label><div class="irow"><input id="f-cliente" placeholder="Nome ou Razão Social" oninput="marcarAlterado();clienteBuscarSugestoes(this.value)" onblur="setTimeout(clienteFecharSugestoes,200)"><button type="button" class="btn btn-o btn-sm" onclick="clienteAbrirBuscaModal()" title="Buscar cliente cadastrado">🔍</button></div><div id="f-cliente-sugest"></div></div>
+    <div><label>CNPJ / CPF</label><div class="irow"><input id="f-doc" placeholder="00.000.000/0001-00" oninput="fmtDoc(this);marcarAlterado();clienteVerificarDoc()"><button class="btn btn-o btn-sm" onclick="buscaCNPJ()">🔍</button></div><div class="hint" id="doc-st"></div></div>
+    <div><label>E-mail</label><input id="f-email" type="email" placeholder="cliente@empresa.com.br" oninput="marcarAlterado()"></div>
+  </div>
+  <div class="g3">
     <div><label>Contato / Telefone</label><input id="f-tel" placeholder="Nome – (51) 99999-9999" oninput="marcarAlterado()"></div>
+    <div style="grid-column:span 2" id="f-cliente-cad-status"></div>
   </div>
   <div class="g4">
     <div><label>CEP</label><div class="irow"><input id="f-cep" placeholder="00000-000" maxlength="9" oninput="fmtCep(this);marcarAlterado()"><button class="btn btn-o btn-sm" onclick="buscaCEP('f-cep','f-end','f-endnum','f-cidade','cep-st','f-bairro')">🔍</button></div><div class="hint" id="cep-st"></div></div>
     <div><label>Logradouro</label><input id="f-end" placeholder="Rua, Av..." oninput="marcarAlterado()"></div>
     <div><label>Nº / Complemento</label><input id="f-endnum" placeholder="123 / Sala 1" oninput="marcarAlterado()"></div>
     <div><label>Bairro</label><input id="f-bairro" placeholder="Centro" oninput="marcarAlterado()"></div>
+  </div>
+  <div class="g4">
     <div><label>Cidade / UF</label><input id="f-cidade" placeholder="Porto Alegre / RS" oninput="marcarAlterado()"></div>
   </div>
 </div>
+
 
 <div class="card">
   <div class="st">📍 Local do Evento</div>
@@ -1903,6 +2007,7 @@ async function doLogin(){
   setTimeout(_atualizarBtnClonar, 200);
   usuarioAtual=u;aprovStatus='rascunho';aprovHist=[];
   permCarregar();
+  clientesCarregarStorage();
   carregarExcluidosDrive();
   carregarSolExclusaoDrive();
   // Abrir home screen ANTES de esconder o overlay de login (evita "flash" da tela de orçamento)
@@ -3422,7 +3527,7 @@ async function driveDeletar(id,nome){
   }
 }
 
-var FORM_IDS=['f-num','f-data','f-val','f-cons','f-fonte','f-cliente','f-doc','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dd','f-hd','f-pub','f-obs','f-obs-os','f-pgto','f-svinc','desc-pct','desc-rs','val-liq','val-liq-si','f-bv'];
+var FORM_IDS=['f-num','f-data','f-val','f-cons','f-fonte','f-cliente','f-doc','f-email','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dd','f-hd','f-pub','f-obs','f-obs-os','f-pgto','f-svinc','desc-pct','desc-rs','val-liq','val-liq-si','f-bv'];
 function getForm(){var o={};FORM_IDS.forEach(function(id){var e=document.getElementById(id);if(e)o[id]=e.value;});if((!o['f-bv']||o['f-bv']==='0')&&_bvStorage>0)o['f-bv']=String(_bvStorage);return o;}
 function setForm(f){Object.keys(f).forEach(function(id){var e=document.getElementById(id);if(e)e.value=f[id];});sv('orc-disp',f['f-num']||'—');}
 function salvar(){var blob=new Blob([JSON.stringify({form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,finParcelas:finParcelas,finObs:finObs},null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(gv('f-num')||'orc')+' - '+(gv('f-cliente')||'cliente')+'.json';a.click();URL.revokeObjectURL(a.href);}
@@ -7530,6 +7635,334 @@ async function usuariosCarregarStorage(){
   }catch(e){}
 }
 
+// ═══════════════════════════════════════════════════════
+//  CADASTRO DE CLIENTES
+// ═══════════════════════════════════════════════════════
+var CLIENTES=[];
+var _clientesDriveId=null;
+var _clienteBuscaModoSelecao=false;
+var _docVerifTimer=null;
+var _sugestTimer=null;
+
+function _clienteSoDigitos(s){return (s||'').toString().replace(/\D/g,'');}
+
+async function clientesCarregarStorage(){
+  try{
+    var rL=await fetch(SCRIPT_URL+'?action=list');
+    var dL=await rL.json();
+    var cfg=(dL.lista||[]).find(function(x){return x.nome&&x.nome.includes('_CONFIG_CLIENTES');});
+    if(cfg){
+      var rC=await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
+      var dC=await rC.json();
+      if(dC.ok&&dC.dados&&dC.dados._tipo==='config-clientes'&&Array.isArray(dC.dados.clientes)){
+        _clientesDriveId=cfg.id;
+        CLIENTES=dC.dados.clientes;
+        try{ localStorage.setItem('crazySomClientes',JSON.stringify(CLIENTES)); }catch(e){}
+        return;
+      }
+    }
+  }catch(e){ console.warn('clientesCarregarStorage Drive:',e); }
+  try{
+    var d=localStorage.getItem('crazySomClientes');
+    if(d){ var arr=JSON.parse(d); if(Array.isArray(arr)) CLIENTES=arr; }
+  }catch(e){}
+}
+
+async function _clientesSalvarDrive(){
+  try{
+    var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
+      action:'save', id:_clientesDriveId||null,
+      numero:'_CONFIG_CLIENTES', cliente:'_SISTEMA',
+      data:new Date().toISOString().split('T')[0],
+      dados:{_tipo:'config-clientes', clientes:CLIENTES}
+    })});
+    var d=await r.json();
+    if(d.ok) _clientesDriveId=d.id;
+    try{ localStorage.setItem('crazySomClientes',JSON.stringify(CLIENTES)); }catch(e){}
+    return d.ok;
+  }catch(e){ return false; }
+}
+
+async function abrirClientes(){
+  await clientesCarregarStorage();
+  _clienteBuscaModoSelecao=false;
+  document.getElementById('clientes-busca').value='';
+  clientesRenderLista('');
+  document.getElementById('clientes-ov').classList.add('open');
+}
+
+function clientesRenderLista(filtro){
+  var box=document.getElementById('clientes-lista');
+  filtro=(filtro||'').toLowerCase().trim();
+  var filtroDig=_clienteSoDigitos(filtro);
+  var lista=CLIENTES.filter(function(c){
+    if(!filtro)return true;
+    var nome=(c.nome||'').toLowerCase();
+    var fantasia=(c.fantasia||'').toLowerCase();
+    var email=(c.email||'').toLowerCase();
+    var doc=_clienteSoDigitos(c.doc);
+    return nome.indexOf(filtro)>=0||fantasia.indexOf(filtro)>=0||email.indexOf(filtro)>=0||(filtroDig&&doc.indexOf(filtroDig)>=0);
+  }).sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
+  if(!lista.length){box.innerHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">Nenhum cliente encontrado.</div>';return;}
+  box.innerHTML=lista.map(function(c){
+    var idx=CLIENTES.indexOf(c);
+    var acao=_clienteBuscaModoSelecao
+      ? '<button class="btn btn-g btn-sm" onclick="clienteSelecionarParaOrcamento('+idx+')">✅ Selecionar</button>'
+      : '<button class="btn btn-o btn-sm" onclick="clienteEditar('+idx+')">✏️ Editar</button>';
+    return '<div style="padding:12px 14px;border-bottom:1px solid #2a2a2a;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
+      +'<div>'
+      +'<div style="color:#fff;font-size:13px;font-weight:700">'+eh(c.nome||'—')+(c.fantasia?' <span style="color:#888;font-weight:400">('+eh(c.fantasia)+')</span>':'')+'</div>'
+      +'<div style="color:#999;font-size:11px;margin-top:2px">'+(c.tipo==='PF'?'CPF':'CNPJ')+': '+eh(c.doc||'—')+(c.email?' · ✉️ '+eh(c.email):'')+(c.tel?' · 📞 '+eh(c.tel):'')+'</div>'
+      +(c.cidade?'<div style="color:#666;font-size:10px;margin-top:2px">📍 '+eh(c.cidade)+'</div>':'')
+      +'</div>'
+      +'<div>'+acao+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function cfAtualizarLabels(){
+  var pf=document.getElementById('cf-tipo').value==='PF';
+  document.getElementById('cf-nome-label').textContent=pf?'Nome Completo':'Razão Social';
+  document.getElementById('cf-fantasia-label').textContent=pf?'Apelido':'Nome Fantasia';
+  document.getElementById('cf-ie-label').textContent=pf?'RG':'Inscrição Estadual';
+  document.getElementById('cf-doc').placeholder=pf?'000.000.000-00':'00.000.000/0001-00';
+}
+
+function _clienteLimparForm(){
+  ['cf-id','cf-doc','cf-nome','cf-fantasia','cf-ie','cf-email','cf-tel','cf-contato','cf-cep','cf-end','cf-endnum','cf-bairro','cf-cidade','cf-obs'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.value='';
+  });
+  document.getElementById('cf-tipo').value='PJ';
+  document.getElementById('cf-origem').value='';
+  document.getElementById('cf-doc-st').textContent='';
+  document.getElementById('cf-cep-st').textContent='';
+  cfAtualizarLabels();
+}
+
+function clienteNovo(prefill){
+  _clienteLimparForm();
+  if(prefill){
+    if(prefill.doc)document.getElementById('cf-doc').value=prefill.doc;
+    if(prefill.nome)document.getElementById('cf-nome').value=prefill.nome;
+    if(prefill.tel)document.getElementById('cf-tel').value=prefill.tel;
+    if(prefill.email)document.getElementById('cf-email').value=prefill.email;
+    if(prefill.cep)document.getElementById('cf-cep').value=prefill.cep;
+    if(prefill.end)document.getElementById('cf-end').value=prefill.end;
+    if(prefill.endnum)document.getElementById('cf-endnum').value=prefill.endnum;
+    if(prefill.bairro)document.getElementById('cf-bairro').value=prefill.bairro;
+    if(prefill.cidade)document.getElementById('cf-cidade').value=prefill.cidade;
+    var docDig=_clienteSoDigitos(prefill.doc);
+    document.getElementById('cf-tipo').value=docDig.length===11?'PF':'PJ';
+    cfAtualizarLabels();
+  }
+  document.getElementById('cliente-form-titulo').textContent='👤 Novo Cliente';
+  document.getElementById('cf-btn-excluir').style.display='none';
+  document.getElementById('cliente-form-ov').classList.add('open');
+}
+
+function clienteEditar(idx){
+  var c=CLIENTES[idx];if(!c)return;
+  _clienteLimparForm();
+  document.getElementById('cf-id').value=c.id;
+  document.getElementById('cf-tipo').value=c.tipo||'PJ';
+  document.getElementById('cf-doc').value=c.doc||'';
+  document.getElementById('cf-nome').value=c.nome||'';
+  document.getElementById('cf-fantasia').value=c.fantasia||'';
+  document.getElementById('cf-ie').value=c.ie||'';
+  document.getElementById('cf-email').value=c.email||'';
+  document.getElementById('cf-tel').value=c.tel||'';
+  document.getElementById('cf-contato').value=c.contato||'';
+  document.getElementById('cf-origem').value=c.origem||'';
+  document.getElementById('cf-cep').value=c.cep||'';
+  document.getElementById('cf-end').value=c.end||'';
+  document.getElementById('cf-endnum').value=c.endnum||'';
+  document.getElementById('cf-bairro').value=c.bairro||'';
+  document.getElementById('cf-cidade').value=c.cidade||'';
+  document.getElementById('cf-obs').value=c.obs||'';
+  cfAtualizarLabels();
+  document.getElementById('cliente-form-titulo').textContent='✏️ Editar Cliente';
+  document.getElementById('cf-btn-excluir').style.display='inline-block';
+  document.getElementById('cliente-form-ov').classList.add('open');
+}
+
+async function cfBuscaCNPJ(){
+  var doc=_clienteSoDigitos(document.getElementById('cf-doc').value);
+  var st=document.getElementById('cf-doc-st');
+  if(doc.length!==14){st.textContent=doc.length===11?'ℹ️ CPF':'⚠️ CNPJ inválido';return;}
+  st.textContent='🔍 Buscando...';
+  var d=null;
+  var urls=['https://brasilapi.com.br/api/cnpj/v1/'+doc,'https://publica.cnpj.ws/cnpj/'+doc];
+  for(var i=0;i<urls.length;i++){
+    try{var r=await fetch(urls[i],{headers:{Accept:'application/json'}});if(r.ok){d=await r.json();if(d&&(d.razao_social||d.nome_fantasia||d.nome))break;}}catch(e){}
+  }
+  if(!d){st.textContent='⚠️ Não encontrado.';return;}
+  var razao=d.razao_social||d.nome||'';
+  var fantasia=d.nome_fantasia||'';
+  if(razao)document.getElementById('cf-nome').value=razao;
+  if(fantasia)document.getElementById('cf-fantasia').value=fantasia;
+  var est=d.estabelecimento||{};
+  var logr=d.logradouro||est.logradouro||'';
+  var num=d.numero||est.numero||'';
+  var comp=d.complemento||est.complemento||'';
+  var bairro=d.bairro||est.bairro||'';
+  var mun=d.municipio||(est.cidade&&est.cidade.nome)||'';
+  var uf=d.uf||(est.estado&&est.estado.sigla)||'';
+  var cepR=(d.cep||est.cep||'').replace(/\D/g,'');
+  var email=d.email||(est.email)||'';
+  if(email)document.getElementById('cf-email').value=email;
+  if(logr)document.getElementById('cf-end').value=logr;
+  if(num||comp)document.getElementById('cf-endnum').value=[num,comp].filter(Boolean).join(' / ');
+  if(bairro)document.getElementById('cf-bairro').value=bairro;
+  if(mun||uf)document.getElementById('cf-cidade').value=[mun,uf].filter(Boolean).join(' / ');
+  if(cepR.length===8){
+    document.getElementById('cf-cep').value=cepR.slice(0,5)+'-'+cepR.slice(5);
+  }
+  st.textContent='✅ Dados preenchidos automaticamente';
+}
+
+function _clienteValidarDocDuplicado(docNorm,idAtual){
+  return CLIENTES.find(function(c){return _clienteSoDigitos(c.doc)===docNorm&&c.id!==idAtual;});
+}
+
+async function clienteSalvar(){
+  var id=document.getElementById('cf-id').value;
+  var nome=(document.getElementById('cf-nome').value||'').trim();
+  var doc=(document.getElementById('cf-doc').value||'').trim();
+  if(!nome){alert('⚠️ Informe o Nome / Razão Social.');return;}
+  if(!doc){alert('⚠️ Informe o CNPJ/CPF.');return;}
+  var docDig=_clienteSoDigitos(doc);
+  if(docDig.length!==11&&docDig.length!==14){alert('⚠️ CNPJ/CPF inválido.');return;}
+  var dup=_clienteValidarDocDuplicado(docDig,id);
+  if(dup){alert('⚠️ Já existe um cliente cadastrado com este CNPJ/CPF:\n\n'+(dup.nome||''));return;}
+  var obj={
+    id:id||('cli_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)),
+    tipo:document.getElementById('cf-tipo').value,
+    nome:nome,
+    fantasia:document.getElementById('cf-fantasia').value.trim(),
+    doc:doc,
+    ie:document.getElementById('cf-ie').value.trim(),
+    email:document.getElementById('cf-email').value.trim(),
+    tel:document.getElementById('cf-tel').value.trim(),
+    contato:document.getElementById('cf-contato').value.trim(),
+    origem:document.getElementById('cf-origem').value,
+    cep:document.getElementById('cf-cep').value.trim(),
+    end:document.getElementById('cf-end').value.trim(),
+    endnum:document.getElementById('cf-endnum').value.trim(),
+    bairro:document.getElementById('cf-bairro').value.trim(),
+    cidade:document.getElementById('cf-cidade').value.trim(),
+    obs:document.getElementById('cf-obs').value.trim(),
+    atualizadoEm:new Date().toLocaleString('pt-BR'),
+    atualizadoPor:usuarioAtual?usuarioAtual.nome:''
+  };
+  var idx=CLIENTES.findIndex(function(c){return c.id===obj.id;});
+  if(idx>=0) CLIENTES[idx]=Object.assign({},CLIENTES[idx],obj);
+  else CLIENTES.push(obj);
+  var ok=await _clientesSalvarDrive();
+  document.getElementById('cliente-form-ov').classList.remove('open');
+  if(document.getElementById('clientes-ov').classList.contains('open')) clientesRenderLista(document.getElementById('clientes-busca').value);
+  if(ok) driveStatus('✅ Cliente salvo no cadastro','ok'); else driveStatus('⚠️ Cliente salvo localmente (Drive indisponível)','err');
+  return obj;
+}
+
+async function clienteExcluirAtual(){
+  var id=document.getElementById('cf-id').value;if(!id)return;
+  var c=CLIENTES.find(function(x){return x.id===id;});
+  if(!confirm('🗑️ Excluir o cliente "'+(c?c.nome:'')+'" do cadastro?\n\nEsta ação não afeta orçamentos já emitidos.'))return;
+  CLIENTES=CLIENTES.filter(function(x){return x.id!==id;});
+  await _clientesSalvarDrive();
+  document.getElementById('cliente-form-ov').classList.remove('open');
+  if(document.getElementById('clientes-ov').classList.contains('open')) clientesRenderLista(document.getElementById('clientes-busca').value);
+  driveStatus('🗑️ Cliente excluído do cadastro','ok');
+}
+
+// ── Integração com a tela de Orçamento ──────────────────────────────
+function _clientePreencherOrcamento(c){
+  document.getElementById('f-cliente').value=c.nome||'';
+  document.getElementById('f-doc').value=c.doc||'';
+  document.getElementById('f-email').value=c.email||'';
+  document.getElementById('f-tel').value=c.tel||'';
+  document.getElementById('f-cep').value=c.cep||'';
+  document.getElementById('f-end').value=c.end||'';
+  document.getElementById('f-endnum').value=c.endnum||'';
+  document.getElementById('f-bairro').value=c.bairro||'';
+  document.getElementById('f-cidade').value=c.cidade||'';
+  if(c.origem&&document.getElementById('f-fonte')) document.getElementById('f-fonte').value=c.origem;
+  marcarAlterado();
+  var st=document.getElementById('f-cliente-cad-status');
+  if(st)st.innerHTML='<span style="font-size:10px;color:#2e7d32;font-weight:700">✅ Cliente cadastrado — dados preenchidos automaticamente</span>';
+}
+
+function clienteVerificarDoc(){
+  clearTimeout(_docVerifTimer);
+  _docVerifTimer=setTimeout(function(){
+    var docDig=_clienteSoDigitos(gv('f-doc'));
+    var st=document.getElementById('f-cliente-cad-status');
+    if(!st)return;
+    if(docDig.length!==11&&docDig.length!==14){st.innerHTML='';return;}
+    var c=CLIENTES.find(function(x){return _clienteSoDigitos(x.doc)===docDig;});
+    if(c){
+      _clientePreencherOrcamento(c);
+    }else{
+      st.innerHTML='<span style="font-size:10px;color:#e65100;font-weight:700">ℹ️ Cliente não cadastrado — </span>'
+        +'<button type="button" onclick="clienteCadastroRapido()" style="font-size:10px;font-weight:700;color:#1565c0;background:none;border:none;text-decoration:underline;cursor:pointer;padding:0">➕ cadastrar este cliente</button>';
+    }
+  },400);
+}
+
+function clienteCadastroRapido(){
+  clienteNovo({
+    doc:gv('f-doc'),nome:gv('f-cliente'),tel:gv('f-tel'),email:gv('f-email'),
+    cep:gv('f-cep'),end:gv('f-end'),endnum:gv('f-endnum'),bairro:gv('f-bairro'),cidade:gv('f-cidade')
+  });
+  // Após salvar, vincula automaticamente ao orçamento atual
+  var btnSalvar=document.querySelector('#cliente-form-ov .btn.btn-g.btn-sm');
+  if(btnSalvar){
+    btnSalvar.onclick=async function(){
+      var obj=await clienteSalvar();
+      if(obj)_clientePreencherOrcamento(obj);
+      btnSalvar.onclick=function(){clienteSalvar();};
+    };
+  }
+}
+
+function clienteBuscarSugestoes(texto){
+  clearTimeout(_sugestTimer);
+  var box=document.getElementById('f-cliente-sugest');
+  if(!box)return;
+  texto=(texto||'').trim();
+  if(texto.length<2){box.innerHTML='';return;}
+  _sugestTimer=setTimeout(function(){
+    var t=texto.toLowerCase();
+    var tDig=_clienteSoDigitos(texto);
+    var resultados=CLIENTES.filter(function(c){
+      var nome=(c.nome||'').toLowerCase();
+      var doc=_clienteSoDigitos(c.doc);
+      return nome.indexOf(t)>=0||(tDig.length>=3&&doc.indexOf(tDig)>=0);
+    }).slice(0,8);
+    if(!resultados.length){box.innerHTML='';return;}
+    box.innerHTML='<div class="cli-sugest">'+resultados.map(function(c){
+      var idxG=CLIENTES.indexOf(c);
+      return '<div class="cli-sugest-item" onmousedown="clienteSelecionarParaOrcamento('+idxG+')"><b>'+eh(c.nome||'')+'</b><small>'+(c.tipo==='PF'?'CPF':'CNPJ')+': '+eh(c.doc||'—')+(c.email?' · '+eh(c.email):'')+'</small></div>';
+    }).join('')+'</div>';
+  },250);
+}
+function clienteFecharSugestoes(){var box=document.getElementById('f-cliente-sugest');if(box)box.innerHTML='';}
+
+function clienteAbrirBuscaModal(){
+  _clienteBuscaModoSelecao=true;
+  document.getElementById('clientes-busca').value='';
+  clientesRenderLista('');
+  document.getElementById('clientes-ov').classList.add('open');
+}
+
+function clienteSelecionarParaOrcamento(idx){
+  var c=CLIENTES[idx];if(!c)return;
+  _clientePreencherOrcamento(c);
+  clienteFecharSugestoes();
+  _clienteBuscaModoSelecao=false;
+  document.getElementById('clientes-ov').classList.remove('open');
+}
+
 function renderAdmList(){
   usuariosCarregarStorage();
   document.getElementById('adm-list').innerHTML=USUARIOS.map(function(u,i){
@@ -8806,6 +9239,7 @@ document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
 // Carregar dados persistidos ao iniciar
 usuariosCarregarStorage();
 permCarregar();
+clientesCarregarStorage();
 calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
 // Auto-save a cada 3 minutos se houver alterações não salvas e orçamento já tiver ID no Drive
 setInterval(function(){
