@@ -2162,7 +2162,7 @@ async function aprovAcaoInline(novo){
   }
 }
 
-async function abrirAdm(){mostrarCarregando('⏳ Carregando administração...');try{await permCarregar();await usuariosCarregarStorage();}finally{esconderCarregando();}renderAdmList();renderAdmExclusoes();document.getElementById('adm-ov').classList.add('open');admAba('usuarios');}
+async function abrirAdm(){mostrarCarregando('⏳ Carregando administração...');try{await permCarregar();await usuariosCarregarStorage();renderAdmList();renderAdmExclusoes();document.getElementById('adm-ov').classList.add('open');admAba('usuarios');}finally{esconderCarregando();}}
 
 function toggleNegociacaoBox(){
   var b=document.getElementById('negociacao-box');
@@ -2188,13 +2188,12 @@ async function enviarNegociacao(){
 function abrirAprovacoes(){
   document.getElementById('aprov-ov').classList.add('open');
   mostrarCarregando('⏳ Carregando aprovações...');
-  Promise.all([
-    carregarSolExclusaoDrive().then(function(){
-      atualizarBadgeExclusoes();
-      if(abaAprovAtual==='excl'){renderExclusivoModal();}
-    }),
-    mudarAbaAprov(abaAprovAtual)
-  ]).finally(function(){esconderCarregando();});
+  // Varredura de solicitações de exclusão roda em segundo plano (não deve travar o indicador de carregamento)
+  carregarSolExclusaoDrive().then(function(){
+    atualizarBadgeExclusoes();
+    if(abaAprovAtual==='excl'){renderExclusivoModal();}
+  });
+  Promise.resolve(mudarAbaAprov(abaAprovAtual)).finally(function(){esconderCarregando();});
 }
 function atualizarAprovacoes(btn){
   var orig=btn?btn.textContent:'';
@@ -7639,7 +7638,7 @@ async function usuariosCarregarStorage(){
     if(cfg){
       var rC=await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
       var dC=await rC.json();
-      if(dC.ok&&dC.dados&&dC.dados._tipo==='config-usuarios'&&Array.isArray(dC.dados.usuarios)){
+      if(dC.ok&&dC.dados&&dC.dados._tipo==='config-usuarios'&&Array.isArray(dC.dados.usuarios)&&dC.dados.usuarios.length>0){
         _usuariosDriveId=cfg.id;
         dC.dados.usuarios.forEach(function(u){
           var idx=USUARIOS.findIndex(function(x){return x.id===u.id;});
@@ -7649,14 +7648,18 @@ async function usuariosCarregarStorage(){
         try{ localStorage.setItem('crazySomUsuarios',JSON.stringify(USUARIOS)); }catch(e){}
         return;
       }
+      // Arquivo existe no Drive mas está vazio/corrompido — usar como destino para re-semear abaixo
+      if(cfg) _usuariosDriveId=cfg.id;
     }
   }catch(e){ console.warn('usuariosCarregarStorage Drive:',e); }
-  // 2) Fallback localStorage
+  // 2) Fallback localStorage (dados reais deste navegador, inclusive senhas alteradas localmente)
+  var _tinhaLocal=false;
   try{
     var d=localStorage.getItem('crazySomUsuarios');
     if(d){
       var arr=JSON.parse(d);
       if(Array.isArray(arr)&&arr.length>0){
+        _tinhaLocal=true;
         arr.forEach(function(u){
           var idx=USUARIOS.findIndex(function(x){return x.id===u.id;});
           if(idx>=0) USUARIOS[idx]=Object.assign({},USUARIOS[idx],u);
@@ -7665,6 +7668,8 @@ async function usuariosCarregarStorage(){
       }
     }
   }catch(e){}
+  // 3) Auto-semear o Drive com os dados reais deste navegador (corrige login em outros computadores)
+  try{ await usuariosSalvarStorage(); }catch(e){}
 }
 
 // ═══════════════════════════════════════════════════════
