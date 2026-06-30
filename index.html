@@ -4219,6 +4219,22 @@ function downloadPDF(){
 }
 
 function gerarOS(){
+  // ── Validação de campos obrigatórios para emissão da OS ──
+  var camposFaltandoOS = [];
+  if(!gv('f-cliente'))    camposFaltandoOS.push('Nome do cliente');
+  if(!gv('f-local'))      camposFaltandoOS.push('Local do evento');
+  if(!gv('f-end-ev'))     camposFaltandoOS.push('Endereço do evento');
+  if(!gv('f-cid-ev'))     camposFaltandoOS.push('Cidade do evento');
+  if(!gv('f-dia'))        camposFaltandoOS.push('Data do evento');
+  if(!gv('f-hi')||!gv('f-hf')) camposFaltandoOS.push('Horário de início e fim do evento');
+  if(!gv('f-resp'))       camposFaltandoOS.push('Responsável no Local / Telefone');
+  if(!gv('f-cons'))       camposFaltandoOS.push('Consultor responsável');
+
+  if(camposFaltandoOS.length > 0){
+    alert('⚠️ DADOS INCOMPLETOS PARA EMISSÃO DA OS\n\nOs seguintes campos precisam ser preenchidos:\n\n• ' + camposFaltandoOS.join('\n• ') + '\n\nPreencha os dados e tente novamente.');
+    return;
+  }
+
   var mStr=fD(gv('f-dm'));if(gv('f-hm'))mStr+=' às '+gv('f-hm');
   var dStr=fD(gv('f-dd'));if(gv('f-hd'))dStr+=' às '+gv('f-hd');
   var horEv=fD(gv('f-dia'));if(gv('f-sem'))horEv+=' ('+gv('f-sem')+')';
@@ -7145,11 +7161,11 @@ var _permDriveId = null;
 
 async function permCarregar(){
   try{
-    var rL=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'list',q:''})});
+    var rL=await fetch(SCRIPT_URL+'?action=list');
     var dL=await rL.json();
     var cfg=(dL.lista||[]).find(function(x){return x.nome&&x.nome.includes('_CONFIG_PERMISSOES');});
     if(cfg){
-      var rC=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'load',id:cfg.id})});
+      var rC=await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
       var dC=await rC.json();
       if(dC.ok&&dC.dados&&dC.dados._tipo==='config-permissoes'){
         _permDriveId=cfg.id;
@@ -7410,11 +7426,11 @@ async function usuariosSalvarStorage(){
 async function usuariosCarregarStorage(){
   // 1) Tentar Drive
   try{
-    var rL=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'list',q:''})});
+    var rL=await fetch(SCRIPT_URL+'?action=list');
     var dL=await rL.json();
     var cfg=(dL.lista||[]).find(function(x){return x.nome&&x.nome.includes('_CONFIG_USUARIOS');});
     if(cfg){
-      var rC=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'load',id:cfg.id})});
+      var rC=await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
       var dC=await rC.json();
       if(dC.ok&&dC.dados&&dC.dados._tipo==='config-usuarios'&&Array.isArray(dC.dados.usuarios)){
         _usuariosDriveId=cfg.id;
