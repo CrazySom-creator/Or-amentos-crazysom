@@ -608,7 +608,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
         <div class="home-card-badge" id="home-badge-aprov">!</div>
       </div>
 
-      <div class="home-card" style="border-color:#37474f;background:#0d1214" id="home-btn-elab" onclick="homeAbrirElab()">
+      <div class="home-card purple" id="home-btn-elab" onclick="homeAbrirElab()">
         <div class="home-card-ico">📐</div>
         <div class="home-card-title">Dashboard Elaboração</div>
         <div class="home-card-desc">Pipeline com tempo de elaboração até o fechamento do orçamento</div>
@@ -1892,12 +1892,12 @@ async function doLogin(){
   permCarregar();
   carregarExcluidosDrive();
   carregarSolExclusaoDrive();
+  // Abrir home screen ANTES de esconder o overlay de login (evita "flash" da tela de orçamento)
+  abrirHome();
   document.getElementById('login-ov').style.display='none';
   document.getElementById('user-badge').style.display='flex';
   document.getElementById('user-nome').textContent=u.nome;
   document.getElementById('user-cargo').textContent=u.cargo||(NIVEIS[u.nivel]||u.nivel);
-  // Abrir home screen após login
-  setTimeout(function(){ abrirHome(); }, 350);
   document.getElementById('btn-adm').style.display=u.nivel==='adm'?'inline-block':'none';
   var _bG=document.getElementById('btn-dash-ger');if(_bG)_bG.style.display=['adm','gerente','diretor'].includes(u.nivel)?'inline-block':'none';
   // Aplicar visibilidade dos botões de dashboard conforme cargo
@@ -7850,6 +7850,37 @@ function osModImprimirTodos(){
 }
 
 function osModGerarOS(lista){
+  // ── Validação: verificar campos obrigatórios em cada orçamento da lista ──
+  var CAMPOS_OBR_OS=[
+    {id:'f-cliente', label:'Nome do cliente'},
+    {id:'f-local',   label:'Local do evento'},
+    {id:'f-end-ev',  label:'Endereço do evento'},
+    {id:'f-cid-ev',  label:'Cidade do evento'},
+    {id:'f-dia',     label:'Data do evento'},
+    {id:'f-resp',    label:'Responsável no Local / Telefone'},
+    {id:'f-cons',    label:'Consultor responsável'}
+  ];
+  var incompletos=[];
+  lista.forEach(function(o){
+    var f=o.form||{};
+    var faltando=CAMPOS_OBR_OS.filter(function(c){return !f[c.id];}).map(function(c){return c.label;});
+    if(!f['f-hi']||!f['f-hf']) faltando.push('Horário de início e fim do evento');
+    if(faltando.length>0){
+      incompletos.push({num:f['f-num']||'S/N', cliente:f['f-cliente']||'(sem nome)', faltando:faltando});
+    }
+  });
+  if(incompletos.length>0){
+    var msg='⚠️ DADOS INCOMPLETOS PARA EMISSÃO DA OS\n\n';
+    incompletos.forEach(function(it){
+      msg+='Orçamento Nº '+it.num+' — '+it.cliente+'\n';
+      it.faltando.forEach(function(f){ msg+='   • '+f+'\n'; });
+      msg+='\n';
+    });
+    msg+='Preencha os dados e tente novamente.';
+    alert(msg);
+    return;
+  }
+
   // Gerar HTML de todas as OS em uma única página (separadas por page-break)
   var OCULT_LOC=['Montagem','Desmontagem','Frete','Almoço/Janta','Combustível','Hotel','Pedágio','Projeto','Carregadores','BV Produtora','Bônus de Venda'];
   function isOcultOS(n){
