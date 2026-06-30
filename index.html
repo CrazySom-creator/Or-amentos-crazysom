@@ -1734,7 +1734,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <button class="btn btn-o" onclick="homeSairSemSalvar()" title="Sair sem salvar — descarta alteracoes nao salvas" style="border-color:#c0001a;color:#ff6060;font-weight:700">✕ Sair</button>
     <button class="btn btn-r" onclick="abrirTipo()">📄 PDF</button>
     <button class="btn btn-d" onclick="downloadPDF()">⬇️ Download</button>
-    <button class="btn" onclick="gerarContrato()" style="background:#1a3a5c;color:#fff;border:none;font-weight:800" title="Gerar contrato em PDF preenchido com os dados do orçamento">📝 Contrato</button>
+    <button class="btn" onclick="abrirPreviewContrato()" style="background:#1a3a5c;color:#fff;border:none;font-weight:800" title="Pré-visualizar e editar dados antes de gerar o contrato em PDF">📝 Contrato</button>
   </div>
 </div>
 
@@ -9748,6 +9748,100 @@ async function verificarNumDuplicado(num){
 // ════════════════════════════════════════════════════════
 //  GERADOR DE CONTRATO PDF — v3 (versão consolidada)
 // ════════════════════════════════════════════════════════
+// ── Dados editáveis do preview do contrato (compartilhados com gerarContrato) ──
+var _pcDados = null;
+
+function pcSetPgto(txt){ var el=document.getElementById('pc-pgto'); if(el) el.value=txt; }
+
+function abrirPreviewContrato(){
+  // Validações básicas primeiro
+  var _elLiq = document.getElementById('val-liq');
+  var _elLiqSI = document.getElementById('val-liq-si');
+  var valorLiq = parseFloat((_elLiq && (_elLiq.value || _elLiq.placeholder)) || 0)
+               || parseFloat((_elLiqSI && (_elLiqSI.value || _elLiqSI.placeholder)) || 0) || 0;
+  var camposFaltando = [];
+  if(!gv('f-cliente'))  camposFaltando.push('Nome / Razão Social do cliente');
+  if(!gv('f-doc'))      camposFaltando.push('CPF / CNPJ do cliente');
+  if(!gv('f-end'))      camposFaltando.push('Endereço do cliente');
+  if(!gv('f-cidade'))   camposFaltando.push('Cidade / UF do cliente');
+  if(!gv('f-local'))    camposFaltando.push('Local do evento');
+  if(!gv('f-dia'))      camposFaltando.push('Data de início do evento');
+  if(!valorLiq)         camposFaltando.push('Valor total (calcule o orçamento primeiro)');
+  if(camposFaltando.length){
+    alert('⚠️ DADOS INCOMPLETOS\n\n• ' + camposFaltando.join('\n• ') + '\n\nPreencha os dados e tente novamente.');
+    return;
+  }
+
+  function fmtDataPc(d){ if(!d)return ''; var p=d.split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d; }
+  var diaIni=gv('f-dia'),diaFim=gv('f-dia-fim'),semIni=gv('f-sem'),semFim=gv('f-sem-fim');
+  var hiEv=gv('f-hi'),hfEv=gv('f-hf');
+  var dataInicioFmt=fmtDataPc(diaIni)+(semIni?' ('+semIni+')':'');
+  var dataFimFmt=(diaFim&&diaFim!==diaIni)?fmtDataPc(diaFim)+(semFim?' ('+semFim+')':''):'';
+  var datasEvento=dataFimFmt?dataInicioFmt+' a '+dataFimFmt:dataInicioFmt;
+  var horarioEv=(hiEv&&hfEv)?hiEv+' as '+hfEv:(hiEv||hfEv||'');
+  var dmData=gv('f-dm'),dmHora=gv('f-hm'),ddData=gv('f-dd'),ddHora=gv('f-hd');
+  var montagemFmt=(fmtDataPc(dmData)+(dmHora?' às '+dmHora:'')).trim();
+  var desmontagemFmt=(fmtDataPc(ddData)+(ddHora?' às '+ddHora:'')).trim();
+  var endEvRua=[gv('f-end-ev'),gv('f-num-ev')].filter(Boolean).join(', ');
+  var endEvCompleto=[endEvRua,gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
+  var endCliStr=[gv('f-end'),gv('f-endnum')].filter(Boolean).join(', ');
+  var pgtoText=gv('f-pgto')||'';
+  if(typeof finParcelas!=='undefined'&&finParcelas.length>0){
+    var linhasPgto=finParcelas.map(function(p){
+      var l='';if(p.desc)l+=p.desc;
+      if(p.valor){var vF='R$ '+parseFloat(p.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});l+=(l?' — ':'')+vF;}
+      if(p.data)l+=(l?' — venc. ':'')+(function(d){var x=d.split('-');return x.length===3?x[2]+'/'+x[1]+'/'+x[0]:d;})(p.data);
+      if(p.forma)l+=(l?' | ':'')+p.forma;
+      return l;
+    }).filter(Boolean).join('\n');
+    if(linhasPgto) pgtoText=linhasPgto;
+  }
+
+  // Preenche o modal
+  document.getElementById('pc-cliente').value=gv('f-cliente')||'';
+  document.getElementById('pc-doc').value=gv('f-doc')||'';
+  document.getElementById('pc-tel').value=gv('f-tel')||'';
+  document.getElementById('pc-end').value=endCliStr;
+  document.getElementById('pc-bairro').value=gv('f-bairro')||'';
+  document.getElementById('pc-cidade').value=gv('f-cidade')||'';
+  document.getElementById('pc-local').value=gv('f-local')||'';
+  document.getElementById('pc-tipo').value=gv('f-tipo')||'';
+  document.getElementById('pc-end-ev').value=endEvCompleto;
+  document.getElementById('pc-datas').value=datasEvento;
+  document.getElementById('pc-horario').value=horarioEv;
+  document.getElementById('pc-montagem').value=montagemFmt;
+  document.getElementById('pc-desmontagem').value=desmontagemFmt;
+  document.getElementById('pc-valor').value=valorLiq;
+  document.getElementById('pc-pgto').value=pgtoText;
+  document.getElementById('pc-obs').value='';
+  document.getElementById('preview-contrato-ov').style.display='block';
+  document.getElementById('preview-contrato-ov').scrollTop=0;
+}
+
+function confirmarGerarContrato(){
+  // Lê os dados editados do modal e repassa para gerarContrato
+  _pcDados={
+    cliente:    document.getElementById('pc-cliente').value.trim(),
+    doc:        document.getElementById('pc-doc').value.trim(),
+    tel:        document.getElementById('pc-tel').value.trim(),
+    end:        document.getElementById('pc-end').value.trim(),
+    bairro:     document.getElementById('pc-bairro').value.trim(),
+    cidade:     document.getElementById('pc-cidade').value.trim(),
+    local:      document.getElementById('pc-local').value.trim(),
+    tipo:       document.getElementById('pc-tipo').value.trim(),
+    endEv:      document.getElementById('pc-end-ev').value.trim(),
+    datas:      document.getElementById('pc-datas').value.trim(),
+    horario:    document.getElementById('pc-horario').value.trim(),
+    montagem:   document.getElementById('pc-montagem').value.trim(),
+    desmontagem:document.getElementById('pc-desmontagem').value.trim(),
+    valor:      parseFloat(document.getElementById('pc-valor').value)||0,
+    pgto:       document.getElementById('pc-pgto').value.trim(),
+    obs:        document.getElementById('pc-obs').value.trim()
+  };
+  document.getElementById('preview-contrato-ov').style.display='none';
+  gerarContrato();
+}
+
 function gerarContrato(){
   // ── Coletar valor real (value, placeholder ou cálculo) ──
   var _elLiq   = document.getElementById('val-liq');
@@ -9783,33 +9877,35 @@ function gerarContrato(){
 
   function _buildContratoPDF(){
     var jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    // Se veio pelo preview editável, usa os dados do modal; senão usa os campos do orçamento
+    var _pc = _pcDados || {};
+    _pcDados = null; // limpa para a próxima vez
     var numOrc    = gv('f-num')    || 'S/N';
-    var cli       = gv('f-cliente')|| '';
-    var docCli    = gv('f-doc')    || '';
-    var telCli    = gv('f-tel')    || '';
-    var endCli    = [gv('f-end'), gv('f-endnum')].filter(Boolean).join(', ');
-    var bairroCli = gv('f-bairro') || '';
-    var cidadeCli = gv('f-cidade') || '';
+    var cli       = _pc.cliente  || gv('f-cliente')|| '';
+    var docCli    = _pc.doc      || gv('f-doc')    || '';
+    var telCli    = _pc.tel      || gv('f-tel')    || '';
+    var endCli    = _pc.end      || [gv('f-end'), gv('f-endnum')].filter(Boolean).join(', ');
+    var bairroCli = _pc.bairro   || gv('f-bairro') || '';
+    var cidadeCli = _pc.cidade   || gv('f-cidade') || '';
     var endCliCompleto = [endCli, bairroCli, cidadeCli].filter(Boolean).join(', ');
-    var localEv   = gv('f-local')     || '';
-    var tipoEv    = gv('f-tipo')      || '';
-    var endEvRua  = [gv('f-end-ev'), gv('f-num-ev')].filter(Boolean).join(', ');
-    var bairroEv  = gv('f-bairro-ev') || '';
-    var cidadeEv  = gv('f-cid-ev')    || '';
-    var endEvCompleto = [endEvRua, bairroEv, cidadeEv].filter(Boolean).join(', ');
-    var diaIni = gv('f-dia')||''; var diaFim = gv('f-dia-fim')||'';
-    var semIni = gv('f-sem')||''; var semFim = gv('f-sem-fim')||'';
-    var hiEv = gv('f-hi')||''; var hfEv = gv('f-hf')||'';
-    var dmData = gv('f-dm')||''; var dmHora = gv('f-hm')||'';
-    var ddData = gv('f-dd')||''; var ddHora = gv('f-hd')||'';
-    var pgtoText = gv('f-pgto')||'';
+    var localEv   = _pc.local    || gv('f-local')  || '';
+    var tipoEv    = _pc.tipo     || gv('f-tipo')   || '';
+    var endEvCompleto = _pc.endEv || [gv('f-end-ev'), gv('f-num-ev'), gv('f-bairro-ev'), gv('f-cid-ev')].filter(Boolean).join(', ');
     var consultor = gv('f-cons')||'';
+    var pgtoText  = _pc.pgto || gv('f-pgto')||'';
+    if(_pc.valor) valorLiq = _pc.valor;
 
     function fmtData(d){ if(!d)return ''; var p=d.split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d; }
-    var dataInicioFmt = fmtData(diaIni)+(semIni?' ('+semIni+')':'');
-    var dataFimFmt    = (diaFim&&diaFim!==diaIni)?fmtData(diaFim)+(semFim?' ('+semFim+')':''):'';
-    var datasEvento   = dataFimFmt?dataInicioFmt+' a '+dataFimFmt:dataInicioFmt;
-    var horarioEv     = (hiEv&&hfEv)?hiEv+' as '+hfEv:(hiEv||hfEv||'');
+    var datasEvento = _pc.datas || (function(){
+      var diaIni=gv('f-dia'),diaFim=gv('f-dia-fim'),semIni=gv('f-sem'),semFim=gv('f-sem-fim');
+      var di=fmtData(diaIni)+(semIni?' ('+semIni+')':'');
+      var df=(diaFim&&diaFim!==diaIni)?fmtData(diaFim)+(semFim?' ('+semFim+')':''):'';
+      return df?di+' a '+df:di;
+    })();
+    var horarioEv = _pc.horario || (function(){ var h=gv('f-hi'),hf=gv('f-hf'); return (h&&hf)?h+' as '+hf:(h||hf||''); })();
+    var montagemStr = _pc.montagem || (function(){ var d=gv('f-dm'),h=gv('f-hm'); return (fmtData(d)+(h?' às '+h:'')).trim(); })();
+    var desmontagemStr = _pc.desmontagem || (function(){ var d=gv('f-dd'),h=gv('f-hd'); return (fmtData(d)+(h?' às '+h:'')).trim(); })();
+    var obsExtra = _pc.obs || '';
     var valorFmt = 'R$ '+valorLiq.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
     var hoje = new Date();
     var meses = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
@@ -9817,17 +9913,21 @@ function gerarContrato(){
 
     // Condições de pagamento
     var linhasPgto = [];
-    if(typeof finParcelas!=='undefined'&&finParcelas.length>0){
-      finParcelas.forEach(function(p){
-        var l='';
-        if(p.desc) l+=p.desc;
-        if(p.valor){var vF='R$ '+parseFloat(p.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});l+=(l?' — ':'')+vF;}
-        if(p.data)  l+=(l?' — venc. ':'')+fmtData(p.data);
-        if(p.forma) l+=(l?' | ':'')+p.forma;
-        if(l) linhasPgto.push(l);
-      });
+    if(_pc.pgto){
+      linhasPgto = pgtoText.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+    } else {
+      if(typeof finParcelas!=='undefined'&&finParcelas.length>0){
+        finParcelas.forEach(function(p){
+          var l='';
+          if(p.desc) l+=p.desc;
+          if(p.valor){var vF='R$ '+parseFloat(p.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});l+=(l?' — ':'')+vF;}
+          if(p.data)  l+=(l?' — venc. ':'')+fmtData(p.data);
+          if(p.forma) l+=(l?' | ':'')+p.forma;
+          if(l) linhasPgto.push(l);
+        });
+      }
+      if(!linhasPgto.length&&pgtoText) linhasPgto=pgtoText.split('\n').map(function(l){return l.trim();}).filter(Boolean);
     }
-    if(!linhasPgto.length&&pgtoText) linhasPgto=pgtoText.split('\n').map(function(l){return l.trim();}).filter(Boolean);
     if(!linhasPgto.length) linhasPgto=['50% na contratacao','50% ate 03 dias antes da montagem'];
 
     // Equipamentos (mesma lógica do PDF do orçamento)
@@ -9915,7 +10015,7 @@ function gerarContrato(){
     campo('Local do Evento',localEv+(tipoEv?' — '+tipoEv:''));
     if(endEvCompleto)campo('Endereco do Evento',endEvCompleto);
     campo2('Data(s) do Evento',datasEvento,'Horario',horarioEv||'—');
-    campo2('Montagem',dmData?fmtData(dmData)+(dmHora?' as '+dmHora:''):'—','Desmontagem',ddData?fmtData(ddData)+(ddHora?' as '+ddHora:''):'—');y+=2;
+    campo2('Montagem',montagemStr||'—','Desmontagem',desmontagemStr||'—');y+=2;
 
     clausula('3','EQUIPAMENTOS E SERVICOS');y+=2;
     txtLine('A CONTRATADA disponibilizara os equipamentos e servicos especificados no Anexo 1 em perfeito estado de funcionamento, com equipe tecnica qualificada para montagem, operacao e desmontagem.');y+=2;
@@ -9950,6 +10050,7 @@ function gerarContrato(){
     clausula('10','DISPOSICOES GERAIS');y+=2;txtLine('Quaisquer alteracoes devem ser feitas por escrito e assinadas por ambas as partes. Foro: Comarca de Canoas/RS.');y+=2;
 
     // Assinaturas contrato
+    if(obsExtra){checkY(20);y+=2;clausula('','OBSERVACOES ADICIONAIS');y+=1;font('normal',8);rgb(C.pt);doc.splitTextToSize(obsExtra,cw).forEach(function(l){checkY(8);doc.text(l,ml,y);y+=5;});y+=4;}
     checkY(52);y+=3;rgb(C.pt);font('normal',8.5);doc.text('Canoas/RS, '+dataContrato+'.',ml,y);y+=10;
     assinBlock(col1,col2,larg);
 
@@ -10016,5 +10117,80 @@ function gerarContrato(){
 }
 
 </script>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  MODAL PRÉ-VISUALIZAÇÃO EDITÁVEL DO CONTRATO          -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="preview-contrato-ov" style="display:none;position:fixed;inset:0;background:#000;z-index:99999;overflow-y:auto;padding:20px">
+  <div style="max-width:720px;margin:0 auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <div>
+        <h2 style="color:#fff;font-size:16px;font-weight:800;margin-bottom:2px">📝 Pré-visualização do Contrato</h2>
+        <p style="color:#888;font-size:11px">Revise e edite os dados antes de gerar o PDF. As alterações feitas aqui são apenas para o contrato — não alteram o orçamento salvo.</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="document.getElementById('preview-contrato-ov').style.display='none'" style="padding:9px 16px;background:#333;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700">✕ Cancelar</button>
+        <button onclick="confirmarGerarContrato()" style="padding:9px 20px;background:#c0001a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:800">📄 Gerar PDF do Contrato</button>
+      </div>
+    </div>
+
+    <!-- DADOS DO CLIENTE -->
+    <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:12px;overflow:hidden">
+      <div style="background:#c0001a;padding:8px 14px;font-size:10px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:1px">👤 Dados do Cliente</div>
+      <div style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="grid-column:span 2"><label style="font-size:9px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Nome / Razão Social</label><input id="pc-cliente" style="width:100%;padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#fff;font-size:12px"></div>
+        <div><label style="font-size:9px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">CNPJ / CPF</label><input id="pc-doc" style="width:100%;padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#fff;font-size:12px"></div>
+        <div><label style="font-size:9px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Telefone / Contato</label><input id="pc-tel" style="width:100%;padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#fff;font-size:12px"></div>
+        <div style="grid-column:span 2"><label style="font-size:9px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Endereço completo</label><input id="pc-end" style="width:100%;padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#fff;font-size:12px"></div>
+        <div><label style="font-size:9px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Bairro</label><input id="pc-bairro" style="width:100%;padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#fff;font-size:12px"></div>
+        <div><label style="font-size:9px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Cidade / UF</label><input id="pc-cidade" style="width:100%;padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#fff;font-size:12px"></div>
+      </div>
+    </div>
+
+    <!-- DADOS DO EVENTO -->
+    <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:12px;overflow:hidden">
+      <div style="background:#c0001a;padding:8px 14px;font-size:10px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:1px">📍 Local e Data do Evento</div>
+      <div style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label style="font-size:9px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Local do Evento</label><input id="pc-local" style="width:100%;padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#fff;font-size:12px"></div>
+        <div><label style="font-size:9px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Tipo / Nome do Evento</label><input id="pc-tipo" style="width:100%;padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#fff;font-size:12px"></div>
+        <div style="grid-column:span 2"><label style="font-size:9px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Endereço do Evento</label><input id="pc-end-ev" style="width:100%;padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#fff;font-size:12px"></div>
+        <div><label style="font-size:9px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Data(s) do Evento</label><input id="pc-datas" style="width:100%;padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#fff;font-size:12px"></div>
+        <div><label style="font-size:9px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Horário (início às fim)</label><input id="pc-horario" style="width:100%;padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#fff;font-size:12px" placeholder="08:00 as 18:00"></div>
+        <div><label style="font-size:9px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Data / Hora da Montagem</label><input id="pc-montagem" style="width:100%;padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#fff;font-size:12px"></div>
+        <div><label style="font-size:9px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Data / Hora da Desmontagem</label><input id="pc-desmontagem" style="width:100%;padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#fff;font-size:12px"></div>
+      </div>
+    </div>
+
+    <!-- VALOR E PAGAMENTO -->
+    <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:12px;overflow:hidden">
+      <div style="background:#c0001a;padding:8px 14px;font-size:10px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:1px">💰 Valor e Condições de Pagamento</div>
+      <div style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label style="font-size:9px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Valor Total do Contrato (R$)</label><input id="pc-valor" type="number" min="0" step="0.01" style="width:100%;padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#fff;font-size:12px"></div>
+        <div style="grid-column:span 2"><label style="font-size:9px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Condições de Pagamento</label>
+          <textarea id="pc-pgto" rows="4" style="width:100%;padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#fff;font-size:12px;resize:vertical" placeholder="Ex: 100% pago antecipado via PIX"></textarea>
+          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+            <button onclick="pcSetPgto('100% pago antecipado via PIX.')" style="padding:4px 10px;background:#1a1a1a;border:1px solid #444;color:#aaa;border-radius:4px;cursor:pointer;font-size:10px">✓ Pago (PIX)</button>
+            <button onclick="pcSetPgto('100% pago antecipado via transferência bancária.')" style="padding:4px 10px;background:#1a1a1a;border:1px solid #444;color:#aaa;border-radius:4px;cursor:pointer;font-size:10px">✓ Pago (TED)</button>
+            <button onclick="pcSetPgto(document.getElementById('f-pgto').value)" style="padding:4px 10px;background:#1a1a1a;border:1px solid #444;color:#aaa;border-radius:4px;cursor:pointer;font-size:10px">↩ Original do orçamento</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OBSERVAÇÕES -->
+    <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:20px;overflow:hidden">
+      <div style="background:#c0001a;padding:8px 14px;font-size:10px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:1px">📝 Observações adicionais no contrato</div>
+      <div style="padding:14px">
+        <textarea id="pc-obs" rows="3" style="width:100%;padding:8px 10px;background:#1a1a1a;border:1px solid #333;border-radius:5px;color:#fff;font-size:12px;resize:vertical" placeholder="Observações adicionais que aparecerão no contrato (opcional)..."></textarea>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:8px;padding-bottom:30px">
+      <button onclick="document.getElementById('preview-contrato-ov').style.display='none'" style="padding:10px 20px;background:#333;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700">✕ Cancelar</button>
+      <button onclick="confirmarGerarContrato()" style="padding:10px 24px;background:#c0001a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:800">📄 Gerar PDF do Contrato</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
