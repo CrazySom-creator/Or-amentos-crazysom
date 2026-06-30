@@ -7634,7 +7634,15 @@ async function usuariosCarregarStorage(){
   try{
     var rL=await fetch(SCRIPT_URL+'?action=list');
     var dL=await rL.json();
-    var cfg=(dL.lista||[]).find(function(x){return x.nome&&x.nome.includes('_CONFIG_USUARIOS');});
+    var candidatos=(dL.lista||[]).filter(function(x){return x.nome&&x.nome.includes('_CONFIG_USUARIOS');});
+    function _parseDataBr(s){ // "dd/mm/yyyy hh:mm" -> timestamp
+      if(!s)return 0;
+      var m=s.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+      if(!m)return 0;
+      return new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5]).getTime();
+    }
+    candidatos.sort(function(a,b){return _parseDataBr(b.modificado)-_parseDataBr(a.modificado);});
+    var cfg=candidatos[0];
     if(cfg){
       var rC=await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
       var dC=await rC.json();
