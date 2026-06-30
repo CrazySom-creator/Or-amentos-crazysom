@@ -9971,7 +9971,7 @@ function gerarContrato(){
     if(linhasAnexo.length===0){rgb(C.cmed);font('normal',8);doc.text('Nenhum equipamento cadastrado.',ml,y);y+=8;}
     else{
       fill(C.pt);doc.rect(ml,y,cw,ALT_HDR,'F');rgb(C.br);font('bold',8);
-      doc.text('QTD',ml+3,y+PAD);doc.text('DESCRICAO DO EQUIPAMENTO / SERVICO',ml+18,y+PAD);doc.text('DIARIAS',pw-mr-2,y+PAD,{align:'right'});
+      doc.text('QTD',ml+3,y+PAD);doc.text('DESCRICAO DO EQUIPAMENTO / SERVICO',ml+18,y+PAD);
       y+=ALT_HDR+1;
       var par=false;
       linhasAnexo.forEach(function(item){
@@ -9989,7 +9989,7 @@ function gerarContrato(){
           draw([230,230,230]);doc.line(ml,y+itemH,ml+cw,y+itemH);
           rgb(C.pt);font('bold',8);doc.text(String(item.qty).padStart(2,'0'),ml+4,y+PAD);
           font('normal',8);descLines.forEach(function(dl,di){rgb(C.pt);doc.text(dl,ml+18,y+PAD+(di*5));});
-          if(item.diaria&&item.diaria>1){rgb(C.vm);font('bold',7.5);doc.text(String(item.diaria)+'x',pw-mr-2,y+PAD,{align:'right'});}
+          
           y+=itemH+0.5;par=!par;
         }
       });
