@@ -2302,13 +2302,14 @@ async function fetchComLimite(itens, limite){
 var _loadBatchDisponivel=true; // detecta automaticamente se o backend já tem o endpoint novo
 async function fetchProgressivo(itens, limite, onProgress){
   var resultados = [];
-  limite = Math.max(limite||12, 12);
+  limite = limite||6;
   var INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_CONFIG_CLIENTES','_CONFIG_USUARIOS','_CONFIG_PERMISSOES','_LOCKS_CRAZYSOM'];
   itens = itens.filter(function(x){return !INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});});
 
-  // Tamanho do lote: bem maior quando usamos o endpoint em lote (1 única requisição),
-  // menor quando caímos no modo antigo (1 requisição por item, em paralelo).
-  var loteTam = _loadBatchDisponivel ? Math.max(limite*4, 40) : limite;
+  // Tamanho do lote: um pouco maior quando usamos o endpoint em lote (1 única requisição),
+  // mas sempre conservador no modo antigo (1 requisição por item, em paralelo) para não
+  // sobrecarregar o backend com muitas requisições simultâneas.
+  var loteTam = _loadBatchDisponivel ? Math.max(limite*2, 12) : limite;
 
   for(var i=0;i<itens.length;i+=loteTam){
     var lote = itens.slice(i,i+loteTam);
@@ -2434,7 +2435,7 @@ async function carregarListaAprov(aba){
       +'<div id="aprov-prog-bar" style="height:100%;background:#c0001a;width:0%;transition:width .3s;border-radius:4px"></div>'
       +'</div></div>';
 
-    var validos=await fetchProgressivo(itens, 15, function(parciais, totalItens){
+    var validos=await fetchProgressivo(itens, 6, function(parciais, totalItens){
       var pct=Math.round(parciais.length/totalItens*100);
       var pg=document.getElementById('aprov-progress');
       var pb=document.getElementById('aprov-prog-bar');
@@ -4950,7 +4951,7 @@ async function funilCarregarDados(forcar){
       return !INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
     });
     if(stEl) stEl.textContent = '⏳ Carregando ' + itens.length + ' orçamento(s)...';
-    var todos = await fetchProgressivo(itens, 15, function(parciais, total){
+    var todos = await fetchProgressivo(itens, 6, function(parciais, total){
       var pct=Math.round(parciais.length/total*100);
       var pb=document.getElementById('funil-prog-bar');
       if(pb) pb.style.width=pct+'%';
@@ -5213,7 +5214,7 @@ async function funilHomeCarregarDados(){
       return !INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
     });
     if(stEl) stEl.textContent = 'Carregando ' + itens.length + ' orcamento(s)...';
-    var todos = await fetchProgressivo(itens, 15, function(parciais, total){
+    var todos = await fetchProgressivo(itens, 6, function(parciais, total){
       var pct=Math.round(parciais.length/total*100);
       var pb=document.getElementById('funil-home-prog');
       if(pb) pb.style.width=pct+'%';
@@ -9245,7 +9246,7 @@ async function carregarSolExclusaoDrive(){
       }
     }
 
-    var loteTam = _loadBatchDisponivel ? 40 : 5;
+    var loteTam = _loadBatchDisponivel ? 25 : 5;
     for(var i=0;i<itens.length;i+=loteTam){
       var lote=itens.slice(i,i+loteTam);
       if(_loadBatchDisponivel){
