@@ -2299,30 +2299,83 @@ async function fetchComLimite(itens, limite){
 }
 
 // Versão progressiva: chama onProgress(resultadosParciais) a cada lote
+var _loadBatchDisponivel=true; // detecta automaticamente se o backend já tem o endpoint novo
 async function fetchProgressivo(itens, limite, onProgress){
   var resultados = [];
   limite = Math.max(limite||12, 12);
   var INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_CONFIG_CLIENTES','_CONFIG_USUARIOS','_CONFIG_PERMISSOES','_LOCKS_CRAZYSOM'];
   itens = itens.filter(function(x){return !INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});});
 
-  for(var i=0;i<itens.length;i+=limite){
-    var lote = itens.slice(i,i+limite);
-    var res = await Promise.all(lote.map(function(item){
-      var cached = _driveCacheGet(item.id);
-      if(cached) return Promise.resolve(cached);
-      return fetch(SCRIPT_URL+'?action=load&id='+item.id)
-        .then(function(r){return r.ok?r.json():null;})
-        .then(function(d){
-          if(!d||!d.ok) return null;
-          var dados=d.dados;
-          var obj={driveId:item.id,nome:item.nome,modificado:item.modificado,
-            st:dados.aprovStatus||'rascunho',form:dados.form||{},
-            hist:dados.aprovHist||[],dados:dados};
-          _driveCacheSet(item.id, obj);
-          return obj;
-        })
-        .catch(function(){return null;});
-    }));
+  // Tamanho do lote: bem maior quando usamos o endpoint em lote (1 única requisição),
+  // menor quando caímos no modo antigo (1 requisição por item, em paralelo).
+  var loteTam = _loadBatchDisponivel ? Math.max(limite*4, 40) : limite;
+
+  for(var i=0;i<itens.length;i+=loteTam){
+    var lote = itens.slice(i,i+loteTam);
+    var faltam = lote.filter(function(item){ return !_driveCacheGet(item.id); });
+    var jaEmCache = lote.filter(function(item){ return !!_driveCacheGet(item.id); }).map(function(item){ return _driveCacheGet(item.id); });
+
+    var carregados = [];
+    if(faltam.length){
+      if(_loadBatchDisponivel){
+        try{
+          var rB=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'loadBatch', ids: faltam.map(function(x){return x.id;})})});
+          var dB=await rB.json();
+          if(!dB || dB.ok===false || !Array.isArray(dB.resultados)){
+            throw new Error('endpoint loadBatch indisponível');
+          }
+          var porId={};
+          dB.resultados.forEach(function(r){ porId[r.id]=r; });
+          faltam.forEach(function(item){
+            var r=porId[item.id];
+            if(!r||!r.ok||!r.dados) return;
+            var dados=r.dados;
+            var obj={driveId:item.id,nome:item.nome,modificado:item.modificado,
+              st:dados.aprovStatus||'rascunho',form:dados.form||{},
+              hist:dados.aprovHist||[],dados:dados};
+            _driveCacheSet(item.id, obj);
+            carregados.push(obj);
+          });
+        }catch(eBatch){
+          // Backend ainda não tem o endpoint novo (ou falhou) — desativa para as próximas chamadas
+          // desta sessão e cai no modo antigo (1 requisição por item) só para este lote.
+          _loadBatchDisponivel=false;
+          var resFallback = await Promise.all(faltam.map(function(item){
+            return fetch(SCRIPT_URL+'?action=load&id='+item.id)
+              .then(function(r){return r.ok?r.json():null;})
+              .then(function(d){
+                if(!d||!d.ok) return null;
+                var dados=d.dados;
+                var obj={driveId:item.id,nome:item.nome,modificado:item.modificado,
+                  st:dados.aprovStatus||'rascunho',form:dados.form||{},
+                  hist:dados.aprovHist||[],dados:dados};
+                _driveCacheSet(item.id, obj);
+                return obj;
+              })
+              .catch(function(){return null;});
+          }));
+          resFallback.forEach(function(o){ if(o) carregados.push(o); });
+        }
+      }else{
+        var resAntigo = await Promise.all(faltam.map(function(item){
+          return fetch(SCRIPT_URL+'?action=load&id='+item.id)
+            .then(function(r){return r.ok?r.json():null;})
+            .then(function(d){
+              if(!d||!d.ok) return null;
+              var dados=d.dados;
+              var obj={driveId:item.id,nome:item.nome,modificado:item.modificado,
+                st:dados.aprovStatus||'rascunho',form:dados.form||{},
+                hist:dados.aprovHist||[],dados:dados};
+              _driveCacheSet(item.id, obj);
+              return obj;
+            })
+            .catch(function(){return null;});
+        }));
+        resAntigo.forEach(function(o){ if(o) carregados.push(o); });
+      }
+    }
+
+    var res = jaEmCache.concat(carregados);
     for(var j=0;j<res.length;j++){if(res[j])resultados.push(res[j]);}
     if(onProgress) onProgress(resultados.slice(), itens.length);
   }
@@ -9181,25 +9234,39 @@ async function carregarSolExclusaoDrive(){
     });
     var encontradas=[];
     var paraLimpar=[];
-    for(var i=0;i<itens.length;i+=5){
-      var lote=itens.slice(i,i+5);
+
+    function processarItem(item, d){
+      if(!d||!d.ok||!d.dados) return;
+      var se=d.dados.solExclusao;
+      if(se&&se.status==='pendente'){
+        encontradas.push({id:item.id,nome:item.nome,solicitante:se.solicitante||'—',cargo:se.cargo||'—',data:se.data||'—',status:'pendente'});
+      }else if(se){
+        paraLimpar.push({id:item.id,dados:d.dados,nome:item.nome});
+      }
+    }
+
+    var loteTam = _loadBatchDisponivel ? 40 : 5;
+    for(var i=0;i<itens.length;i+=loteTam){
+      var lote=itens.slice(i,i+loteTam);
+      if(_loadBatchDisponivel){
+        try{
+          var rB=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'loadBatch', ids: lote.map(function(x){return x.id;})})});
+          var dB=await rB.json();
+          if(!dB || dB.ok===false || !Array.isArray(dB.resultados)) throw new Error('loadBatch indisponível');
+          var porId={};
+          dB.resultados.forEach(function(r){ porId[r.id]={ok:r.ok, dados:r.dados}; });
+          lote.forEach(function(item){ processarItem(item, porId[item.id]); });
+          continue;
+        }catch(eBatch){ _loadBatchDisponivel=false; loteTam=5; }
+      }
       var resultados=await Promise.all(lote.map(async function(item){
         try{
           var r=await fetch(SCRIPT_URL+'?action=load&id='+item.id);
           var d=await r.json();
-          if(!d.ok||!d.dados) return null;
-          var se=d.dados.solExclusao;
-          if(se&&se.status==='pendente'){
-            return {id:item.id,nome:item.nome,solicitante:se.solicitante||'—',cargo:se.cargo||'—',data:se.data||'—',status:'pendente'};
-          }
-          // Campo solExclusao existe mas NÃO é pendente — residuo, limpar automaticamente
-          if(se){
-            paraLimpar.push({id:item.id,dados:d.dados,nome:item.nome});
-          }
+          processarItem(item, d);
         }catch(e){}
         return null;
       }));
-      resultados.forEach(function(x){if(x)encontradas.push(x);});
     }
     // Limpar resíduos em background (sem bloquear)
     paraLimpar.forEach(function(item){
