@@ -1837,6 +1837,40 @@ var tipoAtual='det';
 var impAtual='cimp';
 var _carregandoOrc=false;
 
+async function migrarClientesDoDriveParaFirestore(){
+  console.log('Buscando arquivo antigo _CONFIG_CLIENTES no Drive...');
+  var dL;
+  try{
+    var rL=await fetch(SCRIPT_URL+'?action=list');
+    dL=await rL.json();
+  }catch(e){console.log('Erro ao listar Drive:',e);return;}
+  var cfg=(dL.lista||[]).find(function(x){return x.nome&&x.nome.includes('_CONFIG_CLIENTES');});
+  if(!cfg){console.log('❌ Arquivo _CONFIG_CLIENTES não encontrado no Drive.');alert('Não encontrei o arquivo antigo de clientes no Drive.');return;}
+  console.log('Arquivo encontrado (id: '+cfg.id+'). Carregando conteúdo...');
+  var dC;
+  try{
+    var rC=await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
+    dC=await rC.json();
+  }catch(e){console.log('Erro ao carregar arquivo:',e);return;}
+  if(!dC.ok||!dC.dados||!Array.isArray(dC.dados.clientes)){console.log('❌ Conteúdo do arquivo não é uma lista de clientes válida.',dC);return;}
+  var arr=dC.dados.clientes;
+  console.log('Migrando '+arr.length+' clientes do Drive para o Firestore...');
+  var ok=0,falha=0;
+  for(var i=0;i<arr.length;i++){
+    var c=arr[i];
+    if(!c||!c.id){falha++;continue;}
+    try{
+      await fbDb.collection('clientes').doc(c.id).set(c);
+      ok++;
+    }catch(e){
+      falha++;
+      console.log('Falha ao migrar cliente',c.nome||c.id,':',e.message);
+    }
+  }
+  console.log('✅ Migração concluída: '+ok+' migrados, '+falha+' com falha.');
+  alert('Migração concluída!\n\n✅ '+ok+' clientes migrados\n❌ '+falha+' com falha (veja o console)');
+}
+
 // ═══════════════════════════════════════════════════════
 // MIGRAÇÃO ÚNICA: clientes do localStorage (cache antigo, pré-Firestore) → Firestore
 // Rode uma vez pelo console do navegador (F12 → Console → digite
