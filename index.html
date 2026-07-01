@@ -2013,117 +2013,6 @@ var tipoAtual='det';
 var impAtual='cimp';
 var _carregandoOrc=false;
 
-// ═══════════════════════════════════════════════════════
-// FASE 4 — PASSO 1 (SEGURO): copiar orçamentos do Drive para o Firestore
-// Esta função é SOMENTE LEITURA no Drive — não move, não apaga, não altera
-// nenhum arquivo original. Só grava cópias na coleção 'orcamentos' do
-// Firestore, usando o MESMO ID do arquivo do Drive (facilita conferência).
-// O sistema continua funcionando 100% a partir do Drive até que a
-// próxima etapa (trocar o código de leitura/escrita) seja feita e
-// confirmada — ou seja, roda esta função quantas vezes quiser, sem risco.
-// ═══════════════════════════════════════════════════════
-async function migrarOrcamentosDriveParaFirestore(){
-  var INTERNOS_MIG=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_CONFIG_CLIENTES','_CONFIG_USUARIOS','_CONFIG_PERMISSOES','_LOCKS_CRAZYSOM'];
-  console.log('Listando arquivos no Drive...');
-  var dL;
-  try{
-    var rL=await fetch(SCRIPT_URL+'?action=list');
-    dL=await rL.json();
-  }catch(e){console.log('❌ Erro ao listar Drive:',e);return;}
-  var todos=dL.lista||[];
-  var orcamentos=todos.filter(function(f){
-    return !INTERNOS_MIG.some(function(n){return f.nome&&f.nome.indexOf(n)>=0;});
-  });
-  console.log('Total de arquivos no Drive: '+todos.length+' | Orçamentos a migrar (excluindo internos): '+orcamentos.length);
-  if(!orcamentos.length){console.log('Nada para migrar.');return;}
-  var ok=0,falha=0,falhas=[];
-  for(var i=0;i<orcamentos.length;i++){
-    var f=orcamentos[i];
-    try{
-      var rC=await fetch(SCRIPT_URL+'?action=load&id='+f.id);
-      var dC=await rC.json();
-      if(!dC.ok||!dC.dados){falha++;falhas.push(f.nome+' (conteúdo inválido)');continue;}
-      var doc=Object.assign({},dC.dados,{_driveId:f.id,_driveNome:f.nome,_driveModificado:f.modificado});
-      await fbDb.collection('orcamentos').doc(f.id).set(doc);
-      ok++;
-      if(ok%10===0) console.log('...'+ok+'/'+orcamentos.length+' migrados até agora');
-    }catch(e){
-      falha++;
-      falhas.push(f.nome+' ('+e.message+')');
-    }
-  }
-  console.log('═══════════════════════════════════');
-  console.log('✅ Migrados com sucesso: '+ok);
-  console.log('❌ Falhas: '+falha);
-  if(falhas.length) console.log('Detalhe das falhas:',falhas);
-  console.log('Total no Drive (excluindo internos): '+orcamentos.length);
-  console.log('═══════════════════════════════════');
-  alert('Cópia concluída!\n\n📁 Total no Drive: '+orcamentos.length+'\n✅ Copiados: '+ok+'\n❌ Falhas: '+falha+'\n\nO Drive NÃO foi alterado — isso foi só uma cópia. Confira as contagens antes de qualquer próximo passo.');
-}
-
-async function migrarClientesDoDriveParaFirestore(){
-  console.log('Buscando arquivo antigo _CONFIG_CLIENTES no Drive...');
-  var dL;
-  try{
-    var rL=await fetch(SCRIPT_URL+'?action=list');
-    dL=await rL.json();
-  }catch(e){console.log('Erro ao listar Drive:',e);return;}
-  var cfg=(dL.lista||[]).find(function(x){return x.nome&&x.nome.includes('_CONFIG_CLIENTES');});
-  if(!cfg){console.log('❌ Arquivo _CONFIG_CLIENTES não encontrado no Drive.');alert('Não encontrei o arquivo antigo de clientes no Drive.');return;}
-  console.log('Arquivo encontrado (id: '+cfg.id+'). Carregando conteúdo...');
-  var dC;
-  try{
-    var rC=await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
-    dC=await rC.json();
-  }catch(e){console.log('Erro ao carregar arquivo:',e);return;}
-  if(!dC.ok||!dC.dados||!Array.isArray(dC.dados.clientes)){console.log('❌ Conteúdo do arquivo não é uma lista de clientes válida.',dC);return;}
-  var arr=dC.dados.clientes;
-  console.log('Migrando '+arr.length+' clientes do Drive para o Firestore...');
-  var ok=0,falha=0;
-  for(var i=0;i<arr.length;i++){
-    var c=arr[i];
-    if(!c||!c.id){falha++;continue;}
-    try{
-      await fbDb.collection('clientes').doc(c.id).set(c);
-      ok++;
-    }catch(e){
-      falha++;
-      console.log('Falha ao migrar cliente',c.nome||c.id,':',e.message);
-    }
-  }
-  console.log('✅ Migração concluída: '+ok+' migrados, '+falha+' com falha.');
-  alert('Migração concluída!\n\n✅ '+ok+' clientes migrados\n❌ '+falha+' com falha (veja o console)');
-}
-
-// ═══════════════════════════════════════════════════════
-// MIGRAÇÃO ÚNICA: clientes do localStorage (cache antigo, pré-Firestore) → Firestore
-// Rode uma vez pelo console do navegador (F12 → Console → digite
-// migrarClientesFirestore() e Enter) na máquina que tem o cache mais completo.
-// Depois disso pode ignorar/remover esta função.
-// ═══════════════════════════════════════════════════════
-async function migrarClientesFirestore(){
-  var raw=localStorage.getItem('crazySomClientes');
-  if(!raw){console.log('Nada encontrado em localStorage.crazySomClientes neste navegador.');return;}
-  var arr;
-  try{ arr=JSON.parse(raw); }catch(e){console.log('Erro ao ler o cache local:',e);return;}
-  if(!Array.isArray(arr)||!arr.length){console.log('Cache local vazio, nada para migrar.');return;}
-  console.log('Migrando '+arr.length+' clientes para o Firestore...');
-  var ok=0,falha=0;
-  for(var i=0;i<arr.length;i++){
-    var c=arr[i];
-    if(!c||!c.id){falha++;continue;}
-    try{
-      await fbDb.collection('clientes').doc(c.id).set(c);
-      ok++;
-    }catch(e){
-      falha++;
-      console.log('Falha ao migrar cliente',c.nome||c.id,':',e.message);
-    }
-  }
-  console.log('✅ Migração concluída: '+ok+' migrados, '+falha+' com falha.');
-  alert('Migração concluída!\n\n✅ '+ok+' clientes migrados\n❌ '+falha+' com falha (veja o console)');
-}
-
 function finFormaLabel(f){
   var ico={'PIX':'💚','Boleto':'🧾','Cartão de Crédito':'💳','Cartão de Débito':'💳','Transferência':'🏦','Dinheiro':'💵','Cheque':'📝'};
   return f?(ico[f]||'')+(ico[f]?' ':'')+f:'—';
@@ -8354,7 +8243,7 @@ async function usuariosCarregarFirestore(){
 function renderAdmList(){
   usuariosCarregarFirestore().then(function(){
     var avisoHtml='<div style="background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:#aaa">'
-      +'ℹ️ A criação da conta de login (e-mail/senha) é feita no <b>Firebase Console → Authentication</b>. Aqui você só edita nome, nível e cargo do perfil já existente.'
+      +'ℹ️ Use <b>+ Novo Usuário</b> pra criar a conta de login e o perfil de uma vez. O botão 🗑️ exclui os dois juntos. Aqui embaixo você também pode editar nome, nível e cargo de quem já existe.'
       +'</div>';
     document.getElementById('adm-list').innerHTML=avisoHtml+USUARIOS.map(function(u,i){
     var cargoVal=u.cargo||'';
@@ -8412,26 +8301,49 @@ async function admSalvar(i){
   }
 }
 
+var GERENCIAR_USUARIOS_URL='https://gerenciar-usuarios-758816759742.southamerica-east1.run.app';
+
+async function _chamarGerenciarUsuarios(body){
+  var token=await fbAuth.currentUser.getIdToken();
+  var r=await fetch(GERENCIAR_USUARIOS_URL,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+    body:JSON.stringify(body)
+  });
+  return r.json();
+}
+
 async function admDel(i){
   var u=USUARIOS[i];
-  if(!confirm('Excluir o PERFIL de "'+u.nome+'" ('+u.id+')?\n\n⚠️ Isso remove o nível de acesso dele no sistema, mas NÃO exclui a conta de login. Para bloquear o acesso por completo, também desative a conta em Firebase Console → Authentication.\n\nContinuar?'))return;
+  if(!confirm('Excluir COMPLETAMENTE "'+u.nome+'" ('+u.id+')?\n\n⚠️ Isso remove a conta de login (ela nunca mais consegue entrar) e o perfil de acesso, ao mesmo tempo.\n\nEsta ação não pode ser desfeita. Continuar?'))return;
   try{
-    await fbDb.collection('usuarios').doc(u.id).delete();
+    var d=await _chamarGerenciarUsuarios({acao:'excluir',email:u.id});
+    if(!d.ok) throw new Error(d.erro||'Erro desconhecido');
     renderAdmList();
+    alert('🗑️ "'+u.nome+'" foi excluído — conta de login e perfil removidos.');
   }catch(e){
     alert('❌ Erro ao excluir: '+e.message);
   }
 }
 
 async function admNovo(){
-  var email=(prompt('E-mail da pessoa (a conta de login precisa já existir em Firebase Console → Authentication):')||'').trim().toLowerCase();
+  var email=(prompt('E-mail da nova pessoa:')||'').trim().toLowerCase();
   if(!email)return;
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){alert('⚠️ E-mail inválido.');return;}
   if(USUARIOS.some(function(u){return u.id===email;})){alert('⚠️ Já existe um perfil com este e-mail.');return;}
+  var nome=(prompt('Nome completo:')||'').trim();
+  if(!nome){alert('⚠️ Nome é obrigatório.');return;}
+  var opcoesNivel=Object.keys(NIVEIS).map(function(k){return k+' = '+NIVEIS[k];}).join('\n');
+  var nivel=(prompt('Nível de acesso — digite exatamente uma destas opções:\n'+opcoesNivel)||'').trim().toLowerCase();
+  if(!NIVEIS[nivel]){alert('⚠️ Nível inválido. Use uma das opções: '+Object.keys(NIVEIS).join(', '));return;}
+  var senha=(prompt('Senha temporária (mínimo 6 caracteres — a pessoa vai poder trocar depois com "Esqueci minha senha"):')||'').trim();
+  if(senha.length<6){alert('⚠️ A senha precisa ter pelo menos 6 caracteres.');return;}
   try{
-    await fbDb.collection('usuarios').doc(email).set({nome:'Novo Usuário',nivel:'consultor',cargo:''});
+    var d=await _chamarGerenciarUsuarios({acao:'criar',email:email,senha:senha,nome:nome,nivel:nivel,cargo:''});
+    if(!d.ok) throw new Error(d.erro||'Erro desconhecido');
     renderAdmList();
     setTimeout(function(){document.getElementById('adm-list').lastElementChild.scrollIntoView({behavior:'smooth'});},300);
+    alert('✅ "'+nome+'" criado com sucesso — já pode fazer login com o e-mail e a senha temporária.');
   }catch(e){
     alert('❌ Erro ao criar: '+e.message);
   }
