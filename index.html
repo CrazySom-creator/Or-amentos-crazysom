@@ -1793,6 +1793,182 @@ var SECS=['som','video','luz','estrutura','servico','logistica','extra'];
 var SEC_LBL={som:'Sonorização',video:'Vídeo',luz:'Iluminação',estrutura:'Estrutura',servico:'Serviço',logistica:'Logística',extra:'Custos Extra'};
 var SEC_ICO={som:'🔊',video:'📺',luz:'💡',estrutura:'🏗️',servico:'⚙️',logistica:'🚚',extra:'💰'};
 var SCRIPT_URL='https://script.google.com/macros/s/AKfycbwV251xtPwAUjSn-CJM88-iySrObu5oZqF9FQuMQdmhSbHAu_DRnrCy9VJGRSwwKzAR/exec';
+
+// ═══════════════════════════════════════════════════════
+// FASE 4 — PASSO 2: Orçamentos, aprovações e locks agora no Firestore.
+//
+// Em vez de reescrever ~40 pontos espalhados pelo código que chamam
+// fetch(SCRIPT_URL, ...) para listar/carregar/salvar/travar orçamentos,
+// interceptamos aqui, num único lugar, toda chamada dirigida ao
+// SCRIPT_URL e respondemos com dados vindos do Firestore, no MESMO
+// formato que o Apps Script devolvia. Assim, nenhuma das ~40 chamadas
+// precisou ser alterada — elas continuam pedindo a mesma coisa de
+// sempre, só que agora são atendidas pelo Firestore por trás.
+// (As chamadas de configuração — usuarios/permissões — já foram
+// migradas antes e não passam mais pelo SCRIPT_URL de forma alguma.)
+// ═══════════════════════════════════════════════════════
+(function(){
+  var _fetchOriginal=window.fetch.bind(window);
+
+  function _fmtDataBr(d){
+    function p(n){return (n<10?'0':'')+n;}
+    return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes());
+  }
+  function _orcId(){return 'orc_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);}
+  function _mkResponse(obj){ return {ok:true, json:function(){return Promise.resolve(obj);}}; }
+
+  async function _shimList(q){
+    var snap=await fbDb.collection('orcamentos').get();
+    var lista=[];
+    snap.forEach(function(doc){
+      var d=doc.data();
+      var nome=d._driveNome||doc.id;
+      if(q && nome.toLowerCase().indexOf(q.toLowerCase())<0) return;
+      lista.push({id:doc.id,nome:nome.replace('.json',''),modificado:d._driveModificado||'',tamanho:0});
+    });
+    lista.sort(function(a,b){
+      function parse(s){var m=(s||'').match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);if(!m)return 0;return new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5]).getTime();}
+      return parse(b.modificado)-parse(a.modificado);
+    });
+    return {ok:true,lista:lista,total:lista.length};
+  }
+
+  async function _shimLoad(id){
+    if(!id) return {ok:false,erro:'ID não informado'};
+    var snap=await fbDb.collection('orcamentos').doc(id).get();
+    if(!snap.exists) return {ok:false,erro:'Arquivo não encontrado'};
+    var d=snap.data();
+    var nome=d._driveNome||id;
+    var dados=Object.assign({},d);
+    delete dados._driveId;delete dados._driveNome;delete dados._driveModificado;
+    return {ok:true,dados:dados,nome:nome.replace('.json','')};
+  }
+
+  async function _shimSave(body){
+    var id=body.id||_orcId();
+    var num=body.numero||'SN';
+    var cli=body.cliente||'SemCliente';
+    var data=body.data||new Date().toISOString().split('T')[0];
+    var nome=num+' - '+cli+' - '+data+'.json';
+    var doc=Object.assign({},body.dados,{_driveId:id,_driveNome:nome,_driveModificado:_fmtDataBr(new Date())});
+    await fbDb.collection('orcamentos').doc(id).set(doc);
+    return {ok:true,id:id,nome:nome};
+  }
+
+  async function _shimDelete(id){
+    if(!id) return {ok:false,erro:'ID não informado'};
+    await fbDb.collection('orcamentos').doc(id).delete();
+    return {ok:true};
+  }
+
+  async function _shimLoadBatch(ids){
+    var resultados=await Promise.all((ids||[]).map(async function(id){
+      try{
+        var snap=await fbDb.collection('orcamentos').doc(id).get();
+        if(!snap.exists) return {id:id,ok:false,erro:'not found'};
+        var d=snap.data();
+        var dados=Object.assign({},d);
+        delete dados._driveId;delete dados._driveNome;delete dados._driveModificado;
+        return {id:id,ok:true,dados:dados};
+      }catch(e){ return {id:id,ok:false,erro:e.message}; }
+    }));
+    return {ok:true,resultados:resultados};
+  }
+
+  // Locks e sessões vivem num único documento cada, dentro de system/.
+  // Operações que alteram estado usam transação do Firestore — o
+  // equivalente ao LockService+PropertiesService do Apps Script, só que
+  // nativo do banco (mais rápido e sem fila global compartilhada entre
+  // ações não relacionadas).
+  async function _shimLock(body){
+    var lockAction=body.lockAction;
+    var driveId=body.driveId;
+    var usuarioId=body.usuarioId;
+    var usuarioNome=body.usuarioNome;
+    var ttl=body.ttl||300000;
+
+    if(lockAction==='session-check'){
+      var sSnap=await fbDb.collection('system').doc('sessions').get();
+      var sessions=(sSnap.exists&&sSnap.data().dados)||{};
+      var sess=sessions[usuarioId];
+      if(sess&&sess.expira>Date.now()) return {ok:false,sessao:sess};
+      return {ok:true};
+    }
+    if(lockAction==='status'){
+      var lSnap=await fbDb.collection('system').doc('locks').get();
+      var locks=(lSnap.exists&&lSnap.data().dados)||{};
+      return {ok:true,locks:locks};
+    }
+
+    var colecaoDoc=(lockAction==='session-start'||lockAction==='session-end')?'sessions':'locks';
+    var resultado={ok:false};
+    try{
+      await fbDb.runTransaction(async function(t){
+        var ref=fbDb.collection('system').doc(colecaoDoc);
+        var snap=await t.get(ref);
+        var mapa=(snap.exists&&snap.data().dados)||{};
+        var agora=Date.now();
+        Object.keys(mapa).forEach(function(k){ if(mapa[k].expira<agora) delete mapa[k]; });
+
+        if(lockAction==='acquire'){
+          var atual=mapa[driveId];
+          if(atual&&atual.expira>agora&&atual.usuarioId!==usuarioId){
+            resultado={ok:false,lock:atual};
+          }else{
+            mapa[driveId]={usuarioId:usuarioId,usuarioNome:usuarioNome,desde:_fmtDataBr(new Date()),desdeTs:agora,expira:agora+ttl};
+            resultado={ok:true};
+          }
+        }else if(lockAction==='release'){
+          if(mapa[driveId]&&mapa[driveId].usuarioId===usuarioId) delete mapa[driveId];
+          resultado={ok:true};
+        }else if(lockAction==='renew'){
+          if(mapa[driveId]&&mapa[driveId].usuarioId===usuarioId) mapa[driveId].expira=agora+ttl;
+          resultado={ok:true};
+        }else if(lockAction==='session-start'){
+          mapa[usuarioId]={usuarioId:usuarioId,usuarioNome:usuarioNome,desde:_fmtDataBr(new Date()),desdeTs:agora,expira:agora+(ttl||8*60*60*1000)};
+          resultado={ok:true};
+        }else if(lockAction==='session-end'){
+          if(body.forcar||(mapa[usuarioId]&&mapa[usuarioId].usuarioId===usuarioId)) delete mapa[usuarioId];
+          resultado={ok:true};
+        }else{
+          resultado={ok:false,erro:'lockAction inválido'};
+        }
+        t.set(ref,{dados:mapa});
+      });
+    }catch(e){
+      resultado={ok:false,erro:e.message};
+    }
+    return resultado;
+  }
+
+  window.fetch=async function(url,opts){
+    if(typeof url==='string' && url.indexOf(SCRIPT_URL)===0){
+      try{
+        var qIdx=url.indexOf('?');
+        var params=new URLSearchParams(qIdx>=0?url.slice(qIdx+1):'');
+        var action=params.get('action');
+        var body=null;
+        if(opts&&opts.method==='POST'&&opts.body){
+          try{body=JSON.parse(opts.body);}catch(eParse){}
+          if(body&&body.action) action=body.action;
+        }
+        var resultado;
+        if(action==='list') resultado=await _shimList(params.get('q')||'');
+        else if(action==='load') resultado=await _shimLoad(params.get('id'));
+        else if(action==='delete') resultado=await _shimDelete(params.get('id'));
+        else if(action==='save') resultado=await _shimSave(body||{});
+        else if(action==='loadBatch') resultado=await _shimLoadBatch((body&&body.ids)||[]);
+        else if(action==='lock') resultado=await _shimLock(body||{});
+        else resultado={ok:false,erro:'Ação não implementada no Firestore: '+action};
+        return _mkResponse(resultado);
+      }catch(eShim){
+        return _mkResponse({ok:false,erro:'Erro no Firestore: '+eShim.message});
+      }
+    }
+    return _fetchOriginal(url,opts);
+  };
+})();
+
 var LIMITE_TEC=4000;
 var SI={
   rascunho:{label:'🟡 Rascunho',bg:'#fff8e1',bd:'#ffe082',tx:'#7a5a00',dot:'#f9a825'},
