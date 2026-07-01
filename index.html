@@ -776,10 +776,11 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   <div class="login-box">
     <h2>🎛️ Crazy Som</h2>
     <p>Sistema de Orçamentos – Acesso Restrito</p>
-    <div class="lf"><label>Usuário</label><input type="text" id="l-user" placeholder="seu.login"></div>
-    <div class="lf"><label>Senha</label><input type="password" id="l-pass" placeholder="••••••••"></div>
+    <div class="lf"><label>E-mail</label><input type="email" id="l-user" placeholder="seu.email@crazysom.com.br" autocomplete="username"></div>
+    <div class="lf"><label>Senha</label><input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password"></div>
     <div class="lerr" id="l-err"></div>
     <button class="lbtn" onclick="doLogin()">Entrar →</button>
+    <div style="text-align:center;margin-top:10px"><a href="#" onclick="doEsqueciSenha();return false" style="font-size:11px;color:#888;text-decoration:underline">Esqueci minha senha</a></div>
   </div>
 </div>
 
@@ -1770,6 +1771,22 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   <div id="funil-lista" style="border:1px solid #e0e0e0;border-radius:5px;overflow:hidden;max-height:420px;overflow-y:auto;background:#fff"></div>
 </div><!-- /funil-card -->
 
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<script>
+var firebaseConfig={
+  apiKey:"AIzaSyANrm4_JIeQQoGthAtzaOU42jNIb7Cm_3M",
+  authDomain:"crazysom-sistema.firebaseapp.com",
+  projectId:"crazysom-sistema",
+  storageBucket:"crazysom-sistema.firebasestorage.app",
+  messagingSenderId:"758816759742",
+  appId:"1:758816759742:web:fcac8cbdce8625dbf7e3ef"
+};
+firebase.initializeApp(firebaseConfig);
+var fbAuth=firebase.auth();
+var fbDb=firebase.firestore();
+</script>
 <script>
 var IMP=0.135;
 var SECS=['som','video','luz','estrutura','servico','logistica','extra'];
@@ -1787,16 +1804,14 @@ var SI={
 };
 var NIVEIS={adm:'Administrador',consultor:'Consultor',tecnico:'Área Técnica',gerente:'Gerente Comercial',diretor:'Diretor Comercial'};
 var USUARIOS=[
-  {id:'fabiano.santos',nome:'Fabiano Santos',nivel:'adm',senha:hs('crazy@2026')},
-  {id:'giovana.borges',nome:'Giovana Borges',nivel:'consultor',senha:hs('crazy@2026')},
-  {id:'jessica.elisandra',nome:'Jéssica Elisandra',nivel:'consultor',senha:hs('crazy@2026')},
-  {id:'rafael.oliveira',nome:'Rafael Oliveira',nivel:'consultor',senha:hs('crazy@2026')},
-  {id:'jefferson',nome:'Jefferson',nivel:'consultor',senha:hs('crazy@2026')},
-  {id:'wagner.wolff',nome:'Wagner Wolff',nivel:'consultor',senha:hs('crazy@2026')},
-  {id:'tec1',nome:'Técnico 1',nivel:'tecnico',senha:hs('crazy@2026')},
-  {id:'tec2',nome:'Técnico 2',nivel:'tecnico',senha:hs('crazy@2026')},
-  {id:'gerente',nome:'Gerente Comercial',nivel:'gerente',senha:hs('crazy@2026')},
-  {id:'diretor',nome:'Diretor Comercial',nivel:'diretor',senha:hs('crazy@2026')}
+  {id:'fabiano.santos@crazysom.com.br',nome:'Fabiano Santos',nivel:'adm'},
+  {id:'comercial2@crazysom.com.br',nome:'Giovana Borges',nivel:'consultor'},
+  {id:'comercial3@crazysom.com.br',nome:'Jéssica Elisandra',nivel:'consultor'},
+  {id:'comercial4@crazysom.com.br',nome:'Wagner Wolff',nivel:'consultor'},
+  {id:'crazysom@crazysom.com.br',nome:'Jefferson Sampaio',nivel:'diretor',cargo:'Diretor de Operações'},
+  {id:'felipe@crazysom.com.br',nome:'Felipe Brum',nivel:'diretor',cargo:'Diretor Comercial'},
+  {id:'regisbrum@crazysom.com.br',nome:'Régis Brum',nivel:'diretor',cargo:'Diretor Administrativo'},
+  {id:'raffadlucasdj@gmail.com',nome:'Rafael Oliveira',nivel:'tecnico',cargo:'Análise Técnica / Logística'}
 ];
 var usuarioAtual=null;
 var aprovStatus='rascunho';
@@ -1821,8 +1836,6 @@ var _listaAprov=[];
 var tipoAtual='det';
 var impAtual='cimp';
 var _carregandoOrc=false;
-
-function hs(s){var h=0;for(var i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h=h|0;}return String(h);}
 
 function finFormaLabel(f){
   var ico={'PIX':'💚','Boleto':'🧾','Cartão de Crédito':'💳','Cartão de Débito':'💳','Transferência':'🏦','Dinheiro':'💵','Cheque':'📝'};
@@ -1983,17 +1996,44 @@ var PRECOS={
 
 async function doLogin(){
   var err=document.getElementById('l-err');
-  err.textContent='⏳ Verificando credenciais...';
-  await usuariosCarregarStorage(); // carregar do Drive (funciona em qualquer PC)
-  var uid=(document.getElementById('l-user').value||'').trim().toLowerCase();
+  var email=(document.getElementById('l-user').value||'').trim().toLowerCase();
   var pwd=document.getElementById('l-pass').value||'';
   err.textContent='';
-  if(!uid){err.textContent='⚠️ Digite seu usuário.';return;}
+  if(!email){err.textContent='⚠️ Digite seu e-mail.';return;}
   if(!pwd){err.textContent='⚠️ Digite sua senha.';return;}
-  var u=null;
-  for(var i=0;i<USUARIOS.length;i++){if(USUARIOS[i].id===uid){u=USUARIOS[i];break;}}
-  if(!u){err.textContent='❌ Usuário "'+uid+'" não encontrado.';document.getElementById('l-pass').value='';return;}
-  if(u.senha!==hs(pwd)){err.textContent='❌ Senha incorreta.';document.getElementById('l-pass').value='';document.getElementById('l-pass').focus();return;}
+  err.textContent='⏳ Verificando credenciais...';
+  var cred;
+  try{
+    cred=await fbAuth.signInWithEmailAndPassword(email,pwd);
+  }catch(eAuth){
+    var msgs={
+      'auth/invalid-email':'⚠️ E-mail inválido.',
+      'auth/user-not-found':'❌ Usuário não encontrado.',
+      'auth/wrong-password':'❌ Senha incorreta.',
+      'auth/invalid-credential':'❌ E-mail ou senha incorretos.',
+      'auth/too-many-requests':'⛔ Muitas tentativas. Aguarde alguns minutos e tente novamente.',
+      'auth/user-disabled':'⛔ Este usuário foi desativado. Contate o administrador.'
+    };
+    err.textContent=msgs[eAuth.code]||('❌ Erro ao entrar: '+eAuth.message);
+    document.getElementById('l-pass').value='';
+    return;
+  }
+  // Buscar o perfil (nome/nivel/cargo) no Firestore — documento indexado pelo e-mail
+  var perfilSnap;
+  try{
+    perfilSnap=await fbDb.collection('usuarios').doc(email).get();
+  }catch(ePerfil){
+    err.textContent='❌ Erro ao carregar seu perfil: '+ePerfil.message;
+    try{await fbAuth.signOut();}catch(e0){}
+    return;
+  }
+  if(!perfilSnap.exists){
+    err.textContent='⚠️ Login autenticado, mas seu perfil ainda não foi cadastrado no sistema. Contate o administrador.';
+    try{await fbAuth.signOut();}catch(e0){}
+    return;
+  }
+  var perfil=perfilSnap.data();
+  var u={id:email,nome:perfil.nome||email,nivel:perfil.nivel||'consultor',cargo:perfil.cargo||''};
   try{
     var _sR=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'lock',lockAction:'session-check',usuarioId:u.id,usuarioNome:u.nome,ttl:35*60*1000})});
     var _sD=await _sR.json();
@@ -2039,6 +2079,23 @@ async function doLogin(){
   // Pré-carregar lista de orçamentos no cache silenciosamente
   driveListarSilencioso();
 }
+
+async function doEsqueciSenha(){
+  var err=document.getElementById('l-err');
+  var email=(document.getElementById('l-user').value||'').trim().toLowerCase();
+  if(!email){err.textContent='⚠️ Digite seu e-mail no campo acima primeiro.';return;}
+  err.textContent='⏳ Enviando e-mail de redefinição...';
+  try{
+    await fbAuth.sendPasswordResetEmail(email);
+    err.textContent='✅ Enviamos um link de redefinição para '+email+'. Verifique sua caixa de entrada (e o spam).';
+  }catch(eReset){
+    var msgs={
+      'auth/invalid-email':'⚠️ E-mail inválido.',
+      'auth/user-not-found':'❌ Não existe conta com este e-mail.'
+    };
+    err.textContent=msgs[eReset.code]||('❌ Erro ao enviar: '+eReset.message);
+  }
+}
 async function logout(){
   if(_naoSalvo){
     var cli=gv('f-cliente')||'este orçamento';
@@ -2058,6 +2115,7 @@ async function logout(){
       })});
     }catch(e4){}
   }
+  try{await fbAuth.signOut();}catch(e7){}
   usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];snapshotAnterior=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';driveIdAtual=null;driveNumAtual=null;
   _atualizarBtnClonar();
   fecharHome();
@@ -2162,7 +2220,7 @@ async function aprovAcaoInline(novo){
   }
 }
 
-async function abrirAdm(){mostrarCarregando('⏳ Carregando administração...');try{await permCarregar();await usuariosCarregarStorage();renderAdmList();renderAdmExclusoes();document.getElementById('adm-ov').classList.add('open');admAba('usuarios');}finally{esconderCarregando();}}
+async function abrirAdm(){mostrarCarregando('⏳ Carregando administração...');try{await permCarregar();renderAdmList();renderAdmExclusoes();document.getElementById('adm-ov').classList.add('open');admAba('usuarios');}finally{esconderCarregando();}}
 
 function toggleNegociacaoBox(){
   var b=document.getElementById('negociacao-box');
@@ -2920,7 +2978,7 @@ function driveFiltrarLocal(){
 
   var q=(document.getElementById('drive-q').value||'').trim().toLowerCase();
   var filtroSt=(document.getElementById('drive-filtro-st').value||'');
-  var podeDel=usuarioAtual&&(PODE_EXCLUIR.includes(usuarioAtual.nivel)||usuarioAtual.id==='fabiano.santos');
+  var podeDel=usuarioAtual&&(PODE_EXCLUIR.includes(usuarioAtual.nivel)||usuarioAtual.id==='fabiano.santos@crazysom.com.br');
 
   var SI_COR2={rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
   var SI_LBL={rascunho:'Rascunho',analise:'Em Análise',gerencial:'Ap. Gerencial',diretoria:'Ap. Diretoria',aprovado:'Aprovado',revisao:'Revisão'};
@@ -3542,7 +3600,7 @@ var PODE_EXCLUIR=['gerente','diretor']; // adm genérico NÃO pode — só Fabia
 async function driveDeletar(id,nome){
   if(!usuarioAtual)return;
   var nivel=usuarioAtual.nivel;
-  var isFabiano=usuarioAtual.id==='fabiano.santos';
+  var isFabiano=usuarioAtual.id==='fabiano.santos@crazysom.com.br';
   // Quem pode excluir diretamente: gerente, diretor, ou Fabiano especificamente
   var temPermissao=PODE_EXCLUIR.includes(nivel)||isFabiano;
   if(temPermissao){
@@ -7665,55 +7723,9 @@ function dashAcessoRenderizar(){
 }
 
 // ════════════════════════════════════════════════
-//  USUÁRIOS — Drive como fonte de verdade
+//  USUÁRIOS — Firebase Auth + Firestore como fonte de verdade
+//  (ver usuariosCarregarFirestore, mais abaixo, usada pelo painel de Admin)
 // ════════════════════════════════════════════════
-async function usuariosSalvarStorage(){
-  try{ localStorage.setItem('crazySomUsuarios', JSON.stringify(USUARIOS)); }catch(e){}
-  try{
-    var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
-      action:'configSave', tipo:'usuarios',
-      dados:{usuarios:USUARIOS}
-    })});
-    await r.json();
-  }catch(e){ console.warn('usuariosSalvarStorage:',e); }
-}
-
-async function usuariosCarregarStorage(){
-  var _encontrouRemoto=false;
-  // 1) Tentar Properties (rota nova — rápida, sem varrer o Drive)
-  try{
-    var r=await fetch(SCRIPT_URL+'?action=config&tipo=usuarios');
-    var d=await r.json();
-    if(d.ok&&d.dados&&Array.isArray(d.dados.usuarios)&&d.dados.usuarios.length>0){
-      _encontrouRemoto=true;
-      d.dados.usuarios.forEach(function(u){
-        var idx=USUARIOS.findIndex(function(x){return x.id===u.id;});
-        if(idx>=0) USUARIOS[idx]=Object.assign({},USUARIOS[idx],u);
-        else USUARIOS.push(u);
-      });
-      try{ localStorage.setItem('crazySomUsuarios',JSON.stringify(USUARIOS)); }catch(e){}
-      return;
-    }
-  }catch(e){ console.warn('usuariosCarregarStorage:',e); }
-  // 2) Fallback localStorage (dados reais deste navegador, inclusive senhas alteradas localmente)
-  try{
-    var dLocal=localStorage.getItem('crazySomUsuarios');
-    if(dLocal){
-      var arr=JSON.parse(dLocal);
-      if(Array.isArray(arr)&&arr.length>0){
-        arr.forEach(function(u){
-          var idx=USUARIOS.findIndex(function(x){return x.id===u.id;});
-          if(idx>=0) USUARIOS[idx]=Object.assign({},USUARIOS[idx],u);
-          else USUARIOS.push(u);
-        });
-      }
-    }
-  }catch(e){}
-  // 3) Auto-semear SOMENTE se realmente não existir nada remoto ainda
-  //    (evita que múltiplos usuários, sob falha passageira, disparem gravações simultâneas)
-  if(_encontrouRemoto){ return; }
-  try{ await usuariosSalvarStorage(); }catch(e){}
-}
 
 // ═══════════════════════════════════════════════════════
 //  CADASTRO DE CLIENTES
@@ -8048,9 +8060,26 @@ function clienteSelecionarParaOrcamento(idx){
   document.getElementById('clientes-ov').classList.remove('open');
 }
 
+async function usuariosCarregarFirestore(){
+  try{
+    var snap=await fbDb.collection('usuarios').get();
+    var lista=[];
+    snap.forEach(function(doc){
+      var d=doc.data();
+      lista.push({id:doc.id,nome:d.nome||doc.id,nivel:d.nivel||'consultor',cargo:d.cargo||''});
+    });
+    USUARIOS=lista;
+  }catch(e){
+    console.warn('usuariosCarregarFirestore:',e);
+  }
+}
+
 function renderAdmList(){
-  usuariosCarregarStorage();
-  document.getElementById('adm-list').innerHTML=USUARIOS.map(function(u,i){
+  usuariosCarregarFirestore().then(function(){
+    var avisoHtml='<div style="background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:#aaa">'
+      +'ℹ️ A criação da conta de login (e-mail/senha) é feita no <b>Firebase Console → Authentication</b>. Aqui você só edita nome, nível e cargo do perfil já existente.'
+      +'</div>';
+    document.getElementById('adm-list').innerHTML=avisoHtml+USUARIOS.map(function(u,i){
     var cargoVal=u.cargo||'';
     var nivelOpts=Object.keys(NIVEIS).map(function(k){
       return '<option value="'+k+'"'+(u.nivel===k?' selected':'')+'>'+NIVEIS[k]+'</option>';
@@ -8076,50 +8105,59 @@ function renderAdmList(){
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px">'
       +'<div><label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">Nome</label>'
       +'<input id="an'+i+'" value="'+u.nome+'" placeholder="Nome completo" style="width:100%;padding:6px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px;box-sizing:border-box"></div>'
-      +'<div><label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">Login</label>'
-      +'<input id="ai'+i+'" value="'+u.id+'" placeholder="login.usuario" style="width:100%;padding:6px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px;box-sizing:border-box"></div>'
+      +'<div><label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">E-mail (não editável aqui)</label>'
+      +'<input value="'+u.id+'" disabled style="width:100%;padding:6px 8px;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:4px;color:#777;font-size:11px;box-sizing:border-box"></div>'
       +'</div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px">'
-      +'<div><label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">Nova Senha</label>'
-      +'<input type="password" id="ap'+i+'" placeholder="deixe em branco p/ manter" style="width:100%;padding:6px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px;box-sizing:border-box"></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'
       +'<div><label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">Nível de Acesso</label>'
       +'<select id="al'+i+'" style="width:100%;padding:6px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px">'+nivelOpts+'</select></div>'
       +'<div><label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">Cargo</label>'
       +'<select id="ac'+i+'" style="width:100%;padding:6px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px">'+cargoOpts+'</select></div>'
       +'</div>'
       +'</div>';
-  }).join('');
+    }).join('');
+  });
 }
 
 async function admSalvar(i){
+  var u=USUARIOS[i];
   var nome=document.getElementById('an'+i).value.trim();
-  var id=document.getElementById('ai'+i).value.trim().toLowerCase().replace(/\s+/g,'.');
-  var pass=document.getElementById('ap'+i).value;
   var nivel=document.getElementById('al'+i).value;
   var cargo=document.getElementById('ac'+i).value||'';
-  if(!nome||!id){alert('Nome e login obrigatórios.');return;}
-  // Verificar login duplicado
-  var duplicado=USUARIOS.some(function(u,j){return j!==i&&u.id===id;});
-  if(duplicado){alert('⚠️ Este login já está em uso por outro usuário.');return;}
-  USUARIOS[i]=Object.assign({},USUARIOS[i],{nome:nome,id:id,nivel:nivel,cargo:cargo});
-  if(pass.trim()) USUARIOS[i].senha=hs(pass.trim());
-  await usuariosSalvarStorage();
-  renderAdmList();
-  alert('✅ Usuário "'+nome+'" salvo com sucesso!');
+  if(!nome){alert('Nome obrigatório.');return;}
+  try{
+    await fbDb.collection('usuarios').doc(u.id).set({nome:nome,nivel:nivel,cargo:cargo},{merge:true});
+    USUARIOS[i]=Object.assign({},u,{nome:nome,nivel:nivel,cargo:cargo});
+    renderAdmList();
+    alert('✅ Perfil de "'+nome+'" salvo com sucesso!');
+  }catch(e){
+    alert('❌ Erro ao salvar: '+e.message);
+  }
 }
 
 async function admDel(i){
-  if(!confirm('Excluir o usuário "'+USUARIOS[i].nome+'"?\nEsta ação não pode ser desfeita.'))return;
-  USUARIOS.splice(i,1);
-  await usuariosSalvarStorage();
-  renderAdmList();
+  var u=USUARIOS[i];
+  if(!confirm('Excluir o PERFIL de "'+u.nome+'" ('+u.id+')?\n\n⚠️ Isso remove o nível de acesso dele no sistema, mas NÃO exclui a conta de login. Para bloquear o acesso por completo, também desative a conta em Firebase Console → Authentication.\n\nContinuar?'))return;
+  try{
+    await fbDb.collection('usuarios').doc(u.id).delete();
+    renderAdmList();
+  }catch(e){
+    alert('❌ Erro ao excluir: '+e.message);
+  }
 }
 
 async function admNovo(){
-  USUARIOS.push({id:'novo.usuario',nome:'Novo Usuário',nivel:'consultor',cargo:'',senha:hs('crazy@2026')});
-  await usuariosSalvarStorage();
-  renderAdmList();
-  setTimeout(function(){document.getElementById('adm-list').lastElementChild.scrollIntoView({behavior:'smooth'});},100);
+  var email=(prompt('E-mail da pessoa (a conta de login precisa já existir em Firebase Console → Authentication):')||'').trim().toLowerCase();
+  if(!email)return;
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){alert('⚠️ E-mail inválido.');return;}
+  if(USUARIOS.some(function(u){return u.id===email;})){alert('⚠️ Já existe um perfil com este e-mail.');return;}
+  try{
+    await fbDb.collection('usuarios').doc(email).set({nome:'Novo Usuário',nivel:'consultor',cargo:''});
+    renderAdmList();
+    setTimeout(function(){document.getElementById('adm-list').lastElementChild.scrollIntoView({behavior:'smooth'});},300);
+  }catch(e){
+    alert('❌ Erro ao criar: '+e.message);
+  }
 }
 
 function dashDrill(key, tituloEnc){
@@ -8943,7 +8981,7 @@ function renderAdmExclusoes(){
   var el=document.getElementById('adm-excl');
   if(!el)return;
   var nivel=usuarioAtual?usuarioAtual.nivel:'';
-  var isFabiano=usuarioAtual&&usuarioAtual.id==='fabiano.santos';
+  var isFabiano=usuarioAtual&&usuarioAtual.id==='fabiano.santos@crazysom.com.br';
   var podever=PODE_EXCLUIR.includes(nivel)||isFabiano;
   if(!podever){el.innerHTML='';return;}
 
@@ -9224,7 +9262,7 @@ function renderExclusivoModal(){
   var lista=document.getElementById('aprov-lista');
   if(!lista)return;
   var nivel=usuarioAtual?usuarioAtual.nivel:'';
-  var isFabiano=usuarioAtual&&usuarioAtual.id==='fabiano.santos';
+  var isFabiano=usuarioAtual&&usuarioAtual.id==='fabiano.santos@crazysom.com.br';
   var podever=PODE_EXCLUIR.includes(nivel)||isFabiano;
   var pendentes=solExclusao.filter(function(s){return s.status==='pendente';});
   var aprovadas=solExclusao.filter(function(s){return s.status==='aprovado';});
@@ -9337,7 +9375,6 @@ buildTabs();
 document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
 (function(){var elVal0=document.getElementById('f-val');if(elVal0&&!elVal0.value){var d0=new Date();d0.setDate(d0.getDate()+7);elVal0.value=d0.toISOString().split('T')[0];}})();
 // Carregar dados persistidos ao iniciar
-usuariosCarregarStorage();
 permCarregar();
 clientesCarregarStorage();
 calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
