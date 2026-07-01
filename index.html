@@ -1837,6 +1837,35 @@ var tipoAtual='det';
 var impAtual='cimp';
 var _carregandoOrc=false;
 
+// ═══════════════════════════════════════════════════════
+// MIGRAÇÃO ÚNICA: clientes do localStorage (cache antigo, pré-Firestore) → Firestore
+// Rode uma vez pelo console do navegador (F12 → Console → digite
+// migrarClientesFirestore() e Enter) na máquina que tem o cache mais completo.
+// Depois disso pode ignorar/remover esta função.
+// ═══════════════════════════════════════════════════════
+async function migrarClientesFirestore(){
+  var raw=localStorage.getItem('crazySomClientes');
+  if(!raw){console.log('Nada encontrado em localStorage.crazySomClientes neste navegador.');return;}
+  var arr;
+  try{ arr=JSON.parse(raw); }catch(e){console.log('Erro ao ler o cache local:',e);return;}
+  if(!Array.isArray(arr)||!arr.length){console.log('Cache local vazio, nada para migrar.');return;}
+  console.log('Migrando '+arr.length+' clientes para o Firestore...');
+  var ok=0,falha=0;
+  for(var i=0;i<arr.length;i++){
+    var c=arr[i];
+    if(!c||!c.id){falha++;continue;}
+    try{
+      await fbDb.collection('clientes').doc(c.id).set(c);
+      ok++;
+    }catch(e){
+      falha++;
+      console.log('Falha ao migrar cliente',c.nome||c.id,':',e.message);
+    }
+  }
+  console.log('✅ Migração concluída: '+ok+' migrados, '+falha+' com falha.');
+  alert('Migração concluída!\n\n✅ '+ok+' clientes migrados\n❌ '+falha+' com falha (veja o console)');
+}
+
 function finFormaLabel(f){
   var ico={'PIX':'💚','Boleto':'🧾','Cartão de Crédito':'💳','Cartão de Débito':'💳','Transferência':'🏦','Dinheiro':'💵','Cheque':'📝'};
   return f?(ico[f]||'')+(ico[f]?' ':'')+f:'—';
