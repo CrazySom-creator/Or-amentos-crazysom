@@ -7727,7 +7727,6 @@ function dashAcessoRenderizar(){
 //  CADASTRO DE CLIENTES
 // ═══════════════════════════════════════════════════════
 var CLIENTES=[];
-var _clientesDriveId=null;
 var _clienteBuscaModoSelecao=false;
 var _docVerifTimer=null;
 var _sugestTimer=null;
@@ -7736,38 +7735,33 @@ function _clienteSoDigitos(s){return (s||'').toString().replace(/\D/g,'');}
 
 async function clientesCarregarStorage(){
   try{
-    var dL=await _listarDriveCompartilhado();
-    var cfg=(dL.lista||[]).find(function(x){return x.nome&&x.nome.includes('_CONFIG_CLIENTES');});
-    if(cfg){
-      var rC=await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
-      var dC=await rC.json();
-      if(dC.ok&&dC.dados&&dC.dados._tipo==='config-clientes'&&Array.isArray(dC.dados.clientes)){
-        _clientesDriveId=cfg.id;
-        CLIENTES=dC.dados.clientes;
-        try{ localStorage.setItem('crazySomClientes',JSON.stringify(CLIENTES)); }catch(e){}
-        return;
-      }
-    }
-  }catch(e){ console.warn('clientesCarregarStorage Drive:',e); }
+    var snap=await fbDb.collection('clientes').get();
+    var lista=[];
+    snap.forEach(function(doc){ lista.push(doc.data()); });
+    CLIENTES=lista;
+    try{ localStorage.setItem('crazySomClientes',JSON.stringify(CLIENTES)); }catch(e){}
+    return;
+  }catch(e){ console.warn('clientesCarregarStorage:',e); }
   try{
     var d=localStorage.getItem('crazySomClientes');
     if(d){ var arr=JSON.parse(d); if(Array.isArray(arr)) CLIENTES=arr; }
   }catch(e){}
 }
 
-async function _clientesSalvarDrive(){
+async function _clienteSalvarFirestore(obj){
   try{
-    var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
-      action:'save', id:_clientesDriveId||null,
-      numero:'_CONFIG_CLIENTES', cliente:'_SISTEMA',
-      data:new Date().toISOString().split('T')[0],
-      dados:{_tipo:'config-clientes', clientes:CLIENTES}
-    })});
-    var d=await r.json();
-    if(d.ok) _clientesDriveId=d.id;
+    await fbDb.collection('clientes').doc(obj.id).set(obj);
     try{ localStorage.setItem('crazySomClientes',JSON.stringify(CLIENTES)); }catch(e){}
-    return d.ok;
-  }catch(e){ return false; }
+    return true;
+  }catch(e){ console.warn('_clienteSalvarFirestore:',e); return false; }
+}
+
+async function _clienteExcluirFirestore(id){
+  try{
+    await fbDb.collection('clientes').doc(id).delete();
+    try{ localStorage.setItem('crazySomClientes',JSON.stringify(CLIENTES)); }catch(e){}
+    return true;
+  }catch(e){ console.warn('_clienteExcluirFirestore:',e); return false; }
 }
 
 async function abrirClientes(){
@@ -7950,10 +7944,10 @@ async function clienteSalvar(){
   var idx=CLIENTES.findIndex(function(c){return c.id===obj.id;});
   if(idx>=0) CLIENTES[idx]=Object.assign({},CLIENTES[idx],obj);
   else CLIENTES.push(obj);
-  var ok=await _clientesSalvarDrive();
+  var ok=await _clienteSalvarFirestore(obj);
   document.getElementById('cliente-form-ov').classList.remove('open');
   if(document.getElementById('clientes-ov').classList.contains('open')) clientesRenderLista(document.getElementById('clientes-busca').value);
-  if(ok) driveStatus('✅ Cliente salvo no cadastro','ok'); else driveStatus('⚠️ Cliente salvo localmente (Drive indisponível)','err');
+  if(ok) driveStatus('✅ Cliente salvo no cadastro','ok'); else driveStatus('⚠️ Cliente salvo localmente (Firestore indisponível)','err');
   return obj;
 }
 
@@ -7962,7 +7956,7 @@ async function clienteExcluirAtual(){
   var c=CLIENTES.find(function(x){return x.id===id;});
   if(!confirm('🗑️ Excluir o cliente "'+(c?c.nome:'')+'" do cadastro?\n\nEsta ação não afeta orçamentos já emitidos.'))return;
   CLIENTES=CLIENTES.filter(function(x){return x.id!==id;});
-  await _clientesSalvarDrive();
+  await _clienteExcluirFirestore(id);
   document.getElementById('cliente-form-ov').classList.remove('open');
   if(document.getElementById('clientes-ov').classList.contains('open')) clientesRenderLista(document.getElementById('clientes-busca').value);
   driveStatus('🗑️ Cliente excluído do cadastro','ok');
