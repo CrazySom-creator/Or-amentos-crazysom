@@ -1837,6 +1837,54 @@ var tipoAtual='det';
 var impAtual='cimp';
 var _carregandoOrc=false;
 
+// ═══════════════════════════════════════════════════════
+// FASE 4 — PASSO 1 (SEGURO): copiar orçamentos do Drive para o Firestore
+// Esta função é SOMENTE LEITURA no Drive — não move, não apaga, não altera
+// nenhum arquivo original. Só grava cópias na coleção 'orcamentos' do
+// Firestore, usando o MESMO ID do arquivo do Drive (facilita conferência).
+// O sistema continua funcionando 100% a partir do Drive até que a
+// próxima etapa (trocar o código de leitura/escrita) seja feita e
+// confirmada — ou seja, roda esta função quantas vezes quiser, sem risco.
+// ═══════════════════════════════════════════════════════
+async function migrarOrcamentosDriveParaFirestore(){
+  var INTERNOS_MIG=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_CONFIG_CLIENTES','_CONFIG_USUARIOS','_CONFIG_PERMISSOES','_LOCKS_CRAZYSOM'];
+  console.log('Listando arquivos no Drive...');
+  var dL;
+  try{
+    var rL=await fetch(SCRIPT_URL+'?action=list');
+    dL=await rL.json();
+  }catch(e){console.log('❌ Erro ao listar Drive:',e);return;}
+  var todos=dL.lista||[];
+  var orcamentos=todos.filter(function(f){
+    return !INTERNOS_MIG.some(function(n){return f.nome&&f.nome.indexOf(n)>=0;});
+  });
+  console.log('Total de arquivos no Drive: '+todos.length+' | Orçamentos a migrar (excluindo internos): '+orcamentos.length);
+  if(!orcamentos.length){console.log('Nada para migrar.');return;}
+  var ok=0,falha=0,falhas=[];
+  for(var i=0;i<orcamentos.length;i++){
+    var f=orcamentos[i];
+    try{
+      var rC=await fetch(SCRIPT_URL+'?action=load&id='+f.id);
+      var dC=await rC.json();
+      if(!dC.ok||!dC.dados){falha++;falhas.push(f.nome+' (conteúdo inválido)');continue;}
+      var doc=Object.assign({},dC.dados,{_driveId:f.id,_driveNome:f.nome,_driveModificado:f.modificado});
+      await fbDb.collection('orcamentos').doc(f.id).set(doc);
+      ok++;
+      if(ok%10===0) console.log('...'+ok+'/'+orcamentos.length+' migrados até agora');
+    }catch(e){
+      falha++;
+      falhas.push(f.nome+' ('+e.message+')');
+    }
+  }
+  console.log('═══════════════════════════════════');
+  console.log('✅ Migrados com sucesso: '+ok);
+  console.log('❌ Falhas: '+falha);
+  if(falhas.length) console.log('Detalhe das falhas:',falhas);
+  console.log('Total no Drive (excluindo internos): '+orcamentos.length);
+  console.log('═══════════════════════════════════');
+  alert('Cópia concluída!\n\n📁 Total no Drive: '+orcamentos.length+'\n✅ Copiados: '+ok+'\n❌ Falhas: '+falha+'\n\nO Drive NÃO foi alterado — isso foi só uma cópia. Confira as contagens antes de qualquer próximo passo.');
+}
+
 async function migrarClientesDoDriveParaFirestore(){
   console.log('Buscando arquivo antigo _CONFIG_CLIENTES no Drive...');
   var dL;
