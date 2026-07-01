@@ -7472,7 +7472,7 @@ var _permissoes = {};
 var _dashAcessos = {};
 
 // ════════════════════════════════════════════════
-//  PERMISSÕES — PropertiesService como fonte de verdade
+//  PERMISSÕES — Firestore como fonte de verdade (config/permissoes)
 // ════════════════════════════════════════════════
 
 var _driveListCache=null;var _driveListCacheTs=0;
@@ -7486,19 +7486,19 @@ async function _listarDriveCompartilhado(forcar){
 
 async function permCarregar(){
   try{
-    var r=await fetch(SCRIPT_URL+'?action=config&tipo=permissoes');
-    var d=await r.json();
-    if(d.ok&&d.dados){
-      if(d.dados.permissoes) _permissoes=d.dados.permissoes;
-      if(d.dados.dashAcessos) _dashAcessos=d.dados.dashAcessos;
+    var snap=await fbDb.collection('config').doc('permissoes').get();
+    if(snap.exists){
+      var d=snap.data();
+      if(d.permissoes) _permissoes=d.permissoes;
+      if(d.dashAcessos) _dashAcessos=d.dashAcessos;
       try{ localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes)); }catch(e){}
       try{ localStorage.setItem('crazySomDashAcesso',JSON.stringify(_dashAcessos)); }catch(e){}
       return;
     }
   }catch(e){ console.warn('permCarregar:',e); }
   try{
-    var d=localStorage.getItem('crazySomPerm');
-    if(d) _permissoes=JSON.parse(d);
+    var dLocal=localStorage.getItem('crazySomPerm');
+    if(dLocal) _permissoes=JSON.parse(dLocal);
     var d2=localStorage.getItem('crazySomDashAcesso');
     if(d2) _dashAcessos=JSON.parse(d2);
   }catch(e){}
@@ -7506,15 +7506,11 @@ async function permCarregar(){
 
 async function _permSalvarDrive(){
   try{
-    var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
-      action:'configSave', tipo:'permissoes',
-      dados:{permissoes:_permissoes, dashAcessos:_dashAcessos}
-    })});
-    var d=await r.json();
+    await fbDb.collection('config').doc('permissoes').set({permissoes:_permissoes, dashAcessos:_dashAcessos});
     try{ localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes)); }catch(e){}
     try{ localStorage.setItem('crazySomDashAcesso',JSON.stringify(_dashAcessos)); }catch(e){}
-    return d.ok;
-  }catch(e){ return false; }
+    return true;
+  }catch(e){ console.warn('_permSalvarDrive:',e); return false; }
 }
 
 async function permSalvar(){
