@@ -810,7 +810,6 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
       <div class="rel-tab active" onclick="admAba('usuarios')">👤 Usuários</div>
       <div class="rel-tab" onclick="admAba('permissoes')">🔐 Permissões por Cargo</div>
       <div class="rel-tab" onclick="admAba('dashboards')">📊 Acesso a Dashboards</div>
-      <div class="rel-tab" onclick="admAba('contaazul')">🔵 Conta Azul</div>
     </div>
     <!-- ABA Usuários -->
     <div class="rel-pane active" id="admpane-usuarios">
@@ -842,18 +841,6 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
       <p style="font-size:11px;color:#888;margin-bottom:10px">Defina quais dashboards e relatórios cada cargo pode acessar.</p>
       <div id="dash-acesso-corpo"></div>
       <button onclick="dashAcessoSalvar()" style="margin-top:12px;padding:7px 18px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Acessos</button>
-    </div>
-    <!-- ABA Conta Azul -->
-    <div class="rel-pane" id="admpane-contaazul">
-      <p style="font-size:11px;color:#888;margin-bottom:14px">Conecte o sistema à Conta Azul para enviar o cliente e a venda automaticamente quando um orçamento for aprovado, sem precisar redigitar tudo lá.</p>
-      <div id="ca-status-box" style="background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-        <div id="ca-status-icone" style="font-size:22px">🔴</div>
-        <div style="flex:1;min-width:200px">
-          <div id="ca-status-texto" style="color:#fff;font-size:13px;font-weight:700">Verificando conexão...</div>
-          <div style="color:#888;font-size:10px;margin-top:2px">A autorização é feita uma única vez por empresa.</div>
-        </div>
-        <button class="btn btn-g btn-sm" id="ca-btn-conectar" onclick="caConectar()">🔗 Conectar Conta Azul</button>
-      </div>
     </div>
   </div>
 </div>
@@ -2113,7 +2100,6 @@ function renderStatusOrc(){
   else if(nivel==='diretor'&&aprovStatus==='diretoria'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#c62828','🔄 Reprovar / Revisão',"aprovAcao('revisao')")+'</div>';}
   else if(['adm','gerente','diretor'].includes(usuarioAtual.nivel)&&aprovStatus!=='aprovado'&&aprovStatus!=='rascunho'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#6a1b9a','🏆 Enviar para Diretoria',"aprovAcao('diretoria')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}
   else{var msgs={rascunho:'Aguardando envio pelo consultor.',analise:'Aguardando análise técnica.',gerencial:'Aguardando aprovação do gerente.',diretoria:'Aguardando aprovação da diretoria.',aprovado:'✅ Orçamento aprovado!',revisao:'🔄 Revisão solicitada.'};acoes='<p style="font-size:11px;color:#888;padding:6px 0">'+(msgs[aprovStatus]||'')+'</p>';}
-  if(aprovStatus==='aprovado'&&driveIdAtual){acoes+='<div style="margin-top:4px"><button id="btn-enviar-ca" onclick="enviarParaContaAzul()" style="padding:8px 16px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;color:#fff;background:#2546f0">📤 Enviar para Conta Azul</button></div>';}
   if(nivel==='consultor'&&driveIdAtual&&aprovStatus!=='rascunho'){acoes+='<div style="margin-top:6px"><button onclick="toggleNegociacaoBox()" style="padding:7px 14px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;color:#fff;background:#e65100;margin:3px">🤝 Negociação / Desconto</button></div>';}
   sa.innerHTML=acoes;
 }
@@ -7428,9 +7414,8 @@ var _permissoes = {};
 var _dashAcessos = {};
 
 // ════════════════════════════════════════════════
-//  PERMISSÕES — Drive como fonte de verdade
+//  PERMISSÕES — PropertiesService como fonte de verdade
 // ════════════════════════════════════════════════
-var _permDriveId = null;
 
 var _driveListCache=null;var _driveListCacheTs=0;
 async function _listarDriveCompartilhado(forcar){
@@ -7443,21 +7428,16 @@ async function _listarDriveCompartilhado(forcar){
 
 async function permCarregar(){
   try{
-    var dL=await _listarDriveCompartilhado();
-    var cfg=(dL.lista||[]).find(function(x){return x.nome&&x.nome.includes('_CONFIG_PERMISSOES');});
-    if(cfg){
-      var rC=await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
-      var dC=await rC.json();
-      if(dC.ok&&dC.dados&&dC.dados._tipo==='config-permissoes'){
-        _permDriveId=cfg.id;
-        if(dC.dados.permissoes) _permissoes=dC.dados.permissoes;
-        if(dC.dados.dashAcessos) _dashAcessos=dC.dados.dashAcessos;
-        try{ localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes)); }catch(e){}
-        try{ localStorage.setItem('crazySomDashAcesso',JSON.stringify(_dashAcessos)); }catch(e){}
-        return;
-      }
+    var r=await fetch(SCRIPT_URL+'?action=config&tipo=permissoes');
+    var d=await r.json();
+    if(d.ok&&d.dados){
+      if(d.dados.permissoes) _permissoes=d.dados.permissoes;
+      if(d.dados.dashAcessos) _dashAcessos=d.dados.dashAcessos;
+      try{ localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes)); }catch(e){}
+      try{ localStorage.setItem('crazySomDashAcesso',JSON.stringify(_dashAcessos)); }catch(e){}
+      return;
     }
-  }catch(e){ console.warn('permCarregar Drive:',e); }
+  }catch(e){ console.warn('permCarregar:',e); }
   try{
     var d=localStorage.getItem('crazySomPerm');
     if(d) _permissoes=JSON.parse(d);
@@ -7469,13 +7449,12 @@ async function permCarregar(){
 async function _permSalvarDrive(){
   try{
     var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
-      action:'save', id:_permDriveId||null,
-      numero:'_CONFIG_PERMISSOES', cliente:'_SISTEMA',
-      data:new Date().toISOString().split('T')[0],
-      dados:{_tipo:'config-permissoes', permissoes:_permissoes, dashAcessos:_dashAcessos}
+      action:'configSave', tipo:'permissoes',
+      dados:{permissoes:_permissoes, dashAcessos:_dashAcessos}
     })});
     var d=await r.json();
-    if(d.ok) _permDriveId=d.id;
+    try{ localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes)); }catch(e){}
+    try{ localStorage.setItem('crazySomDashAcesso',JSON.stringify(_dashAcessos)); }catch(e){}
     return d.ok;
   }catch(e){ return false; }
 }
@@ -7637,7 +7616,7 @@ function dashTemAcesso(dashId){
 
 function admAba(aba){
   document.querySelectorAll('#adm-ov .rel-tab').forEach(function(t,i){
-    var abas=['usuarios','permissoes','dashboards','contaazul'];
+    var abas=['usuarios','permissoes','dashboards'];
     t.classList.toggle('active',abas[i]===aba);
   });
   document.querySelectorAll('#adm-ov .rel-pane').forEach(function(p){p.classList.remove('active');});
@@ -7645,7 +7624,6 @@ function admAba(aba){
   if(el)el.classList.add('active');
   if(aba==='permissoes') permRenderizar();
   if(aba==='dashboards') dashAcessoRenderizar();
-  if(aba==='contaazul') caAtualizarStatus();
 }
 
 function permRenderizar(){
@@ -7689,66 +7667,40 @@ function dashAcessoRenderizar(){
 // ════════════════════════════════════════════════
 //  USUÁRIOS — Drive como fonte de verdade
 // ════════════════════════════════════════════════
-var _usuariosDriveId = null;
-
 async function usuariosSalvarStorage(){
   try{ localStorage.setItem('crazySomUsuarios', JSON.stringify(USUARIOS)); }catch(e){}
   try{
     var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
-      action:'save', id:_usuariosDriveId||null,
-      numero:'_CONFIG_USUARIOS', cliente:'_SISTEMA',
-      data:new Date().toISOString().split('T')[0],
-      dados:{_tipo:'config-usuarios', usuarios:USUARIOS}
+      action:'configSave', tipo:'usuarios',
+      dados:{usuarios:USUARIOS}
     })});
-    var d=await r.json();
-    if(d.ok) _usuariosDriveId=d.id;
-  }catch(e){ console.warn('usuariosSalvarStorage Drive:',e); }
+    await r.json();
+  }catch(e){ console.warn('usuariosSalvarStorage:',e); }
 }
 
 async function usuariosCarregarStorage(){
-  // 1) Tentar Drive
+  var _encontrouRemoto=false;
+  // 1) Tentar Properties (rota nova — rápida, sem varrer o Drive)
   try{
-    var dL=await _listarDriveCompartilhado();
-    var candidatos=(dL.lista||[]).filter(function(x){return x.nome&&x.nome.includes('_CONFIG_USUARIOS');});
-    function _parseDataBr(s){ // "dd/mm/yyyy hh:mm" -> timestamp
-      if(!s)return 0;
-      var m=s.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
-      if(!m)return 0;
-      return new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5]).getTime();
+    var r=await fetch(SCRIPT_URL+'?action=config&tipo=usuarios');
+    var d=await r.json();
+    if(d.ok&&d.dados&&Array.isArray(d.dados.usuarios)&&d.dados.usuarios.length>0){
+      _encontrouRemoto=true;
+      d.dados.usuarios.forEach(function(u){
+        var idx=USUARIOS.findIndex(function(x){return x.id===u.id;});
+        if(idx>=0) USUARIOS[idx]=Object.assign({},USUARIOS[idx],u);
+        else USUARIOS.push(u);
+      });
+      try{ localStorage.setItem('crazySomUsuarios',JSON.stringify(USUARIOS)); }catch(e){}
+      return;
     }
-    candidatos.sort(function(a,b){return _parseDataBr(b.modificado)-_parseDataBr(a.modificado);});
-    // Tenta no máximo os 2 candidatos mais recentes — evita uma cascata de tentativas sequenciais
-    // quando o Drive está sob carga (múltiplos usuários logando ao mesmo tempo).
-    var limiteTentativas=Math.min(candidatos.length,2);
-    for(var ci=0; ci<limiteTentativas; ci++){
-      var cfg=candidatos[ci];
-      try{
-        var rC=await fetch(SCRIPT_URL+'?action=load&id='+cfg.id);
-        var dC=await rC.json();
-        if(dC.ok&&dC.dados&&dC.dados._tipo==='config-usuarios'&&Array.isArray(dC.dados.usuarios)&&dC.dados.usuarios.length>0){
-          _usuariosDriveId=cfg.id;
-          dC.dados.usuarios.forEach(function(u){
-            var idx=USUARIOS.findIndex(function(x){return x.id===u.id;});
-            if(idx>=0) USUARIOS[idx]=Object.assign({},USUARIOS[idx],u);
-            else USUARIOS.push(u);
-          });
-          try{ localStorage.setItem('crazySomUsuarios',JSON.stringify(USUARIOS)); }catch(e){}
-          return;
-        }
-      }catch(eCand){ console.warn('usuariosCarregarStorage: falha ao tentar candidato', cfg.id, eCand); }
-    }
-    // Nenhum dos candidatos tentados funcionou agora — NÃO grava nada no Drive neste caso
-    // (pode ser apenas uma falha de rede passageira). Apenas usa o ID existente como referência.
-    if(candidatos.length>0){ _usuariosDriveId=candidatos[0].id; }
-  }catch(e){ console.warn('usuariosCarregarStorage Drive:',e); }
+  }catch(e){ console.warn('usuariosCarregarStorage:',e); }
   // 2) Fallback localStorage (dados reais deste navegador, inclusive senhas alteradas localmente)
-  var _tinhaLocal=false;
   try{
-    var d=localStorage.getItem('crazySomUsuarios');
-    if(d){
-      var arr=JSON.parse(d);
+    var dLocal=localStorage.getItem('crazySomUsuarios');
+    if(dLocal){
+      var arr=JSON.parse(dLocal);
       if(Array.isArray(arr)&&arr.length>0){
-        _tinhaLocal=true;
         arr.forEach(function(u){
           var idx=USUARIOS.findIndex(function(x){return x.id===u.id;});
           if(idx>=0) USUARIOS[idx]=Object.assign({},USUARIOS[idx],u);
@@ -7757,10 +7709,9 @@ async function usuariosCarregarStorage(){
       }
     }
   }catch(e){}
-  // 3) Auto-semear o Drive SOMENTE se nenhum arquivo de configuração existir de verdade
-  //    (evita que múltiplos usuários, sob falha passageira, disparem gravações simultâneas
-  //    que sobrecarregam o backend e travam o login de todos).
-  if(_usuariosDriveId){ return; }
+  // 3) Auto-semear SOMENTE se realmente não existir nada remoto ainda
+  //    (evita que múltiplos usuários, sob falha passageira, disparem gravações simultâneas)
+  if(_encontrouRemoto){ return; }
   try{ await usuariosSalvarStorage(); }catch(e){}
 }
 
@@ -8095,80 +8046,6 @@ function clienteSelecionarParaOrcamento(idx){
   clienteFecharSugestoes();
   _clienteBuscaModoSelecao=false;
   document.getElementById('clientes-ov').classList.remove('open');
-}
-
-// ═══════════════════════════════════════════════════════
-//  INTEGRAÇÃO CONTA AZUL
-// ═══════════════════════════════════════════════════════
-async function caAtualizarStatus(){
-  var icone=document.getElementById('ca-status-icone');
-  var texto=document.getElementById('ca-status-texto');
-  var btn=document.getElementById('ca-btn-conectar');
-  if(!icone)return;
-  texto.textContent='Verificando conexão...';
-  try{
-    var r=await fetch(SCRIPT_URL+'?action=ca-status');
-    var d=await r.json();
-    if(d.ok&&d.conectado){
-      icone.textContent='🟢';
-      texto.textContent='Conta Azul conectada';
-      btn.textContent='🔄 Reconectar';
-    }else{
-      icone.textContent='🔴';
-      texto.textContent='Conta Azul não conectada';
-      btn.textContent='🔗 Conectar Conta Azul';
-    }
-  }catch(e){
-    icone.textContent='⚠️';
-    texto.textContent='Não foi possível verificar (backend ainda sem a integração instalada).';
-  }
-}
-async function caConectar(){
-  try{
-    var r=await fetch(SCRIPT_URL+'?action=ca-auth-url');
-    var d=await r.json();
-    if(!d.ok||!d.url){alert('⚠️ Não foi possível gerar o link de autorização. Verifique se o código da Conta Azul já foi instalado no Apps Script.');return;}
-    window.open(d.url,'_blank');
-    alert('Uma nova aba foi aberta para você autorizar o acesso na Conta Azul.\n\nApós autorizar, volte aqui e clique novamente em "Conectar Conta Azul" (ou feche esta janela) para atualizar o status.');
-    setTimeout(caAtualizarStatus, 4000);
-  }catch(e){alert('⚠️ Erro ao iniciar conexão: '+e.message);}
-}
-
-async function enviarParaContaAzul(){
-  if(!gv('f-doc')){alert('⚠️ Informe o CNPJ/CPF do cliente antes de enviar para a Conta Azul.');return;}
-  var valorEl=document.getElementById('val-liq')||{};
-  var valorTotal=parseFloat(valorEl.value||valorEl.placeholder||0)||0;
-  if(!valorTotal){
-    var valorSiEl=document.getElementById('val-liq-si')||{};
-    valorTotal=parseFloat(valorSiEl.value||valorSiEl.placeholder||0)||0;
-  }
-  if(!confirm('📤 Enviar este orçamento para a Conta Azul?\n\nCliente: '+gv('f-cliente')+'\nValor: '+fmt(valorTotal)+'\n\nIsso vai criar (ou localizar) o cliente e gerar uma venda na Conta Azul.'))return;
-  var btn=document.getElementById('btn-enviar-ca');
-  if(btn){btn.disabled=true;btn.textContent='⏳ Enviando...';}
-  mostrarCarregando('⏳ Enviando para a Conta Azul...');
-  try{
-    var payload={
-      action:'ca-enviar',
-      cliente:{nome:gv('f-cliente'),doc:gv('f-doc'),email:gv('f-email'),tel:gv('f-tel'),cep:gv('f-cep'),end:gv('f-end'),endnum:gv('f-endnum'),bairro:gv('f-bairro'),cidade:gv('f-cidade')},
-      numero:gv('f-num'),
-      dataVenda:gv('f-data')||new Date().toISOString().split('T')[0],
-      valorTotal:valorTotal,
-      observacoes:gv('f-local')||''
-    };
-    var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify(payload)});
-    var d=await r.json();
-    if(d.ok){
-      alert('✅ Enviado com sucesso! Venda criada na Conta Azul'+(d.numero?(' (nº '+d.numero+')'):'')+'.');
-      driveStatus('✅ Enviado para a Conta Azul','ok');
-    }else{
-      alert('⚠️ Não foi possível enviar para a Conta Azul:\n\n'+(d.erro||'Erro desconhecido.'));
-    }
-  }catch(e){
-    alert('⚠️ Erro ao enviar para a Conta Azul: '+e.message);
-  }finally{
-    esconderCarregando();
-    if(btn){btn.disabled=false;btn.textContent='📤 Enviar para Conta Azul';}
-  }
 }
 
 function renderAdmList(){
