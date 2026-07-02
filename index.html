@@ -4462,7 +4462,7 @@ function buildPDF(tipo){
   });
   var multiAmb2=todosAmb.length>1||todosAmb.some(function(a){return a.nome!=='Geral';});
 
-  function rTotF(r){return rowTot(r)*F*(1-descFrac);}
+  function rTotF(r){return rowTot(r)*F;}
 
   function secBlock(s,aid,det){
     if(s==='logistica')return'';
@@ -4479,7 +4479,7 @@ function buildPDF(tipo){
         +'</tr></thead><tbody>';
       rows2.forEach(function(r){
         var tot2=rTotF(r);
-        var unitVal=r.painel?fmt(r.val*F*(1-descFrac))+'/m²':isPalco(r.name)?'—':fmt(r.val*F*(1-descFrac));
+        var unitVal=r.painel?fmt(r.val*F)+'/m²':isPalco(r.name)?'—':fmt(r.val*F);
         h+='<tr>'
           +'<td>'+String(r.qty).padStart(2,'0')+'</td>'
           +'<td>'+buildDesc(r)+'</td>'
@@ -4543,8 +4543,8 @@ function buildPDF(tipo){
     SECS_PDF.forEach(function(s){corpo+=secBlock(s,'default',tipo==='det');});
   }
 
-  var bvTot=(_bvStorage||parseFloat(gv('f-bv'))||0)*F*(1-descFrac);
-  var logTot=secTotAll('logistica')*F*(1-descFrac);
+  var bvTot=(_bvStorage||parseFloat(gv('f-bv'))||0)*F;
+  var logTot=secTotAll('logistica')*F;
   var totalLabel='Valor Total'+(impAtual==='cimp'?' (impostos inclusos)':'');
 
   var res='<table class="pres">'
@@ -4564,7 +4564,7 @@ function buildPDF(tipo){
     [{n:'SONORIZAÇÃO',s:'som'},{n:'VÍDEO',s:'video'},{n:'ILUMINAÇÃO',s:'luz'},{n:'ESTRUTURA',s:'estrutura'},{n:'OPERAÇÃO TÉCNICA',s:'servico'}]
       .filter(function(x){return secTotAll(x.s)>0;})
       .forEach(function(x){
-        var vSec=secTotAll(x.s)*F*(1-descFrac);
+        var vSec=secTotAll(x.s)*F;
         if(x.s==='servico')vSec+=bvTot; // adicionar BV ao total de serviço interno
         res+='<tr><td>'+x.n+'</td><td class="r">'+fmt(vSec)+'</td></tr>';
       });
@@ -4591,7 +4591,6 @@ function buildPDF(tipo){
 
   var pgto='<div class="pgto-pdf">'
     +(gv('f-pgto')?'<div class="pt">Forma de Pagamento</div>'+gv('f-pgto').split('\n').join('<br>'):'')
-    +(gv('f-obs')?'<div class="ob">OBS: '+gv('f-obs')+'</div>':'')
     +'</div>';
 
   var foot='<div class="pfooter"><span>Crazy Som – CNPJ: 10.909.827/0001-76</span><span>Pág. 1</span></div>';
