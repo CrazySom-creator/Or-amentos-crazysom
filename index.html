@@ -6125,6 +6125,8 @@ function relGerarFinanceiro(){
 
   var parcelas=[];
   _relDados.forEach(function(o){
+    var cs=(o.dados&&o.dados.comercialStatus)||'';
+    if(cs!=='ganha')return;
     var fin=(o.dados&&o.dados.finParcelas)||[];
     fin.forEach(function(p){
       if(de&&p.data&&p.data<de)return;
@@ -6401,6 +6403,8 @@ function relGetDadosTabela(){
     var stFiltro=document.getElementById('rf-fin-status').value;
     var parcelas=[];
     _relDados.forEach(function(o){
+      var cs=(o.dados&&o.dados.comercialStatus)||'';
+      if(cs!=='ganha')return;
       var fin=(o.dados&&o.dados.finParcelas)||[];
       fin.forEach(function(p){
         if(de&&p.data&&p.data<de)return;
@@ -8882,8 +8886,12 @@ function dashFinRenderizar(){
   var hoje   = new Date().toISOString().split('T')[0];
 
   // Coletar todas as parcelas (com referência ao driveId do orçamento)
+  // IMPORTANTE: só entram orçamentos com venda GANHA — parcelas configuradas
+  // em orçamentos ainda em negociação/rascunho não são compromisso financeiro real.
   var todas = [];
   _dashFinDados.forEach(function(o){
+    var cs = (o.dados && o.dados.comercialStatus) || '';
+    if(cs !== 'ganha') return;
     var fin = (o.dados && o.dados.finParcelas)||[];
     fin.forEach(function(p){
       var atrasado = p.status!=='pago' && p.data && p.data < hoje;
