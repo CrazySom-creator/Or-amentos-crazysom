@@ -1602,8 +1602,8 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
           <span style="font-size:10px;color:#66bb6a;font-weight:800;text-transform:uppercase">Sem Imposto</span>
           <span style="font-size:9px;color:#555;margin-left:auto">s/ nota</span>
         </div>
-        <input type="number" id="val-liq-si" placeholder="0" step="1" style="width:100%;background:#0a0a0a;color:#fff;border:1px solid #2e7d32;border-radius:4px;font-size:15px;font-weight:700;padding:6px 9px;box-sizing:border-box" onclick="event.stopPropagation();selImpVenda('simp')" oninput="calc();marcarAlterado()">
-        <div style="font-size:9px;color:#555;margin-top:4px">vazio = usa valor calculado</div>
+        <input type="number" id="val-liq-si" placeholder="0" step="1" readonly style="width:100%;background:#0a0a0a;color:#fff;border:1px solid #2e7d32;border-radius:4px;font-size:15px;font-weight:700;padding:6px 9px;box-sizing:border-box;cursor:pointer" onclick="event.stopPropagation();selImpVenda('simp')">
+        <div style="font-size:9px;color:#555;margin-top:4px">calculado automaticamente</div>
       </div>
       <div id="valliq-cimp-box" onclick="selImpVenda('cimp')" style="flex:1;min-width:170px;cursor:pointer;border:2px solid #c0001a;border-radius:8px;padding:10px 12px;background:#140303">
         <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
@@ -1611,8 +1611,8 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
           <span style="font-size:10px;color:#ef5350;font-weight:800;text-transform:uppercase">Com Imposto</span>
           <span style="font-size:9px;color:#555;margin-left:auto">c/ nota</span>
         </div>
-        <input type="number" id="val-liq" placeholder="0" step="1" style="width:100%;background:#0a0a0a;color:#fff;border:1px solid #c0001a;border-radius:4px;font-size:15px;font-weight:700;padding:6px 9px;box-sizing:border-box" onclick="event.stopPropagation();selImpVenda('cimp')" oninput="calc();marcarAlterado()">
-        <div style="font-size:9px;color:#555;margin-top:4px">vazio = usa valor calculado</div>
+        <input type="number" id="val-liq" placeholder="0" step="1" readonly style="width:100%;background:#0a0a0a;color:#fff;border:1px solid #c0001a;border-radius:4px;font-size:15px;font-weight:700;padding:6px 9px;box-sizing:border-box;cursor:pointer" onclick="event.stopPropagation();selImpVenda('cimp')">
+        <div style="font-size:9px;color:#555;margin-top:4px">calculado automaticamente</div>
       </div>
     </div>
   </div>
@@ -3091,6 +3091,7 @@ function calc(){
     }else{subGeral.style.display='none';}
   }
   renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+  _preencherValLiqCalculado();
 }
 
 function driveStatus(msg,tipo){var el=document.getElementById('drive-status');if(!el)return;el.textContent=msg;el.className='drive-status '+(tipo||'');if(msg)setTimeout(function(){if(el.textContent===msg)el.textContent='';},5000);}
@@ -4367,8 +4368,8 @@ function _preencherValLiqCalculado(){
       vdsi=bruto-dv_pvl;vdci=vdsi*(1+IMP);
     }
     var elci=document.getElementById('val-liq'),elsi=document.getElementById('val-liq-si');
-    if(elci) elci.placeholder=vdci>0?Math.round(vdci).toString():'0';
-    if(elsi) elsi.placeholder=vdsi>0?Math.round(vdsi).toString():'0';
+    if(elci) elci.value=vdci>0?Math.round(vdci).toString():'0';
+    if(elsi) elsi.value=vdsi>0?Math.round(vdsi).toString():'0';
   }catch(e){}
 }
 function getSvinc(){var e=document.getElementById('f-svinc');return e?e.value:'';}
@@ -4393,6 +4394,9 @@ var PDF_STYLES={
 
 function buildPDF(tipo){
   var SECS_PDF=['som','video','luz','estrutura','servico'];
+  // Nomes usados SÓ no texto do PDF (o sistema, nas abas de edição, continua
+  // usando SEC_LBL normalmente — essa troca é só do documento final).
+  var SEC_LBL_PDF=Object.assign({},SEC_LBL,{servico:'Operação Técnica',logistica:'Logística e Serviços'});
   var F=pdfFator();
   var orcN=gv('f-num')||'—',dataorc=gv('f-data')?fD(gv('f-data')):new Date().toLocaleDateString('pt-BR');
   var bvBruto=_bvStorage||parseFloat(gv('f-bv'))||0;
@@ -4470,7 +4474,7 @@ function buildPDF(tipo){
     var rows2=(state[s].rows[aid]||[]).filter(function(r){return !isOcult(r.name);});if(!rows2.length)return'';
     var secTotal=rows2.reduce(function(t,r){return t+rTotF(r);},0);
     if(det){
-      var h='<div class="psec">'+SEC_ICO[s]+' '+SEC_LBL[s]+'</div>'
+      var h='<div class="psec">'+SEC_ICO[s]+' '+SEC_LBL_PDF[s]+'</div>'
         +'<table class="pi">'
         +'<thead><tr>'
         +'<th style="width:30px">Qtd</th>'
@@ -4489,12 +4493,12 @@ function buildPDF(tipo){
           +'</tr>';
       });
       h+='<tr class="strow">'
-        +'<td colspan="3" style="text-align:right">Total '+SEC_LBL[s]+'</td>'
+        +'<td colspan="3" style="text-align:right">Total '+SEC_LBL_PDF[s]+'</td>'
         +'<td class="r">'+fmt(secTotal)+'</td>'
         +'</tr></tbody></table>';
       return h;
     }else{
-      var h2='<div class="psec">'+SEC_ICO[s]+' '+SEC_LBL[s]+'</div>'
+      var h2='<div class="psec">'+SEC_ICO[s]+' '+SEC_LBL_PDF[s]+'</div>'
         +'<table class="pi">'
         +'<thead><tr>'
         +'<th style="width:30px">Qtd</th>'
@@ -4526,7 +4530,7 @@ function buildPDF(tipo){
         SECS_PDF.forEach(function(s){
           var t=amb.ids.reduce(function(tot,aid){return tot+(state[s].rows[aid]||[]).reduce(function(a,r){return a+rTotF(r);},0);},0);
           if(t>0){
-            linhasAmb+='<tr><td style="padding:3px 9px;border-bottom:1px solid #eee;font-size:11px;color:#555">'+SEC_LBL[s]+'</td><td style="padding:3px 9px;border-bottom:1px solid #eee;font-size:11px;text-align:right;font-weight:600">'+fmt(t)+'</td></tr>';
+            linhasAmb+='<tr><td style="padding:3px 9px;border-bottom:1px solid #eee;font-size:11px;color:#555">'+SEC_LBL_PDF[s]+'</td><td style="padding:3px 9px;border-bottom:1px solid #eee;font-size:11px;text-align:right;font-weight:600">'+fmt(t)+'</td></tr>';
             totalAmb+=t;
           }
         });
@@ -4562,7 +4566,7 @@ function buildPDF(tipo){
       if(t2>0)res+='<tr><td>'+amb.nome+'</td><td class="r">'+fmt(t2)+'</td></tr>';
     });
   }else{
-    [{n:'SONORIZAÇÃO',s:'som'},{n:'VÍDEO',s:'video'},{n:'ILUMINAÇÃO',s:'luz'},{n:'ESTRUTURA',s:'estrutura'},{n:'SERVIÇO',s:'servico'}]
+    [{n:'SONORIZAÇÃO',s:'som'},{n:'VÍDEO',s:'video'},{n:'ILUMINAÇÃO',s:'luz'},{n:'ESTRUTURA',s:'estrutura'},{n:'OPERAÇÃO TÉCNICA',s:'servico'}]
       .filter(function(x){return secTotAll(x.s)>0;})
       .forEach(function(x){
         var vSec=secTotAll(x.s)*F*(1-descFrac);
@@ -4571,7 +4575,7 @@ function buildPDF(tipo){
       });
   }
 
-  if(logTot>0)res+='<tr><td>🚚 LOGÍSTICA</td><td class="r">'+fmt(logTot)+'</td></tr>';
+  if(logTot>0)res+='<tr><td>🚚 LOGÍSTICA E SERVIÇOS</td><td class="r">'+fmt(logTot)+'</td></tr>';
 
   // Serviços inclusos no PDF (Montagem, Desmontagem, Transporte, etc.)
   if(incLines.length){
