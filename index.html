@@ -3047,15 +3047,11 @@ function calc(){
   // Margem: baseada no vdsi (sem imposto) e vdci (com imposto)
   var msd=safe(vdsi-srv-log-xc),msdP=safe(vdsi>0?msd/vdsi*100:0);
   var mcd=safe(vdci-srv*(1+IMP)-log*(1+IMP)-xc*(1+IMP)),mcdP=safe(vdci>0?mcd/vdci*100:0);
-  // Total final: respeita o modo e o val-liq manual se preenchido
-  var vlSimp=parseFloat(gv('val-liq-si'))||0;
-  var vlCimp=parseFloat(gv('val-liq'))||0;
-  var total;
-  if(modoSimp){
-    total=safe(vlSimp>0?vlSimp:vdsi);
-  } else {
-    total=safe(vlCimp>0?vlCimp:vdci);
-  }
+  // Total final: sempre o valor recém-calculado (vdsi/vdci) — os campos de
+  // valor líquido não são mais editáveis manualmente, então não existe mais
+  // "valor ajustado" para priorizar; usar o valor do campo aqui causava uma
+  // defasagem de uma rodada de cálculo (mostrava o total da edição anterior).
+  var total=modoSimp?vdsi:vdci;
   sv('r-bruto',fmt(bruto));sv('r-imp',fmt(imp));sv('r-cimp',fmt(cImp));
   sv('r-dv','-'+fmt(dv_display));sv('r-vdsi',fmt(vdsi));sv('r-vdci',fmt(vdci));sv('r-total',fmt(total));
   // Atualizar label do total final conforme modo de imposto selecionado
@@ -3064,8 +3060,7 @@ function calc(){
     if(gl) gl.textContent=modoSimp?'TOTAL FINAL (s/ impostos)':'TOTAL FINAL (c/ impostos)';
   })();
   sv('m-sd',fmt(msd));sv('m-cd',fmt(mcd));sv('m-sd-pct',fmtN(msdP)+'%');sv('m-cd-pct',fmtN(mcdP)+'%');
-  (function(){var elci=document.getElementById('val-liq');if(elci)elci.placeholder=vdci>0?Math.round(vdci).toString():'0';var elsi=document.getElementById('val-liq-si');if(elsi)elsi.placeholder=vdsi>0?Math.round(vdsi).toString():'0';})();
-  var dl=document.getElementById('desc-label');if(dl){var modoLabel=modoSimp?'s/ imposto':'c/ imposto';dl.textContent=dv_display>0?'Desconto: -'+fmt(dv_display)+' ('+modoLabel+')':(total>0&&(vlSimp>0||vlCimp>0)?'Valor ajustado — '+modoLabel:'');}
+  var dl=document.getElementById('desc-label');if(dl){var modoLabel=modoSimp?'s/ imposto':'c/ imposto';dl.textContent=dv_display>0?'Desconto: -'+fmt(dv_display)+' ('+modoLabel+')':'';}
   // Agrupa subtotal por NOME do ambiente somando todas as secoes (evita repeticao de ambientes iguais entre secoes)
   var ambTotPorNome={},ambOrdem=[];
   ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
