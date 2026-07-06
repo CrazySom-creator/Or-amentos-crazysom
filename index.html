@@ -1935,6 +1935,11 @@ var SCRIPT_URL='https://script.google.com/macros/s/AKfycbwV251xtPwAUjSn-CJM88-iy
         // Mesmo dispositivo (aba fechada/recarregada sem logout) — não é
         // conflito real: deixa entrar e assumir a própria sessão.
         if(deviceId&&sess.deviceId&&sess.deviceId===deviceId) return {ok:true};
+        // Sessão antiga SEM identificador de dispositivo: resquício do sistema
+        // anterior, que não conseguia encerrar a sessão ao fechar a aba. Não é
+        // um conflito confiável — assume silenciosamente em vez de bloquear.
+        if(!sess.deviceId) return {ok:true};
+        // Só resta o caso de OUTRO dispositivo (identificador diferente) — avisa.
         return {ok:false,sessao:sess};
       }
       return {ok:true};
@@ -10198,8 +10203,10 @@ function gerarContrato(){
     if(!linhasPgto.length) linhasPgto=['50% na contratacao','50% ate 03 dias antes da montagem'];
 
     // Equipamentos (mesma lógica do PDF do orçamento)
-    var SECS_C=['som','video','luz','estrutura','servico','logistica','extra'];
-    var SEC_N={som:'Sonorizacao',video:'Video / LED',luz:'Iluminacao',estrutura:'Estrutura',servico:'Servico / Equipe Tecnica',logistica:'Logistica',extra:'Custos Extras'};
+    // 'extra' (Custos Extras / BV) é INTERNO — usado só para cálculo de margem
+    // e NUNCA deve aparecer no contrato do cliente. Por isso fica fora daqui.
+    var SECS_C=['som','video','luz','estrutura','servico','logistica'];
+    var SEC_N={som:'Sonorizacao',video:'Video / LED',luz:'Iluminacao',estrutura:'Estrutura',servico:'Servico / Equipe Tecnica',logistica:'Logistica'};
     var todosAmbNomes={};
     SECS_C.forEach(function(s){var st=state[s];if(!st)return;st.ambientes.forEach(function(a){if(!todosAmbNomes[a.nome])todosAmbNomes[a.nome]={nome:a.nome,ids:[]};if(todosAmbNomes[a.nome].ids.indexOf(a.id)<0)todosAmbNomes[a.nome].ids.push(a.id);});});
     var ambList=Object.values(todosAmbNomes);
