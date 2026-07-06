@@ -1061,7 +1061,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
         <p class="sub" id="dash-sub" style="margin:0">Carregando dados...</p>
       </div>
       <div style="display:flex;gap:7px;align-items:center">
-        <button class="btn btn-r btn-sm" onclick="dashAtualizar()">🔄 Atualizar</button>
+        <button class="btn btn-r btn-sm" onclick="dashAtualizar(true)">🔄 Atualizar</button>
         <button class="btn btn-o btn-sm" onclick="document.getElementById('dash-ov').classList.remove('open');abrirHome()">✕</button>
       </div>
     </div>
@@ -1775,17 +1775,56 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 <script>
-var firebaseConfig={
-  apiKey:"AIzaSyANrm4_JIeQQoGthAtzaOU42jNIb7Cm_3M",
-  authDomain:"crazysom-sistema.firebaseapp.com",
-  projectId:"crazysom-sistema",
-  storageBucket:"crazysom-sistema.firebasestorage.app",
-  messagingSenderId:"758816759742",
-  appId:"1:758816759742:web:fcac8cbdce8625dbf7e3ef"
-};
-firebase.initializeApp(firebaseConfig);
-var fbAuth=firebase.auth();
-var fbDb=firebase.firestore();
+var _firebaseOk=false;
+var fbAuth=null, fbDb=null;
+(function(){
+  var firebaseConfig={
+    apiKey:"AIzaSyANrm4_JIeQQoGthAtzaOU42jNIb7Cm_3M",
+    authDomain:"crazysom-sistema.firebaseapp.com",
+    projectId:"crazysom-sistema",
+    storageBucket:"crazysom-sistema.firebasestorage.app",
+    messagingSenderId:"758816759742",
+    appId:"1:758816759742:web:fcac8cbdce8625dbf7e3ef"
+  };
+  // Se os scripts do Firebase (gstatic.com) não carregaram — internet caiu,
+  // CDN bloqueada por firewall/adblock, etc. — não adianta seguir: mostramos
+  // uma tela de erro clara com botão de tentar novamente, em vez de quebrar
+  // todo o sistema em silêncio.
+  if(typeof firebase==='undefined'){
+    _firebaseOk=false;
+    _mostrarErroConexao('Não foi possível carregar os componentes do servidor (Firebase). Isso costuma ser internet instável ou algum bloqueador/firewall barrando o Google (gstatic.com).');
+    return;
+  }
+  try{
+    firebase.initializeApp(firebaseConfig);
+    fbAuth=firebase.auth();
+    fbDb=firebase.firestore();
+    _firebaseOk=true;
+  }catch(e){
+    _firebaseOk=false;
+    _mostrarErroConexao('Erro ao inicializar o servidor: '+(e&&e.message?e.message:e));
+  }
+})();
+
+// Tela de erro de conexão (Firebase indisponível) — cobre toda a página
+function _mostrarErroConexao(detalhe){
+  function _render(){
+    if(document.getElementById('erro-conexao-ov')) return;
+    var ov=document.createElement('div');
+    ov.id='erro-conexao-ov';
+    ov.style.cssText='position:fixed;inset:0;background:#0d0d0d;z-index:2000000;display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,Segoe UI,Arial,sans-serif';
+    ov.innerHTML='<div style="background:#161616;border:1px solid #c0001a;border-radius:12px;max-width:420px;width:100%;padding:30px 26px;text-align:center;box-shadow:0 14px 44px rgba(0,0,0,.6)">'
+      +'<div style="font-size:40px;margin-bottom:8px">📡</div>'
+      +'<h2 style="color:#fff;font-size:18px;margin:0 0 10px">Sem conexão com o servidor</h2>'
+      +'<p style="color:#bbb;font-size:13px;line-height:1.55;margin:0 0 6px">'+(detalhe||'Não foi possível conectar ao servidor.')+'</p>'
+      +'<p style="color:#888;font-size:12px;line-height:1.5;margin:0 0 18px">Verifique a internet e tente novamente. Se estiver numa rede corporativa, confirme que o domínio <b>gstatic.com</b> não está bloqueado.</p>'
+      +'<button onclick="location.reload()" style="background:#c0001a;color:#fff;border:none;border-radius:7px;padding:12px 22px;font-size:14px;font-weight:800;cursor:pointer;width:100%">🔄 Tentar novamente</button>'
+      +'</div>';
+    document.body.appendChild(ov);
+  }
+  if(document.body) _render();
+  else document.addEventListener('DOMContentLoaded', _render);
+}
 </script>
 <script>
 var IMP=0.135;
@@ -2172,6 +2211,11 @@ var PRECOS={
 
 async function doLogin(){
   var err=document.getElementById('l-err');
+  if(!_firebaseOk||!fbAuth){
+    err.textContent='📡 Sem conexão com o servidor. Verifique a internet e recarregue a página.';
+    _mostrarErroConexao('Não foi possível conectar ao servidor (Firebase). Verifique a internet e tente novamente.');
+    return;
+  }
   var email=(document.getElementById('l-user').value||'').trim().toLowerCase();
   var pwd=document.getElementById('l-pass').value||'';
   err.textContent='';
@@ -2227,6 +2271,7 @@ async function doLogin(){
   sessionIniciarHeartbeat(); // Manter sessão ativa enquanto logado
   setTimeout(_atualizarBtnClonar, 200);
   usuarioAtual=u;aprovStatus='rascunho';aprovHist=[];
+  idleAtivar(); // Iniciar contador de logout automático por inatividade
   permCarregar();
   clientesCarregarStorage();
   carregarExcluidosDrive();
@@ -2272,12 +2317,13 @@ async function doEsqueciSenha(){
     err.textContent=msgs[eReset.code]||('❌ Erro ao enviar: '+eReset.message);
   }
 }
-async function logout(){
-  if(_naoSalvo){
+async function logout(forcado){
+  if(!forcado && _naoSalvo){
     var cli=gv('f-cliente')||'este orçamento';
     var ir=confirm('⚠️ "'+cli+'" não foi salvo no Drive.\n\nDeseja descartar as alterações e sair?');
     if(!ir)return;
   }
+  idleDesativar();
   var _uLogout=usuarioAtual;
   var _idLogout=driveIdAtual;
   lockPararHeartbeat();
@@ -2520,7 +2566,7 @@ async function fetchComLimite(itens, limite){
 
 // Versão progressiva: chama onProgress(resultadosParciais) a cada lote
 var _loadBatchDisponivel=true; // detecta automaticamente se o backend já tem o endpoint novo
-async function fetchProgressivo(itens, limite, onProgress){
+async function fetchProgressivo(itens, limite, onProgress, forcar){
   var resultados = [];
   limite = limite||6;
   var INTERNOS=['SOLEXCL','SOL_EXCLUSAO','_sol_exclusao','SolExclusao','_excluidos_crazysom','HISTORICO_EXCLUSOES','_CONFIG_CLIENTES','_CONFIG_USUARIOS','_CONFIG_PERMISSOES','_LOCKS_CRAZYSOM'];
@@ -2533,8 +2579,10 @@ async function fetchProgressivo(itens, limite, onProgress){
 
   for(var i=0;i<itens.length;i+=loteTam){
     var lote = itens.slice(i,i+loteTam);
-    var faltam = lote.filter(function(item){ return !_driveCacheGet(item.id); });
-    var jaEmCache = lote.filter(function(item){ return !!_driveCacheGet(item.id); }).map(function(item){ return _driveCacheGet(item.id); });
+    // Quando forcar=true (botão 🔄 Atualizar), ignora o cache de sessão e rebusca tudo
+    // do backend — garante dados frescos mesmo que outro usuário tenha editado.
+    var faltam = lote.filter(function(item){ return forcar || !_driveCacheGet(item.id); });
+    var jaEmCache = forcar ? [] : lote.filter(function(item){ return !!_driveCacheGet(item.id); }).map(function(item){ return _driveCacheGet(item.id); });
 
     var carregados = [];
     if(faltam.length){
@@ -3579,6 +3627,94 @@ function sessionIniciarHeartbeat(){
 
 function sessionPararHeartbeat(){
   if(_sessionHeartbeat){clearInterval(_sessionHeartbeat);_sessionHeartbeat=null;}
+}
+
+// ── Logout automático por inatividade ────────────────────────────────────────
+// Se o computador ficar logado e ninguém mexer por IDLE_LIMIT_MS, a sessão cai
+// sozinha para impedir que outra pessoa acesse o sistema. Um aviso com contagem
+// regressiva aparece IDLE_AVISO_MS antes, permitindo continuar conectado.
+var IDLE_LIMIT_MS = 15*60*1000;  // 15 minutos de inatividade total
+var IDLE_AVISO_MS = 60*1000;     // aviso 60s antes de deslogar
+var _idleTimer=null, _idleAvisoTimer=null, _idleCountdownTimer=null, _idleUltimoReset=0;
+var _idleEventos=['mousemove','mousedown','keydown','touchstart','scroll','click','wheel'];
+
+function idleResetTimer(){
+  if(!usuarioAtual) return;
+  // Throttle: só reprograma se passaram >3s desde o último reset (evita reprogramar
+  // a cada pixel de mousemove).
+  var agora=Date.now();
+  if(agora-_idleUltimoReset < 3000) return;
+  _idleUltimoReset=agora;
+  _idleLimparTimers();
+  _idleFecharAviso();
+  _idleAvisoTimer=setTimeout(idleMostrarAviso, IDLE_LIMIT_MS-IDLE_AVISO_MS);
+  _idleTimer=setTimeout(function(){ logoutPorInatividade(); }, IDLE_LIMIT_MS);
+}
+
+function _idleLimparTimers(){
+  if(_idleTimer){clearTimeout(_idleTimer);_idleTimer=null;}
+  if(_idleAvisoTimer){clearTimeout(_idleAvisoTimer);_idleAvisoTimer=null;}
+  if(_idleCountdownTimer){clearInterval(_idleCountdownTimer);_idleCountdownTimer=null;}
+}
+
+function idleAtivar(){
+  idleDesativar();
+  _idleEventos.forEach(function(ev){ document.addEventListener(ev, idleResetTimer, {passive:true}); });
+  _idleUltimoReset=0;
+  idleResetTimer();
+}
+
+function idleDesativar(){
+  _idleEventos.forEach(function(ev){ document.removeEventListener(ev, idleResetTimer, {passive:true}); });
+  _idleLimparTimers();
+  _idleFecharAviso();
+}
+
+function _idleFecharAviso(){
+  var m=document.getElementById('idle-aviso-ov');
+  if(m) m.remove();
+}
+
+function idleMostrarAviso(){
+  if(!usuarioAtual) return;
+  _idleFecharAviso();
+  var restante=Math.round(IDLE_AVISO_MS/1000);
+  var ov=document.createElement('div');
+  ov.id='idle-aviso-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML='<div style="background:#161616;border:1px solid #c0001a;border-radius:10px;max-width:380px;width:100%;padding:26px 24px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.6)">'
+    +'<div style="font-size:34px;margin-bottom:6px">🔒</div>'
+    +'<h2 style="color:#fff;font-size:17px;margin:0 0 8px">Sessão inativa</h2>'
+    +'<p style="color:#bbb;font-size:13px;line-height:1.5;margin:0 0 4px">Por segurança, você será desconectado em</p>'
+    +'<div id="idle-countdown" style="color:#c0001a;font-size:30px;font-weight:800;margin:6px 0 14px">'+restante+'s</div>'
+    +'<button id="idle-continuar" style="background:#c0001a;color:#fff;border:none;border-radius:6px;padding:11px 22px;font-size:13px;font-weight:800;cursor:pointer;width:100%">Continuar conectado</button>'
+    +'</div>';
+  document.body.appendChild(ov);
+  document.getElementById('idle-continuar').addEventListener('click', function(e){
+    e.stopPropagation();
+    _idleUltimoReset=0;        // permite reprogramar imediatamente
+    idleResetTimer();
+  });
+  var fim=Date.now()+IDLE_AVISO_MS;
+  _idleCountdownTimer=setInterval(function(){
+    var s=Math.max(0,Math.round((fim-Date.now())/1000));
+    var el=document.getElementById('idle-countdown');
+    if(el) el.textContent=s+'s';
+    if(s<=0){ if(_idleCountdownTimer){clearInterval(_idleCountdownTimer);_idleCountdownTimer=null;} }
+  },1000);
+}
+
+async function logoutPorInatividade(){
+  idleDesativar();
+  _naoSalvo=false;           // não bloquear com o confirm de "não salvo" no logout automático
+  try{ await logout(true); }catch(e){ try{ await logout(); }catch(e2){} }
+  try{
+    var ov=document.getElementById('login-ov');
+    if(ov){
+      var msg=document.getElementById('l-err');
+      if(msg){ msg.textContent='🔒 Sessão encerrada por inatividade. Faça login novamente.'; }
+    }
+  }catch(e3){}
 }
 
 function lockPararHeartbeat(){
@@ -5179,7 +5315,7 @@ async function funilCarregarDados(forcar){
         _funilCache=aprovParciais;
         funilRenderCounters();
       }
-    });
+    }, forcar);
     _funilCache = todos.filter(Boolean).filter(function(o){ return o.st === 'aprovado'; });
     _funilCarregado = true;
     funilRenderCounters();
@@ -6591,7 +6727,7 @@ async function abrirDashboard(){
   await dashAtualizar();
 }
 
-async function dashAtualizar(){
+async function dashAtualizar(forcar){
   document.getElementById('dash-sub').textContent = 'Carregando orçamentos do Drive...';
   document.getElementById('dash-corpo').innerHTML = '<div class="dash-loading">'
     +'⏳ Buscando dados...'
@@ -6613,7 +6749,7 @@ async function dashAtualizar(){
       if(pb) pb.style.width=pct+'%';
       if(pt) pt.textContent=parciais.length+' / '+total+' carregados';
       document.getElementById('dash-sub').textContent='⏳ '+parciais.length+' / '+total+' orçamentos...';
-    })).filter(Boolean);
+    }, forcar)).filter(Boolean);
     document.getElementById('dash-sub').textContent = '📦 '+_dashDados.length+' orçamentos carregados';
     dashRenderizar();
   }catch(e){
@@ -6710,7 +6846,7 @@ async function abrirDashElab(){
 async function dashElabAtualizar(){
   _dashDados=[];
   document.getElementById('dash-elab-corpo').innerHTML='<div class="dash-loading">⏳ Carregando orçamentos do Drive...</div>';
-  await dashAtualizar();
+  await dashAtualizar(true);
   dashElabRenderizar();
 }
 
@@ -7663,6 +7799,7 @@ async function _listarDriveCompartilhado(forcar){
 }
 
 async function permCarregar(){
+  if(!fbDb) return; // Firebase indisponível — evita erro em cascata
   try{
     var snap=await fbDb.collection('config').doc('permissoes').get();
     if(snap.exists){
@@ -7912,6 +8049,7 @@ var _sugestTimer=null;
 function _clienteSoDigitos(s){return (s||'').toString().replace(/\D/g,'');}
 
 async function clientesCarregarStorage(){
+  if(!fbDb) return; // Firebase indisponível — evita erro em cascata
   try{
     var snap=await fbDb.collection('clientes').get();
     var lista=[];
@@ -8842,7 +8980,8 @@ async function abrirDashFin(){
   await dashFinAtualizar();
 }
 
-async function dashFinAtualizar(){
+async function dashFinAtualizar(forcar){
+  if(forcar===undefined) forcar=true; // dashboard financeiro sempre busca dados frescos
   document.getElementById('dashfin-sub').textContent = 'Carregando dados...';
   document.getElementById('dashfin-corpo').innerHTML = '<div class="dash-loading">'
     +'⏳ Buscando dados financeiros...'
@@ -8864,7 +9003,7 @@ async function dashFinAtualizar(){
       if(pb) pb.style.width=pct+'%';
       if(pt) pt.textContent=parciais.length+' / '+total+' carregados';
       document.getElementById('dashfin-sub').textContent='⏳ '+parciais.length+' / '+total+'...';
-    })).filter(Boolean);
+    }, forcar)).filter(Boolean);
     document.getElementById('dashfin-sub').textContent = '📦 '+_dashFinDados.length+' orçamentos carregados';
     dashFinRenderizar();
   }catch(e){
