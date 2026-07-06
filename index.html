@@ -1924,13 +1924,19 @@ var SCRIPT_URL='https://script.google.com/macros/s/AKfycbwV251xtPwAUjSn-CJM88-iy
     var driveId=body.driveId;
     var usuarioId=body.usuarioId;
     var usuarioNome=body.usuarioNome;
+    var deviceId=body.deviceId;
     var ttl=body.ttl||300000;
 
     if(lockAction==='session-check'){
       var sSnap=await fbDb.collection('system').doc('sessions').get();
       var sessions=(sSnap.exists&&sSnap.data().dados)||{};
       var sess=sessions[usuarioId];
-      if(sess&&sess.expira>Date.now()) return {ok:false,sessao:sess};
+      if(sess&&sess.expira>Date.now()){
+        // Mesmo dispositivo (aba fechada/recarregada sem logout) — não é
+        // conflito real: deixa entrar e assumir a própria sessão.
+        if(deviceId&&sess.deviceId&&sess.deviceId===deviceId) return {ok:true};
+        return {ok:false,sessao:sess};
+      }
       return {ok:true};
     }
     if(lockAction==='status'){
@@ -1964,7 +1970,7 @@ var SCRIPT_URL='https://script.google.com/macros/s/AKfycbwV251xtPwAUjSn-CJM88-iy
           if(mapa[driveId]&&mapa[driveId].usuarioId===usuarioId) mapa[driveId].expira=agora+ttl;
           resultado={ok:true};
         }else if(lockAction==='session-start'){
-          mapa[usuarioId]={usuarioId:usuarioId,usuarioNome:usuarioNome,desde:_fmtDataBr(new Date()),desdeTs:agora,expira:agora+(ttl||8*60*60*1000)};
+          mapa[usuarioId]={usuarioId:usuarioId,usuarioNome:usuarioNome,deviceId:deviceId||null,desde:_fmtDataBr(new Date()),desdeTs:agora,expira:agora+(ttl||8*60*60*1000)};
           resultado={ok:true};
         }else if(lockAction==='session-end'){
           if(body.forcar||(mapa[usuarioId]&&mapa[usuarioId].usuarioId===usuarioId)) delete mapa[usuarioId];
@@ -2255,7 +2261,7 @@ async function doLogin(){
   var perfil=perfilSnap.data();
   var u={id:email,nome:perfil.nome||email,nivel:perfil.nivel||'consultor',cargo:perfil.cargo||''};
   try{
-    var _sR=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'lock',lockAction:'session-check',usuarioId:u.id,usuarioNome:u.nome,ttl:35*60*1000})});
+    var _sR=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'lock',lockAction:'session-check',usuarioId:u.id,usuarioNome:u.nome,deviceId:_getDeviceId(),ttl:35*60*1000})});
     var _sD=await _sR.json();
     if(_sD&&_sD.ok===false&&_sD.sessao){
       var _s=_sD.sessao;
@@ -2266,7 +2272,7 @@ async function doLogin(){
     }
   }catch(e5){}
   try{
-    await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'lock',lockAction:'session-start',usuarioId:u.id,usuarioNome:u.nome,ttl:35*60*1000})});
+    await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'lock',lockAction:'session-start',usuarioId:u.id,usuarioNome:u.nome,deviceId:_getDeviceId(),ttl:35*60*1000})});
   }catch(e6){}
   sessionIniciarHeartbeat(); // Manter sessão ativa enquanto logado
   setTimeout(_atualizarBtnClonar, 200);
@@ -3606,11 +3612,24 @@ function lockIniciarHeartbeat(driveId){
 }
 
 // Renovar sessão periodicamente (evita expirar enquanto logado)
+// Identificador único e persistente deste navegador/máquina. Serve para o
+// sistema saber que uma sessão "presa" (ex.: aba fechada sem logout) é do
+// MESMO dispositivo — nesse caso ele assume o controle sem avisar, em vez de
+// dizer falsamente "já conectado em outro dispositivo".
+function _getDeviceId(){
+  try{
+    var id=localStorage.getItem('crazySomDeviceId');
+    if(!id){ id='dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10); localStorage.setItem('crazySomDeviceId',id); }
+    return id;
+  }catch(e){ return 'dev_sem_storage'; }
+}
+
 function sessionRenovar(){
   if(!usuarioAtual) return;
   fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
     action:'lock',lockAction:'session-start',
     usuarioId:usuarioAtual.id,usuarioNome:usuarioAtual.nome,
+    deviceId:_getDeviceId(),
     ttl:35*60*1000
   })}).catch(function(){});
 }
