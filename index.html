@@ -3486,8 +3486,8 @@ async function _executarSave(num,cli,dt,opts){
 //  SISTEMA DE LOCK E CONTROLE DE VERSÃO
 //  Usa endpoint dedicado no Apps Script (operação atômica)
 // ════════════════════════════════════════════════════════
-var LOCK_TTL = 5 * 60 * 1000;         // 5 min
-var HEARTBEAT_INTERVAL = 2 * 60 * 1000;  // 2 min
+var LOCK_TTL = 90 * 1000;             // 90s — lease curta: aba fechada libera rápido
+var HEARTBEAT_INTERVAL = 25 * 1000;   // 25s — renova com folga (3+ batidas dentro do TTL)
 var _lockHeartbeat = null;
 var _versaoAtual = null;
 var _modoLeitura = false;
@@ -3608,13 +3608,26 @@ async function lockRenovar(driveId){
 
 function lockIniciarHeartbeat(driveId){
   lockPararHeartbeat();
+  _lockDriveAtivo=driveId;
   _lockHeartbeat=setInterval(function(){
     if(!driveIdAtual||driveIdAtual!==driveId){lockPararHeartbeat();return;}
+    if(document.hidden) return; // aba em segundo plano: não renova (deixa o lock liberar sozinho)
     lockRenovar(driveId);
     // Renovar sessão de usuário junto com o heartbeat do lock
     sessionRenovar();
   }, HEARTBEAT_INTERVAL);
 }
+
+// Quando a aba fica em segundo plano, o heartbeat para de renovar o lock — se a
+// pessoa realmente saiu, ele expira em até 90s e libera para os colegas. Ao
+// voltar para a aba, renova imediatamente para não perder o lock por engano.
+var _lockDriveAtivo=null;
+document.addEventListener('visibilitychange',function(){
+  if(!document.hidden && _lockDriveAtivo && driveIdAtual===_lockDriveAtivo && !_modoLeitura && usuarioAtual){
+    lockRenovar(_lockDriveAtivo);
+    sessionRenovar();
+  }
+});
 
 // Renovar sessão periodicamente (evita expirar enquanto logado)
 // Identificador único e persistente deste navegador/máquina. Serve para o
@@ -3743,13 +3756,15 @@ async function logoutPorInatividade(){
 
 function lockPararHeartbeat(){
   if(_lockHeartbeat){clearInterval(_lockHeartbeat);_lockHeartbeat=null;}
+  _lockDriveAtivo=null;
 }
 
 // ── Modal de lock ────────────────────────────────────────
 function lockMostrarModal(lock,id,nome,onForcar,onSomenteLeitura){
   var desde=lock.desde||'—';
   var editandoHa=lock.desdeTs?Math.floor((Date.now()-lock.desdeTs)/60000):0;
-  var expiraEm=lock.expira?Math.max(0,Math.ceil((lock.expira-Date.now())/60000)):Math.ceil(LOCK_TTL/60000);
+  var expiraSeg=lock.expira?Math.max(0,Math.ceil((lock.expira-Date.now())/1000)):Math.ceil(LOCK_TTL/1000);
+  var expiraStr=expiraSeg>60?('~'+Math.ceil(expiraSeg/60)+'min'):('~'+expiraSeg+'s');
   var tempoStr=editandoHa>0?editandoHa+'min atrás':'agora';
   window._lockModalDados={lock:lock,id:id,nome:nome};
   var modal=document.createElement('div');
@@ -3761,17 +3776,19 @@ function lockMostrarModal(lock,id,nome,onForcar,onSomenteLeitura){
     +'<div style="background:#111;border-radius:6px;padding:10px 14px;margin-bottom:14px">'
     +'<div style="font-size:13px;color:#ffa726;font-weight:700">'+eh(lock.usuarioNome)+'</div>'
     +'<div style="font-size:11px;color:#888;margin-top:2px">está editando desde '+desde+' ('+tempoStr+')</div>'
-    +(expiraEm>0?'<div style="font-size:10px;color:#e65100;margin-top:3px">⏳ Libera em ~'+expiraEm+'min se a aba for fechada</div>':'')
+    +(expiraSeg>0?'<div style="font-size:10px;color:#e65100;margin-top:3px">⏳ Libera sozinho em '+expiraStr+' se a aba tiver sido fechada</div>':'')
     +'<div style="font-size:10px;color:#555;margin-top:4px">📋 '+eh(nome)+'</div>'
     +'</div>'
     +'<div style="display:flex;flex-direction:column;gap:8px">'
     +'<button onclick="lockModalLeitura()" style="padding:11px;background:#1565c0;color:#fff;border:none;border-radius:6px;font-weight:800;cursor:pointer;font-size:13px">👁️ Abrir Somente Leitura</button>'
+    +'<button onclick="lockModalForcar()" style="padding:10px;background:#b71c1c;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:12px">✏️ Assumir edição (a pessoa já saiu)</button>'
     +'<button onclick="document.getElementById(\'lock-modal\').remove();driveStatus(\'\',\'\')" style="padding:9px;background:#333;color:#aaa;border:none;border-radius:6px;cursor:pointer;font-size:12px">← Cancelar e aguardar</button>'
     +'</div></div>';
   document.body.appendChild(modal);
 }
 
 async function lockModalForcar(){
+  if(!confirm('⚠️ Assumir a edição vai liberar o bloqueio atual e abrir o orçamento para você editar.\n\nFaça isso apenas se tiver CERTEZA de que a outra pessoa não está editando agora (ex.: fechou a aba). Se as duas editarem ao mesmo tempo, pode haver conflito de versão.\n\nDeseja assumir a edição?')) return;
   var m=document.getElementById('lock-modal');if(m)m.remove();
   var d=window._lockModalDados;if(!d)return;
   driveStatus('⏳ Forçando abertura...','');
@@ -4474,16 +4491,18 @@ window.addEventListener('beforeunload',function(e){
     e.returnValue=msg;
     return msg;
   }
-  // Encerrar sessao e liberar lock ao fechar a aba
+  // Encerrar sessao e liberar lock ao fechar a aba.
+  // Usa fetch com keepalive (passa pelo shim do Firebase) — o sendBeacon
+  // antigo ia para o Apps Script arquivado e não liberava nada.
   if(usuarioAtual){
-    try{navigator.sendBeacon(SCRIPT_URL,JSON.stringify({action:'lock',lockAction:'session-end',usuarioId:usuarioAtual.id}));}catch(e3){}
+    try{fetch(SCRIPT_URL,{method:'POST',keepalive:true,body:JSON.stringify({action:'lock',lockAction:'session-end',usuarioId:usuarioAtual.id,forcar:true})});}catch(e3){}
   }
   if(driveIdAtual&&!_modoLeitura&&usuarioAtual){
     try{
-      navigator.sendBeacon(SCRIPT_URL,JSON.stringify({
+      fetch(SCRIPT_URL,{method:'POST',keepalive:true,body:JSON.stringify({
         action:'lock',lockAction:'release',
         driveId:driveIdAtual,usuarioId:usuarioAtual.id,usuarioNome:usuarioAtual.nome,ttl:LOCK_TTL
-      }));
+      })});
     }catch(e2){}
     if(_locks[driveIdAtual]) delete _locks[driveIdAtual];
   }
