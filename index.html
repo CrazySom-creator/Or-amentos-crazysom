@@ -1367,11 +1367,13 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
           <th style="width:110px">Valor</th>
           <th style="width:115px">Forma Pgto</th>
           <th style="width:90px">Status</th>
+          <th style="width:44px" title="Comprovante de pagamento">📎</th>
           <th style="width:30px"></th>
         </tr>
       </thead>
       <tbody id="fin-tbody"></tbody>
     </table>
+    <input type="file" id="fin-comp-input" accept="image/*" style="display:none" onchange="_finComprovanteSelecionado(this)">
 
     <div class="fin-add-row">
       <div style="font-size:10px;color:#888;font-weight:700;margin-bottom:7px">➕ Adicionar Parcela</div>
@@ -3486,8 +3488,8 @@ async function _executarSave(num,cli,dt,opts){
 //  SISTEMA DE LOCK E CONTROLE DE VERSÃO
 //  Usa endpoint dedicado no Apps Script (operação atômica)
 // ════════════════════════════════════════════════════════
-var LOCK_TTL = 90 * 1000;             // 90s — lease curta: aba fechada libera rápido
-var HEARTBEAT_INTERVAL = 25 * 1000;   // 25s — renova com folga (3+ batidas dentro do TTL)
+var LOCK_TTL = 5 * 60 * 1000;         // 5 min
+var HEARTBEAT_INTERVAL = 2 * 60 * 1000;  // 2 min
 var _lockHeartbeat = null;
 var _versaoAtual = null;
 var _modoLeitura = false;
@@ -3608,26 +3610,13 @@ async function lockRenovar(driveId){
 
 function lockIniciarHeartbeat(driveId){
   lockPararHeartbeat();
-  _lockDriveAtivo=driveId;
   _lockHeartbeat=setInterval(function(){
     if(!driveIdAtual||driveIdAtual!==driveId){lockPararHeartbeat();return;}
-    if(document.hidden) return; // aba em segundo plano: não renova (deixa o lock liberar sozinho)
     lockRenovar(driveId);
     // Renovar sessão de usuário junto com o heartbeat do lock
     sessionRenovar();
   }, HEARTBEAT_INTERVAL);
 }
-
-// Quando a aba fica em segundo plano, o heartbeat para de renovar o lock — se a
-// pessoa realmente saiu, ele expira em até 90s e libera para os colegas. Ao
-// voltar para a aba, renova imediatamente para não perder o lock por engano.
-var _lockDriveAtivo=null;
-document.addEventListener('visibilitychange',function(){
-  if(!document.hidden && _lockDriveAtivo && driveIdAtual===_lockDriveAtivo && !_modoLeitura && usuarioAtual){
-    lockRenovar(_lockDriveAtivo);
-    sessionRenovar();
-  }
-});
 
 // Renovar sessão periodicamente (evita expirar enquanto logado)
 // Identificador único e persistente deste navegador/máquina. Serve para o
@@ -3756,15 +3745,13 @@ async function logoutPorInatividade(){
 
 function lockPararHeartbeat(){
   if(_lockHeartbeat){clearInterval(_lockHeartbeat);_lockHeartbeat=null;}
-  _lockDriveAtivo=null;
 }
 
 // ── Modal de lock ────────────────────────────────────────
 function lockMostrarModal(lock,id,nome,onForcar,onSomenteLeitura){
   var desde=lock.desde||'—';
   var editandoHa=lock.desdeTs?Math.floor((Date.now()-lock.desdeTs)/60000):0;
-  var expiraSeg=lock.expira?Math.max(0,Math.ceil((lock.expira-Date.now())/1000)):Math.ceil(LOCK_TTL/1000);
-  var expiraStr=expiraSeg>60?('~'+Math.ceil(expiraSeg/60)+'min'):('~'+expiraSeg+'s');
+  var expiraEm=lock.expira?Math.max(0,Math.ceil((lock.expira-Date.now())/60000)):Math.ceil(LOCK_TTL/60000);
   var tempoStr=editandoHa>0?editandoHa+'min atrás':'agora';
   window._lockModalDados={lock:lock,id:id,nome:nome};
   var modal=document.createElement('div');
@@ -3776,19 +3763,17 @@ function lockMostrarModal(lock,id,nome,onForcar,onSomenteLeitura){
     +'<div style="background:#111;border-radius:6px;padding:10px 14px;margin-bottom:14px">'
     +'<div style="font-size:13px;color:#ffa726;font-weight:700">'+eh(lock.usuarioNome)+'</div>'
     +'<div style="font-size:11px;color:#888;margin-top:2px">está editando desde '+desde+' ('+tempoStr+')</div>'
-    +(expiraSeg>0?'<div style="font-size:10px;color:#e65100;margin-top:3px">⏳ Libera sozinho em '+expiraStr+' se a aba tiver sido fechada</div>':'')
+    +(expiraEm>0?'<div style="font-size:10px;color:#e65100;margin-top:3px">⏳ Libera em ~'+expiraEm+'min se a aba for fechada</div>':'')
     +'<div style="font-size:10px;color:#555;margin-top:4px">📋 '+eh(nome)+'</div>'
     +'</div>'
     +'<div style="display:flex;flex-direction:column;gap:8px">'
     +'<button onclick="lockModalLeitura()" style="padding:11px;background:#1565c0;color:#fff;border:none;border-radius:6px;font-weight:800;cursor:pointer;font-size:13px">👁️ Abrir Somente Leitura</button>'
-    +'<button onclick="lockModalForcar()" style="padding:10px;background:#b71c1c;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:12px">✏️ Assumir edição (a pessoa já saiu)</button>'
     +'<button onclick="document.getElementById(\'lock-modal\').remove();driveStatus(\'\',\'\')" style="padding:9px;background:#333;color:#aaa;border:none;border-radius:6px;cursor:pointer;font-size:12px">← Cancelar e aguardar</button>'
     +'</div></div>';
   document.body.appendChild(modal);
 }
 
 async function lockModalForcar(){
-  if(!confirm('⚠️ Assumir a edição vai liberar o bloqueio atual e abrir o orçamento para você editar.\n\nFaça isso apenas se tiver CERTEZA de que a outra pessoa não está editando agora (ex.: fechou a aba). Se as duas editarem ao mesmo tempo, pode haver conflito de versão.\n\nDeseja assumir a edição?')) return;
   var m=document.getElementById('lock-modal');if(m)m.remove();
   var d=window._lockModalDados;if(!d)return;
   driveStatus('⏳ Forçando abertura...','');
@@ -4491,18 +4476,16 @@ window.addEventListener('beforeunload',function(e){
     e.returnValue=msg;
     return msg;
   }
-  // Encerrar sessao e liberar lock ao fechar a aba.
-  // Usa fetch com keepalive (passa pelo shim do Firebase) — o sendBeacon
-  // antigo ia para o Apps Script arquivado e não liberava nada.
+  // Encerrar sessao e liberar lock ao fechar a aba
   if(usuarioAtual){
-    try{fetch(SCRIPT_URL,{method:'POST',keepalive:true,body:JSON.stringify({action:'lock',lockAction:'session-end',usuarioId:usuarioAtual.id,forcar:true})});}catch(e3){}
+    try{navigator.sendBeacon(SCRIPT_URL,JSON.stringify({action:'lock',lockAction:'session-end',usuarioId:usuarioAtual.id}));}catch(e3){}
   }
   if(driveIdAtual&&!_modoLeitura&&usuarioAtual){
     try{
-      fetch(SCRIPT_URL,{method:'POST',keepalive:true,body:JSON.stringify({
+      navigator.sendBeacon(SCRIPT_URL,JSON.stringify({
         action:'lock',lockAction:'release',
         driveId:driveIdAtual,usuarioId:usuarioAtual.id,usuarioNome:usuarioAtual.nome,ttl:LOCK_TTL
-      })});
+      }));
     }catch(e2){}
     if(_locks[driveIdAtual]) delete _locks[driveIdAtual];
   }
@@ -5826,7 +5809,7 @@ function finRenderParcelas(){
   var tbody=document.getElementById('fin-tbody');
   if(!tbody)return;
   if(!finParcelas.length){
-    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:#555;padding:16px;font-size:11px">Nenhuma parcela cadastrada. Use os atalhos acima ou adicione manualmente.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#555;padding:16px;font-size:11px">Nenhuma parcela cadastrada. Use os atalhos acima ou adicione manualmente.</td></tr>';
     return;
   }
   var formaOpts=['','PIX','Boleto','Cartão de Crédito','Cartão de Débito','Transferência','Dinheiro','Cheque'];
@@ -5845,6 +5828,9 @@ function finRenderParcelas(){
       +'<td><input type="number" value="'+(p.valor||'')+'" step="0.01" onchange="finParcelas['+i+'].valor=parseFloat(this.value)||0;finAtualizarResumo()" style="background:#0a0a0a;border:1px solid #333;border-radius:3px;color:#fff;padding:4px 7px;font-size:11px;width:100%"></td>'
       +'<td>'+formaSelect+'</td>'
       +'<td><span class="'+statusCls+'" onclick="finToggleStatus('+i+')" title="Clique para alternar">'+statusLabel+'</span></td>'
+      +'<td style="text-align:center">'+(p.comprovanteId
+          ?'<button onclick="finVerComprovante(\''+p.comprovanteId+'\','+i+')" title="Ver comprovante anexado" style="background:none;border:none;color:#66bb6a;cursor:pointer;font-size:14px">📎</button>'
+          :'<button onclick="finAnexarComprovante('+i+')" title="Anexar comprovante de pagamento" style="background:none;border:none;color:#666;cursor:pointer;font-size:14px">📎</button>')+'</td>'
       +'<td><button onclick="finRemoveParcela('+i+')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:13px;padding:2px 4px" title="Remover">✕</button></td>'
       +'</tr>';
   }).join('');
@@ -6002,14 +5988,135 @@ function renderFinanceiroInline(){
     var statusLabel=p.status==='pago'?'✅ Pago':(atrasado?'⚠️ Atrasado':'⏳ Pendente');
     var dataFmt=p.data?new Date(p.data+'T12:00:00').toLocaleDateString('pt-BR'):'—';
     var formaLabel=p.forma?('<span style="color:#888;font-size:9px;margin-left:4px">['+finFormaLabel(p.forma)+']</span>'):'';
+    var compBadge=p.comprovanteId?('<span onclick="event.stopPropagation();finVerComprovante(\''+p.comprovanteId+'\','+i+')" title="Ver comprovante de pagamento" style="cursor:pointer;margin-left:6px" role="button">📎</span>'):'';
     return '<div class="fin-parc-row">'
       +'<span style="color:#666;font-weight:700;min-width:18px">'+(i+1)+'.</span>'
-      +'<span style="flex:1;color:#ccc">'+eh(p.desc||'Parcela')+formaLabel+'</span>'
+      +'<span style="flex:1;color:#ccc">'+eh(p.desc||'Parcela')+formaLabel+compBadge+'</span>'
       +'<span style="color:#888;min-width:80px">'+dataFmt+'</span>'
       +'<span style="font-weight:700;color:#fff;min-width:90px;text-align:right">'+fmt(parseFloat(p.valor)||0)+'</span>'
       +'<span class="'+statusCls+'" onclick="finToggleInline('+i+')" title="Clique para marcar como pago/pendente" style="cursor:pointer">'+statusLabel+'</span>'
       +'</div>';
   }).join('');
+}
+
+// ── Comprovantes de pagamento (imagem comprimida em Base64 no Firestore) ─────
+// A foto é reduzida no navegador e gravada num documento próprio da coleção
+// 'comprovantes' (não infla o documento do orçamento). Na parcela fica apenas
+// um marcador leve: comprovanteId + nome + data.
+var _finComprovanteIdx=null;
+
+function _comprimirImagem(file, cb){
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var img=new Image();
+    img.onload=function(){
+      var maxDim=1400, q=0.72;
+      function tentar(){
+        var w=img.width, h=img.height;
+        if(w>maxDim||h>maxDim){ if(w>h){h=Math.round(h*maxDim/w);w=maxDim;}else{w=Math.round(w*maxDim/h);h=maxDim;} }
+        var cv=document.createElement('canvas');cv.width=w;cv.height=h;
+        var ctx=cv.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
+        var dataUrl=cv.toDataURL('image/jpeg',q);
+        if(dataUrl.length>900000){                 // margem segura sob o limite de 1MB do Firestore
+          if(q>0.42){q-=0.12;return tentar();}
+          if(maxDim>700){maxDim-=200;q=0.6;return tentar();}
+        }
+        cb(dataUrl);
+      }
+      tentar();
+    };
+    img.onerror=function(){cb(null);};
+    img.src=e.target.result;
+  };
+  reader.onerror=function(){cb(null);};
+  reader.readAsDataURL(file);
+}
+
+function finAnexarComprovante(i){
+  _finComprovanteIdx=i;
+  var inp=document.getElementById('fin-comp-input');
+  if(inp){inp.value='';inp.click();}
+}
+
+function _finComprovanteSelecionado(inp){
+  var i=_finComprovanteIdx;
+  if(i==null||!inp.files||!inp.files[0])return;
+  var file=inp.files[0];
+  if(!/^image\//.test(file.type)){alert('Selecione uma imagem (foto ou print do comprovante).');return;}
+  if(!fbDb){alert('Sem conexão com o servidor. Verifique a internet e tente novamente.');return;}
+  var st=document.getElementById('fin-save-status');
+  if(st){st.textContent='⏳ Enviando comprovante...';st.style.color='#ffa726';}
+  _comprimirImagem(file,function(dataUrl){
+    if(!dataUrl){if(st){st.textContent='⚠️ Não foi possível ler a imagem';st.style.color='#ef5350';}return;}
+    var p=finParcelas[i];if(!p)return;
+    var id=('cmp_'+(driveNumAtual||gv('f-num')||'orc')+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)).replace(/[^a-zA-Z0-9_]/g,'');
+    var dados={
+      data:dataUrl, nome:(file.name||'comprovante.jpg'), tipo:'image/jpeg', tamanho:dataUrl.length,
+      orcId:(driveIdAtual||''), orcNum:(driveNumAtual||gv('f-num')||''),
+      parcelaDesc:(p.desc||('Parcela '+(i+1))), enviadoPor:(usuarioAtual?usuarioAtual.nome:''),
+      enviadoEm:new Date().toISOString()
+    };
+    fbDb.collection('comprovantes').doc(id).set(dados).then(function(){
+      p.comprovanteId=id; p.comprovanteNome=dados.nome; p.comprovanteEm=dados.enviadoEm;
+      finRenderParcelas(); renderFinanceiroInline();
+      if(driveIdAtual){
+        salvarNoDrive({mostrarStatus:false})
+          .then(function(){if(st){st.textContent='✅ Comprovante anexado!';st.style.color='#66bb6a';setTimeout(function(){st.textContent='';},3000);}})
+          .catch(function(){if(st){st.textContent='⚠️ Anexado, mas houve erro ao salvar o orçamento';st.style.color='#ef5350';}});
+      }else{
+        if(st){st.textContent='✅ Comprovante anexado! Clique em Salvar Financeiro.';st.style.color='#66bb6a';}
+      }
+    }).catch(function(e){
+      if(st){st.textContent='⚠️ Erro ao enviar: '+((e&&e.message)||e);st.style.color='#ef5350';}
+    });
+  });
+}
+
+async function finVerComprovante(id,i){
+  if(!id)return;
+  if(!fbDb){alert('Sem conexão com o servidor.');return;}
+  var ov=document.getElementById('comp-view-ov');if(ov)ov.remove();
+  ov=document.createElement('div');
+  ov.id='comp-view-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000000;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML='<div style="color:#fff;font-size:13px">⏳ Carregando comprovante...</div>';
+  ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+  document.body.appendChild(ov);
+  try{
+    var snap=await fbDb.collection('comprovantes').doc(id).get();
+    if(!snap.exists){ov.innerHTML='<div style="background:#161616;border-radius:8px;padding:20px;color:#fff">Comprovante não encontrado (pode ter sido removido).</div>';return;}
+    var d=snap.data();
+    var envEm=d.enviadoEm?new Date(d.enviadoEm).toLocaleString('pt-BR'):'';
+    var btnRemover=(i!=null)?'<button onclick="finRemoverComprovante('+i+')" style="background:#7a1616;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;margin-left:8px">🗑 Remover</button>':'';
+    ov.innerHTML='<div style="background:#161616;border-radius:10px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:16px;box-shadow:0 16px 50px rgba(0,0,0,.6)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+      +'<div style="color:#fff;font-size:13px;font-weight:700">📎 '+eh(d.parcelaDesc||'Comprovante de pagamento')+'</div>'
+      +'<button onclick="document.getElementById(\'comp-view-ov\').remove()" style="background:#333;color:#fff;border:none;border-radius:5px;padding:5px 11px;cursor:pointer;font-size:13px">✕</button>'
+      +'</div>'
+      +'<img src="'+d.data+'" alt="comprovante" style="width:100%;border-radius:6px;display:block;background:#fff">'
+      +'<div style="color:#888;font-size:10px;margin-top:8px">Enviado por '+eh(d.enviadoPor||'—')+(envEm?(' em '+envEm):'')+'</div>'
+      +'<div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:4px">'
+      +'<a href="'+d.data+'" download="'+eh(d.nome||'comprovante.jpg')+'" style="display:inline-block;background:#1565c0;color:#fff;text-decoration:none;padding:8px 14px;border-radius:6px;font-size:12px;font-weight:700">⬇️ Baixar</a>'
+      +btnRemover
+      +'</div>'
+      +'</div>';
+  }catch(e){ ov.innerHTML='<div style="background:#161616;border-radius:8px;padding:20px;color:#fff">Erro ao carregar: '+eh((e&&e.message)||'')+'</div>'; }
+}
+
+function finRemoverComprovante(i){
+  var p=finParcelas[i];if(!p||!p.comprovanteId)return;
+  if(!confirm('Remover o comprovante desta parcela?'))return;
+  var id=p.comprovanteId;
+  p.comprovanteId=''; p.comprovanteNome=''; p.comprovanteEm='';
+  var ov=document.getElementById('comp-view-ov');if(ov)ov.remove();
+  finRenderParcelas(); renderFinanceiroInline();
+  if(fbDb){ fbDb.collection('comprovantes').doc(id).delete().catch(function(){}); }
+  var st=document.getElementById('fin-save-status');
+  if(driveIdAtual){
+    salvarNoDrive({mostrarStatus:false})
+      .then(function(){if(st){st.textContent='🗑 Comprovante removido';st.style.color='#66bb6a';setTimeout(function(){st.textContent='';},3000);}})
+      .catch(function(){});
+  }else if(st){ st.textContent='🗑 Comprovante removido. Clique em Salvar Financeiro.';st.style.color='#66bb6a'; }
 }
 
 
