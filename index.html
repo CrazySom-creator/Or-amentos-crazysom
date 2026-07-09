@@ -8572,6 +8572,7 @@ function clienteVerificarDoc(){
 // ═══════════════════════════════════════════════════════
 var _clienteHistLista=[];
 var _clienteHistTimer=null;
+function _normNome(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();}
 function clienteHistoricoBuscar(docDig,docFormatado){
   clearTimeout(_clienteHistTimer);
   var elBtn=document.getElementById('f-cliente-hist-status');
@@ -8581,12 +8582,16 @@ function clienteHistoricoBuscar(docDig,docFormatado){
     try{
       var snap=await fbDb.collection('orcamentos').where('form.f-doc','==',docFormatado).get();
       var lista=[];
+      var nomeAtualNorm=_normNome(gv('f-cliente'));
       snap.forEach(function(doc){
         if(doc.id===driveIdAtual)return; // não conta o orçamento que está aberto agora
         var d=doc.data();
+        var cliNome=(d.form&&d.form['f-cliente'])||'';
         lista.push({
           id:doc.id,
           nome:d._driveNome||doc.id,
+          cliNome:cliNome,
+          nomeDivergente:!!(nomeAtualNorm&&cliNome&&_normNome(cliNome)!==nomeAtualNorm),
           num:(d.form&&d.form['f-num'])||'—',
           data:(d.form&&d.form['f-data'])||'',
           status:d.aprovStatus||'rascunho',
@@ -8596,8 +8601,13 @@ function clienteHistoricoBuscar(docDig,docFormatado){
       });
       lista.sort(function(a,b){return (b.data||'')>(a.data||'')?1:-1;});
       _clienteHistLista=lista;
+      var temDivergencia=lista.some(function(o){return o.nomeDivergente;});
       if(lista.length>0){
-        elBtn.innerHTML='<button type="button" onclick="clienteHistoricoAbrir()" style="font-size:10px;font-weight:700;color:#6a1b9a;background:#f3e5f5;border:1px solid #ce93d8;border-radius:4px;padding:4px 10px;cursor:pointer">📋 Histórico deste cliente ('+lista.length+' orçamento'+(lista.length>1?'s':'')+')</button>';
+        if(temDivergencia){
+          elBtn.innerHTML='<button type="button" onclick="clienteHistoricoAbrir()" style="font-size:10px;font-weight:700;color:#e65100;background:#fff3e0;border:1px solid #ffb74d;border-radius:4px;padding:4px 10px;cursor:pointer" title="Este CNPJ/CPF já foi usado com um nome de cliente diferente — confira antes de continuar">⚠️ Histórico deste CNPJ tem outro nome de cliente ('+lista.length+')</button>';
+        }else{
+          elBtn.innerHTML='<button type="button" onclick="clienteHistoricoAbrir()" style="font-size:10px;font-weight:700;color:#6a1b9a;background:#f3e5f5;border:1px solid #ce93d8;border-radius:4px;padding:4px 10px;cursor:pointer">📋 Histórico deste cliente ('+lista.length+' orçamento'+(lista.length>1?'s':'')+')</button>';
+        }
       }else{
         elBtn.innerHTML='';
       }
@@ -8611,14 +8621,17 @@ function clienteHistoricoBuscar(docDig,docFormatado){
 function clienteHistoricoAbrir(){
   if(!_clienteHistLista.length)return;
   var COM_LBL={enviada:'Proposta Enviada',negociacao:'Em Negociação',standby:'Standby',ganha:'✅ Venda Ganha',perdida:'❌ Venda Perdida'};
-  document.getElementById('cliente-hist-sub').textContent=_clienteHistLista.length+' orçamento'+(_clienteHistLista.length>1?'s':'')+' encontrado'+(_clienteHistLista.length>1?'s':'')+' pra este CNPJ/CPF';
+  var temDivergencia=_clienteHistLista.some(function(o){return o.nomeDivergente;});
+  document.getElementById('cliente-hist-sub').textContent=_clienteHistLista.length+' orçamento'+(_clienteHistLista.length>1?'s':'')+' encontrado'+(_clienteHistLista.length>1?'s':'')+' pra este CNPJ/CPF'+(temDivergencia?' — ⚠️ algum com nome de cliente diferente do atual':'');
   document.getElementById('cliente-hist-lista').innerHTML=_clienteHistLista.map(function(o){
     var si=SI[o.status]||{label:o.status,tx:'#888'};
     var comTxt=COM_LBL[o.comercial]||'';
-    return '<div onclick="clienteHistoricoAbrirOrcamento(\''+o.id+'\',\''+eh(o.nome).replace(/'/g,"\\'")+'\')" style="padding:12px 16px;border-bottom:1px solid #2a2a2a;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px" onmouseover="this.style.background=\'#1a1a1a\'" onmouseout="this.style.background=\'transparent\'">'
+    var avisoNome=o.nomeDivergente?'<div style="font-size:10px;color:#ff9800;font-weight:700;margin-top:2px">⚠️ Cliente salvo como: '+eh(o.cliNome)+'</div>':'';
+    return '<div onclick="clienteHistoricoAbrirOrcamento(\''+o.id+'\',\''+eh(o.nome).replace(/'/g,"\\'")+'\')" style="padding:12px 16px;border-bottom:1px solid #2a2a2a;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px'+(o.nomeDivergente?';background:#2a1a00':'')+'" onmouseover="this.style.background=\'#1a1a1a\'" onmouseout="this.style.background=\''+(o.nomeDivergente?'#2a1a00':'transparent')+'\'">'
       +'<div>'
       +'<div style="font-weight:700;color:#fff;font-size:12px">Nº '+eh(o.num)+' — '+(o.data?fD(o.data):'sem data')+'</div>'
       +'<div style="font-size:10px;color:#888;margin-top:2px">'+(si.label||o.status)+(comTxt?' · '+comTxt:'')+'</div>'
+      +avisoNome
       +'</div>'
       +'<div style="font-weight:700;color:#66bb6a;font-size:13px">'+fmt(o.valor)+'</div>'
       +'</div>';
