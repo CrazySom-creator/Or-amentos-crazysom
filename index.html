@@ -5003,7 +5003,7 @@ function tirarSnapshot(){
     var rows=[];
     state[s].ambientes.forEach(function(a){
       (state[s].rows[a.id]||[]).forEach(function(r){
-        rows.push({name:r.name,qty:r.qty,val:r.val});
+        rows.push({id:r.id,name:r.name,qty:r.qty,val:r.val});
       });
     });
     itens[s]=rows;
@@ -5063,22 +5063,32 @@ function compararSnapshots(ant,atual){
     });
   }
   // Comparar itens por seção
+  // Identificação por id (confiável mesmo com nomes duplicados, ex: dois
+  // painéis LED do mesmo modelo em tamanhos diferentes). Cai para nome
+  // apenas se o snapshot for antigo (de antes desta correção) e não tiver id.
+  function acharCorrespondente(item,lista){
+    if(item.id){
+      var porId=lista.find(function(r2){return r2.id===item.id;});
+      if(porId)return porId;
+    }
+    return lista.find(function(r2){return r2.name===item.name;});
+  }
   ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
     var itAnt=(ant.itens&&ant.itens[s])||[];
     var itAtual=(atual.itens&&atual.itens[s])||[];
     // Itens removidos
     itAnt.forEach(function(r){
-      var found=itAtual.some(function(r2){return r2.name===r.name;});
+      var found=acharCorrespondente(r,itAtual);
       if(!found)diffs.push({campo:'Removido de '+SEC_NOMES[s],de:r.qty+'x '+r.name,para:'—',destaque:'reducao'});
     });
     // Itens adicionados
     itAtual.forEach(function(r){
-      var found=itAnt.some(function(r2){return r2.name===r.name;});
+      var found=acharCorrespondente(r,itAnt);
       if(!found)diffs.push({campo:'Adicionado em '+SEC_NOMES[s],de:'—',para:r.qty+'x '+r.name,destaque:'aumento'});
     });
     // Qtd ou valor alterado
     itAtual.forEach(function(r){
-      var ant2=itAnt.find(function(r2){return r2.name===r.name;});
+      var ant2=acharCorrespondente(r,itAnt);
       if(ant2){
         if(ant2.qty!==r.qty)diffs.push({campo:'Qtd '+r.name,de:String(ant2.qty),para:String(r.qty)});
         if(Math.abs((ant2.val||0)-(r.val||0))>0.01)diffs.push({campo:'Valor unit. '+r.name,de:fmt(ant2.val||0),para:fmt(r.val||0)});
@@ -5849,7 +5859,7 @@ function finRenderParcelas(){
       +'<td>'+formaSelect+'</td>'
       +'<td><span class="'+statusCls+'" onclick="finToggleStatus('+i+')" title="Clique para alternar">'+statusLabel+'</span></td>'
       +'<td style="text-align:center">'+(p.comprovanteId
-          ?'<button onclick="finVerComprovante(\''+p.comprovanteId+'\','+i+')" title="Ver comprovante anexado" style="background:none;border:none;color:#66bb6a;cursor:pointer;font-size:14px">📎</button>'
+          ?'<button onclick="finVerComprovante(\''+p.comprovanteId+'\','+i+')" title="Ver comprovante anexado" style="background:none;border:none;color:#66bb6a;cursor:pointer;font-size:14px">📄</button>'
           :'<button onclick="finAnexarComprovante('+i+')" title="Anexar comprovante de pagamento" style="background:none;border:none;color:#666;cursor:pointer;font-size:14px">📎</button>')+'</td>'
       +'<td><button onclick="finRemoveParcela('+i+')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:13px;padding:2px 4px" title="Remover">✕</button></td>'
       +'</tr>';
@@ -6008,7 +6018,7 @@ function renderFinanceiroInline(){
     var statusLabel=p.status==='pago'?'✅ Pago':(atrasado?'⚠️ Atrasado':'⏳ Pendente');
     var dataFmt=p.data?new Date(p.data+'T12:00:00').toLocaleDateString('pt-BR'):'—';
     var formaLabel=p.forma?('<span style="color:#888;font-size:9px;margin-left:4px">['+finFormaLabel(p.forma)+']</span>'):'';
-    var compBadge=p.comprovanteId?('<span onclick="event.stopPropagation();finVerComprovante(\''+p.comprovanteId+'\','+i+')" title="Ver comprovante de pagamento" style="cursor:pointer;margin-left:6px" role="button">📎</span>'):'';
+    var compBadge=p.comprovanteId?('<span onclick="event.stopPropagation();finVerComprovante(\''+p.comprovanteId+'\','+i+')" title="Ver comprovante de pagamento" style="cursor:pointer;margin-left:6px" role="button">📄</span>'):'';
     return '<div class="fin-parc-row">'
       +'<span style="color:#666;font-weight:700;min-width:18px">'+(i+1)+'.</span>'
       +'<span style="flex:1;color:#ccc">'+eh(p.desc||'Parcela')+formaLabel+compBadge+'</span>'
@@ -6428,6 +6438,11 @@ function relGerarFinanceiro(){
     var cs=(o.dados&&o.dados.comercialStatus)||'';
     if(cs!=='ganha')return;
     var fin=(o.dados&&o.dados.finParcelas)||[];
+    // Status agregado de comprovantes do orçamento inteiro (não só do período filtrado) —
+    // "o cliente já possui todos os comprovantes anexados" é sobre a venda toda.
+    var totalParc=fin.length;
+    var comAnexo=fin.filter(function(p2){return !!p2.comprovanteId;}).length;
+    var anexoStatus=(totalParc===0||comAnexo===0)?'nenhum':(comAnexo===totalParc?'todos':'parcial');
     fin.forEach(function(p){
       if(de&&p.data&&p.data<de)return;
       if(ate&&p.data&&p.data>ate)return;
@@ -6442,7 +6457,8 @@ function relGerarFinanceiro(){
         data:p.data||'',
         valor:parseFloat(p.valor)||0,
         forma:p.forma||'—',
-        status:stReal
+        status:stReal,
+        anexo:anexoStatus
       });
     });
   });
@@ -6463,9 +6479,12 @@ function relGerarFinanceiro(){
 
   var ST_COR={pago:'#66bb6a',pendente:'#ffa726',atrasado:'#ef5350'};
   var ST_LBL={pago:'✅ Pago',pendente:'⏳ Pendente',atrasado:'⚠️ Atrasado'};
+  var ANEXO_COR={todos:'#66bb6a',parcial:'#ffa726',nenhum:'#888'};
+  var ANEXO_LBL={todos:'📄 Todos',parcial:'📄 Parcial',nenhum:'— Nenhum'};
 
   var rows=parcelas.map(function(p){
     var cor=ST_COR[p.status]||'#888';
+    var aCor=ANEXO_COR[p.anexo]||'#888';
     return '<tr>'
       +'<td>'+eh(p.num)+'</td>'
       +'<td>'+eh(p.cliente)+'</td>'
@@ -6475,12 +6494,13 @@ function relGerarFinanceiro(){
       +'<td>'+eh(p.forma)+'</td>'
       +'<td class="r">'+fmt(p.valor)+'</td>'
       +'<td><span class="rel-badge" style="background:'+cor+'22;color:'+cor+';border:1px solid '+cor+'">'+ST_LBL[p.status]+'</span></td>'
+      +'<td><span class="rel-badge" style="background:'+aCor+'22;color:'+aCor+';border:1px solid '+aCor+'">'+ANEXO_LBL[p.anexo]+'</span></td>'
       +'</tr>';
   }).join('');
 
   document.getElementById('rel-fin-body').innerHTML=parcelas.length?
     '<div style="overflow-x:auto"><table class="rel-table"><thead><tr>'
-    +'<th>Nº Orc.</th><th>Cliente</th><th>Consultor</th><th>Parcela</th><th>Vencimento</th><th>Forma</th><th class="r">Valor</th><th>Status</th>'
+    +'<th>Nº Orc.</th><th>Cliente</th><th>Consultor</th><th>Parcela</th><th>Vencimento</th><th>Forma</th><th class="r">Valor</th><th>Status</th><th>Comprovantes</th>'
     +'</tr></thead><tbody>'+rows+'</tbody></table></div>'
     :'<div class="rel-empty">Nenhuma parcela encontrada.</div>';
 }
@@ -6702,10 +6722,14 @@ function relGetDadosTabela(){
     var ate=document.getElementById('rf-fin-ate').value;
     var stFiltro=document.getElementById('rf-fin-status').value;
     var parcelas=[];
+    var ANEXO_LBL2={todos:'Todos',parcial:'Parcial',nenhum:'Nenhum'};
     _relDados.forEach(function(o){
       var cs=(o.dados&&o.dados.comercialStatus)||'';
       if(cs!=='ganha')return;
       var fin=(o.dados&&o.dados.finParcelas)||[];
+      var totalParc=fin.length;
+      var comAnexo=fin.filter(function(p2){return !!p2.comprovanteId;}).length;
+      var anexoStatus=(totalParc===0||comAnexo===0)?'nenhum':(comAnexo===totalParc?'todos':'parcial');
       fin.forEach(function(p){
         if(de&&p.data&&p.data<de)return;
         if(ate&&p.data&&p.data>ate)return;
@@ -6713,11 +6737,11 @@ function relGetDadosTabela(){
         var stReal=p.status==='pago'?'pago':(atrasado?'atrasado':'pendente');
         if(stFiltro&&stReal!==stFiltro)return;
         var ST_LBL={pago:'Pago',pendente:'Pendente',atrasado:'Atrasado'};
-        parcelas.push([(o.form&&o.form['f-num'])||'',(o.form&&o.form['f-cliente'])||'',(o.form&&o.form['f-cons'])||'',p.desc||'',p.data?fD(p.data):'',p.forma||'',parseFloat(p.valor)||0,ST_LBL[stReal]||stReal]);
+        parcelas.push([(o.form&&o.form['f-num'])||'',(o.form&&o.form['f-cliente'])||'',(o.form&&o.form['f-cons'])||'',p.desc||'',p.data?fD(p.data):'',p.forma||'',parseFloat(p.valor)||0,ST_LBL[stReal]||stReal,ANEXO_LBL2[anexoStatus]]);
       });
     });
     parcelas.sort(function(a,b){return a[4]>b[4]?1:-1;});
-    return{titulo:relGetTituloAba()+'  ('+de+' a '+ate+')',cabecalho:['Nº Orc.','Cliente','Consultor','Parcela','Vencimento','Forma Pgto','Valor (R$)','Status'],linhas:parcelas,moeda:[6]};
+    return{titulo:relGetTituloAba()+'  ('+de+' a '+ate+')',cabecalho:['Nº Orc.','Cliente','Consultor','Parcela','Vencimento','Forma Pgto','Valor (R$)','Status','Comprovantes'],linhas:parcelas,moeda:[6]};
   }
 
   if(aba==='eventos'){
