@@ -2857,20 +2857,21 @@ function buildSecPane(s){
   var info='';
   if(s==='logistica')info='<div style="background:#e8f4fd;border:1px solid #90caf9;border-radius:4px;padding:7px 11px;font-size:10px;color:#1565c0;margin-bottom:7px"><b>🚚 Logística</b> — No PDF aparece como linha única com o valor total.</div>';
 
-  if(s==='extra')info='<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:4px;padding:7px 11px;font-size:10px;color:#7a5a00;margin-bottom:7px"><b>💰 Custos Extra</b> — Uso interno. Não aparece no PDF do cliente.</div>';
+  if(s==='extra')info='<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:4px;padding:7px 11px;font-size:10px;color:#7a5a00;margin-bottom:7px"><b>💰 Custos Extra</b> — Uso interno. Não aparece no PDF do cliente.<div id="bv-extra-info" style="margin-top:5px;font-weight:700"></div></div>';
 
-  var bvHtml=s==='servico'?'<div id="bv-box" style="background:#2d2d2d;border:1px solid #3a3a3a;border-radius:4px;padding:6px 10px;margin-top:8px;display:flex;align-items:center;gap:8px">'
+  var bvHtml=s==='servico'?'<div id="bv-box" style="background:#2d2d2d;border:1px solid #3a3a3a;border-radius:4px;padding:6px 10px;margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
     +'<span style="font-size:10px;color:#555;white-space:nowrap">🎁 BV Produtora</span>'
-    +'<input type="text" id="f-bv" inputmode="decimal" placeholder="R$ 0,00" '
-    +'style="max-width:140px;background:#2a2a2a;border:1px solid #444;color:#ddd;font-size:12px;padding:4px 9px;border-radius:3px" '
+    +'<input type="text" id="f-bv" inputmode="decimal" placeholder="0%" '
+    +'style="max-width:80px;background:#2a2a2a;border:1px solid #444;color:#ddd;font-size:12px;padding:4px 9px;border-radius:3px" '
     +'oninput="var v=parseFloat(this.value.replace(/[^0-9,]/g,\'\').replace(\',\',\'.\'))||0;_bvStorage=v;calc();marcarAlterado()" '
-    +'onfocus="if(this.value===\'R$ 0,00\'||this.value===\'\')this.value=\'\';" '
-    +'onblur="this.value=_bvStorage>0?\'R$ \'+_bvStorage.toFixed(2).replace(\'.\',\',\'): \'R$ 0,00\'">'
-    +'<span style="font-size:10px;color:#444">uso interno — não aparece no PDF</span>'
+    +'onfocus="if(this.value===\'0%\'||this.value===\'\')this.value=\'\';" '
+    +'onblur="this.value=_bvStorage>0?String(_bvStorage).replace(\'.\',\',\')+\'%\':\'0%\'">'
+    +'<span id="bv-valor-calc" style="font-size:11px;color:#66bb6a;font-weight:700">R$ 0,00</span>'
+    +'<span style="font-size:10px;color:#444">% sobre o orçamento — uso interno, não aparece no PDF, reduz a margem</span>'
     +'</div>':'';
   pane.innerHTML=info+'<div class="amb-bar" id="ambbar-'+s+'"></div><div id="ambcontent-'+s+'"></div>'+bvHtml;
-  // Restaurar valor do BV da variável _bvStorage
-  if(s==='servico'){var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value=_bvStorage>0?'R$ '+_bvStorage.toFixed(2).replace('.',','):'R$ 0,00';}
+  // Restaurar valor do BV da variável _bvStorage (percentual)
+  if(s==='servico'){var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value=_bvStorage>0?String(_bvStorage).replace('.',',')+'%':'0%';}
   if(s==='logistica'){pane.innerHTML+='<div style="margin-top:11px"><label>Serviços inclusos no PDF (um por linha)</label><textarea id="f-svinc" style="margin-top:4px;background:#f0f7ff;border-color:#90caf9;min-height:60px" oninput="marcarAlterado()"></textarea></div>';setTimeout(function(){var ta=document.getElementById('f-svinc');if(ta&&!ta.value)ta.value='Montagem\nDesmontagem\nTransporte';},10);}
   renderAmbBar(s);renderAmbContent(s);
 }
@@ -2958,7 +2959,38 @@ function toggleDiariaAuto(s,aid,id,checked){
 }
 
 function rowTot(r){if(r.painel)return safe(r.larg*r.alt*r.val*r.diaria*r.qty);if(r.palco||isPalco(r.name))return safe(calcPalco(r).total*r.diaria*r.qty);return safe(r.qty*r.val*r.diaria);}
-function secTotAll(s){return Object.values(state[s].rows).reduce(function(t,arr){return t+arr.reduce(function(a,r){return a+rowTot(r);},0);},0);}
+// Total "cru" de uma seção, sem qualquer diluição de BV (usado internamente
+// pra evitar recursão ao calcular o próprio valor do BV).
+function _secTotAllBase(s){return Object.values(state[s].rows).reduce(function(t,arr){return t+arr.reduce(function(a,r){return a+rowTot(r);},0);},0);}
+
+var _BV_SECS=['som','video','luz','estrutura','servico','logistica'];
+
+// Valor em R$ do BV, calculado a partir do percentual digitado (_bvStorage
+// agora guarda o PERCENTUAL, não mais um valor em R$) sobre a soma bruta
+// das 6 categorias (antes de qualquer diluição — evita recursão).
+function bvValorCalculado(){
+  var pct=_bvStorage||parseFloat(gv('f-bv'))||0;
+  if(!pct)return 0;
+  var base=_BV_SECS.reduce(function(t,s){return t+_secTotAllBase(s);},0);
+  return base*pct/100;
+}
+
+// Total de uma seção PARA EXIBIÇÃO (orçamento, PDF, dashboards): já vem com
+// a fatia do BV somada, de forma invisível — dividida só entre as categorias
+// que TÊM itens (uma categoria vazia não recebe fatia nenhuma).
+function secTotAll(s){
+  var base=_secTotAllBase(s);
+  if(_BV_SECS.indexOf(s)>=0){
+    var bv=bvValorCalculado();
+    if(bv>0){
+      var comItens=_BV_SECS.filter(function(s2){return _secTotAllBase(s2)>0;});
+      if(comItens.length>0 && comItens.indexOf(s)>=0){
+        base+=bv/comItens.length;
+      }
+    }
+  }
+  return base;
+}
 
 function renderRows(s){
   var st=state[s],aid=st.ambAtiva,rows=st.rows[aid]||[];
@@ -3036,8 +3068,7 @@ function renderRows(s){
   }
   if(s==='extra'){var custoT=rows.reduce(function(t,r){return t+r.qty*r.val*r.diaria;},0);var cobT=rows.reduce(function(t,r){return t+r.qty*r.val*r.diaria*(1+r.marg/100);},0);sv('tot-extra',fmt(custoT));sv('tot-extra-cob',fmt(cobT));}
   else{
-    var bvAdd=s==='servico'?_bvStorage:0;
-    var totDisp=totAll+bvAdd;
+    var totDisp=totAll;
     var tEl=document.getElementById('tot-'+s),tiEl=document.getElementById('tot-'+s+'-imp');
     if(tEl)tEl.textContent=fmt(totDisp);
     if(tiEl)tiEl.textContent=fmt(totDisp*(1+IMP));
@@ -3063,8 +3094,7 @@ function syncDesc(from){
   // desc-pct: sempre % sobre BRUTO (base comercial interna)
   // desc-rs:  no modo c/imp = desconto sobre cImp; no modo s/imp = desconto sobre bruto
   // Assim: o consultor digita R$ e o total calculado = referência visível - desconto digitado
-  var _bvVal=_bvStorage||parseFloat(gv('f-bv'))||0;
-  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+_bvVal;
+  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
   var cImp=bruto*(1+IMP);
   var modoSimp=(impAtual==='simp'||finImposto==='simp');
   if(from==='pct'){
@@ -3085,12 +3115,11 @@ function syncDesc(from){
 }
 function calc(){
   var MAIN=['som','video','luz','estrutura','servico','logistica'];
-  var _bvVal=_bvStorage||parseFloat(gv('f-bv'))||0;
   MAIN.forEach(function(s){
-    var tot=secTotAll(s)+(s==='servico'?_bvVal:0);
+    var tot=secTotAll(s);
     sv('r-'+s,fmt(tot));
   });
-  var bruto=MAIN.reduce(function(t,s){return t+secTotAll(s);},0)+_bvVal;
+  var bruto=MAIN.reduce(function(t,s){return t+secTotAll(s);},0);
   var imp=bruto*IMP,cImp=bruto+imp;
   var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
   var modoSimp=(impAtual==='simp'||finImposto==='simp');
@@ -3118,9 +3147,20 @@ function calc(){
     vdci=safe(vdsi*(1+IMP));
     dv_display=modoSimp?dv_bruto:safe(cImp-vdci);
   }
-  var xc=safe(Object.values(state.extra.rows).reduce(function(t,arr){return t+arr.reduce(function(a,r){return a+r.qty*r.val*r.diaria;},0);},0));
-  var bvVal=_bvVal;
-  var srv=secTotAll('servico')+bvVal,log=secTotAll('logistica');
+  // BV entra na margem como um custo (igual a um item de Custos Extra) — o
+  // valor extra cobrado do cliente (diluído nas categorias acima) é
+  // compensado aqui, então o lucro em R$ não muda, mas o percentual de
+  // margem cai (correto: é dinheiro que sai como bonificação, não fica de lucro).
+  var xc=safe(Object.values(state.extra.rows).reduce(function(t,arr){return t+arr.reduce(function(a,r){return a+r.qty*r.val*r.diaria;},0);},0))+bvValorCalculado();
+  (function(){
+    var bvPctNow=_bvStorage||parseFloat(gv('f-bv'))||0;
+    var bvValNow=bvValorCalculado();
+    var elCalc=document.getElementById('bv-valor-calc');
+    if(elCalc)elCalc.textContent=fmt(bvValNow);
+    var elExtra=document.getElementById('bv-extra-info');
+    if(elExtra)elExtra.textContent=bvPctNow>0?'🎁 BV (Bonificação de Vendas): '+String(bvPctNow).replace('.',',')+'% do orçamento = '+fmt(bvValNow)+' — já somado (diluído) no total de cada categoria e reduzindo a margem aqui.':'';
+  })();
+  var srv=_secTotAllBase('servico'),log=_secTotAllBase('logistica');
   // Margem: baseada no vdsi (sem imposto) e vdci (com imposto)
   var msd=safe(vdsi-srv-log-xc),msdP=safe(vdsi>0?msd/vdsi*100:0);
   var mcd=safe(vdci-srv*(1+IMP)-log*(1+IMP)-xc*(1+IMP)),mcdP=safe(vdci>0?mcd/vdci*100:0);
@@ -4532,7 +4572,7 @@ function selImpVenda(t){
 
 function _preencherValLiqCalculado(){
   try{
-    var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+(_bvStorage||parseFloat(gv('f-bv'))||0);
+    var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
     var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
     var cImpPVL=bruto*(1+IMP);
     var modoSimpPVL=(impAtual==='simp'||finImposto==='simp');
@@ -4576,8 +4616,7 @@ function buildPDF(tipo){
   var SEC_LBL_PDF=Object.assign({},SEC_LBL,{servico:'Operação Técnica',logistica:'Logística e Serviços'});
   var F=pdfFator();
   var orcN=gv('f-num')||'—',dataorc=gv('f-data')?fD(gv('f-data')):new Date().toLocaleDateString('pt-BR');
-  var bvBruto=_bvStorage||parseFloat(gv('f-bv'))||0;
-  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+bvBruto;
+  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
   var imp=bruto*IMP,cImp=bruto+imp;
   var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
   var vl=parseFloat(gv('val-liq'))||0;
@@ -4725,7 +4764,6 @@ function buildPDF(tipo){
     SECS_PDF.forEach(function(s){corpo+=secBlock(s,'default',tipo==='det');});
   }
 
-  var bvTot=(_bvStorage||parseFloat(gv('f-bv'))||0)*F;
   var logTot=secTotAll('logistica')*F;
   var totalLabel='Valor Total'+(impAtual==='cimp'?' (impostos inclusos)':'');
 
@@ -4747,7 +4785,6 @@ function buildPDF(tipo){
       .filter(function(x){return secTotAll(x.s)>0;})
       .forEach(function(x){
         var vSec=secTotAll(x.s)*F;
-        if(x.s==='servico')vSec+=bvTot; // adicionar BV ao total de serviço interno
         res+='<tr><td>'+x.n+'</td><td class="r">'+fmt(vSec)+'</td></tr>';
       });
   }
@@ -4981,8 +5018,7 @@ function tirarSnapshot(){
   ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
     totais[s]=secTotAll(s);
   });
-  var _bvOS=_bvStorage||parseFloat(gv('f-bv'))||0;
-  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+_bvOS;
+  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
   var cImp=bruto*(1+IMP);
   var drs=parseFloat(form['desc-rs'])||0,dpct=parseFloat(form['desc-pct'])||0;
   var cImpOS=bruto*(1+IMP);
@@ -5805,7 +5841,7 @@ function fecharFinanceiro(){
 
 function finGetTotal(){
   // Mesma logica do calc(): desc-rs e sobre cImp no modo c/imp, sobre bruto no modo s/imp
-  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)+(_bvStorage||parseFloat(gv('f-bv'))||0);
+  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
   var cImp=bruto*(1+IMP);
   var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
   var vlSimp=parseFloat(gv('val-liq-si'))||0;
@@ -10638,4 +10674,3 @@ function gerarContrato(){
 
 </body>
 </html>
-
