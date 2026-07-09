@@ -849,6 +849,19 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 <!-- ═══════════════════════════════════════════════════════ -->
 <!--  MODAL CADASTRO DE CLIENTES (LISTA)                    -->
 <!-- ═══════════════════════════════════════════════════════ -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  MODAL HISTÓRICO DE ORÇAMENTOS DO CLIENTE               -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="cliente-hist-ov">
+  <div class="modal-box" style="max-width:720px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <div><h2 style="margin-bottom:2px">📋 Histórico do Cliente</h2><p class="sub" style="margin:0" id="cliente-hist-sub">Orçamentos anteriores</p></div>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('cliente-hist-ov').classList.remove('open')">✕</button>
+    </div>
+    <div id="cliente-hist-lista" style="max-height:460px;overflow-y:auto;border:1px solid #2a2a2a;border-radius:6px;margin-top:10px"></div>
+  </div>
+</div>
+
 <div class="ov" id="clientes-ov">
   <div class="modal-box" style="max-width:780px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
@@ -1480,7 +1493,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   <div class="st">👤 Dados do Cliente</div>
   <div class="g3">
     <div style="position:relative"><label>Nome / Razão Social</label><div class="irow"><input id="f-cliente" placeholder="Nome ou Razão Social" oninput="marcarAlterado();clienteBuscarSugestoes(this.value)" onblur="setTimeout(clienteFecharSugestoes,200)"><button type="button" class="btn btn-o btn-sm" onclick="clienteAbrirBuscaModal()" title="Buscar cliente cadastrado">🔍</button></div><div id="f-cliente-sugest"></div></div>
-    <div><label>CNPJ / CPF</label><div class="irow"><input id="f-doc" placeholder="00.000.000/0001-00" oninput="fmtDoc(this);marcarAlterado();clienteVerificarDoc()"><button class="btn btn-o btn-sm" onclick="buscaCNPJ()">🔍</button></div><div class="hint" id="doc-st"></div></div>
+    <div><label>CNPJ / CPF</label><div class="irow"><input id="f-doc" placeholder="00.000.000/0001-00" oninput="fmtDoc(this);marcarAlterado();clienteVerificarDoc()"><button class="btn btn-o btn-sm" onclick="buscaCNPJ()">🔍</button></div><div class="hint" id="doc-st"></div><div id="f-cliente-hist-status" style="margin-top:4px"></div></div>
     <div><label>E-mail</label><input id="f-email" type="email" placeholder="cliente@empresa.com.br" oninput="marcarAlterado()"></div>
   </div>
   <div class="g3">
@@ -3985,6 +3998,7 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
     setTimeout(function(){selImpVenda(finImposto||'cimp');_preencherValLiqCalculado();},50);
     setTimeout(aplicarPermissoes, 150);
+    if(dados.form&&dados.form['f-doc'])clienteHistoricoBuscar(_clienteSoDigitos(dados.form['f-doc']),dados.form['f-doc']);
     driveStatus('✅ Carregado: '+nome,'ok');
     _atualizarBtnClonar();
     // ativarModoLeitura chamado pelo caller com o lock correto
@@ -4115,7 +4129,7 @@ async function limpar(){
   document.getElementById('f-cons').value='';
   document.getElementById('desc-pct').value=0;document.getElementById('desc-rs').value=0;document.getElementById('val-liq').value='';
   var vlsi=document.getElementById('val-liq-si');if(vlsi)vlsi.value='';
-  _bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value='';
+  _bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value=''; _clienteHistLista=[];var histEl=document.getElementById('f-cliente-hist-status');if(histEl)histEl.innerHTML='';
   document.getElementById('f-pgto').value='50% na contratação;\n50% até 03 dias antes da montagem.';
   ['cep-st','doc-st','cep-ev-st'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent='';});
   document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
@@ -4205,7 +4219,7 @@ async function clonarOrcamento(){
   var drs=document.getElementById('desc-rs');if(drs)drs.value=0;
   var vl=document.getElementById('val-liq');if(vl)vl.value='';
   var vlsi=document.getElementById('val-liq-si');if(vlsi)vlsi.value='';
-  _bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value='';
+  _bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value=''; _clienteHistLista=[];var histEl=document.getElementById('f-cliente-hist-status');if(histEl)histEl.innerHTML='';
 
   // ── Zerar aprovações, funil e financeiro
   aprovStatus='rascunho';aprovHist=[];
@@ -4498,7 +4512,7 @@ async function homeSairSemSalvar(){
   document.getElementById('desc-pct').value=0;document.getElementById('desc-rs').value=0;
   document.getElementById('val-liq').value='';
   var vlsi=document.getElementById('val-liq-si');if(vlsi)vlsi.value='';
-  _bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value='';
+  _bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value=''; _clienteHistLista=[];var histEl=document.getElementById('f-cliente-hist-status');if(histEl)histEl.innerHTML='';
   document.getElementById('f-pgto').value='50% na contratação;\n50% até 03 dias antes da montagem.';
   sv('orc-disp','—');
   driveIdAtual=null;driveNumAtual=null;_naoSalvo=false;_versaoAtual=null;
@@ -8528,6 +8542,7 @@ function _clientePreencherOrcamento(c){
   marcarAlterado();
   var st=document.getElementById('f-cliente-cad-status');
   if(st)st.innerHTML='<span style="font-size:10px;color:#2e7d32;font-weight:700">✅ Cliente cadastrado — dados preenchidos automaticamente</span>';
+  clienteHistoricoBuscar(_clienteSoDigitos(c.doc||''),c.doc||'');
 }
 
 function clienteVerificarDoc(){
@@ -8535,6 +8550,7 @@ function clienteVerificarDoc(){
   _docVerifTimer=setTimeout(function(){
     var docDig=_clienteSoDigitos(gv('f-doc'));
     var st=document.getElementById('f-cliente-cad-status');
+    clienteHistoricoBuscar(docDig,gv('f-doc'));
     if(!st)return;
     if(docDig.length!==11&&docDig.length!==14){st.innerHTML='';return;}
     var c=CLIENTES.find(function(x){return _clienteSoDigitos(x.doc)===docDig;});
@@ -8545,6 +8561,74 @@ function clienteVerificarDoc(){
         +'<button type="button" onclick="clienteCadastroRapido()" style="font-size:10px;font-weight:700;color:#1565c0;background:none;border:none;text-decoration:underline;cursor:pointer;padding:0">➕ cadastrar este cliente</button>';
     }
   },400);
+}
+
+// ═══════════════════════════════════════════════════════
+// HISTÓRICO DE ORÇAMENTOS DO CLIENTE
+// Busca no Firestore todos os orçamentos já feitos para o mesmo CNPJ/CPF
+// (por igualdade exata do campo formatado — fmtDoc() sempre produz o mesmo
+// formato pro mesmo número, então a busca é confiável) e, se houver algum
+// (fora o orçamento que está aberto agora), mostra um botão pra consultar.
+// ═══════════════════════════════════════════════════════
+var _clienteHistLista=[];
+var _clienteHistTimer=null;
+function clienteHistoricoBuscar(docDig,docFormatado){
+  clearTimeout(_clienteHistTimer);
+  var elBtn=document.getElementById('f-cliente-hist-status');
+  if(!elBtn)return;
+  if(docDig.length!==11&&docDig.length!==14){elBtn.innerHTML='';_clienteHistLista=[];return;}
+  _clienteHistTimer=setTimeout(async function(){
+    try{
+      var snap=await fbDb.collection('orcamentos').where('form.f-doc','==',docFormatado).get();
+      var lista=[];
+      snap.forEach(function(doc){
+        if(doc.id===driveIdAtual)return; // não conta o orçamento que está aberto agora
+        var d=doc.data();
+        lista.push({
+          id:doc.id,
+          nome:d._driveNome||doc.id,
+          num:(d.form&&d.form['f-num'])||'—',
+          data:(d.form&&d.form['f-data'])||'',
+          status:d.aprovStatus||'rascunho',
+          comercial:d.comercialStatus||'',
+          valor:dashValOrc({form:d.form,dados:d})
+        });
+      });
+      lista.sort(function(a,b){return (b.data||'')>(a.data||'')?1:-1;});
+      _clienteHistLista=lista;
+      if(lista.length>0){
+        elBtn.innerHTML='<button type="button" onclick="clienteHistoricoAbrir()" style="font-size:10px;font-weight:700;color:#6a1b9a;background:#f3e5f5;border:1px solid #ce93d8;border-radius:4px;padding:4px 10px;cursor:pointer">📋 Histórico deste cliente ('+lista.length+' orçamento'+(lista.length>1?'s':'')+')</button>';
+      }else{
+        elBtn.innerHTML='';
+      }
+    }catch(e){
+      console.warn('clienteHistoricoBuscar:',e);
+      elBtn.innerHTML='';
+    }
+  },450);
+}
+
+function clienteHistoricoAbrir(){
+  if(!_clienteHistLista.length)return;
+  var COM_LBL={enviada:'Proposta Enviada',negociacao:'Em Negociação',standby:'Standby',ganha:'✅ Venda Ganha',perdida:'❌ Venda Perdida'};
+  document.getElementById('cliente-hist-sub').textContent=_clienteHistLista.length+' orçamento'+(_clienteHistLista.length>1?'s':'')+' encontrado'+(_clienteHistLista.length>1?'s':'')+' pra este CNPJ/CPF';
+  document.getElementById('cliente-hist-lista').innerHTML=_clienteHistLista.map(function(o){
+    var si=SI[o.status]||{label:o.status,tx:'#888'};
+    var comTxt=COM_LBL[o.comercial]||'';
+    return '<div onclick="clienteHistoricoAbrirOrcamento(\''+o.id+'\',\''+eh(o.nome).replace(/'/g,"\\'")+'\')" style="padding:12px 16px;border-bottom:1px solid #2a2a2a;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px" onmouseover="this.style.background=\'#1a1a1a\'" onmouseout="this.style.background=\'transparent\'">'
+      +'<div>'
+      +'<div style="font-weight:700;color:#fff;font-size:12px">Nº '+eh(o.num)+' — '+(o.data?fD(o.data):'sem data')+'</div>'
+      +'<div style="font-size:10px;color:#888;margin-top:2px">'+(si.label||o.status)+(comTxt?' · '+comTxt:'')+'</div>'
+      +'</div>'
+      +'<div style="font-weight:700;color:#66bb6a;font-size:13px">'+fmt(o.valor)+'</div>'
+      +'</div>';
+  }).join('');
+  document.getElementById('cliente-hist-ov').classList.add('open');
+}
+
+function clienteHistoricoAbrirOrcamento(id,nome){
+  document.getElementById('cliente-hist-ov').classList.remove('open');
+  driveCarregar(id,nome);
 }
 
 function clienteCadastroRapido(){
