@@ -2966,18 +2966,23 @@ function _secTotAllBase(s){return Object.values(state[s].rows).reduce(function(t
 var _BV_SECS=['som','video','luz','estrutura','servico','logistica'];
 
 // Valor em R$ do BV, calculado a partir do percentual digitado (_bvStorage
-// agora guarda o PERCENTUAL, não mais um valor em R$) sobre a soma bruta
-// das 6 categorias (antes de qualquer diluição — evita recursão).
+// agora guarda o PERCENTUAL, não mais um valor em R$) sobre o valor COM
+// IMPOSTO das 6 categorias (antes de qualquer diluição — evita recursão).
 function bvValorCalculado(){
   var pct=_bvStorage||parseFloat(gv('f-bv'))||0;
   if(!pct)return 0;
   var base=_BV_SECS.reduce(function(t,s){return t+_secTotAllBase(s);},0);
-  return base*pct/100;
+  var baseComImposto=base*(1+IMP);
+  return baseComImposto*pct/100;
 }
 
 // Total de uma seção PARA EXIBIÇÃO (orçamento, PDF, dashboards): já vem com
 // a fatia do BV somada, de forma invisível — dividida só entre as categorias
 // que TÊM itens (uma categoria vazia não recebe fatia nenhuma).
+// A fatia é diluída em valor SEM imposto (dividindo por 1+IMP) pra que,
+// quando o imposto for aplicado por cima na exibição com imposto, o total
+// com imposto suba exatamente o valor do BV — sem cobrar imposto duas vezes
+// sobre o próprio BV.
 function secTotAll(s){
   var base=_secTotAllBase(s);
   if(_BV_SECS.indexOf(s)>=0){
@@ -2985,7 +2990,7 @@ function secTotAll(s){
     if(bv>0){
       var comItens=_BV_SECS.filter(function(s2){return _secTotAllBase(s2)>0;});
       if(comItens.length>0 && comItens.indexOf(s)>=0){
-        base+=bv/comItens.length;
+        base+=(bv/(1+IMP))/comItens.length;
       }
     }
   }
@@ -3151,7 +3156,7 @@ function calc(){
   // valor extra cobrado do cliente (diluído nas categorias acima) é
   // compensado aqui, então o lucro em R$ não muda, mas o percentual de
   // margem cai (correto: é dinheiro que sai como bonificação, não fica de lucro).
-  var xc=safe(Object.values(state.extra.rows).reduce(function(t,arr){return t+arr.reduce(function(a,r){return a+r.qty*r.val*r.diaria;},0);},0))+bvValorCalculado();
+  var xc=safe(Object.values(state.extra.rows).reduce(function(t,arr){return t+arr.reduce(function(a,r){return a+r.qty*r.val*r.diaria;},0);},0))+bvValorCalculado()/(1+IMP);
   (function(){
     var bvPctNow=_bvStorage||parseFloat(gv('f-bv'))||0;
     var bvValNow=bvValorCalculado();
