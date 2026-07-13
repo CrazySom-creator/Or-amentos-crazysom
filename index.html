@@ -288,6 +288,7 @@ table.pres th{background:#e8e8e8;color:#444;padding:5px 9px;font-size:11px;text-
 table.pres th.r{text-align:right}
 table.pres td{padding:5px 9px;border-bottom:1px solid #eee;font-size:11px}
 table.pres td.r{text-align:right;font-weight:700}
+table.pres .trow td{font-weight:800;border-top:2px solid #ccc;background:#fafafa}
 table.pres .drow2 td{color:#c0001a;font-weight:800;background:#fff5f5}
 table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font-size:13px}
 .pgto-pdf{border:1px solid #ddd;border-radius:3px;padding:7px 11px;font-size:11px;color:#333;line-height:1.8}
@@ -4820,7 +4821,10 @@ function buildPDF(tipo){
   // Mostrar desconto APENAS se ha desconto real (comparando total sem desconto vs totalFinal)
   var semDescPDF=modoSimpPDF?bruto:cImp;
   var difDesc=semDescPDF-totalFinal;
-  if(difDesc>0.01)res+='<tr class="drow2"><td style="text-align:right">Desconto</td><td class="r">– '+fmt(difDesc)+'</td></tr>';
+  if(difDesc>0.01){
+    res+='<tr class="trow"><td style="text-align:right">Valor Total</td><td class="r">'+fmt(semDescPDF)+'</td></tr>';
+    res+='<tr class="drow2"><td style="text-align:right">Desconto</td><td class="r">– '+fmt(difDesc)+'</td></tr>';
+  }
 
   res+='<tr class="lrow">'
     +'<td>'+totalLabel+'</td>'
@@ -4874,6 +4878,7 @@ function getCSSImpressao(){
     +'table.pres th.r{text-align:right}'
     +'table.pres td{padding:5px 9px;border-bottom:1px solid #eee;font-size:11px}'
     +'table.pres td.r{text-align:right;font-weight:700}'
+    +'table.pres .trow td{font-weight:800;border-top:2px solid #ccc;background:#fafafa}'
     +'table.pres .drow2 td{color:#c0001a;font-weight:800;background:#fff5f5}'
     +'table.pres .lrow td{background:#fff0f0;color:#c0001a;font-weight:900;font-size:13px}'
     +'.pgto-pdf{border:1px solid #ddd;border-radius:3px;padding:7px 11px;font-size:11px;color:#333;line-height:1.8;page-break-inside:avoid}'
