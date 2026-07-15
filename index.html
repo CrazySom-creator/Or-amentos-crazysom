@@ -8780,15 +8780,16 @@ async function usuariosCarregarFirestore(){
   }
 }
 
-// Lista do campo "Consultor" do orçamento — sempre derivada dos usuários
-// cadastrados (nível Consultor ou Consultor Externo), então todo mundo
-// criado em Admin > Usuários aparece aqui sozinho, sem precisar editar
-// código nenhum.
+// Lista do campo "Consultor" do orçamento — sempre derivada de TODOS os
+// usuários cadastrados (qualquer nível: Consultor, Consultor Externo,
+// Gerente, Diretor, Adm...), já que na prática qualquer um deles pode ser
+// o responsável comercial por um orçamento. Assim todo mundo criado em
+// Admin > Usuários aparece aqui sozinho, sem precisar editar código.
 function popularConsultores(){
   var sel=document.getElementById('f-cons');
   if(!sel) return;
   var atual=sel.value;
-  var nomes=USUARIOS.filter(function(u){return u.nivel==='consultor'||u.nivel==='consultor_externo';}).map(function(u){return u.nome;});
+  var nomes=USUARIOS.map(function(u){return u.nome;});
   nomes=nomes.filter(function(n,i){return n&&nomes.indexOf(n)===i;}).sort(function(a,b){return a.localeCompare(b,'pt-BR');});
   // Preserva o consultor de um orçamento antigo mesmo se a pessoa não estiver mais na lista ativa
   if(atual && nomes.indexOf(atual)<0) nomes.push(atual);
