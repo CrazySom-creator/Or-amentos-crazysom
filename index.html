@@ -3110,7 +3110,14 @@ function renderRows(s){
 function updRow(s,aid,id,field,val){
   var arr=state[s].rows[aid];if(!arr)return;
   var r=arr.find(function(x){return x.id===id;});if(!r)return;
-  if(['qty','val','marg','larg','alt','elev','prof'].indexOf(field)>=0)r[field]=parseFloat(val)||0;
+  if(['qty','val','marg','larg','alt','elev','prof'].indexOf(field)>=0){
+    var parsed=parseFloat(val)||0;
+    // Item personalizado: o valor digitado é sempre um preço "cru" novo (não
+    // existe base de catálogo aqui), então a comissão do Consultor Externo
+    // entra do mesmo jeito que entra nos itens escolhidos da tabela.
+    if(field==='val'&&r.custom) parsed=precoComMarkup(parsed);
+    r[field]=parsed;
+  }
   else if(field==='diaria'){r[field]=parseFloat(val)||0.5; r.diaria_auto=false;}
   else if(field==='diaria_auto'){r.diaria_auto=(val===true||val==='true'); if(r.diaria_auto){var _dA=getDiariasEquip();if(s==='servico')_dA=getDiasEvento();r.diaria=_dA;}}
   else if(field==='elObj')r.elObj=ELEV.find(function(e){return e.l===val;})||ELEV[0];
@@ -3122,6 +3129,19 @@ function updRow(s,aid,id,field,val){
 }
 function delRow(s,aid,id){state[s].rows[aid]=state[s].rows[aid].filter(function(x){return x.id!==id;});renderRows(s);calc();marcarAlterado();}
 
+// Limite de desconto configurado por cargo (Admin > Permissões). ADM,
+// Gerente e Diretor sempre têm liberdade total (mesma regra de bypass usada
+// em permTemAcesso); sem configuração para o cargo, também não há limite.
+function descontoMaxPermitido(){
+  if(!usuarioAtual) return 100;
+  var nivel=usuarioAtual.nivel||'';
+  if(['adm','gerente','diretor'].includes(nivel)) return 100;
+  var cargo=usuarioAtual.cargo||'';
+  if(!cargo||!_permissoes[cargo]||_permissoes[cargo].descontoMaxPct===undefined) return 100;
+  var v=Number(_permissoes[cargo].descontoMaxPct);
+  return isNaN(v)?100:v;
+}
+
 function syncDesc(from){
   // desc-pct: sempre % sobre BRUTO (base comercial interna)
   // desc-rs:  no modo c/imp = desconto sobre cImp; no modo s/imp = desconto sobre bruto
@@ -3129,9 +3149,13 @@ function syncDesc(from){
   var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
   var cImp=bruto*(1+IMP);
   var modoSimp=(impAtual==='simp'||finImposto==='simp');
+  var maxDesc=descontoMaxPermitido();
+  var pctEl=document.getElementById('desc-pct'),estourou=false;
   if(from==='pct'){
     // pct -> rs: converter % (do bruto) para R$ sobre a base do modo atual
-    var dv_bruto=bruto*(parseFloat(gv('desc-pct'))||0)/100;
+    var pctDigitado=parseFloat(gv('desc-pct'))||0;
+    if(pctDigitado>maxDesc){pctDigitado=maxDesc;estourou=true;if(pctEl)pctEl.value=maxDesc;}
+    var dv_bruto=bruto*pctDigitado/100;
     var vdsi_calc=bruto-dv_bruto;
     var vdci_calc=vdsi_calc*(1+IMP);
     // desc-rs exibe o desconto em R$ sobre a base visível ao consultor
@@ -3141,7 +3165,22 @@ function syncDesc(from){
     // rs -> pct: o R$ digitado é sobre a base visível; converter para % do bruto
     var drs=parseFloat(gv('desc-rs'))||0;
     var dv_bruto2=modoSimp?drs:drs/(1+IMP);
-    document.getElementById('desc-pct').value=(bruto>0?dv_bruto2/bruto*100:0).toFixed(2);
+    var pctCalc=bruto>0?dv_bruto2/bruto*100:0;
+    if(pctCalc>maxDesc){
+      // Reenquadrar o R$ digitado pro teto de %, senão os dois campos ficam incoerentes
+      estourou=true;
+      var dv_bruto_max=bruto*maxDesc/100;
+      var vdsi_max=bruto-dv_bruto_max;
+      var vdci_max=vdsi_max*(1+IMP);
+      var drs_max=modoSimp?dv_bruto_max:(cImp-vdci_max);
+      document.getElementById('desc-rs').value=drs_max.toFixed(2);
+      pctCalc=maxDesc;
+    }
+    document.getElementById('desc-pct').value=pctCalc.toFixed(2);
+  }
+  if(pctEl){
+    if(estourou){pctEl.style.borderColor='#c0001a';pctEl.title='⛔ Limite de desconto do seu cargo: '+maxDesc+'%. Ajustado automaticamente.';}
+    else{pctEl.style.borderColor='';pctEl.removeAttribute('title');}
   }
   calc();
 }
@@ -8102,6 +8141,11 @@ async function permSalvar(){
   document.querySelectorAll('.perm-cb').forEach(function(cb){
     _permissoes[cargo][cb.dataset.campo]=cb.checked;
   });
+  var maxDescEl=document.getElementById('perm-desc-max');
+  if(maxDescEl){
+    var vMax=parseFloat(maxDescEl.value);
+    _permissoes[cargo].descontoMaxPct=isNaN(vMax)?100:Math.max(0,Math.min(100,vMax));
+  }
   try{ localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes)); }catch(e){}
   var btn=document.querySelector('#admpane-permissoes button[onclick="permSalvar()"]');
   if(btn){btn.textContent='⏳ Salvando...';btn.disabled=true;}
@@ -8265,7 +8309,12 @@ function admAba(aba){
 function permRenderizar(){
   var cargo=document.getElementById('perm-cargo-sel').value;
   var perm=(_permissoes[cargo])||{};
-  var html='';
+  var maxDesc=perm.descontoMaxPct===undefined?100:perm.descontoMaxPct;
+  var html='<div style="background:#1a0d00;border:1px solid #e65100;border-radius:6px;padding:10px 12px;margin-bottom:10px">'
+    +'<label style="font-size:10px;color:#ffa726;text-transform:uppercase;font-weight:800;display:block;margin-bottom:5px">🔒 Desconto Máximo Permitido (%)</label>'
+    +'<input type="number" id="perm-desc-max" min="0" max="100" step="0.5" value="'+maxDesc+'" style="width:120px;padding:6px 8px;background:#111;border:1px solid #444;border-radius:4px;color:#fff;font-size:12px">'
+    +'<span style="font-size:10px;color:#999;margin-left:8px">Limite de desconto (%) que esse cargo pode aplicar no orçamento (campos Desconto % / Desconto R$). 100 = sem limite.</span>'
+    +'</div>';
   PERM_MODULOS.forEach(function(mod){
     html+='<div style="background:#111;border:1px solid #2a2a2a;border-radius:6px;padding:10px 12px;margin-bottom:8px">'
       +'<div style="font-size:11px;color:#c0001a;font-weight:800;margin-bottom:8px">'+mod.label+'</div>'
