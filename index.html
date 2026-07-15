@@ -1469,7 +1469,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <div><label>Data</label><input type="date" id="f-data" oninput="marcarAlterado()"></div>
     <div><label>Validade</label><input type="date" id="f-val" oninput="marcarAlterado()"></div>
     <div><label>Consultor</label>
-      <select id="f-cons" onchange="marcarAlterado()"><option value="">Selecione...</option><option>Fabiano Santos</option><option>Giovana Borges</option><option>Jéssica Elisandra</option><option>Rafael Oliveira</option><option>Jefferson</option><option>Wagner Wolff</option></select>
+      <select id="f-cons" onchange="marcarAlterado()"><option value="">Selecione...</option></select>
     </div>
   </div>
   <div class="g4">
@@ -2327,6 +2327,7 @@ async function doLogin(){
   usuarioAtual=u;aprovStatus='rascunho';aprovHist=[];
   idleAtivar(); // Iniciar contador de logout automático por inatividade
   permCarregar();
+  usuariosCarregarFirestore().then(popularConsultores);
   clientesCarregarStorage();
   carregarExcluidosDrive();
   // carregarSolExclusaoDrive() removida daqui: agora só roda quando o painel de Aprovações é aberto (evita varrer todos os orçamentos a cada login)
@@ -8779,8 +8780,24 @@ async function usuariosCarregarFirestore(){
   }
 }
 
+// Lista do campo "Consultor" do orçamento — sempre derivada dos usuários
+// cadastrados (nível Consultor ou Consultor Externo), então todo mundo
+// criado em Admin > Usuários aparece aqui sozinho, sem precisar editar
+// código nenhum.
+function popularConsultores(){
+  var sel=document.getElementById('f-cons');
+  if(!sel) return;
+  var atual=sel.value;
+  var nomes=USUARIOS.filter(function(u){return u.nivel==='consultor'||u.nivel==='consultor_externo';}).map(function(u){return u.nome;});
+  nomes=nomes.filter(function(n,i){return n&&nomes.indexOf(n)===i;}).sort(function(a,b){return a.localeCompare(b,'pt-BR');});
+  // Preserva o consultor de um orçamento antigo mesmo se a pessoa não estiver mais na lista ativa
+  if(atual && nomes.indexOf(atual)<0) nomes.push(atual);
+  sel.innerHTML='<option value="">Selecione...</option>'+nomes.map(function(n){return '<option'+(n===atual?' selected':'')+'>'+eh(n)+'</option>';}).join('');
+}
+
 function renderAdmList(){
   usuariosCarregarFirestore().then(function(){
+    popularConsultores();
     var avisoHtml='<div style="background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:#aaa">'
       +'ℹ️ Use <b>+ Novo Usuário</b> pra criar a conta de login e o perfil de uma vez. O botão 🗑️ exclui os dois juntos. Aqui embaixo você também pode editar nome, nível e cargo de quem já existe.'
       +'</div>';
