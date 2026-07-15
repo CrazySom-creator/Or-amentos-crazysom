@@ -4854,12 +4854,20 @@ function buildPDF(tipo){
       if(t2>0)res+='<tr><td>'+amb.nome+'</td><td class="r">'+fmt(t2)+'</td></tr>';
     });
   }else{
+    // "Laudo Técnico + ART" sai do bucket de Operação Técnica e vira uma
+    // linha própria no bloco Produto/Serviço, logo antes de Logística e
+    // Serviços — em ambos os PDFs (Detalhado e Resumido), já que os dois
+    // usam este mesmo bloco final.
+    var laudoTot=Object.values(state.servico.rows).reduce(function(t,arr){
+      return t+arr.filter(function(r){return r.name==='Laudo Técnico + ART';}).reduce(function(tt,r){return tt+rTotF(r);},0);
+    },0);
     [{n:'SONORIZAÇÃO',s:'som'},{n:'VÍDEO',s:'video'},{n:'ILUMINAÇÃO',s:'luz'},{n:'ESTRUTURA',s:'estrutura'},{n:'OPERAÇÃO TÉCNICA',s:'servico'}]
-      .filter(function(x){return secTotAll(x.s)>0;})
       .forEach(function(x){
         var vSec=secTotAll(x.s)*F;
-        res+='<tr><td>'+x.n+'</td><td class="r">'+fmt(vSec)+'</td></tr>';
+        if(x.s==='servico') vSec-=laudoTot;
+        if(vSec>0.004) res+='<tr><td>'+x.n+'</td><td class="r">'+fmt(vSec)+'</td></tr>';
       });
+    if(laudoTot>0.004) res+='<tr><td>🛠️ LAUDO TÉCNICO + ART</td><td class="r">'+fmt(laudoTot)+'</td></tr>';
   }
 
   if(logTot>0)res+='<tr><td>🚚 LOGÍSTICA E SERVIÇOS</td><td class="r">'+fmt(logTot)+'</td></tr>';
