@@ -827,6 +827,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
         <label style="font-size:11px;color:#888;font-weight:700">Cargo:</label>
         <select id="perm-cargo-sel" onchange="permRenderizar()" style="padding:6px 10px;background:#111;border:1px solid #333;border-radius:4px;color:#fff;font-size:12px">
           <option value="Consultor">Consultor</option>
+          <option value="Consultor Externo">Consultor Externo</option>
           <option value="Assistente Comercial">Assistente Comercial</option>
           <option value="Análise Técnica">Análise Técnica</option>
           <option value="Logística">Logística</option>
@@ -2250,6 +2251,18 @@ var PRECOS={
   extra:[{n:"Locação equipamento externo",v:0},{n:"Fornecedor terceiro",v:0},{n:"Consumíveis",v:0},{n:"Manutenção",v:0},{n:"Outros custos",v:0}]
 };
 
+// Consultor Externo: acrescenta o percentual de comissão pessoal do usuário
+// logado em cima de toda a tabela de preços (cadastrado por usuário na
+// aba Usuários do Admin). Itens personalizados (valor digitado à mão)
+// não passam por aqui — só os selecionados da tabela.
+function precoComMarkup(v){
+  if(usuarioAtual && usuarioAtual.cargo==='Consultor Externo' && usuarioAtual.comissaoPercentual){
+    var pct=Number(usuarioAtual.comissaoPercentual)||0;
+    return v*(1+pct/100);
+  }
+  return v;
+}
+
 async function doLogin(){
   var err=document.getElementById('l-err');
   if(!_firebaseOk||!fbAuth){
@@ -2294,7 +2307,7 @@ async function doLogin(){
     return;
   }
   var perfil=perfilSnap.data();
-  var u={id:email,nome:perfil.nome||email,nivel:perfil.nivel||'consultor',cargo:perfil.cargo||''};
+  var u={id:email,nome:perfil.nome||email,nivel:perfil.nivel||'consultor',cargo:perfil.cargo||'',comissaoPercentual:perfil.comissaoPercentual||0};
   try{
     var _sR=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'lock',lockAction:'session-check',usuarioId:u.id,usuarioNome:u.nome,deviceId:_getDeviceId(),ttl:35*60*1000})});
     var _sD=await _sR.json();
@@ -2931,7 +2944,7 @@ function renderAmbContent(s){
   el.innerHTML='<table class="it" id="tbl-'+s+'"><thead>'+thead+'</thead><tbody id="tbody-'+s+'"></tbody></table>'+addBar;
   setTimeout(function(){
     var sel=document.getElementById('sel-'+s);
-    if(sel&&PRECOS[s]){PRECOS[s].forEach(function(it){var o=document.createElement('option');o.value=JSON.stringify(it);o.text=it.n+(it.v?' – R$ '+fmtN(it.v):'');sel.appendChild(o);});}
+    if(sel&&PRECOS[s]){PRECOS[s].forEach(function(it){var vAj=precoComMarkup(it.v);var o=document.createElement('option');o.value=JSON.stringify({n:it.n,v:vAj});o.text=it.n+(vAj?' – R$ '+fmtN(vAj):'');sel.appendChild(o);});}
     renderRows(s);
   },0);
 }
@@ -7951,7 +7964,7 @@ function metasRenderizarAba(aba){
 // ════════════════════════════════════════════════════════
 //  GERENCIAR USUÁRIOS — cargo
 // ════════════════════════════════════════════════════════
-var CARGOS=['Consultor','Assistente Comercial','Análise Técnica','Logística','Gerente Comercial','Diretoria'];
+var CARGOS=['Consultor','Consultor Externo','Assistente Comercial','Análise Técnica','Logística','Gerente Comercial','Diretoria'];
 
 // ════════════════════════════════════════════════════════
 //  SISTEMA DE PERMISSÕES POR CARGO
@@ -8709,7 +8722,7 @@ async function usuariosCarregarFirestore(){
     var lista=[];
     snap.forEach(function(doc){
       var d=doc.data();
-      lista.push({id:doc.id,nome:d.nome||doc.id,nivel:d.nivel||'consultor',cargo:d.cargo||''});
+      lista.push({id:doc.id,nome:d.nome||doc.id,nivel:d.nivel||'consultor',cargo:d.cargo||'',comissaoPercentual:d.comissaoPercentual||0});
     });
     USUARIOS=lista;
   }catch(e){
@@ -8755,11 +8768,21 @@ function renderAdmList(){
       +'<div><label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">Nível de Acesso</label>'
       +'<select id="al'+i+'" style="width:100%;padding:6px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px">'+nivelOpts+'</select></div>'
       +'<div><label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">Cargo</label>'
-      +'<select id="ac'+i+'" style="width:100%;padding:6px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px">'+cargoOpts+'</select></div>'
+      +'<select id="ac'+i+'" onchange="admCargoMudou('+i+')" style="width:100%;padding:6px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px">'+cargoOpts+'</select></div>'
+      +'</div>'
+      +'<div id="apcw'+i+'" style="display:'+(cargoVal==='Consultor Externo'?'block':'none')+';margin-top:7px">'
+      +'<label style="font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px">Comissão (%) — acrescida em toda a tabela de preços</label>'
+      +'<input id="ap'+i+'" type="number" step="0.1" min="0" value="'+(u.comissaoPercentual||0)+'" placeholder="Ex: 10" style="width:140px;padding:6px 8px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:11px;box-sizing:border-box">'
       +'</div>'
       +'</div>';
     }).join('');
   });
+}
+
+function admCargoMudou(i){
+  var cargo=document.getElementById('ac'+i).value;
+  var wrap=document.getElementById('apcw'+i);
+  if(wrap) wrap.style.display = cargo==='Consultor Externo' ? 'block' : 'none';
 }
 
 async function admSalvar(i){
@@ -8767,10 +8790,12 @@ async function admSalvar(i){
   var nome=document.getElementById('an'+i).value.trim();
   var nivel=document.getElementById('al'+i).value;
   var cargo=document.getElementById('ac'+i).value||'';
+  var comissaoEl=document.getElementById('ap'+i);
+  var comissaoPercentual=comissaoEl?(parseFloat(comissaoEl.value)||0):0;
   if(!nome){alert('Nome obrigatório.');return;}
   try{
-    await fbDb.collection('usuarios').doc(u.id).set({nome:nome,nivel:nivel,cargo:cargo},{merge:true});
-    USUARIOS[i]=Object.assign({},u,{nome:nome,nivel:nivel,cargo:cargo});
+    await fbDb.collection('usuarios').doc(u.id).set({nome:nome,nivel:nivel,cargo:cargo,comissaoPercentual:comissaoPercentual},{merge:true});
+    USUARIOS[i]=Object.assign({},u,{nome:nome,nivel:nivel,cargo:cargo,comissaoPercentual:comissaoPercentual});
     renderAdmList();
     alert('✅ Perfil de "'+nome+'" salvo com sucesso!');
   }catch(e){
