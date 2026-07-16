@@ -8791,13 +8791,41 @@ async function usuariosCarregarFirestore(){
 // Lista do campo "Consultor" do orçamento — sempre derivada de TODOS os
 // usuários cadastrados (qualquer nível: Consultor, Consultor Externo,
 // Gerente, Diretor, Adm...), já que na prática qualquer um deles pode ser
-// o responsável comercial por um orçamento. Assim todo mundo criado em
-// Admin > Usuários aparece aqui sozinho, sem precisar editar código.
-function popularConsultores(){
+// o responsável comercial por um orçamento.
+//
+// Por que um documento público separado (config/consultoresNomes) em vez de
+// ler a coleção 'usuarios' direto: a coleção 'usuarios' tem e-mail, cargo e
+// percentual de comissão de todo mundo — dado sensível que só faz sentido o
+// Admin enxergar. Se as regras do Firestore restringem a leitura completa
+// dessa coleção a quem é Admin (o que é o correto/esperado), um Consultor
+// comum não conseguiria carregar a lista pra popular este campo. Por isso o
+// Admin publica aqui, em config/consultoresNomes, só os NOMES (sem nada
+// sensível) — a mesma coleção 'config' de onde as permissões já são lidas
+// por todo mundo hoje (permCarregar), então não deveria exigir nenhuma
+// regra nova no Firestore.
+async function _salvarNomesConsultoresPublico(){
+  try{
+    var nomes=USUARIOS.map(function(u){return u.nome;})
+      .filter(function(n,i,arr){return n&&arr.indexOf(n)===i;})
+      .sort(function(a,b){return a.localeCompare(b,'pt-BR');});
+    await fbDb.collection('config').doc('consultoresNomes').set({nomes:nomes});
+  }catch(e){ console.warn('_salvarNomesConsultoresPublico:',e); }
+}
+
+async function popularConsultores(){
   var sel=document.getElementById('f-cons');
   if(!sel) return;
   var atual=sel.value;
-  var nomes=USUARIOS.map(function(u){return u.nome;});
+  var nomes=[];
+  try{
+    var snap=await fbDb.collection('config').doc('consultoresNomes').get();
+    if(snap.exists && Array.isArray(snap.data().nomes)) nomes=snap.data().nomes.slice();
+  }catch(e){ console.warn('popularConsultores:',e); }
+  // Fallback pra quando o documento público ainda não existe (primeira vez,
+  // antes de qualquer Admin ter aberto Admin > Usuários) ou também falhou:
+  // usa o que já estiver em memória (ex: numa sessão de Admin, que carrega a
+  // coleção completa).
+  if(!nomes.length && Array.isArray(USUARIOS)) nomes=USUARIOS.map(function(u){return u.nome;});
   nomes=nomes.filter(function(n,i){return n&&nomes.indexOf(n)===i;}).sort(function(a,b){return a.localeCompare(b,'pt-BR');});
   // Preserva o consultor de um orçamento antigo mesmo se a pessoa não estiver mais na lista ativa
   if(atual && nomes.indexOf(atual)<0) nomes.push(atual);
@@ -8806,6 +8834,7 @@ function popularConsultores(){
 
 function renderAdmList(){
   usuariosCarregarFirestore().then(function(){
+    _salvarNomesConsultoresPublico(); // republica a lista de nomes toda vez que o Admin abre este painel
     popularConsultores();
     var avisoHtml='<div style="background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:#aaa">'
       +'ℹ️ Use <b>+ Novo Usuário</b> pra criar a conta de login e o perfil de uma vez. O botão 🗑️ exclui os dois juntos. Aqui embaixo você também pode editar nome, nível e cargo de quem já existe.'
