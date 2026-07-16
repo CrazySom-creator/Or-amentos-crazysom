@@ -54,6 +54,18 @@ table.it input,table.it select{padding:2px 5px;font-size:11px}
 .btn-clone:hover{background:#00796b}
 .btn-sm{padding:3px 8px;font-size:10px}
 .bdel{background:#e53935;color:#fff;padding:2px 7px;font-size:10px;border:none;border-radius:3px;cursor:pointer}
+/* Toolbar principal do orçamento — padronizada */
+.btn-info{background:#1565c0;color:#fff}
+.btn-danger{background:#8b0000;color:#fff}
+.btn-o-danger{background:#fff;color:var(--R);border:1px solid var(--R)}
+.toolbar-orc{display:flex;gap:8px;margin-top:9px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
+.toolbar-orc .btn{font-weight:700;letter-spacing:.2px;padding:7px 14px}
+.toolbar-sep{width:1px;align-self:stretch;background:#3a3a3a;margin:0 2px;min-height:22px}
+/* Botão flutuante de voltar — acompanha a rolagem da tela */
+.btn-voltar-float{position:fixed;left:16px;bottom:16px;z-index:5000;width:46px;height:46px;border-radius:50%;background:var(--D);color:#fff;border:2px solid var(--R);font-size:19px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.5);transition:transform .15s ease,background .15s ease}
+.btn-voltar-float:hover{background:var(--R);transform:scale(1.06)}
+.btn-voltar-float:active{transform:scale(.96)}
+@media(max-width:600px){.btn-voltar-float{width:42px;height:42px;font-size:17px;left:10px;bottom:10px}}
 .add-bar{display:flex;gap:6px;margin-top:7px;align-items:flex-end;flex-wrap:wrap}
 .add-bar .f{flex:1;min-width:130px}
 .stot{text-align:right;padding:6px 0 2px;font-size:11px;color:#555;border-top:2px solid #eee;margin-top:5px}
@@ -574,6 +586,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 </head>
 <body>
 <div id="global-loading-ov"><span class="cs-spinner"></span><b id="global-loading-msg">⏳ Carregando...</b></div>
+<button class="btn-voltar-float" onclick="abrirHome()" title="Voltar ao Menu">←</button>
 <div class="wrap">
 
 <!-- ═══════════════════════════════════════════════════════ -->
@@ -1731,15 +1744,17 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <label class="btn btn-b btn-sm" style="cursor:pointer">📂 Carregar<input type="file" accept=".json" style="display:none" onchange="carregar(this)"></label>
     <button class="btn btn-d btn-sm" onclick="gerarOS()">📋 OS</button>
   </div>
-  <div style="display:flex;gap:8px;margin-top:9px;justify-content:flex-end;flex-wrap:wrap">
-    <button class="btn btn-o" onclick="abrirHome()" style="border-color:#555;color:#ccc">☰ Menu</button>
-    <button class="btn btn-o" onclick="limpar()" style="border-color:#444;color:#bbb">📄 Novo</button>
+  <div class="toolbar-orc">
+    <button class="btn btn-o" onclick="abrirHome()" title="Voltar ao Menu">☰ Menu</button>
+    <button class="btn btn-o" onclick="limpar()" title="Começar um orçamento novo em branco">📄 Novo</button>
     <button class="btn btn-clone" id="btn-clonar" onclick="clonarOrcamento()" title="Clonar este orçamento para um novo">📋 Clonar</button>
-    <button class="btn btn-g" onclick="salvarESair()" title="Salva no Drive e volta para o Menu principal" style="font-weight:800">💾 Salvar e Sair</button>
-    <button class="btn btn-o" onclick="homeSairSemSalvar()" title="Sair sem salvar — descarta alteracoes nao salvas" style="border-color:#c0001a;color:#ff6060;font-weight:700">✕ Sair</button>
-    <button class="btn btn-r" onclick="abrirTipo()">📄 PDF</button>
-    <button class="btn btn-d" onclick="downloadPDF()">⬇️ Download</button>
-    <button class="btn" onclick="abrirPreviewContrato()" style="background:#1a3a5c;color:#fff;border:none;font-weight:800" title="Pré-visualizar e editar dados antes de gerar o contrato em PDF">📝 Contrato</button>
+    <button class="btn btn-g" onclick="salvarESair()" title="Salva no Drive e volta para o Menu principal">💾 Salvar e Sair</button>
+    <button class="btn btn-r" onclick="abrirTipo()" title="Gerar PDF do orçamento">📄 PDF</button>
+    <button class="btn btn-d" onclick="downloadPDF()" title="Baixar o PDF gerado">⬇️ Download</button>
+    <button class="btn btn-info" onclick="abrirPreviewContrato()" title="Pré-visualizar e editar dados antes de gerar o contrato em PDF">📝 Contrato</button>
+    <span class="toolbar-sep"></span>
+    <button class="btn btn-o-danger" onclick="homeSairSemSalvar()" title="Sair sem salvar — descarta alterações não salvas">✕ Sair sem salvar</button>
+    <button class="btn btn-danger" onclick="homeExcluirOrcAtual()" title="Excluir este orçamento definitivamente">🗑️ Excluir Orçamento</button>
   </div>
 </div>
 
