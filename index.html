@@ -2327,7 +2327,15 @@ async function doLogin(){
   usuarioAtual=u;aprovStatus='rascunho';aprovHist=[];
   idleAtivar(); // Iniciar contador de logout automático por inatividade
   permCarregar();
-  usuariosCarregarFirestore().then(popularConsultores);
+  // Sempre repopula o campo Consultor a partir do documento público de nomes.
+  // Além disso, se quem logou é Admin/Gerente/Diretor (perfis que conseguem
+  // listar a coleção completa de usuários), republica esse documento público
+  // automaticamente a cada login — assim ele nunca fica desatualizado
+  // esperando alguém abrir a tela de Admin > Usuários manualmente.
+  usuariosCarregarFirestore().then(function(){
+    popularConsultores();
+    if(['adm','gerente','diretor'].includes(u.nivel)) _salvarNomesConsultoresPublico();
+  });
   clientesCarregarStorage();
   carregarExcluidosDrive();
   // carregarSolExclusaoDrive() removida daqui: agora só roda quando o painel de Aprovações é aberto (evita varrer todos os orçamentos a cada login)
