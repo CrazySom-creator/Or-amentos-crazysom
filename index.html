@@ -50,14 +50,16 @@ table.it input,table.it select{padding:2px 5px;font-size:11px}
 .btn-g{background:#2e7d32;color:#fff}
 .btn-b{background:#1565c0;color:#fff}
 .btn-o{background:#fff;color:var(--R);border:1px solid var(--R)}
+.btn-o:hover{background:#fdf0f0}
 .btn-clone{background:#00695c;color:#fff;border:2px solid #004d40;font-weight:700;letter-spacing:.3px}
 .btn-clone:hover{background:#00796b}
 .btn-sm{padding:3px 8px;font-size:10px}
 .bdel{background:#e53935;color:#fff;padding:2px 7px;font-size:10px;border:none;border-radius:3px;cursor:pointer}
-/* Toolbar principal do orçamento — padronizada */
-.btn-info{background:#1565c0;color:#fff}
+/* Toolbar principal do orçamento — padronizada (poucas cores: outline neutro
+   pra ações normais, vermelho sólido só pra "Salvar e Sair" e pro grupo de
+   risco no final, separado por uma linha divisória) */
 .btn-danger{background:#8b0000;color:#fff}
-.btn-o-danger{background:#fff;color:var(--R);border:1px solid var(--R)}
+.btn-danger:hover{background:#a30000}
 .toolbar-orc{display:flex;gap:8px;margin-top:9px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
 .toolbar-orc .btn{font-weight:700;letter-spacing:.2px;padding:7px 14px}
 .toolbar-sep{width:1px;align-self:stretch;background:#3a3a3a;margin:0 2px;min-height:22px}
@@ -586,7 +588,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 </head>
 <body>
 <div id="global-loading-ov"><span class="cs-spinner"></span><b id="global-loading-msg">⏳ Carregando...</b></div>
-<button class="btn-voltar-float" onclick="abrirHome()" title="Voltar ao Menu">←</button>
+<button class="btn-voltar-float" onclick="voltarTelaAnterior()" title="Voltar">←</button>
 <div class="wrap">
 
 <!-- ═══════════════════════════════════════════════════════ -->
@@ -1747,13 +1749,13 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
   <div class="toolbar-orc">
     <button class="btn btn-o" onclick="abrirHome()" title="Voltar ao Menu">☰ Menu</button>
     <button class="btn btn-o" onclick="limpar()" title="Começar um orçamento novo em branco">📄 Novo</button>
-    <button class="btn btn-clone" id="btn-clonar" onclick="clonarOrcamento()" title="Clonar este orçamento para um novo">📋 Clonar</button>
-    <button class="btn btn-g" onclick="salvarESair()" title="Salva no Drive e volta para o Menu principal">💾 Salvar e Sair</button>
-    <button class="btn btn-r" onclick="abrirTipo()" title="Gerar PDF do orçamento">📄 PDF</button>
-    <button class="btn btn-d" onclick="downloadPDF()" title="Baixar o PDF gerado">⬇️ Download</button>
-    <button class="btn btn-info" onclick="abrirPreviewContrato()" title="Pré-visualizar e editar dados antes de gerar o contrato em PDF">📝 Contrato</button>
+    <button class="btn btn-o" id="btn-clonar" onclick="clonarOrcamento()" title="Clonar este orçamento para um novo">📋 Clonar</button>
+    <button class="btn btn-r" onclick="salvarESair()" title="Salva no Drive e volta para o Menu principal">💾 Salvar e Sair</button>
+    <button class="btn btn-o" onclick="abrirTipo()" title="Gerar PDF do orçamento">📄 PDF</button>
+    <button class="btn btn-o" onclick="downloadPDF()" title="Baixar o PDF gerado">⬇️ Download</button>
+    <button class="btn btn-o" onclick="abrirPreviewContrato()" title="Pré-visualizar e editar dados antes de gerar o contrato em PDF">📝 Contrato</button>
     <span class="toolbar-sep"></span>
-    <button class="btn btn-o-danger" onclick="homeSairSemSalvar()" title="Sair sem salvar — descarta alterações não salvas">✕ Sair sem salvar</button>
+    <button class="btn btn-o" onclick="homeSairSemSalvar()" title="Sair sem salvar — descarta alterações não salvas">✕ Sair sem salvar</button>
     <button class="btn btn-danger" onclick="homeExcluirOrcAtual()" title="Excluir este orçamento definitivamente">🗑️ Excluir Orçamento</button>
   </div>
 </div>
@@ -2086,6 +2088,19 @@ var finObs='';
 var finImposto='cimp';
 var finNumVenda='';
 var driveIdAtual=null;
+// Lembra de qual tela o orçamento atual foi aberto (Aprovações, Funil,
+// Dashboards, Clientes...), pra o botão flutuante "voltar" retornar pra lá
+// em vez de sempre cair no Menu principal. É uma função sem argumentos que
+// reabre aquela tela; null = não há origem específica, cai no Menu.
+var _origemOrc=null;
+function voltarTelaAnterior(){
+  var fn=_origemOrc;
+  _origemOrc=null;
+  if(typeof fn==='function'){
+    try{ fn(); return; }catch(e){}
+  }
+  abrirHome();
+}
 var driveNumAtual=null;
 var abaAprovAtual='pend';
 var _aprovadosCache=[];
@@ -2885,6 +2900,7 @@ async function aprovAcaoLista(idx,novo,ev){
 async function abrirOrcDrive(idx,ev){
   ev.stopPropagation();var orc=_listaAprov[idx];if(!orc)return;
   document.getElementById('aprov-ov').classList.remove('open');
+  _origemOrc=abrirAprovacoes;
   // Apenas fecha o painel de aprovações e abre o orçamento (sem ir para home)
   await driveCarregar(orc.driveId, orc.nome);
   setTimeout(function(){document.getElementById('status-orc-card').scrollIntoView({behavior:'smooth',block:'start'});},400);
@@ -4196,6 +4212,7 @@ async function limpar(){
   }else{
     if(!confirm('Iniciar Novo Orçamento? Todos os dados serão limpos.'))return;
   }
+  _origemOrc=null; // orçamento em branco não tem tela de origem — "voltar" cai no Menu
   var _idLimpar=driveIdAtual;
   lockPararHeartbeat();
   // Não parar sessionHeartbeat no limpar (usuário ainda está logado)
@@ -5923,6 +5940,7 @@ async function funilHomeAbrirOrcamento(driveId, nome){
   if(!confirm('Abrir orcamento "'+nome+'"?')) return;
   fecharFunilHome();
   fecharHome();
+  _origemOrc=abrirFunilHome;
   window.scrollTo({top:0, behavior:'smooth'});
   await driveCarregar(driveId, nome);
   setTimeout(function(){
@@ -8740,6 +8758,7 @@ function clienteHistoricoAbrir(){
 
 function clienteHistoricoAbrirOrcamento(id,nome){
   document.getElementById('cliente-hist-ov').classList.remove('open');
+  _origemOrc=abrirClientes;
   driveCarregar(id,nome);
 }
 
@@ -9117,6 +9136,10 @@ function dashDrill(key, tituloEnc){
 async function dashDrillAbrirOrc(driveId, nome){
   if(!driveId){alert('ID do orçamento não encontrado.');return;}
   if(!confirm('Abrir orçamento "'+nome+'"?\n\nDados não salvos do orçamento atual serão perdidos.'))return;
+  // Guarda de qual dos dois dashboards veio, antes de fechar os dois
+  var _veioDashElab=document.getElementById('dash-elab-ov').classList.contains('open');
+  var _veioDash=document.getElementById('dash-ov').classList.contains('open');
+  _origemOrc=_veioDashElab?abrirDashElab:(_veioDash?abrirDashboard:null);
   // Fechar todos os modais abertos
   document.getElementById('dash-ov').classList.remove('open');
   document.getElementById('dash-elab-ov').classList.remove('open');
@@ -9811,6 +9834,7 @@ async function dashFinAbrirOrc(driveId, nome){
   if(!driveId){alert('ID do orçamento não encontrado.');return;}
   if(!confirm('Abrir orçamento "'+nome+'"?\n\nDados não salvos do orçamento atual serão perdidos.'))return;
   document.getElementById('dashfin-ov').classList.remove('open');
+  _origemOrc=abrirDashFin;
   window.scrollTo({top:0,behavior:'smooth'});
   await driveCarregar(driveId, nome);
 }
