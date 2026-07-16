@@ -833,6 +833,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
       <div class="rel-tab active" onclick="admAba('usuarios')">👤 Usuários</div>
       <div class="rel-tab" onclick="admAba('permissoes')">🔐 Permissões por Cargo</div>
       <div class="rel-tab" onclick="admAba('dashboards')">📊 Acesso a Dashboards</div>
+      <div class="rel-tab" onclick="admAba('tiposevento')">🎪 Tipos de Evento</div>
     </div>
     <!-- ABA Usuários -->
     <div class="rel-pane active" id="admpane-usuarios">
@@ -865,6 +866,15 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
       <p style="font-size:11px;color:#888;margin-bottom:10px">Defina quais dashboards e relatórios cada cargo pode acessar.</p>
       <div id="dash-acesso-corpo"></div>
       <button onclick="dashAcessoSalvar()" style="margin-top:12px;padding:7px 18px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Acessos</button>
+    </div>
+    <!-- ABA Tipos de Evento -->
+    <div class="rel-pane" id="admpane-tiposevento">
+      <p style="font-size:11px;color:#888;margin-bottom:10px">Tipos disponíveis no campo "Tipo de Evento" do orçamento e do cadastro de eventos. Adicione novos tipos conforme forem surgindo — a alteração vale pra todos os usuários assim que salva.</p>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <input id="tiposevento-novo" type="text" placeholder="Ex: Premiações" style="flex:1;padding:8px 12px;border:1px solid #333;border-radius:4px;background:#111;color:#fff;font-size:12px" onkeydown="if(event.key==='Enter'){event.preventDefault();tiposEventoAdicionar();}">
+        <button class="btn btn-g btn-sm" onclick="tiposEventoAdicionar()">+ Adicionar</button>
+      </div>
+      <div id="tiposevento-lista" style="max-height:400px;overflow-y:auto;border:1px solid #2a2a2a;border-radius:6px"></div>
     </div>
   </div>
 </div>
@@ -997,13 +1007,6 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
       <div><label>Tipo de Evento</label>
         <select id="ef-tipo">
           <option value="">Selecione...</option>
-          <option>Palestras</option>
-          <option>Feiras</option>
-          <option>Congressos</option>
-          <option>Show</option>
-          <option>Convenções</option>
-          <option>Festa</option>
-          <option>Outros</option>
         </select>
       </div>
     </div>
@@ -1605,13 +1608,6 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <div><label>Tipo de Evento</label>
       <select id="f-tipo" onchange="marcarAlterado()">
         <option value="">Selecione...</option>
-        <option>Palestras</option>
-        <option>Feiras</option>
-        <option>Congressos</option>
-        <option>Show</option>
-        <option>Convenções</option>
-        <option>Festa</option>
-        <option>Outros</option>
       </select>
     </div>
     <div><label>Resp. no Local / Tel.</label><input id="f-resp" placeholder="Nome – (51) 99999-9999" oninput="marcarAlterado()"></div>
@@ -2449,6 +2445,7 @@ async function doLogin(){
   });
   clientesCarregarStorage();
   eventosCarregarStorage();
+  tiposEventoCarregar();
   carregarExcluidosDrive();
   // carregarSolExclusaoDrive() removida daqui: agora só roda quando o painel de Aprovações é aberto (evita varrer todos os orçamentos a cada login)
   // Abrir home screen ANTES de esconder o overlay de login (evita "flash" da tela de orçamento)
@@ -8532,7 +8529,7 @@ function dashTemAcesso(dashId){
 
 function admAba(aba){
   document.querySelectorAll('#adm-ov .rel-tab').forEach(function(t,i){
-    var abas=['usuarios','permissoes','dashboards'];
+    var abas=['usuarios','permissoes','dashboards','tiposevento'];
     t.classList.toggle('active',abas[i]===aba);
   });
   document.querySelectorAll('#adm-ov .rel-pane').forEach(function(p){p.classList.remove('active');});
@@ -8540,6 +8537,7 @@ function admAba(aba){
   if(el)el.classList.add('active');
   if(aba==='permissoes') permRenderizar();
   if(aba==='dashboards') dashAcessoRenderizar();
+  if(aba==='tiposevento') tiposEventoRenderAdmin();
 }
 
 function permRenderizar(){
@@ -9248,6 +9246,82 @@ async function _eventoAutoRegistrar(){
     EVENTOS.push(obj);
     await _eventoSalvarFirestore(obj);
   }catch(e){ console.warn('_eventoAutoRegistrar:',e); }
+}
+
+// ── TIPOS DE EVENTO (editável pelo Admin) ───────────────────────────
+// Lista publicada em config/tiposEvento (mesmo padrão de config/consultoresNomes
+// e config/permissoes: documento público lido por todo mundo, editado só pelo
+// Admin). Isso permite que o Admin acrescente novos tipos de evento (ex.:
+// "Premiações") sem depender de alteração no código.
+var TIPOS_EVENTO_PADRAO=['Palestras','Feiras','Congressos','Show','Convenções','Festa','Premiações','Outros'];
+var TIPOS_EVENTO=TIPOS_EVENTO_PADRAO.slice();
+
+function popularTiposEvento(){
+  ['f-tipo','ef-tipo'].forEach(function(id){
+    var sel=document.getElementById(id);
+    if(!sel) return;
+    var atual=sel.value;
+    var lista=TIPOS_EVENTO.slice();
+    // Preserva o tipo de um orçamento/evento antigo mesmo se o Admin tiver removido esse tipo da lista ativa
+    if(atual && lista.indexOf(atual)<0) lista.push(atual);
+    sel.innerHTML='<option value="">Selecione...</option>'+lista.map(function(t){return '<option'+(t===atual?' selected':'')+'>'+eh(t)+'</option>';}).join('');
+  });
+}
+
+async function tiposEventoCarregar(){
+  try{
+    var snap=await fbDb.collection('config').doc('tiposEvento').get();
+    if(snap.exists && Array.isArray(snap.data().lista) && snap.data().lista.length) TIPOS_EVENTO=snap.data().lista.slice();
+    else TIPOS_EVENTO=TIPOS_EVENTO_PADRAO.slice();
+  }catch(e){
+    console.warn('tiposEventoCarregar:',e);
+    TIPOS_EVENTO=TIPOS_EVENTO_PADRAO.slice();
+  }
+  popularTiposEvento();
+}
+
+async function _tiposEventoSalvarFirestore(){
+  try{
+    await fbDb.collection('config').doc('tiposEvento').set({lista:TIPOS_EVENTO});
+    return true;
+  }catch(e){ console.warn('_tiposEventoSalvarFirestore:',e); return false; }
+}
+
+function tiposEventoRenderAdmin(){
+  var box=document.getElementById('tiposevento-lista');
+  if(!box) return;
+  if(!TIPOS_EVENTO.length){box.innerHTML='<div style="text-align:center;padding:24px;color:#666;font-size:12px">Nenhum tipo cadastrado.</div>';return;}
+  box.innerHTML=TIPOS_EVENTO.map(function(t,i){
+    return '<div style="padding:10px 14px;border-bottom:1px solid #2a2a2a;display:flex;justify-content:space-between;align-items:center">'
+      +'<span style="color:#fff;font-size:12px">🎪 '+eh(t)+'</span>'
+      +'<button class="btn btn-sm" style="background:#c62828;color:#fff" onclick="tiposEventoRemover('+i+')">🗑️ Remover</button>'
+      +'</div>';
+  }).join('');
+}
+
+async function tiposEventoAdicionar(){
+  var inp=document.getElementById('tiposevento-novo');
+  var val=(inp.value||'').trim();
+  if(!val){alert('⚠️ Informe o nome do novo tipo de evento.');return;}
+  var jaExiste=TIPOS_EVENTO.some(function(t){return t.toLowerCase()===val.toLowerCase();});
+  if(jaExiste){alert('⚠️ Esse tipo já existe na lista.');return;}
+  TIPOS_EVENTO.push(val);
+  inp.value='';
+  var ok=await _tiposEventoSalvarFirestore();
+  tiposEventoRenderAdmin();
+  popularTiposEvento();
+  if(ok) driveStatus('✅ Tipo de evento adicionado','ok'); else driveStatus('⚠️ Salvo localmente (Firestore indisponível)','err');
+}
+
+async function tiposEventoRemover(idx){
+  var t=TIPOS_EVENTO[idx];if(t===undefined)return;
+  if(TIPOS_EVENTO.length<=1){alert('⚠️ Precisa manter ao menos um tipo de evento na lista.');return;}
+  if(!confirm('🗑️ Remover o tipo "'+t+'" da lista?\n\nOrçamentos que já usam esse tipo não serão alterados.'))return;
+  TIPOS_EVENTO.splice(idx,1);
+  var ok=await _tiposEventoSalvarFirestore();
+  tiposEventoRenderAdmin();
+  popularTiposEvento();
+  if(ok) driveStatus('🗑️ Tipo de evento removido','ok'); else driveStatus('⚠️ Removido localmente (Firestore indisponível)','err');
 }
 
 async function usuariosCarregarFirestore(){
@@ -10674,6 +10748,7 @@ document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
 permCarregar();
 clientesCarregarStorage();
 eventosCarregarStorage();
+tiposEventoCarregar();
 calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
 // Auto-save a cada 3 minutos se houver alterações não salvas e orçamento já tiver ID no Drive
 setInterval(function(){
