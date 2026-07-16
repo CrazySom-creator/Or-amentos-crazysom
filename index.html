@@ -10494,8 +10494,13 @@ function abrirPreviewContrato(){
   // Validações básicas primeiro
   var _elLiq = document.getElementById('val-liq');
   var _elLiqSI = document.getElementById('val-liq-si');
-  var valorLiq = parseFloat((_elLiq && (_elLiq.value || _elLiq.placeholder)) || 0)
-               || parseFloat((_elLiqSI && (_elLiqSI.value || _elLiqSI.placeholder)) || 0) || 0;
+  // Respeita o "Tipo da Venda" selecionado no orçamento (Sem Imposto / Com
+  // Imposto) — antes pegava sempre o valor com imposto quando existia,
+  // ignorando qual dos dois cards estava selecionado.
+  var _modoSimpPc=(impAtual==='simp'||finImposto==='simp');
+  var valorLiq = _modoSimpPc
+    ? (parseFloat((_elLiqSI && (_elLiqSI.value || _elLiqSI.placeholder)) || 0) || parseFloat((_elLiq && (_elLiq.value || _elLiq.placeholder)) || 0) || 0)
+    : (parseFloat((_elLiq && (_elLiq.value || _elLiq.placeholder)) || 0) || parseFloat((_elLiqSI && (_elLiqSI.value || _elLiqSI.placeholder)) || 0) || 0);
   var camposFaltando = [];
   if(!gv('f-cliente'))  camposFaltando.push('Nome / Razão Social do cliente');
   if(!gv('f-doc'))      camposFaltando.push('CPF / CNPJ do cliente');
@@ -10592,9 +10597,12 @@ function gerarContrato(){
   // ── Coletar valor real (value, placeholder ou cálculo) ──
   var _elLiq   = document.getElementById('val-liq');
   var _elLiqSI = document.getElementById('val-liq-si');
-  var valorLiq = parseFloat((_elLiq   && (_elLiq.value   || _elLiq.placeholder))  || 0)
-              || parseFloat((_elLiqSI && (_elLiqSI.value || _elLiqSI.placeholder)) || 0)
-              || 0;
+  // Mesma regra do preview: respeita o Tipo de Venda selecionado (Sem/Com
+  // Imposto) em vez de sempre preferir o valor com imposto.
+  var _modoSimpGc=(impAtual==='simp'||finImposto==='simp');
+  var valorLiq = _modoSimpGc
+    ? (parseFloat((_elLiqSI && (_elLiqSI.value || _elLiqSI.placeholder)) || 0) || parseFloat((_elLiq   && (_elLiq.value   || _elLiq.placeholder))  || 0) || 0)
+    : (parseFloat((_elLiq   && (_elLiq.value   || _elLiq.placeholder))  || 0) || parseFloat((_elLiqSI && (_elLiqSI.value || _elLiqSI.placeholder)) || 0) || 0);
 
   // ── Validação de campos obrigatórios ──
   var camposFaltando = [];
