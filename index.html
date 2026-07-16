@@ -10516,9 +10516,18 @@ function abrirPreviewContrato(){
   var endCliStr=[gv('f-end'),gv('f-endnum')].filter(Boolean).join(', ');
   var pgtoText=gv('f-pgto')||'';
   if(typeof finParcelas!=='undefined'&&finParcelas.length>0){
+    // As parcelas do Financeiro podem ter sido lançadas ANTES de um desconto
+    // ser alterado no orçamento, e ficam com valores desatualizados. Pra o
+    // contrato nunca mostrar um total diferente do "Valor Total do Contrato"
+    // (que já é o valor final, com desconto aplicado, igual ao PDF do
+    // orçamento), reajusta as parcelas proporcionalmente pra somarem
+    // exatamente esse mesmo valor.
+    var _somaParcelasPc=finParcelas.reduce(function(t,p){return t+(parseFloat(p.valor)||0);},0);
+    var _fatorPc=(_somaParcelasPc>0&&valorLiq>0)?(valorLiq/_somaParcelasPc):1;
     var linhasPgto=finParcelas.map(function(p){
       var l='';if(p.desc)l+=p.desc;
-      if(p.valor){var vF='R$ '+parseFloat(p.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});l+=(l?' — ':'')+vF;}
+      var vAjustadoPc=(parseFloat(p.valor)||0)*_fatorPc;
+      if(p.valor){var vF='R$ '+vAjustadoPc.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});l+=(l?' — ':'')+vF;}
       if(p.data)l+=(l?' — venc. ':'')+(function(d){var x=d.split('-');return x.length===3?x[2]+'/'+x[1]+'/'+x[0]:d;})(p.data);
       if(p.forma)l+=(l?' | ':'')+p.forma;
       return l;
@@ -10646,10 +10655,15 @@ function gerarContrato(){
       linhasPgto = pgtoText.split('\n').map(function(l){return l.trim();}).filter(Boolean);
     } else {
       if(typeof finParcelas!=='undefined'&&finParcelas.length>0){
+        // Mesmo reajuste proporcional do preview: garante que a soma das
+        // parcelas exibidas bate com o Valor Total do Contrato.
+        var _somaParcelasBc=finParcelas.reduce(function(t,p){return t+(parseFloat(p.valor)||0);},0);
+        var _fatorBc=(_somaParcelasBc>0&&valorLiq>0)?(valorLiq/_somaParcelasBc):1;
         finParcelas.forEach(function(p){
           var l='';
+          var vAjustadoBc=(parseFloat(p.valor)||0)*_fatorBc;
           if(p.desc) l+=p.desc;
-          if(p.valor){var vF='R$ '+parseFloat(p.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});l+=(l?' — ':'')+vF;}
+          if(p.valor){var vF='R$ '+vAjustadoBc.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});l+=(l?' — ':'')+vF;}
           if(p.data)  l+=(l?' — venc. ':'')+fmtData(p.data);
           if(p.forma) l+=(l?' | ':'')+p.forma;
           if(l) linhasPgto.push(l);
