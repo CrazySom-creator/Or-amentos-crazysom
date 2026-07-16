@@ -711,6 +711,12 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
         <div class="home-card-desc">Cadastro completo de clientes (PF/PJ) com busca por nome, CNPJ/CPF e e-mail</div>
       </div>
 
+      <div class="home-card" style="border-color:#37474f;background:#0d1214" id="home-btn-eventos" onclick="abrirEventos();fecharHome()">
+        <div class="home-card-ico">🎪</div>
+        <div class="home-card-title">Cadastro de Eventos</div>
+        <div class="home-card-desc">Eventos recorrentes — nome, tipo e endereço prontos pra reaproveitar</div>
+      </div>
+
       <div class="home-card" style="border-color:#37474f;background:#0d1214" id="home-btn-rel" onclick="abrirRelatorios();fecharHome()">
         <div class="home-card-ico">📊</div>
         <div class="home-card-title">Relatórios</div>
@@ -953,6 +959,69 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
       <div style="margin-left:auto;display:flex;gap:8px">
         <button class="btn btn-o btn-sm" onclick="document.getElementById('cliente-form-ov').classList.remove('open')">Cancelar</button>
         <button class="btn btn-g btn-sm" onclick="clienteSalvar()">💾 Salvar Cliente</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  MODAL CADASTRO DE EVENTOS (LISTA)                      -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="eventos-ov">
+  <div class="modal-box" style="max-width:780px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <div><h2 style="margin-bottom:2px">🎪 Cadastro de Eventos</h2><p class="sub" style="margin:0">Eventos recorrentes — reaproveite tipo e endereço em orçamentos futuros</p></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-g btn-sm" onclick="eventoNovo()">+ Novo Evento</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('eventos-ov').classList.remove('open')">✕</button>
+      </div>
+    </div>
+    <input id="eventos-busca" type="text" placeholder="🔍 Buscar por nome ou cidade..." style="width:100%;padding:9px 12px;border:1px solid #333;border-radius:6px;background:#111;color:#fff;font-size:12px;margin:12px 0 10px" oninput="eventosRenderLista(this.value)">
+    <div id="eventos-lista" style="max-height:440px;overflow-y:auto;border:1px solid #2a2a2a;border-radius:6px"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  MODAL FORMULÁRIO DE EVENTO (NOVO/EDITAR)               -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="evento-form-ov">
+  <div class="modal-box" style="max-width:640px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <h2 style="margin-bottom:2px" id="evento-form-titulo">🎪 Novo Evento</h2>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('evento-form-ov').classList.remove('open')">✕</button>
+    </div>
+    <p class="sub" style="margin:0 0 12px">Nome e Tipo são obrigatórios. Endereço é opcional, mas sem ele a Cidade passa a ser obrigatória.</p>
+    <input type="hidden" id="ef-id">
+    <div class="g3">
+      <div style="grid-column:span 2"><label>Nome do Evento</label><input id="ef-nome" placeholder="Ex: Congresso Brasileiro de Cardiologia"></div>
+      <div><label>Tipo de Evento</label>
+        <select id="ef-tipo">
+          <option value="">Selecione...</option>
+          <option>Palestras</option>
+          <option>Feiras</option>
+          <option>Congressos</option>
+          <option>Show</option>
+          <option>Convenções</option>
+          <option>Festa</option>
+          <option>Outros</option>
+        </select>
+      </div>
+    </div>
+    <div class="g4">
+      <div><label>CEP</label><div class="irow"><input id="ef-cep" placeholder="00000-000" maxlength="9" oninput="fmtCep(this)"><button type="button" class="btn btn-o btn-sm" onclick="buscaCEP('ef-cep','ef-end','ef-endnum','ef-cidade','ef-cep-st','ef-bairro')">🔍</button></div><div class="hint" id="ef-cep-st"></div></div>
+      <div><label>Logradouro</label><input id="ef-end" placeholder="Rua, Av..."></div>
+      <div><label>Nº / Complemento</label><input id="ef-endnum" placeholder="123"></div>
+      <div><label>Bairro</label><input id="ef-bairro" placeholder="Centro"></div>
+    </div>
+    <div class="g3">
+      <div style="grid-column:span 2"><label>Cidade / UF <span style="color:#c0001a">(obrigatório se não houver endereço)</span></label><input id="ef-cidade" placeholder="Porto Alegre / RS"></div>
+    </div>
+    <div style="margin-bottom:10px"><label>Observações</label><textarea id="ef-obs" placeholder="Observações gerais sobre o evento..."></textarea></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+      <button class="btn btn-sm" id="ef-btn-excluir" style="background:#c62828;color:#fff;display:none" onclick="eventoExcluirAtual()">🗑️ Excluir Evento</button>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('evento-form-ov').classList.remove('open')">Cancelar</button>
+        <button class="btn btn-g btn-sm" onclick="eventoSalvar()">💾 Salvar Evento</button>
       </div>
     </div>
   </div>
@@ -1532,11 +1601,23 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 <div class="card">
   <div class="st">📍 Local do Evento</div>
   <div class="g3" style="margin-bottom:8px">
-    <div><label>Nome / Local</label><input id="f-local" placeholder="Hotel Serra Azul – Festa CVC" oninput="marcarAlterado()"></div>
-    <div><label>Tipo de Evento</label><input id="f-tipo" placeholder="Festa, Congresso, Show..." oninput="marcarAlterado()"></div>
+    <div style="position:relative"><label>Nome do Evento</label><div class="irow"><input id="f-nome-evento" placeholder="Ex: Congresso Brasileiro de Cardiologia" oninput="marcarAlterado();eventoBuscarSugestoes(this.value)" onblur="setTimeout(eventoFecharSugestoes,200)"><button type="button" class="btn btn-o btn-sm" onclick="eventoAbrirBuscaModal()" title="Buscar evento cadastrado">🔍</button></div><div id="f-nome-evento-sugest"></div></div>
+    <div><label>Tipo de Evento</label>
+      <select id="f-tipo" onchange="marcarAlterado()">
+        <option value="">Selecione...</option>
+        <option>Palestras</option>
+        <option>Feiras</option>
+        <option>Congressos</option>
+        <option>Show</option>
+        <option>Convenções</option>
+        <option>Festa</option>
+        <option>Outros</option>
+      </select>
+    </div>
     <div><label>Resp. no Local / Tel.</label><input id="f-resp" placeholder="Nome – (51) 99999-9999" oninput="marcarAlterado()"></div>
   </div>
   <div class="g4">
+    <div><label>Local do Evento</label><input id="f-local" placeholder="Hotel Serra Azul, Salão Nobre..." oninput="marcarAlterado()"></div>
     <div><label>CEP do Evento</label><div class="irow"><input id="f-cep-ev" placeholder="00000-000" maxlength="9" oninput="fmtCep(this);marcarAlterado()"><button class="btn btn-o btn-sm" onclick="buscaCEP('f-cep-ev','f-end-ev','f-num-ev','f-cid-ev','cep-ev-st','f-bairro-ev')">🔍</button></div><div class="hint" id="cep-ev-st"></div></div>
     <div><label>Logradouro</label><input id="f-end-ev" placeholder="Rua, Av..." oninput="marcarAlterado()"></div>
     <div><label>Nº / Complemento</label><input id="f-num-ev" placeholder="123" oninput="marcarAlterado()"></div>
@@ -2367,6 +2448,7 @@ async function doLogin(){
     if(['adm','gerente','diretor'].includes(u.nivel)) _salvarNomesConsultoresPublico();
   });
   clientesCarregarStorage();
+  eventosCarregarStorage();
   carregarExcluidosDrive();
   // carregarSolExclusaoDrive() removida daqui: agora só roda quando o painel de Aprovações é aberto (evita varrer todos os orçamentos a cada login)
   // Abrir home screen ANTES de esconder o overlay de login (evita "flash" da tela de orçamento)
@@ -3643,6 +3725,7 @@ async function _executarSave(num,cli,dt,opts){
     _driveCache[d.id]=null;
     if(opts.mostrarStatus!==false) driveStatus('✅ Salvo: '+d.nome,'ok');
     driveListarSilencioso();
+    _eventoAutoRegistrar();
     if(opts.onSucesso) opts.onSucesso(d);
     return d;
   }catch(e){
@@ -4170,7 +4253,7 @@ async function driveDeletar(id,nome){
   }
 }
 
-var FORM_IDS=['f-num','f-data','f-val','f-cons','f-fonte','f-cliente','f-doc','f-email','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dd','f-hd','f-pub','f-obs','f-obs-os','f-pgto','f-svinc','desc-pct','desc-rs','val-liq','val-liq-si','f-bv'];
+var FORM_IDS=['f-num','f-data','f-val','f-cons','f-fonte','f-cliente','f-doc','f-email','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-nome-evento','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dd','f-hd','f-pub','f-obs','f-obs-os','f-pgto','f-svinc','desc-pct','desc-rs','val-liq','val-liq-si','f-bv'];
 function getForm(){var o={};FORM_IDS.forEach(function(id){var e=document.getElementById(id);if(e)o[id]=e.value;});if((!o['f-bv']||o['f-bv']==='0')&&_bvStorage>0)o['f-bv']=String(_bvStorage);return o;}
 function setForm(f){Object.keys(f).forEach(function(id){var e=document.getElementById(id);if(e)e.value=f[id];});sv('orc-disp',f['f-num']||'—');}
 function salvar(){var blob=new Blob([JSON.stringify({form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,snapshotAprovado:snapshotAprovado,finParcelas:finParcelas,finObs:finObs},null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(gv('f-num')||'orc')+' - '+(gv('f-cliente')||'cliente')+'.json';a.click();URL.revokeObjectURL(a.href);}
@@ -6731,11 +6814,46 @@ function relGerarEventos(){
       +'</tr>';
   }).join('');
 
-  document.getElementById('rel-ev-body').innerHTML=dados.length?
+  // ── Tabela itemizada de eventos (nome, tipo, cliente, local, cidade, consultor, valor)
+  var dadosOrd=dados.slice().sort(function(a,b){
+    var da=a.form&&a.form['f-dia']||'';var db=b.form&&b.form['f-dia']||'';
+    return da>db?1:(da<db?-1:0);
+  });
+  var rowsItem=dadosOrd.map(function(o){
+    var f=o.form||{};
+    var bruto=0;
+    try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+      if(o.dados&&o.dados.state&&o.dados.state[s]){
+        var st2=o.dados.state[s];
+        Object.keys(st2.rows||{}).forEach(function(aid){
+          (st2.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});
+        });
+      }
+    });}catch(e){}
+    var val=bruto*(1+IMP);
+    return '<tr>'
+      +'<td>'+eh(f['f-nome-evento']||'—')+'</td>'
+      +'<td>'+eh(f['f-tipo']||'—')+'</td>'
+      +'<td>'+(f['f-dia']?fD(f['f-dia']):'—')+'</td>'
+      +'<td>'+eh(f['f-cliente']||'—')+'</td>'
+      +'<td>'+eh(f['f-local']||'—')+'</td>'
+      +'<td>'+eh(f['f-cid-ev']||'—')+'</td>'
+      +'<td>'+eh(f['f-cons']||'—')+'</td>'
+      +'<td class="r">'+fmt(val)+'</td>'
+      +'</tr>';
+  }).join('');
+
+  document.getElementById('rel-ev-body').innerHTML=(dados.length?
     '<div style="overflow-x:auto"><table class="rel-table"><thead><tr>'
     +'<th>Período</th><th class="r">Eventos</th><th class="r">Volume</th><th>Distribuição</th>'
     +'</tr></thead><tbody>'+rows+'</tbody></table></div>'
-    :'<div class="rel-empty">Nenhum evento encontrado no período.</div>';
+    :'<div class="rel-empty">Nenhum evento encontrado no período.</div>')
+    + (dadosOrd.length?
+      '<h4 style="margin:16px 0 6px;color:#c0001a;font-size:12px;text-transform:uppercase">Eventos no período (detalhado)</h4>'
+      +'<div style="overflow-x:auto"><table class="rel-table"><thead><tr>'
+      +'<th>Nome do Evento</th><th>Tipo</th><th>Data</th><th>Cliente</th><th>Local</th><th>Cidade</th><th>Consultor</th><th class="r">Valor</th>'
+      +'</tr></thead><tbody>'+rowsItem+'</tbody></table></div>'
+      :'');
 }
 
 // ── PRÓXIMOS EVENTOS ─────────────────────────────────────
@@ -6922,7 +7040,21 @@ function relGetDadosTabela(){
     var porGrupo={};
     dados.forEach(function(o){var dt=o.form&&o.form['f-dia']||'';var k=getChave2(dt);if(!porGrupo[k])porGrupo[k]={qtd:0,val:0};porGrupo[k].qtd++;var bruto=0;try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){if(o.dados&&o.dados.state&&o.dados.state[s]){var st2=o.dados.state[s];Object.keys(st2.rows||{}).forEach(function(aid){(st2.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});});}});}catch(e){}porGrupo[k].val+=bruto*(1+IMP);});
     var linhas=Object.keys(porGrupo).sort().map(function(k){return[k,porGrupo[k].qtd,porGrupo[k].val];});
-    return{titulo:relGetTituloAba()+'  ('+de+' a '+ate+')  Agrupado por: '+grupo,cabecalho:['Período','Nº Eventos','Volume (R$)'],linhas:linhas,moeda:[2]};
+    // Segunda tabela: itemizada, com nome/tipo/cliente/local/cidade/consultor/valor de cada evento
+    var dadosOrd2=dados.slice().sort(function(a,b){var da=a.form&&a.form['f-dia']||'';var db=b.form&&b.form['f-dia']||'';return da>db?1:(da<db?-1:0);});
+    var linhasItem=dadosOrd2.map(function(o){
+      var f=o.form||{};
+      var bruto=0;
+      try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+        if(o.dados&&o.dados.state&&o.dados.state[s]){
+          var st2=o.dados.state[s];
+          Object.keys(st2.rows||{}).forEach(function(aid){(st2.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});});
+        }
+      });}catch(e){}
+      return[f['f-nome-evento']||'',f['f-tipo']||'',f['f-dia']?fD(f['f-dia']):'',f['f-cliente']||'',f['f-local']||'',f['f-cid-ev']||'',f['f-cons']||'',bruto*(1+IMP)];
+    });
+    return{titulo:relGetTituloAba()+'  ('+de+' a '+ate+')  Agrupado por: '+grupo,cabecalho:['Período','Nº Eventos','Volume (R$)'],linhas:linhas,moeda:[2],
+      tabela2:{titulo:'Eventos no período (detalhado)',cabecalho:['Nome do Evento','Tipo','Data','Cliente','Local','Cidade','Consultor','Valor (R$)'],linhas:linhasItem,moeda:[7]}};
   }
 
   if(aba==='proximos'){
@@ -6980,6 +7112,28 @@ function relExportarExcel(){
     linhas.push(totalRow.join(';'));
   }
 
+  // Segunda tabela opcional (ex.: eventos itemizados) — anexada abaixo, com espaço em branco
+  if(dados.tabela2&&dados.tabela2.linhas.length){
+    var t2=dados.tabela2;
+    linhas.push('','',t2.titulo,'',t2.cabecalho.map(csvEscape).join(';'));
+    t2.linhas.forEach(function(row){
+      linhas.push(row.map(function(v,i){
+        if(t2.moeda.indexOf(i)>=0&&typeof v==='number')return v.toFixed(2).replace('.',',');
+        return csvEscape(v);
+      }).join(';'));
+    });
+    if(t2.moeda.length){
+      var totalRow2=t2.cabecalho.map(function(_,i){
+        if(t2.moeda.indexOf(i)>=0){
+          var soma2=t2.linhas.reduce(function(t,r){return t+(typeof r[i]==='number'?r[i]:0);},0);
+          return csvEscape('TOTAL: '+fmt(soma2));
+        }
+        return i===0?'TOTAL':'';
+      });
+      linhas.push(totalRow2.join(';'));
+    }
+  }
+
   var csv=bom+linhas.join('\r\n');
   var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
   var a=document.createElement('a');
@@ -7023,6 +7177,36 @@ function relExportarPDF(){
     totalHTML='<tr style="background:#fff0f0">'+totalTds+'</tr>';
   }
 
+  // Segunda tabela opcional (ex.: eventos itemizados)
+  var tabela2HTML='';
+  if(dados.tabela2&&dados.tabela2.linhas.length){
+    var t2=dados.tabela2;
+    var th2HTML=t2.cabecalho.map(function(h){return'<th>'+h+'</th>';}).join('');
+    var tr2HTML=t2.linhas.map(function(row,ri){
+      var cls=ri%2===0?'':'style="background:#f9f9f9"';
+      var tds=row.map(function(v,i){
+        var isNum=t2.moeda.indexOf(i)>=0||typeof v==='number';
+        var style=isNum?'style="text-align:right;font-weight:700"':'';
+        var disp=typeof v==='number'&&t2.moeda.indexOf(i)>=0?fmt(v):v;
+        return'<td '+style+'>'+disp+'</td>';
+      }).join('');
+      return'<tr '+cls+'>'+tds+'</tr>';
+    }).join('');
+    var total2HTML='';
+    if(t2.moeda.length){
+      var total2Tds=t2.cabecalho.map(function(_,i){
+        if(t2.moeda.indexOf(i)>=0){
+          var soma2=t2.linhas.reduce(function(t,r){return t+(typeof r[i]==='number'?r[i]:0);},0);
+          return'<td style="text-align:right;font-weight:900;color:#c0001a">'+fmt(soma2)+'</td>';
+        }
+        return'<td style="font-weight:900;color:#c0001a">'+(i===0?'TOTAL':'')+'</td>';
+      }).join('');
+      total2HTML='<tr style="background:#fff0f0">'+total2Tds+'</tr>';
+    }
+    tabela2HTML='<div class="titulo" style="margin-top:14px">'+t2.titulo+'</div>'
+      +'<table><thead><tr>'+th2HTML+'</tr></thead><tbody>'+tr2HTML+total2HTML+'</tbody></table>';
+  }
+
   var nomeArq='CrazySom_'+_relAbaAtual+'_'+new Date().toISOString().split('T')[0];
   var w=window.open('','_blank','width=900,height=700');
   if(!w){alert('Pop-up bloqueado!');return;}
@@ -7053,6 +7237,7 @@ function relExportarPDF(){
     +'<div class="hdr"><h1>CRAZY SOM – '+dados.titulo.toUpperCase()+'</h1><span>Gerado em: '+hoje+'</span></div>'
     +'<div class="titulo">'+dados.titulo+'</div>'
     +'<table><thead><tr>'+thHTML+'</tr></thead><tbody>'+trHTML+totalHTML+'</tbody></table>'
+    +tabela2HTML
     +'<div class="foot">Crazy Som Audiovisuais – Sistema de Orçamentos – CNPJ: 10.909.827/0001-76</div>'
     +'</div>'
     +'<script>'
@@ -8076,6 +8261,7 @@ var PERM_MODULOS = [
     {id:'f-cidade',  label:'Cidade'}
   ]},
   {id:'evento', label:'🎪 Local do Evento', campos:[
+    {id:'f-nome-evento', label:'Nome do Evento'},
     {id:'f-local',   label:'Local'},
     {id:'f-tipo',    label:'Tipo de Evento'},
     {id:'f-resp',    label:'Responsável'},
@@ -8250,7 +8436,7 @@ function aplicarPermissoes(){
   var camposForm=[
     'f-num','f-data','f-val','f-cons','f-fonte',
     'f-cliente','f-doc','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade',
-    'f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev',
+    'f-nome-evento','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev',
     'f-dia','f-dia-fim','f-hi','f-hf','f-dm','f-hm','f-dd','f-hd','f-pub',
     'f-obs','f-obs-os','f-pgto','f-svinc',
     'desc-pct','desc-rs','val-liq','f-bv'
@@ -8814,6 +9000,254 @@ function clienteSelecionarParaOrcamento(idx){
   clienteFecharSugestoes();
   _clienteBuscaModoSelecao=false;
   document.getElementById('clientes-ov').classList.remove('open');
+}
+
+// ═══════════════════════════════════════════════════════
+// CADASTRO DE EVENTOS — versão simplificada do cadastro de clientes.
+// Guarda eventos recorrentes (nome, tipo e endereço padrão) pra reaproveitar
+// em orçamentos futuros do mesmo evento, mesmo que em locais diferentes.
+// ═══════════════════════════════════════════════════════
+var EVENTOS=[];
+var _eventoBuscaModoSelecao=false;
+
+async function eventosCarregarStorage(){
+  if(!fbDb) return;
+  try{
+    var snap=await fbDb.collection('eventos').get();
+    var lista=[];
+    snap.forEach(function(doc){ lista.push(doc.data()); });
+    EVENTOS=lista;
+    try{ localStorage.setItem('crazySomEventos',JSON.stringify(EVENTOS)); }catch(e){}
+    return;
+  }catch(e){ console.warn('eventosCarregarStorage:',e); }
+  try{
+    var d=localStorage.getItem('crazySomEventos');
+    if(d){ var arr=JSON.parse(d); if(Array.isArray(arr)) EVENTOS=arr; }
+  }catch(e){}
+}
+
+async function _eventoSalvarFirestore(obj){
+  try{
+    await fbDb.collection('eventos').doc(obj.id).set(obj);
+    try{ localStorage.setItem('crazySomEventos',JSON.stringify(EVENTOS)); }catch(e){}
+    return true;
+  }catch(e){ console.warn('_eventoSalvarFirestore:',e); return false; }
+}
+
+async function _eventoExcluirFirestore(id){
+  try{
+    await fbDb.collection('eventos').doc(id).delete();
+    try{ localStorage.setItem('crazySomEventos',JSON.stringify(EVENTOS)); }catch(e){}
+    return true;
+  }catch(e){ console.warn('_eventoExcluirFirestore:',e); return false; }
+}
+
+async function abrirEventos(){
+  _eventoBuscaModoSelecao=false;
+  document.getElementById('eventos-busca').value='';
+  document.getElementById('eventos-lista').innerHTML='<div style="text-align:center;padding:30px;color:#888;font-size:12px">⏳ Carregando eventos...</div>';
+  document.getElementById('eventos-ov').classList.add('open');
+  mostrarCarregando('⏳ Carregando eventos...');
+  try{
+    await eventosCarregarStorage();
+    eventosRenderLista('');
+  }finally{
+    esconderCarregando();
+  }
+}
+
+function eventosRenderLista(filtro){
+  var box=document.getElementById('eventos-lista');
+  filtro=(filtro||'').toLowerCase().trim();
+  var lista=EVENTOS.filter(function(e){
+    if(!filtro)return true;
+    var nome=(e.nome||'').toLowerCase();
+    var cidade=(e.cidade||'').toLowerCase();
+    return nome.indexOf(filtro)>=0||cidade.indexOf(filtro)>=0;
+  }).sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
+  if(!lista.length){box.innerHTML='<div style="text-align:center;padding:30px;color:#666;font-size:12px">Nenhum evento encontrado.</div>';return;}
+  box.innerHTML=lista.map(function(e){
+    var idx=EVENTOS.indexOf(e);
+    var acao=_eventoBuscaModoSelecao
+      ? '<button class="btn btn-g btn-sm" onclick="eventoSelecionarParaOrcamento('+idx+')">✅ Selecionar</button>'
+      : '<button class="btn btn-o btn-sm" onclick="eventoEditar('+idx+')">✏️ Editar</button>';
+    return '<div style="padding:12px 14px;border-bottom:1px solid #2a2a2a;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
+      +'<div>'
+      +'<div style="color:#fff;font-size:13px;font-weight:700">'+eh(e.nome||'—')+'</div>'
+      +'<div style="color:#999;font-size:11px;margin-top:2px">'+eh(e.tipo||'—')+(e.cidade?' · 📍 '+eh(e.cidade):'')+'</div>'
+      +'</div>'
+      +'<div>'+acao+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function _eventoLimparForm(){
+  ['ef-id','ef-nome','ef-cep','ef-end','ef-endnum','ef-bairro','ef-cidade','ef-obs'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.value='';
+  });
+  document.getElementById('ef-tipo').value='';
+  document.getElementById('ef-cep-st').textContent='';
+}
+
+function eventoNovo(prefill){
+  _eventoLimparForm();
+  if(prefill){
+    if(prefill.nome)document.getElementById('ef-nome').value=prefill.nome;
+    if(prefill.tipo)document.getElementById('ef-tipo').value=prefill.tipo;
+    if(prefill.cep)document.getElementById('ef-cep').value=prefill.cep;
+    if(prefill.end)document.getElementById('ef-end').value=prefill.end;
+    if(prefill.endnum)document.getElementById('ef-endnum').value=prefill.endnum;
+    if(prefill.bairro)document.getElementById('ef-bairro').value=prefill.bairro;
+    if(prefill.cidade)document.getElementById('ef-cidade').value=prefill.cidade;
+  }
+  document.getElementById('evento-form-titulo').textContent='🎪 Novo Evento';
+  document.getElementById('ef-btn-excluir').style.display='none';
+  document.getElementById('evento-form-ov').classList.add('open');
+}
+
+function eventoEditar(idx){
+  var e=EVENTOS[idx];if(!e)return;
+  _eventoLimparForm();
+  document.getElementById('ef-id').value=e.id;
+  document.getElementById('ef-nome').value=e.nome||'';
+  document.getElementById('ef-tipo').value=e.tipo||'';
+  document.getElementById('ef-cep').value=e.cep||'';
+  document.getElementById('ef-end').value=e.end||'';
+  document.getElementById('ef-endnum').value=e.endnum||'';
+  document.getElementById('ef-bairro').value=e.bairro||'';
+  document.getElementById('ef-cidade').value=e.cidade||'';
+  document.getElementById('ef-obs').value=e.obs||'';
+  document.getElementById('evento-form-titulo').textContent='✏️ Editar Evento';
+  document.getElementById('ef-btn-excluir').style.display='inline-block';
+  document.getElementById('evento-form-ov').classList.add('open');
+}
+
+async function eventoSalvar(){
+  var id=document.getElementById('ef-id').value;
+  var nome=(document.getElementById('ef-nome').value||'').trim();
+  var tipo=document.getElementById('ef-tipo').value;
+  var end=(document.getElementById('ef-end').value||'').trim();
+  var cidade=(document.getElementById('ef-cidade').value||'').trim();
+  if(!nome){alert('⚠️ Informe o Nome do Evento.');return;}
+  if(!tipo){alert('⚠️ Selecione o Tipo de Evento.');return;}
+  if(!end&&!cidade){alert('⚠️ Como o endereço não foi preenchido, a Cidade é obrigatória.');return;}
+  var obj={
+    id:id||('evt_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)),
+    nome:nome,
+    tipo:tipo,
+    cep:document.getElementById('ef-cep').value.trim(),
+    end:end,
+    endnum:document.getElementById('ef-endnum').value.trim(),
+    bairro:document.getElementById('ef-bairro').value.trim(),
+    cidade:cidade,
+    obs:document.getElementById('ef-obs').value.trim(),
+    atualizadoEm:new Date().toLocaleString('pt-BR'),
+    atualizadoPor:usuarioAtual?usuarioAtual.nome:''
+  };
+  var idx=EVENTOS.findIndex(function(e){return e.id===obj.id;});
+  if(idx>=0) EVENTOS[idx]=Object.assign({},EVENTOS[idx],obj);
+  else EVENTOS.push(obj);
+  var ok=await _eventoSalvarFirestore(obj);
+  document.getElementById('evento-form-ov').classList.remove('open');
+  if(document.getElementById('eventos-ov').classList.contains('open')) eventosRenderLista(document.getElementById('eventos-busca').value);
+  if(ok) driveStatus('✅ Evento salvo no cadastro','ok'); else driveStatus('⚠️ Evento salvo localmente (Firestore indisponível)','err');
+  return obj;
+}
+
+async function eventoExcluirAtual(){
+  var id=document.getElementById('ef-id').value;if(!id)return;
+  var e=EVENTOS.find(function(x){return x.id===id;});
+  if(!confirm('🗑️ Excluir o evento "'+(e?e.nome:'')+'" do cadastro?\n\nEsta ação não afeta orçamentos já emitidos.'))return;
+  EVENTOS=EVENTOS.filter(function(x){return x.id!==id;});
+  await _eventoExcluirFirestore(id);
+  document.getElementById('evento-form-ov').classList.remove('open');
+  if(document.getElementById('eventos-ov').classList.contains('open')) eventosRenderLista(document.getElementById('eventos-busca').value);
+  driveStatus('🗑️ Evento excluído do cadastro','ok');
+}
+
+// ── Integração com a tela de Orçamento ──────────────────────────────
+function _eventoPreencherOrcamento(e){
+  document.getElementById('f-nome-evento').value=e.nome||'';
+  if(e.tipo) document.getElementById('f-tipo').value=e.tipo;
+  document.getElementById('f-cep-ev').value=e.cep||'';
+  document.getElementById('f-end-ev').value=e.end||'';
+  document.getElementById('f-num-ev').value=e.endnum||'';
+  document.getElementById('f-bairro-ev').value=e.bairro||'';
+  document.getElementById('f-cid-ev').value=e.cidade||'';
+  marcarAlterado();
+}
+
+function eventoBuscarSugestoes(texto){
+  clearTimeout(_sugestTimer);
+  var box=document.getElementById('f-nome-evento-sugest');
+  if(!box)return;
+  texto=(texto||'').trim();
+  if(texto.length<2){box.innerHTML='';return;}
+  _sugestTimer=setTimeout(function(){
+    var t=texto.toLowerCase();
+    var resultados=EVENTOS.filter(function(e){
+      return (e.nome||'').toLowerCase().indexOf(t)>=0;
+    }).slice(0,8);
+    if(!resultados.length){box.innerHTML='';return;}
+    box.innerHTML='<div class="cli-sugest">'+resultados.map(function(e){
+      var idxG=EVENTOS.indexOf(e);
+      return '<div class="cli-sugest-item" onmousedown="eventoSelecionarSugestao('+idxG+')"><b>'+eh(e.nome||'')+'</b><small>'+eh(e.tipo||'—')+(e.cidade?' · '+eh(e.cidade):'')+'</small></div>';
+    }).join('')+'</div>';
+  },250);
+}
+function eventoFecharSugestoes(){var box=document.getElementById('f-nome-evento-sugest');if(box)box.innerHTML='';}
+function eventoSelecionarSugestao(idx){
+  var e=EVENTOS[idx];if(!e)return;
+  _eventoPreencherOrcamento(e);
+  eventoFecharSugestoes();
+}
+
+function eventoAbrirBuscaModal(){
+  _eventoBuscaModoSelecao=true;
+  document.getElementById('eventos-busca').value='';
+  eventosRenderLista('');
+  document.getElementById('eventos-ov').classList.add('open');
+}
+
+function eventoSelecionarParaOrcamento(idx){
+  var e=EVENTOS[idx];if(!e)return;
+  _eventoPreencherOrcamento(e);
+  _eventoBuscaModoSelecao=false;
+  document.getElementById('eventos-ov').classList.remove('open');
+}
+
+// Sempre que um orçamento é salvo com Nome + Tipo de Evento preenchidos, o
+// evento é registrado automaticamente no cadastro (se ainda não existir um
+// com o mesmo nome) — assim o consultor não precisa abrir o cadastro à parte
+// pra reaproveitar esse evento da próxima vez. Não sobrescreve um evento já
+// existente, pra não perder dados curados manualmente no cadastro.
+async function _eventoAutoRegistrar(){
+  try{
+    var nome=(gv('f-nome-evento')||'').trim();
+    var tipo=gv('f-tipo')||'';
+    if(!nome||!tipo) return;
+    var nomeNorm=_normNome(nome);
+    var jaExiste=EVENTOS.some(function(e){return _normNome(e.nome)===nomeNorm;});
+    if(jaExiste) return;
+    var obj={
+      id:'evt_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+      nome:nome,
+      tipo:tipo,
+      cep:gv('f-cep-ev')||'',
+      end:gv('f-end-ev')||'',
+      endnum:gv('f-num-ev')||'',
+      bairro:gv('f-bairro-ev')||'',
+      cidade:gv('f-cid-ev')||'',
+      obs:'',
+      atualizadoEm:new Date().toLocaleString('pt-BR'),
+      atualizadoPor:usuarioAtual?usuarioAtual.nome:''
+    };
+    // Sem endereço nem cidade não dá pra cumprir a regra de cadastro (cidade
+    // obrigatória sem endereço) — nesse caso, não registra automaticamente.
+    if(!obj.end&&!obj.cidade) return;
+    EVENTOS.push(obj);
+    await _eventoSalvarFirestore(obj);
+  }catch(e){ console.warn('_eventoAutoRegistrar:',e); }
 }
 
 async function usuariosCarregarFirestore(){
@@ -10239,6 +10673,7 @@ document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
 // Carregar dados persistidos ao iniciar
 permCarregar();
 clientesCarregarStorage();
+eventosCarregarStorage();
 calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
 // Auto-save a cada 3 minutos se houver alterações não salvas e orçamento já tiver ID no Drive
 setInterval(function(){
