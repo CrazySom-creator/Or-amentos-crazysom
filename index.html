@@ -5159,7 +5159,7 @@ function gerarOS(){
   var endEv=[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
   var incLines=getSvinc().split('\n').map(function(l){return l.trim();}).filter(Boolean);
   var dataorc=gv('f-data')?fD(gv('f-data')):new Date().toLocaleDateString('pt-BR');
-  var SECS_OS=['som','video','luz','estrutura','servico','logistica'];
+  var SECS_OS=['som','video','luz','estrutura','servico'];
   var todosAmb=[],ambIds3={};
   SECS_OS.forEach(function(s){state[s].ambientes.forEach(function(a){if(!ambIds3[a.id]){ambIds3[a.id]=true;todosAmb.push({id:a.id,nome:a.nome});}});});
   function bRow(r){
@@ -9895,7 +9895,7 @@ function osModGerarOS(lista){
 
   var SEC_ICO2={som:'🔊',video:'🎬',luz:'⚡',estrutura:'🏗️',servico:'🔧',logistica:'🚛'};
   var SEC_LBL2={som:'Sonorização',video:'Vídeo',luz:'Iluminação',estrutura:'Estrutura',servico:'Serviço',logistica:'Logística'};
-  var SECS_OS=['som','video','luz','estrutura','servico','logistica'];
+  var SECS_OS=['som','video','luz','estrutura','servico'];
 
   var paginasHTML=lista.map(function(o,idx){
     var f=o.form||{};
@@ -9912,20 +9912,42 @@ function osModGerarOS(lista){
     var endEv=[f['f-end-ev'],f['f-num-ev'],f['f-bairro-ev'],f['f-cid-ev']].filter(Boolean).join(', ');
     var incLines=(f['f-svinc']||'').split('\n').map(function(l){return l.trim();}).filter(Boolean);
 
-    var corpoOS='';
+    // Agrupar por ambiente — mesmo comportamento da impressão individual (gerarOS()):
+    // cada ambiente vira um cabeçalho cinza próprio, com as seções (Sonorização,
+    // Vídeo, etc.) e seus itens dentro dele, em vez de misturar tudo junto.
+    var todosAmb=[],ambIds4={};
     SECS_OS.forEach(function(s){
-      if(!st[s]) return;
-      var todosRows=[];
-      Object.values(st[s].rows||{}).forEach(function(arr){
-        (arr||[]).forEach(function(r){if(!isOcultOS(r.name)&&r.qty>0)todosRows.push(r);});
+      if(!st[s])return;
+      (st[s].ambientes||[{id:'default',nome:'Geral'}]).forEach(function(a){
+        if(!ambIds4[a.id]){ambIds4[a.id]=true;todosAmb.push({id:a.id,nome:a.nome});}
       });
-      var isLog=s==='logistica';
-      if(!todosRows.length&&(!isLog||!incLines.length)) return;
-      corpoOS+='<tr><td colspan="3" style="background:#c0001a;color:#fff;font-weight:bold;padding:3px 8px;font-size:11px;print-color-adjust:exact;-webkit-print-color-adjust:exact">'+SEC_ICO2[s]+' '+SEC_LBL2[s].toUpperCase()+'</td></tr>';
-      todosRows.forEach(function(r){corpoOS+=bRowOS(r);});
-      if(isLog)incLines.forEach(function(l){corpoOS+='<tr><td class="qtd">—</td><td class="item">'+eh(l)+'</td><td class="chk">☐</td></tr>';});
-      corpoOS+='<tr><td colspan="3" style="height:4px"></td></tr>';
     });
+    var multiAmb4=todosAmb.length>1||todosAmb.some(function(a){return a.id!=='default';});
+    var corpoOS='';
+    if(multiAmb4){
+      todosAmb.forEach(function(amb){
+        var temItens=SECS_OS.some(function(s){return st[s]&&(st[s].rows[amb.id]||[]).filter(function(r){return !isOcultOS(r.name)&&r.qty>0;}).length>0;});
+        if(!temItens)return;
+        corpoOS+='<tr><td colspan="3" style="background:#333;color:#fff;font-weight:bold;padding:5px 8px;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact">🏢 '+eh(amb.nome)+'</td></tr>';
+        SECS_OS.forEach(function(s){
+          if(!st[s])return;
+          var rows2=(st[s].rows[amb.id]||[]).filter(function(r){return !isOcultOS(r.name)&&r.qty>0;});
+          if(!rows2.length)return;
+          corpoOS+='<tr><td colspan="3" style="background:#c0001a;color:#fff;font-weight:bold;padding:3px 8px;font-size:11px;print-color-adjust:exact;-webkit-print-color-adjust:exact">'+SEC_ICO2[s]+' '+SEC_LBL2[s].toUpperCase()+'</td></tr>';
+          rows2.forEach(function(r){corpoOS+=bRowOS(r);});
+        });
+        corpoOS+='<tr><td colspan="3" style="height:5px"></td></tr>';
+      });
+    }else{
+      SECS_OS.forEach(function(s){
+        if(!st[s])return;
+        var rows2=(st[s].rows['default']||[]).filter(function(r){return !isOcultOS(r.name)&&r.qty>0;});
+        if(!rows2.length)return;
+        corpoOS+='<tr><td colspan="3" style="background:#c0001a;color:#fff;font-weight:bold;padding:4px 8px;font-size:12px;print-color-adjust:exact;-webkit-print-color-adjust:exact">'+SEC_ICO2[s]+' '+SEC_LBL2[s].toUpperCase()+'</td></tr>';
+        rows2.forEach(function(r){corpoOS+=bRowOS(r);});
+        corpoOS+='<tr><td colspan="3" style="height:4px"></td></tr>';
+      });
+    }
     if(!corpoOS)corpoOS='<tr><td colspan="3" style="padding:12px;text-align:center;color:#aaa;font-size:11px">Nenhum item cadastrado neste orçamento.</td></tr>';
 
     var extras=Array(10).fill('<tr><td colspan="3" style="height:23px;border-bottom:1px solid #ccc">&nbsp;</td></tr>').join('');
