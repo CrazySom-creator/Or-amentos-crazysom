@@ -3944,7 +3944,29 @@ async function _salvarNoDriveInterno(opts){
   // e fazendo o próximo salvamento criar um arquivo novo (duplicado) no Drive.
   var _numAtualTrim=(num||'').toString().trim();
   var _driveNumAtualTrim=(driveNumAtual||'').toString().trim();
-  if(driveIdAtual&&driveNumAtual&&_driveNumAtualTrim!==_numAtualTrim&&!opts.forcarNovoId)driveIdAtual=null;
+  if(driveIdAtual&&driveNumAtual&&_driveNumAtualTrim!==_numAtualTrim&&!opts.forcarNovoId){
+    // Mudar manualmente o número de um orçamento já carregado (sem usar o botão
+    // "Clonar") também cria um arquivo novo no Drive — é um "clone" informal.
+    // Se as Aprovações/histórico comercial não forem zerados aqui também, esse
+    // orçamento novo nasce com o status e o histórico de aprovação do orçamento
+    // ORIGINAL, que é exatamente o problema relatado ("clone carrega aprovações
+    // antigas"). Avisamos e reiniciamos essas informações, igual o botão Clonar já faz.
+    if(aprovStatus!=='rascunho'||(aprovHist&&aprovHist.length)||comercialStatus||(comercialHist&&comercialHist.length)){
+      var _prosseguirNovoNum=confirm('⚠️ Você alterou o número deste orçamento de "'+driveNumAtual+'" para "'+num+'".\n\nIsso cria um ORÇAMENTO NOVO no Drive — o original ("'+driveNumAtual+'") continua existindo separadamente. Por isso, as aprovações e o histórico comercial deste orçamento novo serão reiniciados do zero (assim como acontece ao usar "Clonar").\n\nSe você só queria corrigir o número deste MESMO orçamento (sem criar um novo), clique em Cancelar e desfaça a alteração antes de salvar.\n\nContinuar e criar o orçamento novo com aprovações zeradas?');
+      if(!_prosseguirNovoNum){
+        driveStatus('Salvamento cancelado — o número não foi alterado.','err');
+        return null;
+      }
+      aprovStatus='rascunho';aprovHist=[];
+      comercialStatus='';comercialHist=[];
+      snapshotAnterior=null;snapshotAprovado=null;
+      if(typeof _limparCamposComercialDOM==='function') _limparCamposComercialDOM();
+      if(typeof renderStatusOrc==='function') renderStatusOrc();
+      if(typeof renderAprovInline==='function') renderAprovInline();
+      if(typeof renderComercial==='function') renderComercial();
+    }
+    driveIdAtual=null;
+  }
 
   // Verificar número duplicado APENAS quando:
   // - É orçamento novo (sem ID no Drive), OU
