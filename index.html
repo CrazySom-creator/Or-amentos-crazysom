@@ -821,6 +821,12 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <div class="home-card-desc">Eventos recorrentes — nome, tipo e endereço prontos pra reaproveitar</div>
       </div>
 
+      <div class="home-card" style="border-color:#37474f;background:var(--surface-3)" id="home-btn-produtos" onclick="abrirProdutos();fecharHome()">
+        <div class="home-card-ico">📦</div>
+        <div class="home-card-title">Estoque — Produtos</div>
+        <div class="home-card-desc">Cadastro de equipamentos com ficha técnica e foto</div>
+      </div>
+
       <div class="home-card" style="border-color:#37474f;background:var(--surface-3)" id="home-btn-rel" onclick="abrirRelatorios();fecharHome()">
         <div class="home-card-ico">📊</div>
         <div class="home-card-title">Relatórios</div>
@@ -1434,6 +1440,83 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div style="margin-left:auto;display:flex;gap:8px">
         <button class="btn btn-o btn-sm" onclick="document.getElementById('evento-form-ov').classList.remove('open')">Cancelar</button>
         <button class="btn btn-g btn-sm" onclick="eventoSalvar()">💾 Salvar Evento</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  MÓDULO DE ESTOQUE — CADASTRO DE PRODUTOS (LISTA)        -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="produtos-ov">
+  <div class="modal-box" style="max-width:780px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <div><h2 style="margin-bottom:2px">📦 Cadastro de Produtos</h2><p class="sub" style="margin:0">Catálogo de equipamentos com ficha técnica e foto</p></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-g btn-sm" onclick="produtoNovo()">+ Novo Produto</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('produtos-ov').classList.remove('open')">✕</button>
+      </div>
+    </div>
+    <div id="produtos-status" style="display:none;padding:9px 12px;border-radius:6px;font-size:11.5px;font-weight:700;margin:10px 0"></div>
+    <input id="produtos-busca" type="text" placeholder="🔍 Buscar por nome, marca, modelo ou categoria..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text);font-size:12px;margin:12px 0 10px" oninput="produtosRenderLista(this.value)">
+    <div id="produtos-lista" style="max-height:440px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  MODAL FORMULÁRIO DE PRODUTO (NOVO/EDITAR)               -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="produto-form-ov">
+  <div class="modal-box" style="max-width:640px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <h2 style="margin-bottom:2px" id="produto-form-titulo">📦 Novo Produto</h2>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('produto-form-ov').classList.remove('open')">✕</button>
+    </div>
+    <p class="sub" style="margin:0 0 12px">Nome e Categoria são obrigatórios. Os demais campos da ficha técnica são opcionais.</p>
+    <input type="hidden" id="pf-id">
+
+    <div style="display:flex;gap:14px;margin-bottom:12px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex-shrink:0">
+        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:5px">Foto do Equipamento</label>
+        <div id="pf-foto-preview-wrap" style="display:none;align-items:center;gap:8px;margin-bottom:6px">
+          <img id="pf-foto-preview" style="width:88px;height:88px;object-fit:cover;border-radius:6px;background:var(--surface-3)">
+          <button type="button" class="btn btn-sm" style="background:#c62828;color:#fff" onclick="produtoRemoverFoto()">🗑️ Remover</button>
+        </div>
+        <button type="button" class="btn btn-o btn-sm" onclick="produtoAnexarFoto()">📷 Anexar Foto</button>
+        <input type="file" id="pf-foto-input" accept="image/*" style="display:none" onchange="_produtoFotoSelecionada(this)">
+        <div id="pf-foto-status" style="font-size:10px;color:var(--text-muted);margin-top:5px;max-width:200px"></div>
+      </div>
+      <div style="flex:1;min-width:220px">
+        <div class="g3" style="margin-bottom:0">
+          <div style="grid-column:span 2"><label>Nome do Produto</label><input id="pf-nome" placeholder="Ex: Caixa Ativa JBL PRX815"></div>
+          <div><label>Categoria</label>
+            <select id="pf-categoria">
+              <option value="">Selecione...</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="g4">
+      <div><label>Marca</label><input id="pf-marca" placeholder="Ex: JBL"></div>
+      <div><label>Modelo</label><input id="pf-modelo" placeholder="Ex: PRX815"></div>
+      <div><label>Potência</label><input id="pf-potencia" placeholder="Ex: 1500W"></div>
+      <div><label>Voltagem</label><input id="pf-voltagem" placeholder="Ex: Bivolt 110/220V"></div>
+    </div>
+    <div class="g3">
+      <div><label>Peso</label><input id="pf-peso" placeholder="Ex: 20kg"></div>
+      <div style="grid-column:span 2"><label>Dimensões (L x A x P)</label><input id="pf-dimensoes" placeholder="Ex: 45x76x42cm"></div>
+    </div>
+    <div style="margin-bottom:10px"><label>Conectores / Entradas e Saídas</label><input id="pf-conectores" placeholder="Ex: XLR, P10, Speakon"></div>
+    <div style="margin-bottom:10px"><label>Ficha Técnica (especificações adicionais)</label><textarea id="pf-ficha" placeholder="Resposta em frequência, SPL máximo, ângulo de cobertura, etc."></textarea></div>
+    <div style="margin-bottom:10px"><label>Observações</label><textarea id="pf-obs" placeholder="Cuidados de manuseio, acessórios que acompanham, etc."></textarea></div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+      <button class="btn btn-sm" id="pf-btn-excluir" style="background:#c62828;color:#fff;display:none" onclick="produtoExcluirAtual()">🗑️ Excluir Produto</button>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('produto-form-ov').classList.remove('open')">Cancelar</button>
+        <button class="btn btn-g btn-sm" onclick="produtoSalvar()">💾 Salvar Produto</button>
       </div>
     </div>
   </div>
@@ -2892,6 +2975,7 @@ async function doLogin(){
   tiposEventoCarregar();
   tarefasCarregarStorage().then(atualizarBadgeTarefas);
   tiposTarefaCarregar();
+  produtosCarregarStorage();
   carregarExcluidosDrive();
   // carregarSolExclusaoDrive() removida daqui: agora só roda quando o painel de Aprovações é aberto (evita varrer todos os orçamentos a cada login)
   // Abrir home screen ANTES de esconder o overlay de login (evita "flash" da tela de orçamento)
@@ -11275,6 +11359,356 @@ async function tiposTarefaRemover(idx){
   if(ok) driveStatus('🗑️ Tipo de tarefa removido','ok'); else driveStatus('⚠️ Removido localmente (Firestore indisponível)','err');
 }
 
+// ═══════════════════════════════════════════════════════
+// MÓDULO DE ESTOQUE — Fase 1: Cadastro de Produtos
+// Ficha técnica + foto de cada modelo de equipamento. Segue o mesmo padrão
+// de persistência do Cadastro de Eventos. O controle de quantidade/unidades
+// individuais (com QR code e entrada/saída) vem numa etapa seguinte — por
+// enquanto este cadastro é só o "catálogo" (modelo/ficha técnica), sem
+// contagem de estoque ainda.
+// ═══════════════════════════════════════════════════════
+var PRODUTOS=[];
+var _produtoBuscaModoSelecao=false;
+var _produtosUltimoErro=null;
+
+// Categorias alinhadas às seções do orçamento (SECS), sem "extra" (que no
+// orçamento é usado para custos avulsos, não equipamentos) — isso facilita
+// a futura ligação "item do orçamento ↔ produto do estoque".
+var PRODUTO_CATEGORIAS=['som','video','luz','estrutura','servico','logistica'];
+var PRODUTO_CATEGORIA_LABEL={som:'Som',video:'Vídeo',luz:'Luz',estrutura:'Estrutura',servico:'Serviço',logistica:'Logística'};
+
+async function produtosCarregarStorage(){
+  _produtosUltimoErro=null;
+  if(!fbDb){ _produtosUltimoErro='Sem conexão com o servidor (Firebase indisponível).'; return false; }
+  try{
+    var snap=await fbDb.collection('produtos').get();
+    var lista=[];
+    snap.forEach(function(doc){ lista.push(doc.data()); });
+    PRODUTOS=lista;
+    try{ localStorage.setItem('crazySomProdutos',JSON.stringify(PRODUTOS)); }catch(e){}
+    return true;
+  }catch(e){
+    console.warn('produtosCarregarStorage:',e);
+    _produtosUltimoErro=(e&&e.message)?e.message:String(e);
+  }
+  try{
+    var d=localStorage.getItem('crazySomProdutos');
+    if(d){ var arr=JSON.parse(d); if(Array.isArray(arr)) PRODUTOS=arr; }
+  }catch(e){}
+  return false;
+}
+
+async function _produtoSalvarFirestore(obj){
+  _produtosUltimoErro=null;
+  try{
+    await fbDb.collection('produtos').doc(obj.id).set(obj);
+    try{ localStorage.setItem('crazySomProdutos',JSON.stringify(PRODUTOS)); }catch(e){}
+    return true;
+  }catch(e){
+    console.warn('_produtoSalvarFirestore:',e);
+    _produtosUltimoErro=(e&&e.message)?e.message:String(e);
+    return false;
+  }
+}
+
+async function _produtoExcluirFirestore(id){
+  _produtosUltimoErro=null;
+  try{
+    await fbDb.collection('produtos').doc(id).delete();
+    try{ localStorage.setItem('crazySomProdutos',JSON.stringify(PRODUTOS)); }catch(e){}
+    return true;
+  }catch(e){
+    console.warn('_produtoExcluirFirestore:',e);
+    _produtosUltimoErro=(e&&e.message)?e.message:String(e);
+    return false;
+  }
+}
+
+async function abrirProdutos(){
+  _produtoBuscaModoSelecao=false;
+  document.getElementById('produtos-busca').value='';
+  document.getElementById('produtos-lista').innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">⏳ Carregando produtos...</div>';
+  document.getElementById('produtos-ov').classList.add('open');
+  _produtosStatus('');
+  mostrarCarregando('⏳ Carregando produtos...');
+  try{
+    var ok=await produtosCarregarStorage();
+    if(!ok){
+      _produtosStatus('⚠️ Não foi possível carregar os produtos do servidor'+(_produtosUltimoErro?': "'+_produtosUltimoErro+'"':'')+'. Verifique as regras do Firestore para a coleção "produtos" no console do Firebase. Mostrando apenas o cache salvo neste navegador.','err');
+    }
+    produtosRenderLista('');
+  }finally{
+    esconderCarregando();
+  }
+}
+
+function _produtosStatus(msg,tipo){
+  var el=document.getElementById('produtos-status');
+  if(!el) return;
+  if(!msg){ el.style.display='none'; el.textContent=''; return; }
+  el.textContent=msg;
+  el.style.display='block';
+  if(tipo==='ok'){ el.style.background='rgba(46,125,50,.15)'; el.style.color='#2e7d32'; el.style.border='1px solid #2e7d32'; }
+  else{ el.style.background='rgba(198,40,40,.12)'; el.style.color='#c62828'; el.style.border='1px solid #c62828'; }
+}
+
+function produtosRenderLista(filtro){
+  var box=document.getElementById('produtos-lista');
+  filtro=(filtro||'').toLowerCase().trim();
+  var lista=PRODUTOS.filter(function(p){
+    if(!filtro)return true;
+    var nome=(p.nome||'').toLowerCase();
+    var marca=(p.marca||'').toLowerCase();
+    var modelo=(p.modelo||'').toLowerCase();
+    var cat=(PRODUTO_CATEGORIA_LABEL[p.categoria]||'').toLowerCase();
+    return nome.indexOf(filtro)>=0||marca.indexOf(filtro)>=0||modelo.indexOf(filtro)>=0||cat.indexOf(filtro)>=0;
+  }).sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
+  if(!lista.length){box.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">Nenhum produto encontrado.</div>';return;}
+  box.innerHTML=lista.map(function(p){
+    var idx=PRODUTOS.indexOf(p);
+    var acao=_produtoBuscaModoSelecao
+      ? '<button class="btn btn-g btn-sm" onclick="produtoSelecionarParaOrcamento('+idx+')">✅ Selecionar</button>'
+      : '<button class="btn btn-o btn-sm" onclick="produtoEditar('+idx+')">✏️ Editar</button>';
+    var thumb=p.fotoId
+      ? '<img src="'+eh(p.fotoThumb||'')+'" style="width:44px;height:44px;object-fit:cover;border-radius:6px;background:var(--surface-3);flex-shrink:0" onerror="this.style.display=\'none\'">'
+      : '<div style="width:44px;height:44px;border-radius:6px;background:var(--surface-3);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">'+(SEC_ICO[p.categoria]||'📦')+'</div>';
+    return '<div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
+      +'<div style="display:flex;align-items:center;gap:10px;min-width:0">'
+      +thumb
+      +'<div style="min-width:0">'
+      +'<div style="color:var(--text);font-size:13px;font-weight:700">'+eh(p.nome||'—')+'</div>'
+      +'<div style="color:var(--text-muted);font-size:11px;margin-top:2px">'+(SEC_ICO[p.categoria]||'')+' '+eh(PRODUTO_CATEGORIA_LABEL[p.categoria]||'—')+(p.marca?' · '+eh(p.marca):'')+(p.modelo?' '+eh(p.modelo):'')+'</div>'
+      +'</div>'
+      +'</div>'
+      +'<div>'+acao+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function popularProdutoCategorias(){
+  var sel=document.getElementById('pf-categoria');
+  if(!sel) return;
+  var atual=sel.value;
+  sel.innerHTML='<option value="">Selecione...</option>'+PRODUTO_CATEGORIAS.map(function(c){
+    return '<option value="'+c+'"'+(c===atual?' selected':'')+'>'+(SEC_ICO[c]||'')+' '+PRODUTO_CATEGORIA_LABEL[c]+'</option>';
+  }).join('');
+}
+
+function _produtoLimparForm(){
+  ['pf-id','pf-nome','pf-marca','pf-modelo','pf-potencia','pf-voltagem','pf-peso','pf-dimensoes','pf-conectores','pf-ficha','pf-obs'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.value='';
+  });
+  popularProdutoCategorias();
+  document.getElementById('pf-categoria').value='';
+  _produtoFotoIdAtual='';
+  _produtoFotoThumbAtual='';
+  _produtoFotoPendente=null;
+  var st=document.getElementById('pf-foto-status');
+  if(st) st.textContent='';
+  _produtoAtualizarPreviewFoto('');
+}
+
+function produtoNovo(){
+  _produtoLimparForm();
+  document.getElementById('produto-form-titulo').textContent='📦 Novo Produto';
+  document.getElementById('pf-btn-excluir').style.display='none';
+  document.getElementById('produto-form-ov').classList.add('open');
+}
+
+function produtoEditar(idx){
+  var p=PRODUTOS[idx];if(!p)return;
+  _produtoLimparForm();
+  document.getElementById('pf-id').value=p.id;
+  document.getElementById('pf-nome').value=p.nome||'';
+  document.getElementById('pf-categoria').value=p.categoria||'';
+  document.getElementById('pf-marca').value=p.marca||'';
+  document.getElementById('pf-modelo').value=p.modelo||'';
+  document.getElementById('pf-potencia').value=p.potencia||'';
+  document.getElementById('pf-voltagem').value=p.voltagem||'';
+  document.getElementById('pf-peso').value=p.peso||'';
+  document.getElementById('pf-dimensoes').value=p.dimensoes||'';
+  document.getElementById('pf-conectores').value=p.conectores||'';
+  document.getElementById('pf-ficha').value=p.fichaTecnica||'';
+  document.getElementById('pf-obs').value=p.obs||'';
+  _produtoFotoIdAtual=p.fotoId||'';
+  _produtoAtualizarPreviewFoto(p.fotoThumb||'');
+  document.getElementById('produto-form-titulo').textContent='✏️ Editar Produto';
+  document.getElementById('pf-btn-excluir').style.display='inline-block';
+  document.getElementById('produto-form-ov').classList.add('open');
+}
+
+async function produtoSalvar(){
+  var id=document.getElementById('pf-id').value;
+  var nome=(document.getElementById('pf-nome').value||'').trim();
+  var categoria=document.getElementById('pf-categoria').value;
+  if(!nome){alert('⚠️ Informe o Nome do Produto.');return;}
+  if(!categoria){alert('⚠️ Selecione a Categoria.');return;}
+
+  // Se há uma foto nova pendente, grava o arquivo em resolução cheia na
+  // coleção 'produtoFotos' antes de salvar o produto (mesmo padrão dos
+  // comprovantes financeiros — só o fotoId+thumb ficam no doc do produto).
+  if(_produtoFotoPendente){
+    try{
+      await fbDb.collection('produtoFotos').doc(_produtoFotoPendente.id).set(_produtoFotoPendente.dados);
+    }catch(e){
+      console.warn('produtoSalvar (foto):',e);
+      alert('⚠️ Não foi possível enviar a foto ao servidor ('+((e&&e.message)||e)+'). O produto será salvo sem a foto.');
+      _produtoFotoIdAtual='';
+      _produtoFotoThumbAtual='';
+    }
+    _produtoFotoPendente=null;
+  }
+
+  var obj={
+    id:id||('prd_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)),
+    nome:nome,
+    categoria:categoria,
+    marca:document.getElementById('pf-marca').value.trim(),
+    modelo:document.getElementById('pf-modelo').value.trim(),
+    potencia:document.getElementById('pf-potencia').value.trim(),
+    voltagem:document.getElementById('pf-voltagem').value.trim(),
+    peso:document.getElementById('pf-peso').value.trim(),
+    dimensoes:document.getElementById('pf-dimensoes').value.trim(),
+    conectores:document.getElementById('pf-conectores').value.trim(),
+    fichaTecnica:document.getElementById('pf-ficha').value.trim(),
+    obs:document.getElementById('pf-obs').value.trim(),
+    fotoId:_produtoFotoIdAtual||'',
+    fotoThumb:_produtoFotoThumbAtual||'',
+    atualizadoEm:new Date().toLocaleString('pt-BR'),
+    atualizadoPor:usuarioAtual?usuarioAtual.nome:''
+  };
+  var idx=PRODUTOS.findIndex(function(p){return p.id===obj.id;});
+  if(idx>=0) PRODUTOS[idx]=Object.assign({},PRODUTOS[idx],obj);
+  else PRODUTOS.push(obj);
+  var ok=await _produtoSalvarFirestore(obj);
+  document.getElementById('produto-form-ov').classList.remove('open');
+  if(document.getElementById('produtos-ov').classList.contains('open')) produtosRenderLista(document.getElementById('produtos-busca').value);
+  if(ok){
+    _produtosStatus('✅ Produto salvo no cadastro','ok');
+    driveStatus('✅ Produto salvo no cadastro','ok');
+  } else {
+    var msgErro='❌ Produto NÃO foi salvo no servidor'+(_produtosUltimoErro?': "'+_produtosUltimoErro+'"':'')+'. Ficou salvo só neste navegador — outros usuários/dispositivos não vão vê-lo até isso ser corrigido.';
+    _produtosStatus(msgErro,'err');
+    driveStatus(msgErro,'err');
+  }
+  return obj;
+}
+
+async function produtoExcluirAtual(){
+  var id=document.getElementById('pf-id').value;if(!id)return;
+  var p=PRODUTOS.find(function(x){return x.id===id;});
+  if(!confirm('🗑️ Excluir o produto "'+(p?p.nome:'')+'" do cadastro?\n\nEsta ação não afeta orçamentos já emitidos.'))return;
+  PRODUTOS=PRODUTOS.filter(function(x){return x.id!==id;});
+  var ok=await _produtoExcluirFirestore(id);
+  document.getElementById('produto-form-ov').classList.remove('open');
+  if(document.getElementById('produtos-ov').classList.contains('open')) produtosRenderLista(document.getElementById('produtos-busca').value);
+  if(ok){
+    _produtosStatus('🗑️ Produto excluído do cadastro','ok');
+    driveStatus('🗑️ Produto excluído do cadastro','ok');
+  } else {
+    var msgErroExcl='❌ Não foi possível excluir o produto no servidor'+(_produtosUltimoErro?': "'+_produtosUltimoErro+'"':'')+'.';
+    _produtosStatus(msgErroExcl,'err');
+    driveStatus(msgErroExcl,'err');
+  }
+}
+
+// ── Foto do produto (imagem comprimida em Base64, guardada num documento
+// próprio da coleção 'produtoFotos' — mesmo padrão dos comprovantes
+// financeiros, pra não inflar o documento do produto no Firestore) ──────
+var _produtoFotoIdAtual='';
+var _produtoFotoThumbAtual='';
+
+function _produtoAtualizarPreviewFoto(url){
+  var wrap=document.getElementById('pf-foto-preview-wrap');
+  var img=document.getElementById('pf-foto-preview');
+  if(!wrap||!img) return;
+  if(url){ img.src=url; wrap.style.display='flex'; }
+  else{ img.src=''; wrap.style.display='none'; }
+}
+
+function produtoAnexarFoto(){
+  var inp=document.getElementById('pf-foto-input');
+  if(inp){ inp.value=''; inp.click(); }
+}
+
+// Guarda a foto recém-selecionada até o produto ser salvo (só grava no
+// Firestore quando o usuário confirma "Salvar Produto", evitando fotos
+// órfãs se o usuário cancelar o formulário).
+var _produtoFotoPendente=null;
+
+// Gera uma miniatura bem pequena (poucos KB) a partir da foto já comprimida,
+// pra guardar direto no documento do produto (fotoThumb) sem inflar o
+// tamanho do doc — a foto em resolução cheia fica só em 'produtoFotos'.
+function _produtoGerarThumbDeDataUrl(dataUrl, cb){
+  var img=new Image();
+  img.onload=function(){
+    var maxDim=110;
+    var w=img.width, h=img.height;
+    if(w>h){h=Math.round(h*maxDim/w);w=maxDim;}else{w=Math.round(w*maxDim/h);h=maxDim;}
+    var cv=document.createElement('canvas');cv.width=w;cv.height=h;
+    var ctx=cv.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
+    cb(cv.toDataURL('image/jpeg',0.55));
+  };
+  img.onerror=function(){cb('');};
+  img.src=dataUrl;
+}
+
+function _produtoFotoSelecionada(inp){
+  if(!inp.files||!inp.files[0]) return;
+  var file=inp.files[0];
+  if(!/^image\//.test(file.type)){alert('Selecione uma imagem (foto do equipamento).');return;}
+  var st=document.getElementById('pf-foto-status');
+  if(st){st.textContent='⏳ Processando imagem...';st.style.color='#ffa726';}
+  _comprimirImagem(file,function(dataUrlFull){
+    if(!dataUrlFull){if(st){st.textContent='⚠️ Não foi possível ler a imagem';st.style.color='#ef5350';}return;}
+    var id=('prf_'+Date.now()+'_'+Math.random().toString(36).slice(2,7));
+    _produtoGerarThumbDeDataUrl(dataUrlFull,function(thumb){
+      _produtoFotoIdAtual=id;
+      _produtoFotoThumbAtual=thumb||'';
+      _produtoAtualizarPreviewFoto(dataUrlFull);
+      _produtoFotoPendente={id:id, dados:{
+        data:dataUrlFull, nome:(file.name||'produto.jpg'), tipo:'image/jpeg', tamanho:dataUrlFull.length,
+        enviadoPor:(usuarioAtual?usuarioAtual.nome:''), enviadoEm:new Date().toISOString()
+      }};
+      if(st){st.textContent='✅ Foto pronta — clique em Salvar Produto para confirmar.';st.style.color='#66bb6a';}
+    });
+  });
+}
+
+function produtoRemoverFoto(){
+  _produtoFotoIdAtual='';
+  _produtoFotoThumbAtual='';
+  _produtoFotoPendente=null;
+  _produtoAtualizarPreviewFoto('');
+  var st=document.getElementById('pf-foto-status');
+  if(st){st.textContent='';}
+}
+
+async function produtoVerFoto(idx){
+  var p=PRODUTOS[idx];if(!p||!p.fotoId)return;
+  if(!fbDb){alert('Sem conexão com o servidor.');return;}
+  var ov=document.getElementById('produto-foto-view-ov');if(ov)ov.remove();
+  ov=document.createElement('div');
+  ov.id='produto-foto-view-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000000;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML='<div style="color:var(--text);font-size:13px">⏳ Carregando foto...</div>';
+  ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+  document.body.appendChild(ov);
+  try{
+    var snap=await fbDb.collection('produtoFotos').doc(p.fotoId).get();
+    if(!snap.exists){ov.innerHTML='<div style="background:var(--surface-2);border-radius:8px;padding:20px;color:var(--text)">Foto não encontrada (pode ter sido removida).</div>';return;}
+    var d=snap.data();
+    ov.innerHTML='<div style="background:var(--surface-2);border-radius:10px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:16px;box-shadow:0 16px 50px rgba(0,0,0,.6)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+      +'<div style="color:var(--text);font-size:13px;font-weight:700">📦 '+eh(p.nome||'')+'</div>'
+      +'<button onclick="document.getElementById(\'produto-foto-view-ov\').remove()" style="background:var(--surface-3);color:var(--text);border:none;border-radius:5px;padding:5px 11px;cursor:pointer;font-size:13px">✕</button>'
+      +'</div>'
+      +'<img src="'+d.data+'" alt="'+eh(p.nome||'produto')+'" style="width:100%;border-radius:6px;display:block;background:var(--surface)">'
+      +'<div style="margin-top:12px"><a href="'+d.data+'" download="'+eh(d.nome||'produto.jpg')+'" style="display:inline-block;background:#1565c0;color:#fff;text-decoration:none;padding:8px 14px;border-radius:6px;font-size:12px;font-weight:700">⬇️ Baixar</a></div>'
+      +'</div>';
+  }catch(e){ ov.innerHTML='<div style="background:var(--surface-2);border-radius:8px;padding:20px;color:var(--text)">Erro ao carregar: '+eh((e&&e.message)||'')+'</div>'; }
+}
+
 async function usuariosCarregarFirestore(){
   try{
     var snap=await fbDb.collection('usuarios').get();
@@ -12732,6 +13166,7 @@ eventosCarregarStorage();
 tiposEventoCarregar();
 tarefasCarregarStorage();
 tiposTarefaCarregar();
+produtosCarregarStorage();
 calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
 // Auto-save a cada 3 minutos se houver alterações não salvas e orçamento já tiver ID no Drive
 setInterval(function(){
