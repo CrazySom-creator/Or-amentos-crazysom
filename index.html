@@ -515,6 +515,12 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 .fk-campo-check{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);}
 .fk-campo-check input{width:14px;height:14px;}
 .fk-campos-vazios-resumo{font-size:10.5px;color:var(--text-muted);}
+.fk-data-filtro{display:flex;flex-direction:column;gap:6px;}
+.fk-data-filtro select{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--text);background:var(--surface-2);box-sizing:border-box;}
+.fk-data-custom{display:flex;align-items:center;gap:6px;}
+.fk-data-custom input{flex:1;min-width:0;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--text);background:var(--surface-2);box-sizing:border-box;}
+.fk-data-custom span{font-size:10px;color:var(--text-muted);flex-shrink:0;}
+.fk-empresa-input{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--text);background:var(--surface-2);box-sizing:border-box;}
 .fk-timeline{max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:8px 10px;background:var(--surface-3);}
 .fk-tl-item{display:flex;gap:8px;padding:7px 0;border-bottom:1px solid #1f1f1f;}
 .fk-tl-item:last-child{border-bottom:none;}
@@ -959,6 +965,13 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
           <input type="checkbox" id="fk-switch-sem-followup" onchange="fkToggleSemFollowup(this.checked)">
           <span class="fk-switch-track"></span>
         </label>
+      </div>
+
+      <div id="fk-datas-lista" style="display:flex;flex-direction:column;gap:14px"></div>
+
+      <div>
+        <label class="fk-drawer-label">Empresa / Cliente</label>
+        <input type="text" id="fk-empresa-input" class="fk-empresa-input" placeholder="Buscar por nome..." oninput="fkEmpresaChange(this.value)">
       </div>
 
       <div>
@@ -5942,8 +5955,88 @@ var FUNIL_CAMPOS_VAZIOS = [
   {id:'email',    label:'E-mail'},
   {id:'followup', label:'Próximo Follow-up'}
 ];
-var _fkFiltrosAtivos = {semFollowup:false, camposVazios:[]};
+// Filtros por período — datas que temos de forma confiável (ISO) no nosso modelo.
+// "Data de Criação" só é confiável para leads (criadoEmISO); orçamentos não guardam
+// data de criação separada da data de última atualização, então ficam sem valor
+// nesse campo (e por isso não entram no resultado quando esse filtro é usado).
+// "Data de Previsão de Fechamento" foi mapeada para a Data do Evento (f-dia),
+// nosso equivalente mais próximo desse conceito do RD Station.
+var FUNIL_FILTROS_DATA = [
+  {id:'criacao', label:'Data de Criação', getData:function(item, isLead){
+    return isLead ? (item.criadoEmISO||'').split('T')[0] : '';
+  }},
+  {id:'ultimoContato', label:'Data de Último Contato', getData:function(item, isLead){
+    var hist = isLead ? (item.hist||[]).concat(item.atividades||[]) : ((item.dados&&item.dados.comercialHist)||[]);
+    var datas = hist.map(function(h){ return h.dataISO||''; }).filter(Boolean).sort();
+    return datas.length ? datas[datas.length-1] : '';
+  }},
+  {id:'proximaTarefa', label:'Data da Próxima Tarefa (Follow-up)', getData:function(item, isLead){
+    return isLead ? (item.followupData||'') : ((item.dados&&item.dados.followupData)||'');
+  }},
+  {id:'fechamento', label:'Data de Fechamento', getData:function(item, isLead){
+    if(isLead) return '';
+    var hist = (item.dados&&item.dados.comercialHist)||[];
+    for(var i=hist.length-1;i>=0;i--){ if(hist[i].status==='ganha'||hist[i].status==='perdida') return hist[i].dataISO||''; }
+    return '';
+  }},
+  {id:'previsaoFechamento', label:'Data de Previsão de Fechamento (Evento)', getData:function(item, isLead){
+    return isLead ? '' : ((item.form&&item.form['f-dia'])||'');
+  }}
+];
+var FK_DATA_PRESETS = [
+  {id:'hoje', label:'Hoje'},
+  {id:'semana', label:'Esta semana'},
+  {id:'mes', label:'Este mês'},
+  {id:'7d', label:'Últimos 7 dias'},
+  {id:'14d', label:'Últimos 14 dias'},
+  {id:'30d', label:'Últimos 30 dias'},
+  {id:'6m', label:'Últimos 6 meses'},
+  {id:'custom', label:'Período personalizado'}
+];
+// Converte um preset em {de, ate} (formato ISO yyyy-mm-dd), calculado a partir de hoje.
+function _fkPresetParaRange(preset){
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+  function iso(d){ var p=function(n){return (n<10?'0':'')+n;}; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
+  function addDias(d,n){ var r=new Date(d); r.setDate(r.getDate()+n); return r; }
+  switch(preset){
+    case 'hoje': return {de:iso(hoje), ate:iso(hoje)};
+    case 'semana': {
+      var dow = hoje.getDay();
+      var seg = addDias(hoje, dow===0?-6:1-dow);
+      return {de:iso(seg), ate:iso(addDias(seg,6))};
+    }
+    case 'mes': {
+      var ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+      var fim = new Date(hoje.getFullYear(), hoje.getMonth()+1, 0);
+      return {de:iso(ini), ate:iso(fim)};
+    }
+    case '7d':  return {de:iso(addDias(hoje,-6)),  ate:iso(hoje)};
+    case '14d': return {de:iso(addDias(hoje,-13)), ate:iso(hoje)};
+    case '30d': return {de:iso(addDias(hoje,-29)), ate:iso(hoje)};
+    case '6m': { var d=new Date(hoje); d.setMonth(d.getMonth()-6); return {de:iso(d), ate:iso(hoje)}; }
+    default: return null;
+  }
+}
+// Diz se uma data (ISO) passa em um filtro de período {preset, de, ate}.
+function _fkDataPassaFiltro(valorISO, filtroCfg){
+  if(!filtroCfg || !filtroCfg.preset) return true;
+  if(!valorISO) return false;
+  var range = filtroCfg.preset === 'custom' ? {de:filtroCfg.de, ate:filtroCfg.ate} : _fkPresetParaRange(filtroCfg.preset);
+  if(!range) return true;
+  if(range.de && valorISO < range.de) return false;
+  if(range.ate && valorISO > range.ate) return false;
+  return true;
+}
+
+var _fkFiltrosAtivos = {semFollowup:false, camposVazios:[], datas:{}, empresa:''};
 var _fkFiltrosSalvos = [];
+
+function _fkFiltrosNormalizar(f){
+  if(!f.camposVazios) f.camposVazios = [];
+  if(!f.datas) f.datas = {};
+  if(!f.empresa) f.empresa = '';
+  return f;
+}
 
 function _fkFiltrosCarregarStorage(){
   try{
@@ -5951,8 +6044,7 @@ function _fkFiltrosCarregarStorage(){
     if(raw){
       var d = JSON.parse(raw) || {};
       _fkFiltrosSalvos = d.salvos || [];
-      _fkFiltrosAtivos = d.ativos || {semFollowup:false, camposVazios:[]};
-      if(!_fkFiltrosAtivos.camposVazios) _fkFiltrosAtivos.camposVazios = [];
+      _fkFiltrosAtivos = _fkFiltrosNormalizar(d.ativos || {semFollowup:false, camposVazios:[], datas:{}, empresa:''});
     }
   }catch(e){}
 }
@@ -5990,14 +6082,31 @@ function _fkItemPassaFiltros(item, isLead){
       if(!_fkCampoVazio(item, isLead, campos[i])) return false;
     }
   }
+  var datas = _fkFiltrosAtivos.datas || {};
+  for(var j=0;j<FUNIL_FILTROS_DATA.length;j++){
+    var cfg = FUNIL_FILTROS_DATA[j];
+    var filtroCfg = datas[cfg.id];
+    if(filtroCfg && filtroCfg.preset){
+      if(!_fkDataPassaFiltro(cfg.getData(item, isLead), filtroCfg)) return false;
+    }
+  }
+  if(_fkFiltrosAtivos.empresa){
+    var termo = _fkFiltrosAtivos.empresa.toLowerCase();
+    var nomeCli = isLead ? (item.nome||'') : ((item.form&&item.form['f-cliente'])||'');
+    if(nomeCli.toLowerCase().indexOf(termo) < 0) return false;
+  }
   return true;
 }
 
 function fkAbrirFiltros(){
+  _fkFiltrosNormalizar(_fkFiltrosAtivos);
   fkRenderCamposVaziosLista();
+  fkRenderFiltrosData();
   fkPopularFiltrosSalvos();
   var sw = document.getElementById('fk-switch-sem-followup');
   if(sw) sw.checked = !!_fkFiltrosAtivos.semFollowup;
+  var emp = document.getElementById('fk-empresa-input');
+  if(emp) emp.value = _fkFiltrosAtivos.empresa || '';
   fkAtualizarResumoCamposVazios();
   fkAtualizarContadorFiltros();
   document.getElementById('fk-filtros-modal').classList.add('open');
@@ -6038,9 +6147,47 @@ function fkAtualizarResumoCamposVazios(){
 function fkToggleSemFollowup(checked){
   _fkFiltrosAtivos.semFollowup = checked;
 }
+function fkEmpresaChange(valor){
+  _fkFiltrosAtivos.empresa = (valor||'').trim();
+}
+
+// ── Filtros por período (Data de Criação, Último Contato, Próxima Tarefa, etc.) ──
+function fkRenderFiltrosData(){
+  var el = document.getElementById('fk-datas-lista');
+  if(!el) return;
+  el.innerHTML = FUNIL_FILTROS_DATA.map(function(cfg){
+    var f = (_fkFiltrosAtivos.datas && _fkFiltrosAtivos.datas[cfg.id]) || {preset:'',de:'',ate:''};
+    var opts = '<option value=""'+(!f.preset?' selected':'')+'>Selecionar</option>' +
+      FK_DATA_PRESETS.map(function(p){ return '<option value="'+p.id+'"'+(f.preset===p.id?' selected':'')+'>'+p.label+'</option>'; }).join('');
+    return '<div class="fk-data-filtro">'
+      + '<label class="fk-drawer-label">'+cfg.label+'</label>'
+      + '<select onchange="fkDataPresetChange(\''+cfg.id+'\', this.value)">'+opts+'</select>'
+      + '<div class="fk-data-custom" id="fk-data-custom-'+cfg.id+'" style="display:'+(f.preset==='custom'?'flex':'none')+'">'
+      + '<input type="date" value="'+(f.de||'')+'" onchange="fkDataCustomChange(\''+cfg.id+'\',\'de\',this.value)">'
+      + '<span>até</span>'
+      + '<input type="date" value="'+(f.ate||'')+'" onchange="fkDataCustomChange(\''+cfg.id+'\',\'ate\',this.value)">'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+function fkDataPresetChange(fieldId, preset){
+  if(!_fkFiltrosAtivos.datas) _fkFiltrosAtivos.datas = {};
+  _fkFiltrosAtivos.datas[fieldId] = {preset:preset, de:'', ate:''};
+  var customEl = document.getElementById('fk-data-custom-'+fieldId);
+  if(customEl) customEl.style.display = preset === 'custom' ? 'flex' : 'none';
+  fkAtualizarContadorFiltros();
+}
+function fkDataCustomChange(fieldId, parte, valor){
+  if(!_fkFiltrosAtivos.datas) _fkFiltrosAtivos.datas = {};
+  if(!_fkFiltrosAtivos.datas[fieldId]) _fkFiltrosAtivos.datas[fieldId] = {preset:'custom', de:'', ate:''};
+  _fkFiltrosAtivos.datas[fieldId][parte] = valor;
+}
 
 function fkAtualizarContadorFiltros(){
   var n = (_fkFiltrosAtivos.semFollowup ? 1 : 0) + (_fkFiltrosAtivos.camposVazios ? _fkFiltrosAtivos.camposVazios.length : 0);
+  var datas = _fkFiltrosAtivos.datas || {};
+  Object.keys(datas).forEach(function(k){ if(datas[k] && datas[k].preset) n++; });
+  if(_fkFiltrosAtivos.empresa) n++;
   var drawerCount = document.getElementById('fk-drawer-count');
   if(drawerCount) drawerCount.textContent = n;
   ['fk-badge-funil-card','fk-badge-funil-home'].forEach(function(id){
@@ -6052,11 +6199,14 @@ function fkAtualizarContadorFiltros(){
 }
 
 function fkLimparFiltros(){
-  _fkFiltrosAtivos = {semFollowup:false, camposVazios:[]};
+  _fkFiltrosAtivos = {semFollowup:false, camposVazios:[], datas:{}, empresa:''};
   _fkFiltrosSalvarStorage();
   fkRenderCamposVaziosLista();
+  fkRenderFiltrosData();
   var sw = document.getElementById('fk-switch-sem-followup');
   if(sw) sw.checked = false;
+  var emp = document.getElementById('fk-empresa-input');
+  if(emp) emp.value = '';
   fkAtualizarResumoCamposVazios();
   fkAtualizarContadorFiltros();
   _fkReRenderKanbansVisiveis();
@@ -6093,11 +6243,13 @@ function fkCarregarFiltroSalvo(idx){
   if(idx === '' || idx === null || idx === undefined) return;
   var f = _fkFiltrosSalvos[parseInt(idx,10)];
   if(!f) return;
-  _fkFiltrosAtivos = JSON.parse(JSON.stringify(f.filtros));
-  if(!_fkFiltrosAtivos.camposVazios) _fkFiltrosAtivos.camposVazios = [];
+  _fkFiltrosAtivos = _fkFiltrosNormalizar(JSON.parse(JSON.stringify(f.filtros)));
   var sw = document.getElementById('fk-switch-sem-followup');
   if(sw) sw.checked = !!_fkFiltrosAtivos.semFollowup;
+  var emp = document.getElementById('fk-empresa-input');
+  if(emp) emp.value = _fkFiltrosAtivos.empresa || '';
   fkRenderCamposVaziosLista();
+  fkRenderFiltrosData();
   fkAtualizarResumoCamposVazios();
   fkAtualizarContadorFiltros();
 }
