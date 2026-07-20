@@ -5360,7 +5360,7 @@ function buildPDF(tipo){
       +'<img src="https://i.imgur.com/0HNjldm.png" style="height:52px;width:auto;object-fit:contain;flex-shrink:0" alt="Crazy Som">'
       +'<div style="min-width:0"><p style="font-size:10px;color:var(--text-dim);line-height:1.7">'
       +(full?'CRAZY COMERCIO E LOCACAO DE EQUIPAMENTOS LTDA<br>CNPJ: 10.909.827/0001-76 | IE: 0240563999<br>':'')
-      +'(51) 3428-5053 | fabianoperc@gmail.com<br>OSVALDO CRUZ, 36 - NITEROI - Canoas - RS - CEP: 92110-470</p></div></div>'
+      +'(51) 3428-5053 | '+eh((usuarioAtual&&usuarioAtual.id)?usuarioAtual.id:'comercial@crazysom.com.br')+'<br>OSVALDO CRUZ, 36 - NITEROI - Canoas - RS - CEP: 92110-470</p></div></div>'
       +'<div class="ph-r" style="min-width:0;max-width:130px;word-break:break-word"><div class="pd">'+dataorc+'</div><div class="pl">Orçamento</div>'
       +'<div class="pn" style="font-size:15px;word-break:break-all">'+orcN+'</div>'
       +(full&&gv('f-val')?'<div class="vbox"><div class="vl">Validade</div><div class="vd">'+fD(gv('f-val'))+'</div></div>':'')
