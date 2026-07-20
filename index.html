@@ -1272,6 +1272,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <button class="btn btn-o btn-sm" onclick="document.getElementById('eventos-ov').classList.remove('open')">✕</button>
       </div>
     </div>
+    <div id="eventos-status" style="display:none;padding:9px 12px;border-radius:6px;font-size:11.5px;font-weight:700;margin:10px 0"></div>
     <input id="eventos-busca" type="text" placeholder="🔍 Buscar por nome ou cidade..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text);font-size:12px;margin:12px 0 10px" oninput="eventosRenderLista(this.value)">
     <div id="eventos-lista" style="max-height:440px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
   </div>
@@ -2007,7 +2008,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
           <span style="font-size:10px;color:#ef5350;font-weight:800;text-transform:uppercase">Com Imposto</span>
           <span style="font-size:9px;color:var(--text-dim);margin-left:auto">c/ nota</span>
         </div>
-        <input type="number" id="val-liq" placeholder="0" step="1" readonly style="width:100%;background:var(--surface-3);color:#fff;border:1px solid var(--R);border-radius:4px;font-size:15px;font-weight:700;padding:6px 9px;box-sizing:border-box;cursor:pointer" onclick="event.stopPropagation();selImpVenda('cimp')">
+        <input type="number" id="val-liq" placeholder="0" step="1" readonly style="width:100%;background:var(--surface-3);color:var(--text);border:1px solid var(--R);border-radius:4px;font-size:15px;font-weight:700;padding:6px 9px;box-sizing:border-box;cursor:pointer" onclick="event.stopPropagation();selImpVenda('cimp')">
         <div style="font-size:9px;color:var(--text-dim);margin-top:4px">calculado automaticamente</div>
       </div>
     </div>
@@ -10162,36 +10163,55 @@ function clienteSelecionarParaOrcamento(idx){
 var EVENTOS=[];
 var _eventoBuscaModoSelecao=false;
 
+// Guarda o motivo da última falha ao falar com o Firestore, para exibir na tela
+// em vez de só no console — essencial pra diagnosticar problema de permissão.
+var _eventosUltimoErro=null;
+
 async function eventosCarregarStorage(){
-  if(!fbDb) return;
+  _eventosUltimoErro=null;
+  if(!fbDb){ _eventosUltimoErro='Sem conexão com o servidor (Firebase indisponível).'; return false; }
   try{
     var snap=await fbDb.collection('eventos').get();
     var lista=[];
     snap.forEach(function(doc){ lista.push(doc.data()); });
     EVENTOS=lista;
     try{ localStorage.setItem('crazySomEventos',JSON.stringify(EVENTOS)); }catch(e){}
-    return;
-  }catch(e){ console.warn('eventosCarregarStorage:',e); }
+    return true;
+  }catch(e){
+    console.warn('eventosCarregarStorage:',e);
+    _eventosUltimoErro=(e&&e.message)?e.message:String(e);
+  }
   try{
     var d=localStorage.getItem('crazySomEventos');
     if(d){ var arr=JSON.parse(d); if(Array.isArray(arr)) EVENTOS=arr; }
   }catch(e){}
+  return false;
 }
 
 async function _eventoSalvarFirestore(obj){
+  _eventosUltimoErro=null;
   try{
     await fbDb.collection('eventos').doc(obj.id).set(obj);
     try{ localStorage.setItem('crazySomEventos',JSON.stringify(EVENTOS)); }catch(e){}
     return true;
-  }catch(e){ console.warn('_eventoSalvarFirestore:',e); return false; }
+  }catch(e){
+    console.warn('_eventoSalvarFirestore:',e);
+    _eventosUltimoErro=(e&&e.message)?e.message:String(e);
+    return false;
+  }
 }
 
 async function _eventoExcluirFirestore(id){
+  _eventosUltimoErro=null;
   try{
     await fbDb.collection('eventos').doc(id).delete();
     try{ localStorage.setItem('crazySomEventos',JSON.stringify(EVENTOS)); }catch(e){}
     return true;
-  }catch(e){ console.warn('_eventoExcluirFirestore:',e); return false; }
+  }catch(e){
+    console.warn('_eventoExcluirFirestore:',e);
+    _eventosUltimoErro=(e&&e.message)?e.message:String(e);
+    return false;
+  }
 }
 
 async function abrirEventos(){
@@ -10199,13 +10219,29 @@ async function abrirEventos(){
   document.getElementById('eventos-busca').value='';
   document.getElementById('eventos-lista').innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">⏳ Carregando eventos...</div>';
   document.getElementById('eventos-ov').classList.add('open');
+  _eventosStatus('');
   mostrarCarregando('⏳ Carregando eventos...');
   try{
-    await eventosCarregarStorage();
+    var ok=await eventosCarregarStorage();
+    if(!ok){
+      _eventosStatus('⚠️ Não foi possível carregar os eventos do servidor'+(_eventosUltimoErro?': "'+_eventosUltimoErro+'"':'')+'. Verifique as regras do Firestore para a coleção "eventos" no console do Firebase. Mostrando apenas o cache salvo neste navegador.','err');
+    }
     eventosRenderLista('');
   }finally{
     esconderCarregando();
   }
+}
+
+// Mostra um status/erro visível dentro do próprio modal de Cadastro de Eventos
+// (o #drive-status da tela de orçamento fica escondido atrás deste modal).
+function _eventosStatus(msg,tipo){
+  var el=document.getElementById('eventos-status');
+  if(!el) return;
+  if(!msg){ el.style.display='none'; el.textContent=''; return; }
+  el.textContent=msg;
+  el.style.display='block';
+  if(tipo==='ok'){ el.style.background='rgba(46,125,50,.15)'; el.style.color='#2e7d32'; el.style.border='1px solid #2e7d32'; }
+  else{ el.style.background='rgba(198,40,40,.12)'; el.style.color='#c62828'; el.style.border='1px solid #c62828'; }
 }
 
 function eventosRenderLista(filtro){
@@ -10302,7 +10338,14 @@ async function eventoSalvar(){
   var ok=await _eventoSalvarFirestore(obj);
   document.getElementById('evento-form-ov').classList.remove('open');
   if(document.getElementById('eventos-ov').classList.contains('open')) eventosRenderLista(document.getElementById('eventos-busca').value);
-  if(ok) driveStatus('✅ Evento salvo no cadastro','ok'); else driveStatus('⚠️ Evento salvo localmente (Firestore indisponível)','err');
+  if(ok){
+    _eventosStatus('✅ Evento salvo no cadastro','ok');
+    driveStatus('✅ Evento salvo no cadastro','ok');
+  } else {
+    var msgErro='❌ Evento NÃO foi salvo no servidor'+(_eventosUltimoErro?': "'+_eventosUltimoErro+'"':'')+'. Ficou salvo só neste navegador — outros usuários/dispositivos não vão vê-lo até isso ser corrigido.';
+    _eventosStatus(msgErro,'err');
+    driveStatus(msgErro,'err');
+  }
   return obj;
 }
 
@@ -10311,10 +10354,17 @@ async function eventoExcluirAtual(){
   var e=EVENTOS.find(function(x){return x.id===id;});
   if(!confirm('🗑️ Excluir o evento "'+(e?e.nome:'')+'" do cadastro?\n\nEsta ação não afeta orçamentos já emitidos.'))return;
   EVENTOS=EVENTOS.filter(function(x){return x.id!==id;});
-  await _eventoExcluirFirestore(id);
+  var ok=await _eventoExcluirFirestore(id);
   document.getElementById('evento-form-ov').classList.remove('open');
   if(document.getElementById('eventos-ov').classList.contains('open')) eventosRenderLista(document.getElementById('eventos-busca').value);
-  driveStatus('🗑️ Evento excluído do cadastro','ok');
+  if(ok){
+    _eventosStatus('🗑️ Evento excluído do cadastro','ok');
+    driveStatus('🗑️ Evento excluído do cadastro','ok');
+  } else {
+    var msgErroExcl='❌ Não foi possível excluir o evento no servidor'+(_eventosUltimoErro?': "'+_eventosUltimoErro+'"':'')+'.';
+    _eventosStatus(msgErroExcl,'err');
+    driveStatus(msgErroExcl,'err');
+  }
 }
 
 // ── Integração com a tela de Orçamento ──────────────────────────────
