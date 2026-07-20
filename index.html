@@ -487,6 +487,34 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 .fk-card-val{font-size:11px;font-weight:800;color:var(--text);}
 .fk-fu-badge{font-size:9px;font-weight:700;padding:1px 6px;border-radius:9px;background:#e3f2fd;color:#1565c0;white-space:nowrap;}
 .fk-fu-badge.fk-fu-atrasado{background:#ffebee;color:#c62828;}
+.fk-filtros-btn{position:relative;padding:6px 13px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.fk-filtros-badge{display:none;position:absolute;top:-6px;right:-6px;background:var(--R);color:#fff;font-size:9px;font-weight:800;border-radius:9px;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px;}
+.fk-drawer{background:var(--surface);width:380px;max-width:92vw;height:100%;box-shadow:-4px 0 18px rgba(0,0,0,.18);display:flex;flex-direction:column;}
+.fk-drawer-head{display:flex;align-items:center;gap:8px;padding:16px 18px;border-bottom:1px solid var(--border);}
+.fk-drawer-title{font-size:14px;font-weight:800;color:var(--text);}
+.fk-drawer-count{background:var(--R);color:#fff;font-size:10px;font-weight:800;border-radius:10px;padding:1px 8px;}
+.fk-drawer-close{margin-left:auto;background:none;border:none;color:var(--text-muted);font-size:20px;line-height:1;cursor:pointer;}
+.fk-drawer-body{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:16px;}
+.fk-drawer-foot{display:flex;gap:8px;padding:14px 18px;border-top:1px solid var(--border);}
+.fk-drawer-label{font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:6px;}
+.fk-salvos-row{display:flex;gap:6px;align-items:center;}
+.fk-salvos-row select{flex:1;padding:7px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--text);background:var(--surface-2);}
+.fk-icon-btn{background:none;border:none;color:var(--text-muted);font-size:14px;cursor:pointer;padding:4px;}
+.fk-icon-btn:hover{color:var(--text);}
+.fk-criar-link{background:none;border:none;color:var(--R);font-size:11px;font-weight:700;cursor:pointer;padding:0;margin-top:6px;}
+.fk-switch-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.fk-switch-label{font-size:12px;color:var(--text);}
+.fk-switch{position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0;}
+.fk-switch input{opacity:0;width:0;height:0;}
+.fk-switch-track{position:absolute;cursor:pointer;inset:0;background:var(--border-strong);border-radius:20px;transition:background .15s;}
+.fk-switch-track::before{content:"";position:absolute;height:14px;width:14px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .15s;}
+.fk-switch input:checked + .fk-switch-track{background:var(--R);}
+.fk-switch input:checked + .fk-switch-track::before{transform:translateX(16px);}
+.fk-campos-vazios-head{display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:8px 0;border-top:1px solid var(--border);}
+.fk-campos-vazios-lista{display:flex;flex-direction:column;gap:8px;padding:6px 0 4px;}
+.fk-campo-check{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);}
+.fk-campo-check input{width:14px;height:14px;}
+.fk-campos-vazios-resumo{font-size:10.5px;color:var(--text-muted);}
 .fk-timeline{max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:8px 10px;background:var(--surface-3);}
 .fk-tl-item{display:flex;gap:8px;padding:7px 0;border-bottom:1px solid #1f1f1f;}
 .fk-tl-item:last-child{border-bottom:none;}
@@ -730,7 +758,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 
       <div class="home-card green" id="home-btn-funil" onclick="abrirFunilHome()">
         <div class="home-card-ico">📊</div>
-        <div class="home-card-title">Funil de Vendas</div>
+        <div class="home-card-title">CRM — Funil de Vendas</div>
         <div class="home-card-desc">Acompanhamento comercial por etapa do funil</div>
       </div>
 
@@ -806,7 +834,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 <div id="funil-home-ov" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:89000;flex-direction:column;overflow-y:auto">
   <!-- Topo -->
   <div style="background:#1b5e20;padding:12px 18px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10;border-bottom:2px solid #2e7d32">
-    <span style="font-size:16px;font-weight:900;color:var(--text);letter-spacing:.5px">📊 FUNIL DE VENDAS — ACOMPANHAMENTO COMERCIAL</span>
+    <span style="font-size:16px;font-weight:900;color:var(--text);letter-spacing:.5px">📊 CRM — FUNIL DE VENDAS — ACOMPANHAMENTO COMERCIAL</span>
     <button onclick="fecharFunilHome()" style="margin-left:auto;background:rgba(255,255,255,.12);color:var(--text);border:none;border-radius:6px;padding:6px 16px;font-size:12px;font-weight:800;cursor:pointer">✕ Fechar</button>
   </div>
 
@@ -830,6 +858,10 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div>
         <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">&nbsp;</label>
         <button onclick="leadNovoAbrir()" style="padding:7px 16px;background:#00695c;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap">+ Novo Lead</button>
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">&nbsp;</label>
+        <button class="fk-filtros-btn" onclick="fkAbrirFiltros()">🔍 Filtros<span class="fk-filtros-badge" id="fk-badge-funil-home"></span></button>
       </div>
       <div style="margin-left:auto">
         <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">&nbsp;</label>
@@ -895,6 +927,53 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 
     <div style="margin-top:14px;text-align:center">
       <a href="javascript:void(0)" onclick="fkAbrirOrcamentoCompleto()" style="font-size:11px;color:#1565c0;font-weight:700">Abrir orçamento completo →</a>
+    </div>
+  </div>
+</div>
+
+<!-- Painel de Filtros do CRM (funil) — estilo RD Station -->
+<div class="ov" id="fk-filtros-modal" style="z-index:97000;align-items:stretch;justify-content:flex-end">
+  <div class="fk-drawer">
+    <div class="fk-drawer-head">
+      <span class="fk-drawer-title">Filtros</span>
+      <span class="fk-drawer-count" id="fk-drawer-count">0</span>
+      <button class="fk-drawer-close" onclick="fkFecharFiltros()">&times;</button>
+    </div>
+    <div class="fk-drawer-body">
+
+      <div>
+        <label class="fk-drawer-label">Filtros salvos</label>
+        <div class="fk-salvos-row">
+          <select id="fk-salvos-select" onchange="fkCarregarFiltroSalvo(this.value)">
+            <option value="">Selecione um filtro salvo...</option>
+          </select>
+          <button class="fk-icon-btn" title="Renomear" onclick="fkRenomearFiltroSalvo()">✏️</button>
+          <button class="fk-icon-btn" title="Excluir" onclick="fkExcluirFiltroSalvo()">🗑️</button>
+        </div>
+        <button class="fk-criar-link" onclick="fkCriarFiltroSalvo()">+ Criar filtro salvo</button>
+      </div>
+
+      <div class="fk-switch-row">
+        <span class="fk-switch-label">Ver apenas negociações sem follow-up agendado</span>
+        <label class="fk-switch">
+          <input type="checkbox" id="fk-switch-sem-followup" onchange="fkToggleSemFollowup(this.checked)">
+          <span class="fk-switch-track"></span>
+        </label>
+      </div>
+
+      <div>
+        <div class="fk-campos-vazios-head" onclick="fkToggleCamposVazios()">
+          <label class="fk-drawer-label" style="margin-bottom:0">Campos vazios</label>
+          <span id="fk-campos-vazios-seta">▾</span>
+        </div>
+        <div class="fk-campos-vazios-resumo" id="fk-campos-vazios-resumo">Nenhum campo selecionado</div>
+        <div class="fk-campos-vazios-lista" id="fk-campos-vazios-lista" style="display:none"></div>
+      </div>
+
+    </div>
+    <div class="fk-drawer-foot">
+      <button onclick="fkLimparFiltros()" style="flex:1;padding:9px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:12px;font-weight:700;cursor:pointer">Limpar filtros</button>
+      <button onclick="fkAplicarFiltros()" style="flex:1;padding:9px;background:var(--R);color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:800;cursor:pointer">Aplicar filtros</button>
     </div>
   </div>
 </div>
@@ -2032,7 +2111,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 <!--  FUNIL DE VENDAS — CARD FIXO (fora do totbox)          -->
 <!-- ═══════════════════════════════════════════════════════ -->
 <div class="card" id="funil-card" style="display:none;border-radius:0 0 10px 10px;border-bottom:none">
-  <div class="st" style="background:#1b5e20">📊 Funil de Vendas — Acompanhamento Comercial</div>
+  <div class="st" style="background:#1b5e20">📊 CRM — Funil de Vendas — Acompanhamento Comercial</div>
 
   <!-- Filtros -->
   <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:9px 11px;margin-bottom:10px">
@@ -2052,6 +2131,10 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     <div>
       <label>&nbsp;</label>
       <button onclick="leadNovoAbrir()" style="padding:6px 13px;background:#00695c;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">+ Novo Lead</button>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button class="fk-filtros-btn" onclick="fkAbrirFiltros()">🔍 Filtros<span class="fk-filtros-badge" id="fk-badge-funil-card"></span></button>
     </div>
     <div style="margin-left:auto">
       <label>&nbsp;</label>
@@ -5844,6 +5927,216 @@ async function _leadPatch(id, mutatorFn){
 var FUNIL_COL_ORDEM = ['sem_contato','contato_feito','identificacao','orcando','enviada','negociacao','standby','ganha','perdida','sem_etapa'];
 var FUNIL_COL_SI = Object.assign({ sem_etapa:{label:'⚠️ Sem Etapa', bg:'#5d4037', tx:'#fff'} }, LEAD_COL_SI, FUNIL_SI);
 
+// ═══════════════════════════════════════════════════════
+// FILTROS AVANÇADOS DO CRM (FUNIL) — estilo RD Station
+// Campos adaptados ao nosso modelo: leads não possuem Fonte/Origem
+// nem Data do Evento, por isso são sempre tratados como "vazios"
+// nesses dois campos (Campanha e Produto/Serviço do RD Station não
+// existem no nosso sistema e por isso não entraram na lista).
+// ═══════════════════════════════════════════════════════
+var FUNIL_CAMPOS_VAZIOS = [
+  {id:'cliente',  label:'Empresa / Cliente'},
+  {id:'fonte',    label:'Fonte / Origem'},
+  {id:'evento',   label:'Data do Evento'},
+  {id:'telefone', label:'Telefone'},
+  {id:'email',    label:'E-mail'},
+  {id:'followup', label:'Próximo Follow-up'}
+];
+var _fkFiltrosAtivos = {semFollowup:false, camposVazios:[]};
+var _fkFiltrosSalvos = [];
+
+function _fkFiltrosCarregarStorage(){
+  try{
+    var raw = localStorage.getItem('crazySomFiltrosFunil');
+    if(raw){
+      var d = JSON.parse(raw) || {};
+      _fkFiltrosSalvos = d.salvos || [];
+      _fkFiltrosAtivos = d.ativos || {semFollowup:false, camposVazios:[]};
+      if(!_fkFiltrosAtivos.camposVazios) _fkFiltrosAtivos.camposVazios = [];
+    }
+  }catch(e){}
+}
+function _fkFiltrosSalvarStorage(){
+  try{
+    localStorage.setItem('crazySomFiltrosFunil', JSON.stringify({salvos:_fkFiltrosSalvos, ativos:_fkFiltrosAtivos}));
+  }catch(e){}
+}
+_fkFiltrosCarregarStorage();
+
+// Diz se um campo específico está vazio para o item (orçamento ou lead).
+function _fkCampoVazio(item, isLead, campoId){
+  var f = (!isLead && item.form) || {};
+  var d = (!isLead && item.dados) || {};
+  switch(campoId){
+    case 'cliente':  return isLead ? !item.nome : !f['f-cliente'];
+    case 'fonte':    return isLead ? true : !f['f-fonte'];
+    case 'evento':   return isLead ? true : !f['f-dia'];
+    case 'telefone': return isLead ? !item.telefone : !f['f-tel'];
+    case 'email':    return isLead ? !item.email : !f['f-email'];
+    case 'followup': return isLead ? !item.followupData : !d.followupData;
+    default: return false;
+  }
+}
+
+// Diz se um item (orçamento ou lead) passa nos filtros avançados ativos no momento.
+function _fkItemPassaFiltros(item, isLead){
+  if(_fkFiltrosAtivos.semFollowup){
+    var fu = isLead ? item.followupData : ((item.dados||{}).followupData);
+    if(fu) return false;
+  }
+  var campos = _fkFiltrosAtivos.camposVazios;
+  if(campos && campos.length){
+    for(var i=0;i<campos.length;i++){
+      if(!_fkCampoVazio(item, isLead, campos[i])) return false;
+    }
+  }
+  return true;
+}
+
+function fkAbrirFiltros(){
+  fkRenderCamposVaziosLista();
+  fkPopularFiltrosSalvos();
+  var sw = document.getElementById('fk-switch-sem-followup');
+  if(sw) sw.checked = !!_fkFiltrosAtivos.semFollowup;
+  fkAtualizarResumoCamposVazios();
+  fkAtualizarContadorFiltros();
+  document.getElementById('fk-filtros-modal').classList.add('open');
+}
+function fkFecharFiltros(){
+  var m = document.getElementById('fk-filtros-modal');
+  if(m) m.classList.remove('open');
+}
+
+function fkRenderCamposVaziosLista(){
+  var el = document.getElementById('fk-campos-vazios-lista');
+  if(!el) return;
+  el.innerHTML = FUNIL_CAMPOS_VAZIOS.map(function(c){
+    var checked = _fkFiltrosAtivos.camposVazios.indexOf(c.id) >= 0;
+    return '<label class="fk-campo-check"><input type="checkbox" value="'+c.id+'" '+(checked?'checked':'')+' onchange="fkToggleCampoVazio(\''+c.id+'\', this.checked)"> '+c.label+'</label>';
+  }).join('');
+}
+function fkToggleCampoVazio(id, checked){
+  var idx = _fkFiltrosAtivos.camposVazios.indexOf(id);
+  if(checked && idx < 0) _fkFiltrosAtivos.camposVazios.push(id);
+  else if(!checked && idx >= 0) _fkFiltrosAtivos.camposVazios.splice(idx,1);
+  fkAtualizarResumoCamposVazios();
+}
+function fkToggleCamposVazios(){
+  var lista = document.getElementById('fk-campos-vazios-lista');
+  var seta = document.getElementById('fk-campos-vazios-seta');
+  if(!lista) return;
+  var aberto = lista.style.display !== 'none';
+  lista.style.display = aberto ? 'none' : 'flex';
+  if(seta) seta.textContent = aberto ? '▾' : '▴';
+}
+function fkAtualizarResumoCamposVazios(){
+  var el = document.getElementById('fk-campos-vazios-resumo');
+  if(!el) return;
+  var n = _fkFiltrosAtivos.camposVazios.length;
+  el.textContent = n === 0 ? 'Nenhum campo selecionado' : n + ' campo(s) selecionado(s)';
+}
+function fkToggleSemFollowup(checked){
+  _fkFiltrosAtivos.semFollowup = checked;
+}
+
+function fkAtualizarContadorFiltros(){
+  var n = (_fkFiltrosAtivos.semFollowup ? 1 : 0) + (_fkFiltrosAtivos.camposVazios ? _fkFiltrosAtivos.camposVazios.length : 0);
+  var drawerCount = document.getElementById('fk-drawer-count');
+  if(drawerCount) drawerCount.textContent = n;
+  ['fk-badge-funil-card','fk-badge-funil-home'].forEach(function(id){
+    var b = document.getElementById(id);
+    if(!b) return;
+    if(n > 0){ b.style.display = 'block'; b.textContent = n; }
+    else{ b.style.display = 'none'; b.textContent = ''; }
+  });
+}
+
+function fkLimparFiltros(){
+  _fkFiltrosAtivos = {semFollowup:false, camposVazios:[]};
+  _fkFiltrosSalvarStorage();
+  fkRenderCamposVaziosLista();
+  var sw = document.getElementById('fk-switch-sem-followup');
+  if(sw) sw.checked = false;
+  fkAtualizarResumoCamposVazios();
+  fkAtualizarContadorFiltros();
+  _fkReRenderKanbansVisiveis();
+}
+function fkAplicarFiltros(){
+  _fkFiltrosSalvarStorage();
+  fkAtualizarContadorFiltros();
+  fkFecharFiltros();
+  _fkReRenderKanbansVisiveis();
+}
+
+// Re-renderiza o(s) kanban(s) visível(is) na tela após alterar os filtros.
+function _fkReRenderKanbansVisiveis(){
+  var cardEl = document.getElementById('funil-card');
+  if(cardEl && cardEl.style.display !== 'none'){
+    funilRenderKanban('funil-kanban','funil-filtro-cons','funil-lista-status','funil-followup-alerta');
+  }
+  var homeEl = document.getElementById('funil-home-ov');
+  if(homeEl && homeEl.style.display !== 'none'){
+    funilRenderKanban('funil-home-kanban','funil-home-filtro-cons','funil-home-lista-status','funil-home-followup-alerta');
+  }
+}
+
+// ── Filtros salvos (localStorage) ──
+function fkPopularFiltrosSalvos(){
+  var sel = document.getElementById('fk-salvos-select');
+  if(!sel) return;
+  var atual = sel.value;
+  sel.innerHTML = '<option value="">Selecione um filtro salvo...</option>' +
+    _fkFiltrosSalvos.map(function(f,i){ return '<option value="'+i+'">'+eh(f.nome)+'</option>'; }).join('');
+  if(atual) sel.value = atual;
+}
+function fkCarregarFiltroSalvo(idx){
+  if(idx === '' || idx === null || idx === undefined) return;
+  var f = _fkFiltrosSalvos[parseInt(idx,10)];
+  if(!f) return;
+  _fkFiltrosAtivos = JSON.parse(JSON.stringify(f.filtros));
+  if(!_fkFiltrosAtivos.camposVazios) _fkFiltrosAtivos.camposVazios = [];
+  var sw = document.getElementById('fk-switch-sem-followup');
+  if(sw) sw.checked = !!_fkFiltrosAtivos.semFollowup;
+  fkRenderCamposVaziosLista();
+  fkAtualizarResumoCamposVazios();
+  fkAtualizarContadorFiltros();
+}
+function fkCriarFiltroSalvo(){
+  var nome = prompt('Nome do filtro salvo:');
+  if(!nome || !nome.trim()) return;
+  _fkFiltrosSalvos.push({nome:nome.trim(), filtros:JSON.parse(JSON.stringify(_fkFiltrosAtivos))});
+  _fkFiltrosSalvarStorage();
+  fkPopularFiltrosSalvos();
+  var sel = document.getElementById('fk-salvos-select');
+  if(sel) sel.value = String(_fkFiltrosSalvos.length-1);
+}
+function fkRenomearFiltroSalvo(){
+  var sel = document.getElementById('fk-salvos-select');
+  var idx = sel && sel.value;
+  if(!idx){ alert('Selecione um filtro salvo para renomear.'); return; }
+  var f = _fkFiltrosSalvos[parseInt(idx,10)];
+  if(!f) return;
+  var novoNome = prompt('Novo nome do filtro:', f.nome);
+  if(!novoNome || !novoNome.trim()) return;
+  f.nome = novoNome.trim();
+  _fkFiltrosSalvarStorage();
+  fkPopularFiltrosSalvos();
+  sel.value = idx;
+}
+function fkExcluirFiltroSalvo(){
+  var sel = document.getElementById('fk-salvos-select');
+  var idx = sel && sel.value;
+  if(!idx){ alert('Selecione um filtro salvo para excluir.'); return; }
+  var f = _fkFiltrosSalvos[parseInt(idx,10)];
+  if(!f) return;
+  if(!confirm('Excluir o filtro salvo "'+f.nome+'"?')) return;
+  _fkFiltrosSalvos.splice(parseInt(idx,10),1);
+  _fkFiltrosSalvarStorage();
+  fkPopularFiltrosSalvos();
+}
+
+fkAtualizarContadorFiltros();
+
 function funilMostrarCard(){
   var card = document.getElementById('funil-card');
   if(card) card.style.display = 'block';
@@ -5926,11 +6219,13 @@ function funilRenderKanban(kanbanId, filtroConsElId, statusElId, alertaElId){
 
   var baseOrc = _funilCache.filter(function(o){
     if(cons && (o.form && o.form['f-cons']) !== cons) return false;
+    if(!_fkItemPassaFiltros(o, false)) return false;
     return true;
   });
   var baseLeads = LEADS.filter(function(l){
     if(l.convertido) return false;
     if(cons && (l.consultor||'') !== cons) return false;
+    if(!_fkItemPassaFiltros(l, true)) return false;
     return true;
   });
 
