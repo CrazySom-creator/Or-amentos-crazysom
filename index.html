@@ -772,6 +772,13 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <div class="home-card-desc">Acompanhamento comercial por etapa do funil</div>
       </div>
 
+      <div class="home-card blue" id="home-btn-tarefas" onclick="abrirMinhasTarefas()">
+        <div class="home-card-ico">📋</div>
+        <div class="home-card-title">Minhas Tarefas</div>
+        <div class="home-card-desc">Próximos passos agendados com clientes — ligações, propostas e contratos pendentes</div>
+        <div class="home-card-badge" id="home-badge-tarefas">!</div>
+      </div>
+
       <div class="home-card orange" id="home-btn-com" onclick="abrirDashboard();fecharHome()">
         <div class="home-card-ico">📈</div>
         <div class="home-card-title">Dashboard Comercial</div>
@@ -888,6 +895,36 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  TAREFAS — TELA DEDICADA "MINHAS TAREFAS"                -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="tarefas-ov" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:89000;flex-direction:column;overflow-y:auto">
+  <div style="background:#1565c0;padding:12px 18px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10;border-bottom:2px solid #0d47a1">
+    <span style="font-size:16px;font-weight:900;color:var(--text);letter-spacing:.5px">📋 MINHAS TAREFAS — PRÓXIMOS PASSOS COM CLIENTES</span>
+    <button onclick="fecharMinhasTarefas()" style="margin-left:auto;background:rgba(255,255,255,.12);color:var(--text);border:none;border-radius:6px;padding:6px 16px;font-size:12px;font-weight:800;cursor:pointer">✕ Fechar</button>
+  </div>
+
+  <div style="padding:18px 20px;max-width:1000px;width:100%;margin:0 auto;box-sizing:border-box">
+
+    <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:14px">
+      <div style="min-width:180px">
+        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">Consultor</label>
+        <select id="tarefas-filtro-cons" onchange="tarefasRenderMinhas()" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--text);background:var(--surface-2)">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">&nbsp;</label>
+        <button onclick="tarefasHomeRecarregar()" style="padding:7px 16px;background:var(--R);color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap">&#128260; Atualizar</button>
+      </div>
+    </div>
+
+    <div id="tarefas-minhas-corpo"></div>
+
+    <div style="height:32px"></div>
+  </div>
+</div>
+
 <!-- Modal de detalhe do card do funil: timeline + follow-up + mudança de etapa -->
 <div class="ov" id="fk-detail-modal" style="z-index:96000">
   <div class="modal-box" style="max-width:480px;position:relative">
@@ -923,6 +960,14 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <input type="date" id="fk-det-followup-data" style="flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--surface-2);color:var(--text)">
         <button onclick="fkSalvarFollowup()" style="padding:6px 12px;background:#1565c0;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Salvar</button>
       </div>
+    </div>
+
+    <div style="background:var(--surface-3);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;margin:0">📋 Tarefas</label>
+        <button onclick="tarefaAbrirNovaDoOrcamento()" style="padding:4px 10px;background:#1565c0;color:#fff;border:none;border-radius:4px;font-size:10px;font-weight:800;cursor:pointer">+ Agendar</button>
+      </div>
+      <div id="fk-det-tarefas"></div>
     </div>
 
     <div style="margin-bottom:10px">
@@ -976,6 +1021,15 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div>
         <label class="fk-drawer-label">Empresa / Cliente</label>
         <input type="text" id="fk-empresa-input" class="fk-empresa-input" placeholder="Buscar por nome..." oninput="fkEmpresaChange(this.value)">
+      </div>
+
+      <div>
+        <div class="fk-campos-vazios-head" onclick="fkToggleConsultoresFiltro()">
+          <label class="fk-drawer-label" style="margin-bottom:0">Consultor</label>
+          <span id="fk-consultores-seta">▾</span>
+        </div>
+        <div class="fk-campos-vazios-resumo" id="fk-consultores-resumo">Todos os consultores</div>
+        <div class="fk-campos-vazios-lista" id="fk-consultores-lista" style="display:none"></div>
       </div>
 
       <div>
@@ -1064,6 +1118,14 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       </div>
     </div>
 
+    <div style="background:var(--surface-3);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;margin:0">📋 Tarefas</label>
+        <button onclick="tarefaAbrirNovaDoLead()" style="padding:4px 10px;background:#1565c0;color:#fff;border:none;border-radius:4px;font-size:10px;font-weight:800;cursor:pointer">+ Agendar</button>
+      </div>
+      <div id="lead-det-tarefas"></div>
+    </div>
+
     <div style="margin-bottom:10px">
       <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:5px">🕒 Linha do Tempo</label>
       <div id="lead-det-timeline" class="fk-timeline"></div>
@@ -1076,6 +1138,56 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 
     <div style="text-align:center">
       <a href="javascript:void(0)" onclick="leadExcluirAtual()" style="font-size:11px;color:#c62828;font-weight:700">🗑️ Excluir lead</a>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de agendar/editar Tarefa (vinculada a um orçamento ou a um lead) -->
+<div class="ov" id="tarefa-form-modal" style="z-index:98000">
+  <div class="modal-box" style="max-width:420px;position:relative">
+    <button onclick="tarefaFecharForm()" style="position:absolute;top:10px;right:12px;background:none;border:none;color:var(--text-muted);font-size:22px;line-height:1;cursor:pointer">&times;</button>
+    <h2 id="tf-titulo">📋 Nova Tarefa</h2>
+    <div id="tf-vinc-label" style="font-size:11px;color:var(--text-muted);margin-bottom:14px"></div>
+    <input type="hidden" id="tf-id">
+    <input type="hidden" id="tf-vinc-tipo">
+    <input type="hidden" id="tf-vinc-id">
+
+    <div style="margin-bottom:10px">
+      <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Tipo de Tarefa</label>
+      <select id="tf-tipo" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:13px;background:var(--surface-2);color:var(--text)">
+        <option value="">Selecione...</option>
+      </select>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div style="flex:1">
+        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Data</label>
+        <input type="date" id="tf-data" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:13px;background:var(--surface-2);color:var(--text);box-sizing:border-box">
+      </div>
+      <div style="flex:1">
+        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Hora</label>
+        <input type="time" id="tf-hora" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:13px;background:var(--surface-2);color:var(--text);box-sizing:border-box">
+      </div>
+    </div>
+
+    <div style="margin-bottom:10px">
+      <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Consultor Responsável</label>
+      <select id="tf-consultor" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:13px;background:var(--surface-2);color:var(--text)">
+        <option value="">Selecione...</option>
+      </select>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Observação</label>
+      <textarea id="tf-obs" placeholder="Detalhe o que precisa ser feito..." style="width:100%;min-height:52px;padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--surface-2);color:var(--text);resize:vertical;box-sizing:border-box"></textarea>
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <button id="tf-btn-salvar" onclick="tarefaSalvar()" style="flex:1;padding:9px;background:#1565c0;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:800;cursor:pointer">💾 Salvar Tarefa</button>
+      <button onclick="tarefaFecharForm()" style="padding:9px 16px;background:var(--surface-3);color:var(--text-dim);border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer">Cancelar</button>
+    </div>
+    <div style="margin-top:12px;text-align:center;display:none" id="tf-btn-excluir-wrap">
+      <a href="javascript:void(0)" onclick="tarefaExcluirAtual()" style="font-size:11px;color:#c62828;font-weight:700">🗑️ Excluir tarefa</a>
     </div>
   </div>
 </div>
@@ -1120,6 +1232,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div class="rel-tab" onclick="admAba('permissoes')">🔐 Permissões por Cargo</div>
       <div class="rel-tab" onclick="admAba('dashboards')">📊 Acesso a Dashboards</div>
       <div class="rel-tab" onclick="admAba('tiposevento')">🎪 Tipos de Evento</div>
+      <div class="rel-tab" onclick="admAba('tipostarefa')">📋 Tipos de Tarefa</div>
     </div>
     <!-- ABA Usuários -->
     <div class="rel-pane active" id="admpane-usuarios">
@@ -1161,6 +1274,15 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <button class="btn btn-g btn-sm" onclick="tiposEventoAdicionar()">+ Adicionar</button>
       </div>
       <div id="tiposevento-lista" style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
+    </div>
+    <!-- ABA Tipos de Tarefa -->
+    <div class="rel-pane" id="admpane-tipostarefa">
+      <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Tipos disponíveis ao agendar uma tarefa (ex.: Ligar, Enviar Proposta, Assinatura Pendente). Adicione novos tipos conforme a necessidade do time comercial — a alteração vale pra todos os usuários assim que salva.</p>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <input id="tipostarefa-novo" type="text" placeholder="Ex: Reunião de Alinhamento" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);color:var(--text);font-size:12px" onkeydown="if(event.key==='Enter'){event.preventDefault();tiposTarefaAdicionar();}">
+        <button class="btn btn-g btn-sm" onclick="tiposTarefaAdicionar()">+ Adicionar</button>
+      </div>
+      <div id="tipostarefa-lista" style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
     </div>
   </div>
 </div>
@@ -2768,6 +2890,8 @@ async function doLogin(){
   clientesCarregarStorage();
   eventosCarregarStorage();
   tiposEventoCarregar();
+  tarefasCarregarStorage().then(atualizarBadgeTarefas);
+  tiposTarefaCarregar();
   carregarExcluidosDrive();
   // carregarSolExclusaoDrive() removida daqui: agora só roda quando o painel de Aprovações é aberto (evita varrer todos os orçamentos a cada login)
   // Abrir home screen ANTES de esconder o overlay de login (evita "flash" da tela de orçamento)
@@ -4887,6 +5011,8 @@ function _renderizarHome(){
   _homeShow('home-btn-rel', true);
   _homeShow('home-btn-com', dashTemAcesso('dash-com')||tudo);
   _homeShow('home-btn-funil', tudo||['adm','gerente','diretor','consultor','assistente'].includes(nivel)||dashTemAcesso('funil-card'));
+  _homeShow('home-btn-tarefas', true);
+  atualizarBadgeTarefas();
   // (home-btn-clonar removido — clonar está apenas na tela do orçamento)
 }
 
@@ -6126,13 +6252,14 @@ function _fkDataPassaFiltro(valorISO, filtroCfg){
   return true;
 }
 
-var _fkFiltrosAtivos = {semFollowup:false, camposVazios:[], datas:{}, empresa:''};
+var _fkFiltrosAtivos = {semFollowup:false, camposVazios:[], datas:{}, empresa:'', consultores:[]};
 var _fkFiltrosSalvos = [];
 
 function _fkFiltrosNormalizar(f){
   if(!f.camposVazios) f.camposVazios = [];
   if(!f.datas) f.datas = {};
   if(!f.empresa) f.empresa = '';
+  if(!f.consultores) f.consultores = [];
   return f;
 }
 
@@ -6142,7 +6269,7 @@ function _fkFiltrosCarregarStorage(){
     if(raw){
       var d = JSON.parse(raw) || {};
       _fkFiltrosSalvos = d.salvos || [];
-      _fkFiltrosAtivos = _fkFiltrosNormalizar(d.ativos || {semFollowup:false, camposVazios:[], datas:{}, empresa:''});
+      _fkFiltrosAtivos = _fkFiltrosNormalizar(d.ativos || {semFollowup:false, camposVazios:[], datas:{}, empresa:'', consultores:[]});
     }
   }catch(e){}
 }
@@ -6193,6 +6320,10 @@ function _fkItemPassaFiltros(item, isLead){
     var nomeCli = isLead ? (item.nome||'') : ((item.form&&item.form['f-cliente'])||'');
     if(nomeCli.toLowerCase().indexOf(termo) < 0) return false;
   }
+  if(_fkFiltrosAtivos.consultores && _fkFiltrosAtivos.consultores.length){
+    var consNome = isLead ? (item.consultor||'') : ((item.form&&item.form['f-cons'])||'');
+    if(_fkFiltrosAtivos.consultores.indexOf(consNome) < 0) return false;
+  }
   return true;
 }
 
@@ -6200,12 +6331,14 @@ function fkAbrirFiltros(){
   _fkFiltrosNormalizar(_fkFiltrosAtivos);
   fkRenderCamposVaziosLista();
   fkRenderFiltrosData();
+  fkRenderConsultoresLista();
   fkPopularFiltrosSalvos();
   var sw = document.getElementById('fk-switch-sem-followup');
   if(sw) sw.checked = !!_fkFiltrosAtivos.semFollowup;
   var emp = document.getElementById('fk-empresa-input');
   if(emp) emp.value = _fkFiltrosAtivos.empresa || '';
   fkAtualizarResumoCamposVazios();
+  fkAtualizarResumoConsultores();
   fkAtualizarContadorFiltros();
   document.getElementById('fk-filtros-modal').classList.add('open');
 }
@@ -6249,6 +6382,41 @@ function fkEmpresaChange(valor){
   _fkFiltrosAtivos.empresa = (valor||'').trim();
 }
 
+// ── Filtro por Consultor (multi-select) — reaproveita a lista dinâmica já
+// carregada em #f-cons (populada por popularConsultores()), igual ao truque
+// usado em _leadPopularConsultorSelect(), sem duplicar a busca no Firestore.
+function fkRenderConsultoresLista(){
+  var el = document.getElementById('fk-consultores-lista');
+  if(!el) return;
+  var orig = document.getElementById('f-cons');
+  var nomes = (orig && orig.options) ? Array.prototype.slice.call(orig.options).filter(function(o){return o.value;}).map(function(o){return o.value;}) : [];
+  if(!nomes.length){ el.innerHTML='<div style="font-size:11px;color:var(--text-muted);padding:6px 0">Nenhum consultor cadastrado.</div>'; return; }
+  el.innerHTML = nomes.map(function(n){
+    var checked = _fkFiltrosAtivos.consultores.indexOf(n) >= 0;
+    return '<label class="fk-campo-check"><input type="checkbox" value="'+eh(n)+'" '+(checked?'checked':'')+' onchange="fkToggleConsultorFiltro(this.value, this.checked)"> '+eh(n)+'</label>';
+  }).join('');
+}
+function fkToggleConsultorFiltro(nome, checked){
+  var idx = _fkFiltrosAtivos.consultores.indexOf(nome);
+  if(checked && idx < 0) _fkFiltrosAtivos.consultores.push(nome);
+  else if(!checked && idx >= 0) _fkFiltrosAtivos.consultores.splice(idx,1);
+  fkAtualizarResumoConsultores();
+}
+function fkToggleConsultoresFiltro(){
+  var lista = document.getElementById('fk-consultores-lista');
+  var seta = document.getElementById('fk-consultores-seta');
+  if(!lista) return;
+  var aberto = lista.style.display !== 'none';
+  lista.style.display = aberto ? 'none' : 'flex';
+  if(seta) seta.textContent = aberto ? '▾' : '▴';
+}
+function fkAtualizarResumoConsultores(){
+  var el = document.getElementById('fk-consultores-resumo');
+  if(!el) return;
+  var n = _fkFiltrosAtivos.consultores.length;
+  el.textContent = n === 0 ? 'Todos os consultores' : n + ' consultor(es) selecionado(s)';
+}
+
 // ── Filtros por período (Data de Criação, Último Contato, Próxima Tarefa, etc.) ──
 function fkRenderFiltrosData(){
   var el = document.getElementById('fk-datas-lista');
@@ -6286,6 +6454,7 @@ function fkAtualizarContadorFiltros(){
   var datas = _fkFiltrosAtivos.datas || {};
   Object.keys(datas).forEach(function(k){ if(datas[k] && datas[k].preset) n++; });
   if(_fkFiltrosAtivos.empresa) n++;
+  n += (_fkFiltrosAtivos.consultores ? _fkFiltrosAtivos.consultores.length : 0);
   var drawerCount = document.getElementById('fk-drawer-count');
   if(drawerCount) drawerCount.textContent = n;
   ['fk-badge-funil-card','fk-badge-funil-home'].forEach(function(id){
@@ -6297,15 +6466,17 @@ function fkAtualizarContadorFiltros(){
 }
 
 function fkLimparFiltros(){
-  _fkFiltrosAtivos = {semFollowup:false, camposVazios:[], datas:{}, empresa:''};
+  _fkFiltrosAtivos = {semFollowup:false, camposVazios:[], datas:{}, empresa:'', consultores:[]};
   _fkFiltrosSalvarStorage();
   fkRenderCamposVaziosLista();
   fkRenderFiltrosData();
+  fkRenderConsultoresLista();
   var sw = document.getElementById('fk-switch-sem-followup');
   if(sw) sw.checked = false;
   var emp = document.getElementById('fk-empresa-input');
   if(emp) emp.value = '';
   fkAtualizarResumoCamposVazios();
+  fkAtualizarResumoConsultores();
   fkAtualizarContadorFiltros();
   _fkReRenderKanbansVisiveis();
 }
@@ -6348,7 +6519,9 @@ function fkCarregarFiltroSalvo(idx){
   if(emp) emp.value = _fkFiltrosAtivos.empresa || '';
   fkRenderCamposVaziosLista();
   fkRenderFiltrosData();
+  fkRenderConsultoresLista();
   fkAtualizarResumoCamposVazios();
+  fkAtualizarResumoConsultores();
   fkAtualizarContadorFiltros();
 }
 function fkCriarFiltroSalvo(){
@@ -6819,6 +6992,7 @@ function leadAbrirDetalhe(id){
   document.getElementById('lead-det-obs-inicial').textContent = lead.obs || '';
   document.getElementById('lead-det-obs-inicial').style.display = lead.obs ? 'block' : 'none';
 
+  tarefasRenderNoDetalhe('lead', id, 'lead-det-tarefas');
   _leadRenderTimeline(lead);
   document.getElementById('lead-det-nova-nota').value = '';
 
@@ -6986,6 +7160,7 @@ function fkAbrirDetalhe(driveId, forcarEtapa){
 
   document.getElementById('fk-det-followup-data').value = d.followupData || '';
 
+  tarefasRenderNoDetalhe('orcamento', driveId, 'fk-det-tarefas');
   _fkRenderTimeline(d);
   document.getElementById('fk-det-nova-nota').value = '';
 
@@ -7151,6 +7326,315 @@ async function funilAbrirOrcamento(driveId, nome){
       comPanel.scrollIntoView({behavior:'smooth', block:'start'});
     }
   }, 800);
+}
+
+// ════════════════════════════════════════════════════════
+//  TAREFAS — agendamento de próximos passos com o cliente
+//  (formulário, renderização dentro dos cards de detalhe do funil/lead,
+//  tela dedicada "Minhas Tarefas" e card de contagem na Home)
+// ════════════════════════════════════════════════════════
+
+// Reaproveita a lista de nomes de consultores já populada dinamicamente em
+// #f-cons (via popularConsultores()), igual ao truque usado em
+// _leadPopularConsultorSelect() — evita duplicar a busca no Firestore.
+function _tarefaPopularConsultorSelect(){
+  var sel=document.getElementById('tf-consultor');
+  var orig=document.getElementById('f-cons');
+  if(sel && orig){
+    var atual=sel.value;
+    sel.innerHTML=orig.innerHTML;
+    sel.value=atual||'';
+  }
+}
+
+function tarefaAbrirNovaDoOrcamento(){
+  if(!_fkDetDriveId) return;
+  var orc=_funilCache.find(function(o){ return o.driveId===_fkDetDriveId; });
+  var f=(orc&&orc.form)||{};
+  var label=(f['f-cliente']||'—')+' · '+(f['f-num']||'—');
+  tarefaAbrirForm('orcamento', _fkDetDriveId, label, f['f-cons']||'');
+}
+
+function tarefaAbrirNovaDoLead(){
+  if(!_leadDetId) return;
+  var lead=LEADS.find(function(l){ return l.id===_leadDetId; });
+  if(!lead) return;
+  tarefaAbrirForm('lead', _leadDetId, lead.nome||'—', lead.consultor||'');
+}
+
+function tarefaAbrirForm(vinculoTipo, vinculoId, vinculoLabel, consultorPadrao){
+  document.getElementById('tf-titulo').textContent='📋 Nova Tarefa';
+  document.getElementById('tf-vinc-label').textContent=vinculoLabel||'';
+  document.getElementById('tf-id').value='';
+  document.getElementById('tf-vinc-tipo').value=vinculoTipo;
+  document.getElementById('tf-vinc-id').value=vinculoId;
+  document.getElementById('tf-data').value=_tarefaHojeISO();
+  document.getElementById('tf-hora').value='';
+  document.getElementById('tf-obs').value='';
+  document.getElementById('tf-btn-excluir-wrap').style.display='none';
+  popularTiposTarefa();
+  document.getElementById('tf-tipo').value='';
+  _tarefaPopularConsultorSelect();
+  document.getElementById('tf-consultor').value=consultorPadrao||(usuarioAtual?usuarioAtual.nome:'');
+  document.getElementById('tarefa-form-modal').classList.add('open');
+}
+
+function tarefaEditar(id){
+  var t=TAREFAS.find(function(x){ return x.id===id; });
+  if(!t) return;
+  document.getElementById('tf-titulo').textContent='✏️ Editar Tarefa';
+  document.getElementById('tf-vinc-label').textContent=t.vinculoLabel||'';
+  document.getElementById('tf-id').value=t.id;
+  document.getElementById('tf-vinc-tipo').value=t.vinculoTipo;
+  document.getElementById('tf-vinc-id').value=t.vinculoId;
+  popularTiposTarefa();
+  document.getElementById('tf-tipo').value=t.tipo||'';
+  document.getElementById('tf-data').value=t.data||'';
+  document.getElementById('tf-hora').value=t.hora||'';
+  document.getElementById('tf-obs').value=t.obs||'';
+  _tarefaPopularConsultorSelect();
+  document.getElementById('tf-consultor').value=t.consultor||'';
+  document.getElementById('tf-btn-excluir-wrap').style.display='block';
+  document.getElementById('tarefa-form-modal').classList.add('open');
+}
+
+function tarefaFecharForm(){
+  document.getElementById('tarefa-form-modal').classList.remove('open');
+}
+
+// Reflete o resultado do CRUD de tarefa em todos os lugares que podem estar
+// visíveis na tela no momento: o card de detalhe (funil/lead), a tela
+// "Minhas Tarefas" e o badge de contagem da Home.
+function _tarefasAtualizarTelasAbertas(vinculoTipo, vinculoId){
+  if(vinculoTipo==='orcamento' && _fkDetDriveId===vinculoId){
+    tarefasRenderNoDetalhe('orcamento', vinculoId, 'fk-det-tarefas');
+  }
+  if(vinculoTipo==='lead' && _leadDetId===vinculoId){
+    tarefasRenderNoDetalhe('lead', vinculoId, 'lead-det-tarefas');
+  }
+  var telaOv=document.getElementById('tarefas-ov');
+  if(telaOv && telaOv.style.display!=='none') tarefasRenderMinhas();
+  atualizarBadgeTarefas();
+}
+
+async function tarefaSalvar(){
+  var tipo=document.getElementById('tf-tipo').value;
+  var data=document.getElementById('tf-data').value;
+  var consultor=document.getElementById('tf-consultor').value;
+  if(!tipo){ alert('⚠️ Selecione o Tipo de Tarefa.'); return; }
+  if(!data){ alert('⚠️ Selecione a Data.'); return; }
+  if(!consultor){ alert('⚠️ Selecione o Consultor Responsável.'); return; }
+  var id=document.getElementById('tf-id').value;
+  var vinculoTipo=document.getElementById('tf-vinc-tipo').value;
+  var vinculoId=document.getElementById('tf-vinc-id').value;
+  var existente=id?TAREFAS.find(function(t){ return t.id===id; }):null;
+  var obj={
+    id: id||('trf_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)),
+    tipo: tipo,
+    data: data,
+    hora: document.getElementById('tf-hora').value||'',
+    obs: (document.getElementById('tf-obs').value||'').trim(),
+    consultor: consultor,
+    vinculoTipo: vinculoTipo,
+    vinculoId: vinculoId,
+    vinculoLabel: document.getElementById('tf-vinc-label').textContent||'',
+    status: existente?existente.status:'pendente',
+    criadoEm: existente?existente.criadoEm:new Date().toLocaleString('pt-BR'),
+    criadoPor: existente?existente.criadoPor:(usuarioAtual?usuarioAtual.nome:''),
+    concluidoEm: existente?existente.concluidoEm||'':'',
+    concluidoPor: existente?existente.concluidoPor||'':''
+  };
+  var idx=TAREFAS.findIndex(function(t){ return t.id===obj.id; });
+  if(idx>=0) TAREFAS[idx]=obj; else TAREFAS.push(obj);
+  var ok=await _tarefaSalvarFirestore(obj);
+  tarefaFecharForm();
+  _tarefasAtualizarTelasAbertas(vinculoTipo, vinculoId);
+  if(ok) driveStatus('✅ Tarefa salva','ok');
+  else driveStatus('⚠️ Tarefa salva localmente'+(_tarefasUltimoErro?': "'+_tarefasUltimoErro+'"':'')+' (Firestore indisponível)','err');
+}
+
+async function tarefaExcluirAtual(){
+  var id=document.getElementById('tf-id').value;
+  if(!id) return;
+  var t=TAREFAS.find(function(x){ return x.id===id; });
+  if(!confirm('🗑️ Excluir esta tarefa?\n\nEsta ação não pode ser desfeita.')) return;
+  var vinculoTipo=t?t.vinculoTipo:document.getElementById('tf-vinc-tipo').value;
+  var vinculoId=t?t.vinculoId:document.getElementById('tf-vinc-id').value;
+  TAREFAS=TAREFAS.filter(function(x){ return x.id!==id; });
+  await _tarefaExcluirFirestore(id);
+  tarefaFecharForm();
+  _tarefasAtualizarTelasAbertas(vinculoTipo, vinculoId);
+  driveStatus('🗑️ Tarefa excluída','ok');
+}
+
+async function tarefaConcluirRapido(id){
+  var t=TAREFAS.find(function(x){ return x.id===id; });
+  if(!t) return;
+  t.status='concluida';
+  t.concluidoEm=new Date().toLocaleString('pt-BR');
+  t.concluidoPor=usuarioAtual?usuarioAtual.nome:'';
+  await _tarefaSalvarFirestore(t);
+  _tarefasAtualizarTelasAbertas(t.vinculoTipo, t.vinculoId);
+}
+
+async function tarefaReabrirRapido(id){
+  var t=TAREFAS.find(function(x){ return x.id===id; });
+  if(!t) return;
+  t.status='pendente';
+  t.concluidoEm='';
+  t.concluidoPor='';
+  await _tarefaSalvarFirestore(t);
+  _tarefasAtualizarTelasAbertas(t.vinculoTipo, t.vinculoId);
+}
+
+async function tarefaExcluirRapido(id){
+  var t=TAREFAS.find(function(x){ return x.id===id; });
+  if(!t) return;
+  if(!confirm('🗑️ Excluir esta tarefa?\n\nEsta ação não pode ser desfeita.')) return;
+  TAREFAS=TAREFAS.filter(function(x){ return x.id!==id; });
+  await _tarefaExcluirFirestore(id);
+  _tarefasAtualizarTelasAbertas(t.vinculoTipo, t.vinculoId);
+}
+
+var _TAREFA_URGENCIA_SI={
+  atrasada:{bg:'#c62828',tx:'#fff',label:'⚠️ Atrasada'},
+  hoje:{bg:'#e65100',tx:'#fff',label:'📅 Hoje'},
+  proxima:{bg:'#1565c0',tx:'#fff',label:'🔜 Próxima'},
+  futura:{bg:'#546e7a',tx:'#fff',label:'📆 Futura'},
+  concluida:{bg:'#2e7d32',tx:'#fff',label:'✅ Concluída'}
+};
+
+function _tarefaFormatarData(t){
+  var dd=fD?fD(t.data):(t.data||'');
+  return dd+(t.hora?' às '+t.hora:'');
+}
+
+// Renderiza a lista de tarefas vinculadas a um orçamento/lead específico,
+// usada dentro do card de detalhe do funil (#fk-detail-modal) e do lead
+// (#lead-detail-modal).
+function tarefasRenderNoDetalhe(vinculoTipo, vinculoId, containerId){
+  var el=document.getElementById(containerId);
+  if(!el) return;
+  if(!vinculoId){ el.innerHTML=''; return; }
+  var lista=TAREFAS.filter(function(t){ return t.vinculoTipo===vinculoTipo && t.vinculoId===vinculoId; })
+    .sort(function(a,b){ return (a.data+((a.hora)||'')) < (b.data+(b.hora||'')) ? -1 : 1; });
+  if(!lista.length){ el.innerHTML='<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:8px">Nenhuma tarefa agendada.</div>'; return; }
+  el.innerHTML=lista.map(function(t){
+    var u=_tarefaUrgencia(t);
+    var si=_TAREFA_URGENCIA_SI[u];
+    var acaoConcluir=t.status==='concluida'
+      ? '<a href="javascript:void(0)" onclick="tarefaReabrirRapido(\''+t.id+'\')" style="font-size:10px;color:#1565c0;font-weight:700">↩️ Reabrir</a>'
+      : '<a href="javascript:void(0)" onclick="tarefaConcluirRapido(\''+t.id+'\')" style="font-size:10px;color:#2e7d32;font-weight:700">✅ Concluir</a>';
+    return '<div style="padding:8px 0;border-bottom:1px solid var(--border)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+      +'<div><b style="font-size:11px;color:var(--text)">'+eh(t.tipo||'')+'</b>'
+      +'<div style="font-size:10px;color:var(--text-muted)">'+eh(_tarefaFormatarData(t))+' · '+eh(t.consultor||'')+'</div>'
+      +(t.obs?'<div style="font-size:10px;color:var(--text-muted);font-style:italic;margin-top:2px">'+eh(t.obs)+'</div>':'')
+      +'</div>'
+      +'<span style="white-space:nowrap;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:800;background:'+si.bg+';color:'+si.tx+'">'+si.label+'</span>'
+      +'</div>'
+      +'<div style="display:flex;gap:12px;margin-top:5px">'
+      +acaoConcluir
+      +'<a href="javascript:void(0)" onclick="tarefaEditar(\''+t.id+'\')" style="font-size:10px;color:var(--text-muted);font-weight:700">✏️ Editar</a>'
+      +'<a href="javascript:void(0)" onclick="tarefaExcluirRapido(\''+t.id+'\')" style="font-size:10px;color:#c62828;font-weight:700">🗑️ Excluir</a>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+
+// ── Tela dedicada "Minhas Tarefas" ──────────────────────────────────
+async function abrirMinhasTarefas(){
+  var ov=document.getElementById('tarefas-ov');
+  if(!ov) return;
+  ov.style.display='flex';
+  await tarefasCarregarStorage();
+  _tarefasPopularFiltroConsultor();
+  tarefasRenderMinhas();
+}
+
+function fecharMinhasTarefas(){
+  var ov=document.getElementById('tarefas-ov');
+  if(ov) ov.style.display='none';
+}
+
+async function tarefasHomeRecarregar(){
+  await tarefasCarregarStorage();
+  tarefasRenderMinhas();
+}
+
+function _tarefasPopularFiltroConsultor(){
+  var sel=document.getElementById('tarefas-filtro-cons');
+  if(!sel||!usuarioAtual) return;
+  var vejaTodos=['adm','gerente','diretor'].includes(usuarioAtual.nivel);
+  if(!vejaTodos){
+    sel.innerHTML='<option value="'+eh(usuarioAtual.nome)+'">'+eh(usuarioAtual.nome)+'</option>';
+    sel.value=usuarioAtual.nome;
+    sel.disabled=true;
+    return;
+  }
+  sel.disabled=false;
+  var orig=document.getElementById('f-cons');
+  var atual=sel.value;
+  var opts=(orig && orig.options)?Array.prototype.slice.call(orig.options).filter(function(o){return o.value;}).map(function(o){return '<option value="'+eh(o.value)+'">'+eh(o.textContent)+'</option>';}).join(''):'';
+  sel.innerHTML='<option value="">Todos</option>'+opts;
+  sel.value=atual||'';
+}
+
+function tarefaAbrirVinculo(vinculoTipo, vinculoId){
+  fecharMinhasTarefas();
+  abrirHome();
+  abrirFunilHome();
+  var tentativas=0;
+  (function espera(){
+    if((_funilCarregado && _leadsCarregado) || tentativas>=40){
+      if(vinculoTipo==='lead') leadAbrirDetalhe(vinculoId);
+      else fkAbrirDetalhe(vinculoId);
+      return;
+    }
+    tentativas++;
+    setTimeout(espera, 250);
+  })();
+}
+
+function tarefasRenderMinhas(){
+  var corpo=document.getElementById('tarefas-minhas-corpo');
+  if(!corpo) return;
+  var selCons=document.getElementById('tarefas-filtro-cons');
+  var consFiltro=selCons?selCons.value:'';
+  var lista=TAREFAS.filter(function(t){ return !consFiltro || t.consultor===consFiltro; });
+
+  var grupos={atrasada:[], hoje:[], proxima:[], futura:[], concluida:[]};
+  lista.forEach(function(t){ grupos[_tarefaUrgencia(t)].push(t); });
+  ['atrasada','hoje','proxima','futura','concluida'].forEach(function(g){
+    grupos[g].sort(function(a,b){ return (a.data+(a.hora||'')) < (b.data+(b.hora||'')) ? -1 : 1; });
+  });
+
+  var titulos={atrasada:'⚠️ Atrasadas', hoje:'📅 Hoje', proxima:'🔜 Próximos 7 dias', futura:'📆 Futuras', concluida:'✅ Concluídas'};
+  var html='';
+  ['atrasada','hoje','proxima','futura','concluida'].forEach(function(g){
+    if(!grupos[g].length) return;
+    html+='<div style="margin-bottom:18px">'
+      +'<div style="font-size:12px;font-weight:900;color:var(--text);margin-bottom:8px">'+titulos[g]+' ('+grupos[g].length+')</div>'
+      +'<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden">'
+      +grupos[g].map(function(t){
+        var acaoConcluir=t.status==='concluida'
+          ? '<a href="javascript:void(0)" onclick="tarefaReabrirRapido(\''+t.id+'\');event.stopPropagation();" style="font-size:10px;color:#1565c0;font-weight:700">↩️ Reabrir</a>'
+          : '<a href="javascript:void(0)" onclick="tarefaConcluirRapido(\''+t.id+'\');event.stopPropagation();" style="font-size:10px;color:#2e7d32;font-weight:700">✅ Concluir</a>';
+        return '<div style="padding:11px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;cursor:pointer" onclick="tarefaAbrirVinculo(\''+t.vinculoTipo+'\',\''+t.vinculoId+'\')">'
+          +'<div>'
+          +'<div style="font-size:12px;font-weight:700;color:var(--text)">'+eh(t.tipo||'')+' — '+eh(t.vinculoLabel||'')+'</div>'
+          +'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">'+eh(_tarefaFormatarData(t))+' · '+eh(t.consultor||'')+(t.obs?' · '+eh(t.obs):'')+'</div>'
+          +'</div>'
+          +'<div style="display:flex;gap:12px;align-items:center" onclick="event.stopPropagation()">'
+          +acaoConcluir
+          +'<a href="javascript:void(0)" onclick="tarefaEditar(\''+t.id+'\')" style="font-size:10px;color:var(--text-muted);font-weight:700">✏️ Editar</a>'
+          +'<a href="javascript:void(0)" onclick="tarefaExcluirRapido(\''+t.id+'\')" style="font-size:10px;color:#c62828;font-weight:700">🗑️ Excluir</a>'
+          +'</div>'
+          +'</div>';
+      }).join('')
+      +'</div></div>';
+  });
+  corpo.innerHTML=html||'<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:12px">Nenhuma tarefa agendada. Use "+ Agendar" dentro de um orçamento ou lead no CRM.</div>';
 }
 
 // ════════════════════════════════════════════════════════
@@ -9762,7 +10246,7 @@ function dashTemAcesso(dashId){
 
 function admAba(aba){
   document.querySelectorAll('#adm-ov .rel-tab').forEach(function(t,i){
-    var abas=['usuarios','permissoes','dashboards','tiposevento'];
+    var abas=['usuarios','permissoes','dashboards','tiposevento','tipostarefa'];
     t.classList.toggle('active',abas[i]===aba);
   });
   document.querySelectorAll('#adm-ov .rel-pane').forEach(function(p){p.classList.remove('active');});
@@ -9771,6 +10255,7 @@ function admAba(aba){
   if(aba==='permissoes') permRenderizar();
   if(aba==='dashboards') dashAcessoRenderizar();
   if(aba==='tiposevento') tiposEventoRenderAdmin();
+  if(aba==='tipostarefa') tiposTarefaRenderAdmin();
 }
 
 function permRenderizar(){
@@ -10549,6 +11034,98 @@ async function _eventoAutoRegistrar(){
   }catch(e){ console.warn('_eventoAutoRegistrar:',e); }
 }
 
+// ═══════════════════════════════════════════════════════
+// MÓDULO DE TAREFAS — agendamento de próximos passos do consultor
+// (ligar, enviar proposta, cobrar assinatura de contrato, etc.), vinculado
+// a um orçamento ou a um lead, pra não perder vendas por falta de contato.
+// Segue o mesmo padrão de persistência do Cadastro de Eventos.
+// ═══════════════════════════════════════════════════════
+var TAREFAS=[];
+var _tarefasUltimoErro=null;
+
+async function tarefasCarregarStorage(){
+  _tarefasUltimoErro=null;
+  if(!fbDb){ _tarefasUltimoErro='Sem conexão com o servidor (Firebase indisponível).'; return false; }
+  try{
+    var snap=await fbDb.collection('tarefas').get();
+    var lista=[];
+    snap.forEach(function(doc){ lista.push(doc.data()); });
+    TAREFAS=lista;
+    try{ localStorage.setItem('crazySomTarefas',JSON.stringify(TAREFAS)); }catch(e){}
+    return true;
+  }catch(e){
+    console.warn('tarefasCarregarStorage:',e);
+    _tarefasUltimoErro=(e&&e.message)?e.message:String(e);
+  }
+  try{
+    var d=localStorage.getItem('crazySomTarefas');
+    if(d){ var arr=JSON.parse(d); if(Array.isArray(arr)) TAREFAS=arr; }
+  }catch(e){}
+  return false;
+}
+
+async function _tarefaSalvarFirestore(obj){
+  _tarefasUltimoErro=null;
+  try{
+    await fbDb.collection('tarefas').doc(obj.id).set(obj);
+    try{ localStorage.setItem('crazySomTarefas',JSON.stringify(TAREFAS)); }catch(e){}
+    return true;
+  }catch(e){
+    console.warn('_tarefaSalvarFirestore:',e);
+    _tarefasUltimoErro=(e&&e.message)?e.message:String(e);
+    return false;
+  }
+}
+
+async function _tarefaExcluirFirestore(id){
+  _tarefasUltimoErro=null;
+  try{
+    await fbDb.collection('tarefas').doc(id).delete();
+    try{ localStorage.setItem('crazySomTarefas',JSON.stringify(TAREFAS)); }catch(e){}
+    return true;
+  }catch(e){
+    console.warn('_tarefaExcluirFirestore:',e);
+    _tarefasUltimoErro=(e&&e.message)?e.message:String(e);
+    return false;
+  }
+}
+
+// ── Classificação de urgência (usada no card da Home e na tela "Minhas Tarefas") ──
+function _tarefaHojeISO(){ return new Date().toISOString().split('T')[0]; }
+
+// Retorna: 'concluida' | 'atrasada' | 'hoje' | 'proxima' (≤7 dias) | 'futura'
+function _tarefaUrgencia(t){
+  if(!t || t.status==='concluida') return 'concluida';
+  var hoje=_tarefaHojeISO();
+  var dataT=t.data||'';
+  if(!dataT) return 'futura';
+  if(dataT<hoje) return 'atrasada';
+  if(dataT===hoje) return 'hoje';
+  var d1=new Date(hoje+'T00:00:00'), d2=new Date(dataT+'T00:00:00');
+  var dias=Math.round((d2-d1)/86400000);
+  return dias<=7 ? 'proxima' : 'futura';
+}
+
+// Conta tarefas urgentes (atrasadas + hoje) de um consultor — usada no badge da Home.
+// Se nomeConsultor for vazio/null, conta de TODOS (perfis Adm/Gerente/Diretor).
+function tarefasContarUrgentes(nomeConsultor){
+  return TAREFAS.filter(function(t){
+    if(t.status==='concluida') return false;
+    if(nomeConsultor && t.consultor!==nomeConsultor) return false;
+    var u=_tarefaUrgencia(t);
+    return u==='atrasada'||u==='hoje';
+  }).length;
+}
+
+function atualizarBadgeTarefas(){
+  var badge=document.getElementById('home-badge-tarefas');
+  if(!badge||!usuarioAtual) return;
+  var vejaTodos=['adm','gerente','diretor'].includes(usuarioAtual.nivel);
+  var n=tarefasContarUrgentes(vejaTodos?null:usuarioAtual.nome);
+  badge.textContent=n>0?n:'!';
+  badge.classList.toggle('show', n>0);
+}
+
 // ── TIPOS DE EVENTO (editável pelo Admin) ───────────────────────────
 // Lista publicada em config/tiposEvento (mesmo padrão de config/consultoresNomes
 // e config/permissoes: documento público lido por todo mundo, editado só pelo
@@ -10623,6 +11200,79 @@ async function tiposEventoRemover(idx){
   tiposEventoRenderAdmin();
   popularTiposEvento();
   if(ok) driveStatus('🗑️ Tipo de evento removido','ok'); else driveStatus('⚠️ Removido localmente (Firestore indisponível)','err');
+}
+
+// ── TIPOS DE TAREFA (editável pelo Admin) ───────────────────────────
+// Mesmo padrão de Tipos de Evento: documento público em config/tiposTarefa,
+// lido por todo mundo, editado só pelo Admin, com fallback pra lista padrão.
+var TIPOS_TAREFA_PADRAO=['Ligar','Enviar Proposta','Enviar Contrato','Assinatura Pendente','Reunião','Follow-up','Outro'];
+var TIPOS_TAREFA=TIPOS_TAREFA_PADRAO.slice();
+
+function popularTiposTarefa(){
+  ['tf-tipo'].forEach(function(id){
+    var sel=document.getElementById(id);
+    if(!sel) return;
+    var atual=sel.value;
+    var lista=TIPOS_TAREFA.slice();
+    if(atual && lista.indexOf(atual)<0) lista.push(atual);
+    sel.innerHTML='<option value="">Selecione...</option>'+lista.map(function(t){return '<option'+(t===atual?' selected':'')+'>'+eh(t)+'</option>';}).join('');
+  });
+}
+
+async function tiposTarefaCarregar(){
+  try{
+    var snap=await fbDb.collection('config').doc('tiposTarefa').get();
+    if(snap.exists && Array.isArray(snap.data().lista) && snap.data().lista.length) TIPOS_TAREFA=snap.data().lista.slice();
+    else TIPOS_TAREFA=TIPOS_TAREFA_PADRAO.slice();
+  }catch(e){
+    console.warn('tiposTarefaCarregar:',e);
+    TIPOS_TAREFA=TIPOS_TAREFA_PADRAO.slice();
+  }
+  popularTiposTarefa();
+}
+
+async function _tiposTarefaSalvarFirestore(){
+  try{
+    await fbDb.collection('config').doc('tiposTarefa').set({lista:TIPOS_TAREFA});
+    return true;
+  }catch(e){ console.warn('_tiposTarefaSalvarFirestore:',e); return false; }
+}
+
+function tiposTarefaRenderAdmin(){
+  var box=document.getElementById('tipostarefa-lista');
+  if(!box) return;
+  if(!TIPOS_TAREFA.length){box.innerHTML='<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:12px">Nenhum tipo cadastrado.</div>';return;}
+  box.innerHTML=TIPOS_TAREFA.map(function(t,i){
+    return '<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">'
+      +'<span style="color:var(--text);font-size:12px">📋 '+eh(t)+'</span>'
+      +'<button class="btn btn-sm" style="background:#c62828;color:#fff" onclick="tiposTarefaRemover('+i+')">🗑️ Remover</button>'
+      +'</div>';
+  }).join('');
+}
+
+async function tiposTarefaAdicionar(){
+  var inp=document.getElementById('tipostarefa-novo');
+  var val=(inp.value||'').trim();
+  if(!val){alert('⚠️ Informe o nome do novo tipo de tarefa.');return;}
+  var jaExiste=TIPOS_TAREFA.some(function(t){return t.toLowerCase()===val.toLowerCase();});
+  if(jaExiste){alert('⚠️ Esse tipo já existe na lista.');return;}
+  TIPOS_TAREFA.push(val);
+  inp.value='';
+  var ok=await _tiposTarefaSalvarFirestore();
+  tiposTarefaRenderAdmin();
+  popularTiposTarefa();
+  if(ok) driveStatus('✅ Tipo de tarefa adicionado','ok'); else driveStatus('⚠️ Salvo localmente (Firestore indisponível)','err');
+}
+
+async function tiposTarefaRemover(idx){
+  var t=TIPOS_TAREFA[idx];if(t===undefined)return;
+  if(TIPOS_TAREFA.length<=1){alert('⚠️ Precisa manter ao menos um tipo de tarefa na lista.');return;}
+  if(!confirm('🗑️ Remover o tipo "'+t+'" da lista?\n\nTarefas que já usam esse tipo não serão alteradas.'))return;
+  TIPOS_TAREFA.splice(idx,1);
+  var ok=await _tiposTarefaSalvarFirestore();
+  tiposTarefaRenderAdmin();
+  popularTiposTarefa();
+  if(ok) driveStatus('🗑️ Tipo de tarefa removido','ok'); else driveStatus('⚠️ Removido localmente (Firestore indisponível)','err');
 }
 
 async function usuariosCarregarFirestore(){
@@ -12072,6 +12722,8 @@ permCarregar();
 clientesCarregarStorage();
 eventosCarregarStorage();
 tiposEventoCarregar();
+tarefasCarregarStorage();
+tiposTarefaCarregar();
 calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
 // Auto-save a cada 3 minutos se houver alterações não salvas e orçamento já tiver ID no Drive
 setInterval(function(){
