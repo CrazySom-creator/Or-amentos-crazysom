@@ -2858,7 +2858,7 @@ async function doLogin(){
     return;
   }
   var perfil=perfilSnap.data();
-  var u={id:email,nome:perfil.nome||email,nivel:perfil.nivel||'consultor',cargo:perfil.cargo||'',comissaoPercentual:perfil.comissaoPercentual||0};
+  var u={id:email,nome:perfil.nome||email,nivel:perfil.nivel||'consultor',cargo:perfil.cargo||'',comissaoPercentual:perfil.comissaoPercentual||0,emailComercial:perfil.emailComercial||''};
   try{
     var _sR=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'lock',lockAction:'session-check',usuarioId:u.id,usuarioNome:u.nome,deviceId:_getDeviceId(),ttl:35*60*1000})});
     var _sD=await _sR.json();
@@ -5360,7 +5360,7 @@ function buildPDF(tipo){
       +'<img src="https://i.imgur.com/0HNjldm.png" style="height:52px;width:auto;object-fit:contain;flex-shrink:0" alt="Crazy Som">'
       +'<div style="min-width:0"><p style="font-size:10px;color:var(--text-dim);line-height:1.7">'
       +(full?'CRAZY COMERCIO E LOCACAO DE EQUIPAMENTOS LTDA<br>CNPJ: 10.909.827/0001-76 | IE: 0240563999<br>':'')
-      +'(51) 3428-5053 | '+eh((usuarioAtual&&usuarioAtual.id)?usuarioAtual.id:'comercial@crazysom.com.br')+'<br>OSVALDO CRUZ, 36 - NITEROI - Canoas - RS - CEP: 92110-470</p></div></div>'
+      +'(51) 3428-5053 | '+eh((usuarioAtual&&usuarioAtual.emailComercial)?usuarioAtual.emailComercial:'comercial@crazysom.com.br')+'<br>OSVALDO CRUZ, 36 - NITEROI - Canoas - RS - CEP: 92110-470</p></div></div>'
       +'<div class="ph-r" style="min-width:0;max-width:130px;word-break:break-word"><div class="pd">'+dataorc+'</div><div class="pl">Orçamento</div>'
       +'<div class="pn" style="font-size:15px;word-break:break-all">'+orcN+'</div>'
       +(full&&gv('f-val')?'<div class="vbox"><div class="vl">Validade</div><div class="vd">'+fD(gv('f-val'))+'</div></div>':'')
@@ -11281,7 +11281,7 @@ async function usuariosCarregarFirestore(){
     var lista=[];
     snap.forEach(function(doc){
       var d=doc.data();
-      lista.push({id:doc.id,nome:d.nome||doc.id,nivel:d.nivel||'consultor',cargo:d.cargo||'',comissaoPercentual:d.comissaoPercentual||0});
+      lista.push({id:doc.id,nome:d.nome||doc.id,nivel:d.nivel||'consultor',cargo:d.cargo||'',comissaoPercentual:d.comissaoPercentual||0,emailComercial:d.emailComercial||''});
     });
     USUARIOS=lista;
   }catch(e){
@@ -11369,11 +11369,15 @@ function renderAdmList(){
       +'<div><label style="font-size:9px;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:3px">E-mail (não editável aqui)</label>'
       +'<input value="'+u.id+'" disabled style="width:100%;padding:6px 8px;background:var(--surface-3);border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-size:11px;box-sizing:border-box"></div>'
       +'</div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px">'
       +'<div><label style="font-size:9px;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:3px">Nível de Acesso</label>'
       +'<select id="al'+i+'" style="width:100%;padding:6px 8px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px">'+nivelOpts+'</select></div>'
       +'<div><label style="font-size:9px;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:3px">Cargo</label>'
       +'<select id="ac'+i+'" onchange="admCargoMudou('+i+')" style="width:100%;padding:6px 8px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px">'+cargoOpts+'</select></div>'
+      +'</div>'
+      +'<div style="margin-bottom:7px">'
+      +'<label style="font-size:9px;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:3px">E-mail Comercial (aparece no PDF e demais documentos)</label>'
+      +'<input id="ae'+i+'" type="email" value="'+eh(u.emailComercial||'')+'" placeholder="Ex: comercial@crazysom.com.br" style="width:100%;padding:6px 8px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;box-sizing:border-box">'
       +'</div>'
       +'<div id="apcw'+i+'" style="display:'+(cargoVal==='Consultor Externo'?'block':'none')+';margin-top:7px">'
       +'<label style="font-size:9px;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:3px">Comissão (%) — acrescida em toda a tabela de preços</label>'
@@ -11397,10 +11401,14 @@ async function admSalvar(i){
   var cargo=document.getElementById('ac'+i).value||'';
   var comissaoEl=document.getElementById('ap'+i);
   var comissaoPercentual=comissaoEl?(parseFloat(comissaoEl.value)||0):0;
+  var emailComercialEl=document.getElementById('ae'+i);
+  var emailComercial=emailComercialEl?emailComercialEl.value.trim():'';
+  if(emailComercial&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailComercial)){alert('⚠️ E-mail Comercial inválido.');return;}
   if(!nome){alert('Nome obrigatório.');return;}
   try{
-    await fbDb.collection('usuarios').doc(u.id).set({nome:nome,nivel:nivel,cargo:cargo,comissaoPercentual:comissaoPercentual},{merge:true});
-    USUARIOS[i]=Object.assign({},u,{nome:nome,nivel:nivel,cargo:cargo,comissaoPercentual:comissaoPercentual});
+    await fbDb.collection('usuarios').doc(u.id).set({nome:nome,nivel:nivel,cargo:cargo,comissaoPercentual:comissaoPercentual,emailComercial:emailComercial},{merge:true});
+    USUARIOS[i]=Object.assign({},u,{nome:nome,nivel:nivel,cargo:cargo,comissaoPercentual:comissaoPercentual,emailComercial:emailComercial});
+    if(usuarioAtual&&usuarioAtual.id===u.id) usuarioAtual.emailComercial=emailComercial;
     renderAdmList();
     alert('✅ Perfil de "'+nome+'" salvo com sucesso!');
   }catch(e){
