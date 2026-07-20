@@ -3884,7 +3884,22 @@ function getDadosCompletos(){
   };
 }
 
-async function salvarNoDrive(opts){
+// Serializa chamadas concorrentes a salvarNoDrive(): se duas chamadas se sobrepõem
+// (ex.: um clique de aprovação dispara um save em segundo plano e, antes dele
+// terminar, outra ação dispara outro save), cada uma lê/decide sobre driveIdAtual
+// de forma independente — e é exatamente esse tipo de corrida que pode fazer uma
+// delas "achar" que não há arquivo ainda e criar um Drive novo com o mesmo número,
+// gerando duplicidade. Esta fila garante que um save só começa depois que o
+// anterior terminou.
+var _salvarNoDriveFila=Promise.resolve();
+function salvarNoDrive(opts){
+  var _prox=_salvarNoDriveFila.then(function(){ return _salvarNoDriveInterno(opts); });
+  // Mantém a fila viva mesmo se este save falhar, para não travar os próximos
+  _salvarNoDriveFila=_prox.catch(function(){});
+  return _prox;
+}
+
+async function _salvarNoDriveInterno(opts){
   opts=opts||{};
   if(_modoLeitura){driveStatus('⛔ Modo somente leitura — salvar bloqueado','err');return;}
   // Validar número do orçamento obrigatório
@@ -3912,13 +3927,19 @@ async function salvarNoDrive(opts){
   var num=gv('f-num')||'SN',cli=gv('f-cliente')||'SemCliente',dt=gv('f-data')||new Date().toISOString().split('T')[0];
   // Guardar o ID atual ANTES de potencialmente zerá-lo (usado na verificação de duplicata)
   var _driveIdParaDupCheck=driveIdAtual;
-  if(driveIdAtual&&driveNumAtual&&driveNumAtual!==num&&!opts.forcarNovoId)driveIdAtual=null;
+  // Comparação sempre com trim() — sem isso, um espaço a mais/a menos no número
+  // (ex. vindo de um valor recarregado) faz o sistema achar que o número "mudou"
+  // quando na verdade é o mesmo orçamento, zerando driveIdAtual sem necessidade
+  // e fazendo o próximo salvamento criar um arquivo novo (duplicado) no Drive.
+  var _numAtualTrim=(num||'').toString().trim();
+  var _driveNumAtualTrim=(driveNumAtual||'').toString().trim();
+  if(driveIdAtual&&driveNumAtual&&_driveNumAtualTrim!==_numAtualTrim&&!opts.forcarNovoId)driveIdAtual=null;
 
   // Verificar número duplicado APENAS quando:
   // - É orçamento novo (sem ID no Drive), OU
   // - O usuário alterou o número desde o carregamento
   // Se o número é o mesmo do arquivo carregado: NUNCA é duplicata do próprio arquivo
-  var _numMudou = driveNumAtual && num && driveNumAtual.toString().trim() !== num.toString().trim();
+  var _numMudou = driveNumAtual && num && _driveNumAtualTrim !== _numAtualTrim;
   var _ehNovo = !_driveIdParaDupCheck;
   if(num&&num!=='SN'&&(_ehNovo||_numMudou)){
     driveStatus('🔍 Verificando número...','');
@@ -3972,6 +3993,16 @@ async function salvarNoDrive(opts){
         driveStatus('⚠️ Número '+num+' já existe!','err');
         alert('⚠️ Número "'+num+'" já está em uso por:\n\n📋 '+_dupCliente2+'\n\nAltere o número antes de salvar.');
         return null;
+      }
+      // Se o cache local ainda não tem nada carregado, "não achei duplicata" não
+      // significa nada — não dá pra confiar nisso em silêncio. Avisar em vez de
+      // deixar passar (foi provavelmente assim que números duplicados escaparam).
+      if(!_driveListaCache.length){
+        var _prosseguirSemChecagem=confirm('⚠️ Não foi possível confirmar no servidor se o número "'+num+'" já está em uso (falha de conexão), e ainda não há uma lista local para conferir.\n\nSalvar mesmo assim tem risco de criar um orçamento duplicado.\n\nDeseja salvar mesmo assim?');
+        if(!_prosseguirSemChecagem){
+          driveStatus('Salvamento cancelado — verifique sua conexão e tente novamente.','err');
+          return null;
+        }
       }
     }
   }
@@ -10003,6 +10034,11 @@ function _clientePreencherOrcamento(c){
 
 function clienteVerificarDoc(){
   clearTimeout(_docVerifTimer);
+  // Cancela também o autocomplete por NOME: os dois campos (Cliente e CNPJ/CPF)
+  // preenchem um ao outro automaticamente, e se os dois timers dispararem fora
+  // de ordem um pode sobrescrever o que o outro acabou de preencher — foi essa
+  // corrida que provavelmente causou orçamentos salvos com CNPJ de outro cliente.
+  clearTimeout(_sugestTimer);
   _docVerifTimer=setTimeout(function(){
     var docDig=_clienteSoDigitos(gv('f-doc'));
     var st=document.getElementById('f-cliente-cad-status');
@@ -10011,6 +10047,19 @@ function clienteVerificarDoc(){
     if(docDig.length!==11&&docDig.length!==14){st.innerHTML='';return;}
     var c=CLIENTES.find(function(x){return _clienteSoDigitos(x.doc)===docDig;});
     if(c){
+      // Se o campo Cliente já tem um nome digitado e ele é DIFERENTE do nome
+      // cadastrado para este CNPJ/CPF, não substituir em silêncio — confirmar
+      // antes. Isso evita trocar o cliente inteiro (nome, CNPJ, endereço) sem
+      // o consultor perceber, que é o cenário mais provável do problema relatado.
+      var nomeAtual=(gv('f-cliente')||'').trim();
+      var nomeDiferente=nomeAtual && _normNome(nomeAtual)!==_normNome(c.nome||'');
+      if(nomeDiferente){
+        var confirmarTroca=confirm('⚠️ Este CNPJ/CPF já está cadastrado para "'+(c.nome||'—')+'", mas o campo Cliente está preenchido como "'+nomeAtual+'".\n\nSubstituir os dados do formulário pelos do cliente cadastrado ("'+(c.nome||'—')+'")?\n\nClique em Cancelar para manter o que você digitou.');
+        if(!confirmarTroca){
+          st.innerHTML='<span style="font-size:10px;color:var(--text-muted)">ℹ️ Este CNPJ/CPF pertence a outro cliente cadastrado — dados NÃO foram substituídos.</span>';
+          return;
+        }
+      }
       _clientePreencherOrcamento(c);
     }else{
       st.innerHTML='<span style="font-size:10px;color:#e65100;font-weight:700">ℹ️ Cliente não cadastrado — </span>'
@@ -10149,6 +10198,7 @@ function clienteAbrirBuscaModal(){
 
 function clienteSelecionarParaOrcamento(idx){
   var c=CLIENTES[idx];if(!c)return;
+  clearTimeout(_docVerifTimer); // evita que uma verificação de CNPJ pendente sobrescreva esta seleção
   _clientePreencherOrcamento(c);
   clienteFecharSugestoes();
   _clienteBuscaModoSelecao=false;
