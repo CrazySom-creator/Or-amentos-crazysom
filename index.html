@@ -2461,6 +2461,17 @@ var USUARIOS=[
   {id:'regisbrum@crazysom.com.br',nome:'Régis Brum',nivel:'diretor',cargo:'Diretor Administrativo'},
   {id:'raffadlucasdj@gmail.com',nome:'Rafael Oliveira',nivel:'tecnico',cargo:'Análise Técnica / Logística'}
 ];
+// Alguns registros de histórico mais antigos foram salvos com o e-mail (id) do
+// usuário em vez do nome — a tela de Aprovações mostrava esse e-mail cru,
+// diferente de todos os outros itens do histórico que mostram o nome. Esta
+// função resolve isso na exibição: se o valor salvo parece um e-mail, procura
+// o nome correspondente em USUARIOS; senão, mostra o valor como já estava.
+function _nomeUsuario(v){
+  if(!v) return v;
+  if(String(v).indexOf('@')<0) return v;
+  var u=USUARIOS.find(function(x){return x.id===v;});
+  return u?u.nome:v;
+}
 var usuarioAtual=null;
 var aprovStatus='rascunho';
 var aprovHist=[];
@@ -2847,7 +2858,7 @@ function renderStatusOrc(){
     if(aprovHist&&aprovHist.length){
       sh.style.display='block';
       var hhtml='';
-      for(var i=0;i<aprovHist.length;i++){var h=aprovHist[i];var diffHtml=(h.diffs&&h.diffs.length)?renderDiffNoHistorico(h.diffs,'cur-'+i):'';hhtml+='<div class="hist-evt"><div class="hist-ico">'+(h.ico||'•')+'</div><div class="hist-info"><div class="hist-acao">'+h.acao+' — <span style="color:var(--R)">'+h.usuario+'</span></div><div class="hist-det">'+h.cargo+' · '+h.data+(h.obs?' · "'+h.obs+'"':'')+'</div>'+diffHtml+'</div></div>';}
+      for(var i=0;i<aprovHist.length;i++){var h=aprovHist[i];var diffHtml=(h.diffs&&h.diffs.length)?renderDiffNoHistorico(h.diffs,'cur-'+i):'';hhtml+='<div class="hist-evt"><div class="hist-ico">'+(h.ico||'•')+'</div><div class="hist-info"><div class="hist-acao">'+h.acao+' — <span style="color:var(--R)">'+_nomeUsuario(h.usuario)+'</span></div><div class="hist-det">'+h.cargo+' · '+h.data+(h.obs?' · "'+h.obs+'"':'')+'</div>'+diffHtml+'</div></div>';}
       hl.innerHTML=hhtml;
     }else{sh.style.display='none';}
   }
@@ -3247,13 +3258,13 @@ function buildOrcCard(orc,idx){
   var minhaVez=(nivel==='tecnico'&&orc.st==='analise')||(nivel==='gerente'&&orc.st==='gerencial')||(nivel==='diretor'&&orc.st==='diretoria')||(['adm','gerente','diretor'].includes(nivel)&&orc.st!=='aprovado'&&orc.st!=='rascunho')||(nivel==='consultor'&&orc.st==='revisao');
   var botoesAcao=getBotoesAcaoLista(orc,idx);var temAcao=botoesAcao.length>0;
   var histHtml='';
-  if(orc.hist.length){histHtml='<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:8px">📜 Histórico</div>';for(var i=0;i<orc.hist.length;i++){var h=orc.hist[i];var diffHtml=(h.diffs&&h.diffs.length)?renderDiffNoHistorico(h.diffs,'card'+idx+'-'+i):'';histHtml+='<div class="hist-evt"><div class="hist-ico">'+(h.ico||'•')+'</div><div class="hist-info"><div class="hist-acao">'+h.acao+' — <span style="color:var(--R)">'+h.usuario+'</span></div><div class="hist-det">'+h.cargo+' · '+h.data+(h.obs?' · "'+h.obs+'"':'')+'</div>'+diffHtml+'</div></div>';}}
+  if(orc.hist.length){histHtml='<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:8px">📜 Histórico</div>';for(var i=0;i<orc.hist.length;i++){var h=orc.hist[i];var diffHtml=(h.diffs&&h.diffs.length)?renderDiffNoHistorico(h.diffs,'card'+idx+'-'+i):'';histHtml+='<div class="hist-evt"><div class="hist-ico">'+(h.ico||'•')+'</div><div class="hist-info"><div class="hist-acao">'+h.acao+' — <span style="color:var(--R)">'+_nomeUsuario(h.usuario)+'</span></div><div class="hist-det">'+h.cargo+' · '+h.data+(h.obs?' · "'+h.obs+'"':'')+'</div>'+diffHtml+'</div></div>';}}
   else{histHtml='<div style="color:var(--text-muted);font-size:11px;margin-bottom:8px">Sem histórico.</div>';}
   var infoAgd=orc.st!=='aprovado'?'<b>Aguardando:</b> '+(aguardando[orc.st]||'—')+(minhaVez?' <b style="color:#ff9800">← SUA VEZ</b>':'')+'<br>':'';
   var infoEv=orc.form['f-dia']?new Date(orc.form['f-dia']+'T12:00:00').toLocaleDateString('pt-BR'):'';
   return '<div class="orc-card '+orc.st+'" id="orc-card-'+idx+'" onclick="toggleDetalhes('+idx+')">'
     +'<div class="orc-topo"><span class="orc-num">'+(orc.form['f-num']||'—')+'</span><span class="orc-cli">'+(orc.form['f-cliente']||'—')+'</span><span class="orc-badge" style="background:'+si.bg+';color:'+si.tx+';border:1px solid '+si.bd+'">'+si.label+'</span></div>'
-    +'<div class="orc-info">'+infoAgd+(orc.form['f-cons']?'<b>Consultor:</b> '+orc.form['f-cons']+' · ':'')+(infoEv?'<b>Evento:</b> '+infoEv+' · ':'')+' <b>Atualizado:</b> '+orc.modificado+(ult?'<br><b>Última ação:</b> '+ult.acao+' por '+ult.usuario:'')+'</div>'
+    +'<div class="orc-info">'+infoAgd+(orc.form['f-cons']?'<b>Consultor:</b> '+orc.form['f-cons']+' · ':'')+(infoEv?'<b>Evento:</b> '+infoEv+' · ':'')+' <b>Atualizado:</b> '+orc.modificado+(ult?'<br><b>Última ação:</b> '+ult.acao+' por '+_nomeUsuario(ult.usuario):'')+'</div>'
     +'<div class="etapas">'+etapasHTML+'</div>'
     +'<div id="det-'+idx+'" class="aprov-detalhe">'+histHtml
     +(temAcao?'<div class="acao-wrap"><textarea class="acao-obs" id="obs-'+idx+'" placeholder="Observação / Motivo..."></textarea><div class="acao-btns">'+botoesAcao+'</div></div>':'')
@@ -5633,11 +5644,21 @@ function compararSnapshots(ant,atual){
     descRs:'Desconto R$',valLiq:'Valor Líquido',pgto:'Forma de Pagamento'
   };
   var SEC_NOMES={som:'Sonorização',video:'Vídeo',luz:'Iluminação',estrutura:'Estrutura',servico:'Serviço',logistica:'Logística'};
+  // Campos numéricos, onde "aumento/redução" faz sentido para colorir o antes/depois.
+  // Os demais (Cliente, Local, Tipo, datas, Forma de Pagamento) são texto — não tem
+  // "lado bom" claro, então ficam com destaque neutro em vez de cair em verde por padrão.
+  var CAMPOS_NUMERICOS=['descPct','descRs','valLiq'];
   // Comparar campos do form
   Object.keys(LABELS).forEach(function(k){
     var a=String(ant[k]||'').trim();
     var b=String(atual[k]||'').trim();
-    if(a!==b)diffs.push({campo:LABELS[k],de:a||'(vazio)',para:b||'(vazio)'});
+    if(a===b)return;
+    var item={campo:LABELS[k],de:a||'(vazio)',para:b||'(vazio)'};
+    if(CAMPOS_NUMERICOS.indexOf(k)>=0){
+      var na=parseFloat(a.replace(',','.'))||0,nb=parseFloat(b.replace(',','.'))||0;
+      if(na!==nb) item.destaque=nb>na?'aumento':'reducao';
+    }
+    diffs.push(item);
   });
   // Comparar totais por seção
   ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
@@ -5688,8 +5709,8 @@ function compararSnapshots(ant,atual){
     itAtual.forEach(function(r){
       var ant2=acharCorrespondente(r,itAnt);
       if(ant2){
-        if(ant2.qty!==r.qty)diffs.push({campo:'Qtd '+r.name,de:String(ant2.qty),para:String(r.qty)});
-        if(Math.abs((ant2.val||0)-(r.val||0))>0.01)diffs.push({campo:'Valor unit. '+r.name,de:fmt(ant2.val||0),para:fmt(r.val||0)});
+        if(ant2.qty!==r.qty)diffs.push({campo:'Qtd '+r.name,de:String(ant2.qty),para:String(r.qty),destaque:(parseFloat(r.qty)||0)>(parseFloat(ant2.qty)||0)?'aumento':'reducao'});
+        if(Math.abs((ant2.val||0)-(r.val||0))>0.01)diffs.push({campo:'Valor unit. '+r.name,de:fmt(ant2.val||0),para:fmt(r.val||0),destaque:(r.val||0)>(ant2.val||0)?'aumento':'reducao'});
       }
     });
   });
@@ -5702,10 +5723,14 @@ function renderDiffNoHistorico(diffs,idx){
   var n=diffs.length;
   var itens='';
   diffs.forEach(function(d){
-    var corDe='#ef9a9a';
-    var corPara=d.destaque==='reducao'?'#ef9a9a':'#a5d6a7';
+    // Campos sem "lado bom" definido (texto: Cliente, Tipo de Evento, datas, Forma
+    // de Pagamento) ficam em cor neutra — antes eles caíam em verde por padrão,
+    // dando a entender uma melhora mesmo quando o campo só foi apagado/trocado.
+    var temDestaque=d.destaque==='aumento'||d.destaque==='reducao';
+    var corDe=temDestaque?'#ef9a9a':'var(--text-muted)';
+    var corPara=temDestaque?(d.destaque==='reducao'?'#ef9a9a':'#a5d6a7'):'var(--text)';
     var bold=d.bold?'font-weight:900;font-size:11px':'';
-    itens+='<div class="diff-item" style="'+bold+'"><span class="diff-campo">'+d.campo+':</span> <span style="color:'+corDe+'">'+d.de+'</span> &rarr; <span style="color:'+corPara+'">'+d.para+'</span></div>';
+    itens+='<div class="diff-item" style="'+bold+'"><span class="diff-campo">'+d.campo+':</span> <span style="color:'+corDe+'">'+d.de+'</span> &rarr; <span style="color:'+corPara+';font-weight:700">'+d.para+'</span></div>';
   });
   return '<div class="diff-box">'
     +'<div class="diff-title" style="cursor:pointer;display:flex;justify-content:space-between" onclick="diffToggle(\''+id+'\')" title="Clique para ver as alteracoes">'
@@ -5773,7 +5798,7 @@ function renderComercial(){
       var si=COM_SI[h.status]||{label:h.status,bg:'var(--surface-3)',tx:'var(--text)'};
       return '<div class="com-hist-item">'
         +'<span style="flex-shrink:0;padding:2px 8px;border-radius:10px;background:'+si.bg+';color:'+si.tx+';font-size:9px;font-weight:800">'+si.label+'</span>'
-        +'<div style="flex:1"><span style="color:var(--text-dim);font-weight:700">'+h.usuario+'</span>'
+        +'<div style="flex:1"><span style="color:var(--text-dim);font-weight:700">'+_nomeUsuario(h.usuario)+'</span>'
         +(h.obs?'<br><span style="color:var(--text-muted);font-style:italic">"'+h.obs+'"</span>':'')
         +'<br><span style="color:var(--text-dim)">'+h.data+'</span></div>'
         +'</div>';
@@ -6841,7 +6866,7 @@ function _leadRenderTimeline(lead){
     return { dataISO:h.dataISO||'', html:
       '<div class="fk-tl-item"><span class="fk-tl-ico">'+ico+'</span>'
       +'<div><div class="fk-tl-txt"><b>'+lbl+'</b></div>'
-      +'<div class="fk-tl-meta">'+eh(h.usuario||'')+' · '+eh(h.data||'')+'</div></div></div>' };
+      +'<div class="fk-tl-meta">'+eh(_nomeUsuario(h.usuario)||'')+' · '+eh(h.data||'')+'</div></div></div>' };
   });
   var ativ = (lead.atividades||[]).map(function(a){
     return { dataISO:a.dataISO||'', html:
@@ -7062,7 +7087,7 @@ function _fkRenderTimeline(dados){
       '<div class="fk-tl-item"><span class="fk-tl-ico">'+(si?si.label.split(' ')[0]:'🔹')+'</span>'
       +'<div><div class="fk-tl-txt"><b>'+(si?si.label:eh(h.status||'')) +'</b>'+(h.motivo?' — '+eh(h.motivo):'')+'</div>'
       +(h.obs?'<div class="fk-tl-obs">'+eh(h.obs)+'</div>':'')
-      +'<div class="fk-tl-meta">'+eh(h.usuario||'')+' · '+eh(h.data||'')+'</div></div></div>' };
+      +'<div class="fk-tl-meta">'+eh(_nomeUsuario(h.usuario)||'')+' · '+eh(h.data||'')+'</div></div></div>' };
   });
   var ativ = (dados.atividades||[]).map(function(a){
     return { dataISO:a.dataISO||'', html:
