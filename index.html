@@ -435,6 +435,35 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 .fin-parc-row:last-child{border-bottom:none}
 .fin-parc-row:nth-child(even){background:#080808}
 
+/* Funil de Vendas — Quadro Kanban */
+.fk-board{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch}
+.fk-col{flex:0 0 210px;width:210px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;display:flex;flex-direction:column;max-height:560px;transition:background .15s,border-color .15s}
+.fk-col.fk-col-over{background:#e3f2fd;border-color:#1565c0}
+.fk-col-head{padding:8px 10px;border-radius:8px 8px 0 0;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:6px}
+.fk-col-count{background:rgba(255,255,255,.28);border-radius:10px;padding:1px 7px;font-size:10px;flex-shrink:0}
+.fk-col-total{padding:5px 10px;font-size:10px;font-weight:700;color:#666;background:#fff;border-bottom:1px solid #eee}
+.fk-col-body{flex:1;overflow-y:auto;padding:7px;display:flex;flex-direction:column;gap:7px;min-height:60px}
+.fk-empty{text-align:center;color:#aaa;font-size:10px;padding:14px 4px}
+.fk-card{background:#fff;border:1px solid #e5e5e5;border-radius:6px;padding:8px 9px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.05);transition:box-shadow .15s,transform .15s}
+.fk-card:hover{box-shadow:0 2px 6px rgba(0,0,0,.14);transform:translateY(-1px)}
+.fk-card.fk-dragging{opacity:.4}
+.fk-card-lead{border-left:3px solid #00897b}
+.fk-card-cli{font-size:11.5px;font-weight:800;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.fk-card-meta{font-size:9.5px;color:#888;display:flex;gap:5px;flex-wrap:wrap;margin-bottom:2px}
+.fk-card-evento{font-size:9.5px;color:#1565c0;font-weight:700;margin-bottom:2px}
+.fk-card-obs{font-size:9px;color:#888;font-style:italic;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fk-card-foot{display:flex;align-items:center;justify-content:space-between;gap:5px;margin-top:3px}
+.fk-card-val{font-size:11px;font-weight:800;color:#222}
+.fk-fu-badge{font-size:9px;font-weight:700;padding:1px 6px;border-radius:9px;background:#e3f2fd;color:#1565c0;white-space:nowrap}
+.fk-fu-badge.fk-fu-atrasado{background:#ffebee;color:#c62828}
+.fk-timeline{max-height:220px;overflow-y:auto;border:1px solid #222;border-radius:6px;padding:8px 10px;background:#0a0a0a}
+.fk-tl-item{display:flex;gap:8px;padding:7px 0;border-bottom:1px solid #1f1f1f}
+.fk-tl-item:last-child{border-bottom:none}
+.fk-tl-ico{font-size:13px;flex-shrink:0}
+.fk-tl-txt{font-size:11.5px;color:#eee}
+.fk-tl-obs{font-size:10.5px;color:#aaa;font-style:italic;margin-top:1px}
+.fk-tl-meta{font-size:9.5px;color:#777;margin-top:2px}
+
 /* ═══════════════════════════════════════════════════════
    MOBILE RESPONSIVE — até 768px
 ═══════════════════════════════════════════════════════ */
@@ -505,9 +534,8 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 
   /* Funil de vendas card */
   #funil-card{border-radius:0!important}
-  #funil-counters{gap:4px}
-  #funil-counters span{font-size:9px;padding:3px 8px}
-  #funil-lista{max-height:320px}
+  .fk-col{flex:0 0 78vw;width:78vw;max-height:420px}
+  .fk-board{gap:8px}
 
   /* Modais — full screen */
   .ov{align-items:flex-end!important;padding:0}
@@ -751,25 +779,10 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
     <button onclick="fecharFunilHome()" style="margin-left:auto;background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:6px;padding:6px 16px;font-size:12px;font-weight:800;cursor:pointer">✕ Fechar</button>
   </div>
 
-  <div style="padding:18px 20px;max-width:1100px;width:100%;margin:0 auto;box-sizing:border-box">
-
-    <!-- Contadores por etapa -->
-    <div id="funil-home-counters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px"></div>
+  <div style="padding:18px 20px;max-width:1400px;width:100%;margin:0 auto;box-sizing:border-box">
 
     <!-- Filtros -->
     <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end;background:#1c1c1c;border:1px solid #2a2a2a;border-radius:6px;padding:10px 14px;margin-bottom:12px">
-      <div style="flex:1;min-width:170px">
-        <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">Etapa do Funil</label>
-        <select id="funil-home-filtro-etapa" onchange="funilHomeFiltrarLista()" style="width:100%;padding:7px 9px;border:1px solid #333;border-radius:4px;font-size:12px;color:#fff;background:#111">
-          <option value="__sem_etapa__">&#9888;&#65039; Aprovados sem Etapa</option>
-          <option value="enviada">&#128228; Proposta Enviada</option>
-          <option value="negociacao">&#129309; Em Negociacao</option>
-          <option value="standby">&#9208;&#65039; Standby</option>
-          <option value="ganha" selected>&#127942; Venda Ganha</option>
-          <option value="perdida">&#10060; Venda Perdida</option>
-          <option value="__todos__">&#128203; Todos os aprovados</option>
-        </select>
-      </div>
       <div style="min-width:160px">
         <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">Consultor</label>
         <select id="funil-home-filtro-cons" onchange="funilHomeFiltrarLista()" style="width:100%;padding:7px 9px;border:1px solid #333;border-radius:4px;font-size:12px;color:#fff;background:#111">
@@ -783,14 +796,160 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
         <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">&nbsp;</label>
         <button onclick="funilHomeRecarregar()" style="padding:7px 16px;background:#c0001a;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap">&#128260; Atualizar</button>
       </div>
+      <div>
+        <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">&nbsp;</label>
+        <button onclick="leadNovoAbrir()" style="padding:7px 16px;background:#00695c;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap">+ Novo Lead</button>
+      </div>
+      <div style="margin-left:auto">
+        <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">&nbsp;</label>
+        <span id="funil-home-followup-alerta" style="display:none;padding:7px 14px;background:#c62828;color:#fff;border-radius:14px;font-size:11px;font-weight:800;cursor:default"></span>
+      </div>
     </div>
 
     <!-- Status -->
     <div id="funil-home-lista-status" style="font-size:11px;color:#aaa;margin-bottom:8px;min-height:16px"></div>
 
-    <!-- Lista -->
-    <div id="funil-home-lista" style="border:1px solid #2a2a2a;border-radius:6px;overflow:hidden;background:#fff;max-height:calc(100vh - 260px);overflow-y:auto"></div>
+    <!-- Quadro Kanban -->
+    <div id="funil-home-kanban" class="fk-board"></div>
 
+  </div>
+</div>
+
+<!-- Modal de detalhe do card do funil: timeline + follow-up + mudança de etapa -->
+<div class="ov" id="fk-detail-modal" style="z-index:96000">
+  <div class="modal-box" style="max-width:480px;position:relative">
+    <button onclick="fkFecharDetalhe()" style="position:absolute;top:10px;right:12px;background:none;border:none;color:#888;font-size:22px;line-height:1;cursor:pointer">&times;</button>
+    <h2 id="fk-det-titulo">—</h2>
+    <div id="fk-det-sub" style="font-size:11px;color:#888;margin-bottom:10px"></div>
+
+    <div id="fk-det-etapa-atual" style="margin-bottom:10px"></div>
+
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px" id="fk-det-etapa-btns"></div>
+
+    <div id="fk-det-terminal-box" style="display:none;background:#151515;border:1px solid #333;border-radius:6px;padding:10px 12px;margin-bottom:12px">
+      <div id="fk-det-terminal-label" style="font-size:11px;font-weight:800;margin-bottom:7px"></div>
+      <div id="fk-det-motivo-wrap" style="display:none;margin-bottom:8px">
+        <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Motivo da perda</label>
+        <select id="fk-det-motivo" style="width:100%;padding:6px 8px;border:1px solid #333;border-radius:4px;font-size:12px;background:#111;color:#fff">
+          <option value="">Selecione...</option>
+          <option>Preço</option><option>Política de crédito</option><option>Evento cancelado</option>
+          <option>Sem resposta do cliente</option><option>Demora no follow-up</option>
+          <option>Indisponibilidade de data</option><option>Outros</option>
+        </select>
+      </div>
+      <textarea id="fk-det-terminal-obs" placeholder="Observação (opcional)" style="width:100%;min-height:44px;padding:6px 8px;border:1px solid #333;border-radius:4px;font-size:11px;background:#111;color:#fff;resize:vertical;margin-bottom:8px;box-sizing:border-box"></textarea>
+      <div style="display:flex;gap:8px">
+        <button id="fk-det-terminal-confirmar" onclick="fkConfirmarTerminal()" style="flex:1;padding:8px;border:none;border-radius:5px;font-size:11px;font-weight:800;cursor:pointer;color:#fff">Confirmar</button>
+        <button onclick="fkCancelarTerminal()" style="padding:8px 14px;background:#333;color:#ccc;border:none;border-radius:5px;font-size:11px;font-weight:700;cursor:pointer">Cancelar</button>
+      </div>
+    </div>
+
+    <div style="background:#0d0d0d;border:1px solid #222;border-radius:6px;padding:10px 12px;margin-bottom:12px">
+      <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:5px">📅 Próximo Follow-up</label>
+      <div style="display:flex;gap:6px">
+        <input type="date" id="fk-det-followup-data" style="flex:1;padding:6px 8px;border:1px solid #333;border-radius:4px;font-size:12px;background:#111;color:#fff">
+        <button onclick="fkSalvarFollowup()" style="padding:6px 12px;background:#1565c0;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Salvar</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:10px">
+      <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:5px">🕒 Linha do Tempo</label>
+      <div id="fk-det-timeline" class="fk-timeline"></div>
+    </div>
+
+    <div style="display:flex;gap:6px">
+      <input id="fk-det-nova-nota" placeholder="Adicionar nota/atividade..." style="flex:1;padding:7px 9px;border:1px solid #333;border-radius:4px;font-size:12px;background:#111;color:#fff;box-sizing:border-box">
+      <button onclick="fkAdicionarAtividade()" style="padding:7px 14px;background:#111;border:1px solid #333;color:#fff;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">+ Nota</button>
+    </div>
+
+    <div style="margin-top:14px;text-align:center">
+      <a href="javascript:void(0)" onclick="fkAbrirOrcamentoCompleto()" style="font-size:11px;color:#1565c0;font-weight:700">Abrir orçamento completo →</a>
+    </div>
+  </div>
+</div>
+
+<!-- Formulário de criação de Lead (etapas pré-orçamento) -->
+<div class="ov" id="lead-form-modal" style="z-index:96500">
+  <div class="modal-box" style="max-width:420px;position:relative">
+    <button onclick="leadFecharForm()" style="position:absolute;top:10px;right:12px;background:none;border:none;color:#888;font-size:22px;line-height:1;cursor:pointer">&times;</button>
+    <h2>🆕 Novo Lead</h2>
+    <div style="font-size:11px;color:#888;margin-bottom:14px">Entra no funil na etapa "Sem Contato"</div>
+
+    <div style="margin-bottom:10px">
+      <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Nome / Empresa</label>
+      <input id="lead-form-nome" placeholder="Nome do contato ou razão social" style="width:100%;padding:8px 10px;border:1px solid #333;border-radius:4px;font-size:13px;background:#111;color:#fff;box-sizing:border-box">
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div style="flex:1">
+        <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Telefone</label>
+        <input id="lead-form-telefone" placeholder="(51) 99999-9999" style="width:100%;padding:8px 10px;border:1px solid #333;border-radius:4px;font-size:13px;background:#111;color:#fff;box-sizing:border-box">
+      </div>
+      <div style="flex:1">
+        <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">E-mail</label>
+        <input id="lead-form-email" type="email" placeholder="contato@empresa.com.br" style="width:100%;padding:8px 10px;border:1px solid #333;border-radius:4px;font-size:13px;background:#111;color:#fff;box-sizing:border-box">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div style="flex:1">
+        <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Valor Estimado</label>
+        <input id="lead-form-valor" type="number" step="0.01" placeholder="0,00" style="width:100%;padding:8px 10px;border:1px solid #333;border-radius:4px;font-size:13px;background:#111;color:#fff;box-sizing:border-box">
+      </div>
+      <div style="flex:1">
+        <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Consultor</label>
+        <select id="lead-form-consultor" style="width:100%;padding:8px 10px;border:1px solid #333;border-radius:4px;font-size:13px;background:#111;color:#fff">
+          <option value="">Selecione...</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Observação</label>
+      <textarea id="lead-form-obs" placeholder="Como surgiu o contato, interesse do cliente, etc." style="width:100%;min-height:52px;padding:8px 10px;border:1px solid #333;border-radius:4px;font-size:12px;background:#111;color:#fff;resize:vertical;box-sizing:border-box"></textarea>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button id="lead-form-salvar" onclick="leadCriar()" style="flex:1;padding:9px;background:#00695c;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:800;cursor:pointer">Criar Lead</button>
+      <button onclick="leadFecharForm()" style="padding:9px 16px;background:#333;color:#ccc;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de detalhe do Lead: timeline + follow-up + mudança de etapa + conversão -->
+<div class="ov" id="lead-detail-modal" style="z-index:96500">
+  <div class="modal-box" style="max-width:480px;position:relative">
+    <button onclick="leadFecharDetalhe()" style="position:absolute;top:10px;right:12px;background:none;border:none;color:#888;font-size:22px;line-height:1;cursor:pointer">&times;</button>
+    <h2 id="lead-det-titulo">—</h2>
+    <div id="lead-det-sub" style="font-size:11px;color:#888;margin-bottom:6px"></div>
+    <div style="font-size:16px;font-weight:900;color:#00897b;margin-bottom:10px" id="lead-det-valor">R$ 0,00</div>
+
+    <div id="lead-det-etapa-atual" style="margin-bottom:10px"></div>
+    <div id="lead-det-obs-inicial" style="display:none;font-size:11px;color:#aaa;font-style:italic;background:#151515;border:1px solid #2a2a2a;border-radius:6px;padding:8px 10px;margin-bottom:10px"></div>
+
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px" id="lead-det-etapa-btns"></div>
+
+    <div style="margin-bottom:14px">
+      <button onclick="leadIniciarConversao(_leadDetId)" style="width:100%;padding:9px;background:var(--R);color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:800;cursor:pointer">🚀 Converter em Orçamento →</button>
+    </div>
+
+    <div style="background:#0d0d0d;border:1px solid #222;border-radius:6px;padding:10px 12px;margin-bottom:12px">
+      <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:5px">📅 Próximo Follow-up</label>
+      <div style="display:flex;gap:6px">
+        <input type="date" id="lead-det-followup-data" style="flex:1;padding:6px 8px;border:1px solid #333;border-radius:4px;font-size:12px;background:#111;color:#fff">
+        <button onclick="leadSalvarFollowup()" style="padding:6px 12px;background:#1565c0;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Salvar</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:10px">
+      <label style="font-size:10px;color:#888;text-transform:uppercase;font-weight:700;display:block;margin-bottom:5px">🕒 Linha do Tempo</label>
+      <div id="lead-det-timeline" class="fk-timeline"></div>
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:14px">
+      <input id="lead-det-nova-nota" placeholder="Adicionar nota/atividade..." style="flex:1;padding:7px 9px;border:1px solid #333;border-radius:4px;font-size:12px;background:#111;color:#fff;box-sizing:border-box">
+      <button onclick="leadAdicionarAtividade()" style="padding:7px 14px;background:#111;border:1px solid #333;color:#fff;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">+ Nota</button>
+    </div>
+
+    <div style="text-align:center">
+      <a href="javascript:void(0)" onclick="leadExcluirAtual()" style="font-size:11px;color:#c62828;font-weight:700">🗑️ Excluir lead</a>
+    </div>
   </div>
 </div>
 
@@ -1843,23 +2002,8 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
 <div class="card" id="funil-card" style="display:none;border-radius:0 0 10px 10px;border-bottom:none">
   <div class="st" style="background:#1b5e20">📊 Funil de Vendas — Acompanhamento Comercial</div>
 
-  <!-- Contadores por etapa (badges rápidos) -->
-  <div id="funil-counters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
-
   <!-- Filtros -->
   <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:5px;padding:9px 11px;margin-bottom:10px">
-    <div style="flex:1;min-width:170px">
-      <label>Etapa do Funil</label>
-      <select id="funil-filtro-etapa" onchange="funilFiltrarLista()" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;color:#222;background:#fff">
-        <option value="__sem_etapa__">⚠️ Aprovados sem Etapa</option>
-        <option value="enviada">📤 Proposta Enviada</option>
-        <option value="negociacao">🤝 Em Negociação</option>
-        <option value="standby">⏸️ Standby</option>
-        <option value="ganha">🏆 Venda Ganha</option>
-        <option value="perdida">❌ Venda Perdida</option>
-        <option value="__todos__">📋 Todos os aprovados</option>
-      </select>
-    </div>
     <div style="min-width:160px">
       <label>Consultor</label>
       <select id="funil-filtro-cons" onchange="funilFiltrarLista()" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;color:#222;background:#fff">
@@ -1873,13 +2017,21 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:#fff;font-weight:900;font
       <label>&nbsp;</label>
       <button onclick="funilRecarregar()" style="padding:6px 13px;background:#111;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">🔄 Atualizar</button>
     </div>
+    <div>
+      <label>&nbsp;</label>
+      <button onclick="leadNovoAbrir()" style="padding:6px 13px;background:#00695c;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">+ Novo Lead</button>
+    </div>
+    <div style="margin-left:auto">
+      <label>&nbsp;</label>
+      <span id="funil-followup-alerta" style="display:none;padding:6px 12px;background:#c62828;color:#fff;border-radius:14px;font-size:10px;font-weight:800;cursor:default"></span>
+    </div>
   </div>
 
   <!-- Status de carregamento -->
   <div id="funil-lista-status" style="font-size:11px;color:#888;margin-bottom:7px;min-height:14px"></div>
 
-  <!-- Lista de orçamentos -->
-  <div id="funil-lista" style="border:1px solid #e0e0e0;border-radius:5px;overflow:hidden;max-height:420px;overflow-y:auto;background:#fff"></div>
+  <!-- Quadro Kanban -->
+  <div id="funil-kanban" class="fk-board"></div>
 </div><!-- /funil-card -->
 
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
@@ -5570,6 +5722,70 @@ var FUNIL_SI = {
   perdida:   {label:'❌ Venda Perdida',    bg:'#c62828', tx:'#fff', lbg:'#ffebee', ltx:'#b71c1c', lbd:'#ef9a9a'}
 };
 
+// ── LEADS — pipeline pré-orçamento (espelha o funil da RD Station) ──
+// Coleção Firestore própria ('leads'), independente dos orçamentos.
+// Quando um lead avança para "Proposta Enviada" ele é convertido: sai do
+// quadro de Leads e vira um orçamento de verdade (fluxo normal do sistema).
+var LEADS = [];
+var _leadsCarregado = false;
+
+var LEAD_COL_ORDEM = ['sem_contato','contato_feito','identificacao','orcando'];
+var LEAD_COL_SI = {
+  sem_contato:   {label:'⚪ Sem Contato',               bg:'#455a64', tx:'#fff'},
+  contato_feito: {label:'📞 Contato Feito',             bg:'#00695c', tx:'#fff'},
+  identificacao: {label:'🔍 Identificação do Interesse', bg:'#00838f', tx:'#fff'},
+  orcando:       {label:'🧮 Orçando',                    bg:'#6a1b9a', tx:'#fff'}
+};
+
+async function leadsCarregarStorage(){
+  if(!fbDb) return;
+  try{
+    var snap = await fbDb.collection('leads').get();
+    var lista = [];
+    snap.forEach(function(doc){ lista.push(doc.data()); });
+    LEADS = lista;
+    try{ localStorage.setItem('crazySomLeads', JSON.stringify(LEADS)); }catch(e){}
+    return;
+  }catch(e){ console.warn('leadsCarregarStorage:', e); }
+  try{
+    var d = localStorage.getItem('crazySomLeads');
+    if(d){ var arr = JSON.parse(d); if(Array.isArray(arr)) LEADS = arr; }
+  }catch(e){}
+}
+
+async function _leadSalvarFirestore(obj){
+  try{
+    await fbDb.collection('leads').doc(obj.id).set(obj);
+    try{ localStorage.setItem('crazySomLeads', JSON.stringify(LEADS)); }catch(e){}
+    return true;
+  }catch(e){ console.warn('_leadSalvarFirestore:', e); return false; }
+}
+
+async function _leadExcluirFirestore(id){
+  try{
+    await fbDb.collection('leads').doc(id).delete();
+    try{ localStorage.setItem('crazySomLeads', JSON.stringify(LEADS)); }catch(e){}
+    return true;
+  }catch(e){ console.warn('_leadExcluirFirestore:', e); return false; }
+}
+
+// Salva uma alteração num lead do cache local (padrão igual ao _funilPatchOrcamento)
+async function _leadPatch(id, mutatorFn){
+  var lead = LEADS.find(function(l){ return l.id === id; });
+  if(!lead){ alert('⚠️ Lead não encontrado.'); return null; }
+  mutatorFn(lead);
+  lead.atualizadoEm = new Date().toLocaleString('pt-BR');
+  lead.atualizadoPor = usuarioAtual ? usuarioAtual.nome : '';
+  var ok = await _leadSalvarFirestore(lead);
+  if(!ok) alert('⚠️ Erro ao salvar lead (Firestore indisponível). Alteração mantida só localmente.');
+  return lead;
+}
+
+// Colunas do kanban (ordem de exibição) e seus estilos — leads (pré-orçamento)
+// seguidos das etapas comerciais do orçamento, igual ao funil da RD Station
+var FUNIL_COL_ORDEM = ['sem_contato','contato_feito','identificacao','orcando','enviada','negociacao','standby','ganha','perdida','sem_etapa'];
+var FUNIL_COL_SI = Object.assign({ sem_etapa:{label:'⚠️ Sem Etapa', bg:'#5d4037', tx:'#fff'} }, LEAD_COL_SI, FUNIL_SI);
+
 function funilMostrarCard(){
   var card = document.getElementById('funil-card');
   if(card) card.style.display = 'block';
@@ -5582,17 +5798,19 @@ function funilEsconderCard(){
 
 async function funilCarregarDados(forcar){
   if(_funilCarregando) return;
-  if(_funilCarregado && !forcar) { funilFiltrarLista(); return; }
+  if(_funilCarregado && _leadsCarregado && !forcar) { funilFiltrarLista(); return; }
   _funilCarregando = true;
   var stEl = document.getElementById('funil-lista-status');
-  var listaEl = document.getElementById('funil-lista');
-  if(stEl) stEl.textContent = '⏳ Carregando orçamentos...';
-  if(listaEl) listaEl.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px">'
+  var kEl = document.getElementById('funil-kanban');
+  if(stEl) stEl.textContent = '⏳ Carregando leads e orçamentos...';
+  if(kEl) kEl.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px;width:100%">'
     +'⏳ Buscando...'
     +'<div style="background:#e0e0e0;border-radius:4px;height:5px;margin-top:8px;overflow:hidden">'
     +'<div id="funil-prog-bar" style="height:100%;background:#c0001a;width:0%;transition:width .3s;border-radius:4px"></div>'
     +'</div></div>';
   try{
+    await leadsCarregarStorage();
+    _leadsCarregado = true;
     var r = await fetch(SCRIPT_URL+'?action=list&q=');
     var d = await r.json();
     if(!d.ok) throw new Error(d.erro||'Erro ao listar');
@@ -5610,17 +5828,16 @@ async function funilCarregarDados(forcar){
       var aprovParciais=parciais.filter(function(o){return o&&o.st==='aprovado';});
       if(aprovParciais.length>0){
         _funilCache=aprovParciais;
-        funilRenderCounters();
+        funilRenderKanban('funil-kanban','funil-filtro-cons',null,'funil-followup-alerta');
       }
     }, forcar);
     _funilCache = todos.filter(Boolean).filter(function(o){ return o.st === 'aprovado'; });
     _funilCarregado = true;
-    funilRenderCounters();
     funilFiltrarLista();
     if(stEl) stEl.textContent = _funilCache.length + ' orçamento(s) aprovado(s)';
   }catch(e){
     if(stEl) stEl.textContent = '⚠️ Erro ao carregar: ' + e.message;
-    if(listaEl) listaEl.innerHTML = '<div style="padding:20px;text-align:center;color:#c0001a;font-size:12px">⚠️ ' + e.message + '</div>';
+    if(kEl) kEl.innerHTML = '<div style="padding:20px;text-align:center;color:#c0001a;font-size:12px">⚠️ ' + e.message + '</div>';
   }finally{
     _funilCarregando = false;
   }
@@ -5630,156 +5847,692 @@ function funilRecarregar(){
   // Limpar cache do Drive para garantir dados frescos do servidor
   _driveCacheClear();
   _funilCarregado = false;
+  _leadsCarregado = false;
   _funilCarregando = false;
   funilCarregarDados(true);
 }
 
-function funilRenderCounters(){
-  var el = document.getElementById('funil-counters');
-  if(!el) return;
-  var semEtapa = _funilCache.filter(function(o){
-    var cs = (o.dados && o.dados.comercialStatus) || '';
-    return !['enviada','negociacao','standby','ganha','perdida'].includes(cs);
-  }).length;
-  var html = '';
-  if(semEtapa > 0){
-    html += '<span onclick="funilSelecionarEtapa(\'__sem_etapa__\')" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:800;background:#e65100;color:#fff;border:2px solid #e65100">'
-      + '⚠️ Sem Etapa: ' + semEtapa + '</span>';
-  }
-  ['enviada','negociacao','standby','ganha','perdida'].forEach(function(k){
-    var si = FUNIL_SI[k];
-    var n = _funilCache.filter(function(o){ return (o.dados&&o.dados.comercialStatus)===k; }).length;
-    html += '<span onclick="funilSelecionarEtapa(\''+k+'\')" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:800;background:'+si.bg+';color:'+si.tx+';border:2px solid '+si.bg+'">'
-      + si.label + ': ' + n + '</span>';
-  });
-  var total = _funilCache.length;
-  html += '<span onclick="funilSelecionarEtapa(\'__todos__\')" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:700;background:#333;color:#ccc;border:2px solid #444">'
-    + '📋 Todos: ' + total + '</span>';
-  el.innerHTML = html;
-}
-
-function funilSelecionarEtapa(etapa){
-  var sel = document.getElementById('funil-filtro-etapa');
-  if(sel){ sel.value = etapa; }
-  funilFiltrarLista();
-}
-
 function funilFiltrarLista(){
-  var etapa  = (document.getElementById('funil-filtro-etapa')||{}).value || '__sem_etapa__';
-  var cons   = (document.getElementById('funil-filtro-cons')||{}).value  || '';
-  var stEl   = document.getElementById('funil-lista-status');
-  var listaEl= document.getElementById('funil-lista');
-  if(!listaEl) return;
+  if(!_funilCarregado){ funilCarregarDados(); return; }
+  funilRenderKanban('funil-kanban','funil-filtro-cons','funil-lista-status','funil-followup-alerta');
+}
 
-  if(!_funilCarregado){
-    funilCarregarDados();
-    return;
-  }
+// Renderiza o quadro kanban — compartilhado entre o card fixo e o overlay da home.
+// Mescla duas fontes: LEADS (pré-orçamento, Firestore) e _funilCache (orçamentos aprovados).
+function funilRenderKanban(kanbanId, filtroConsElId, statusElId, alertaElId){
+  var kEl = document.getElementById(kanbanId);
+  if(!kEl) return;
+  var cons = (document.getElementById(filtroConsElId)||{}).value || '';
+  var stEl = statusElId ? document.getElementById(statusElId) : null;
+  var alertaEl = alertaElId ? document.getElementById(alertaElId) : null;
 
-  var isSemEtapa = etapa === '__sem_etapa__';
-  var isTodos    = etapa === '__todos__';
-
-  var filtrados = _funilCache.filter(function(o){
+  var baseOrc = _funilCache.filter(function(o){
     if(cons && (o.form && o.form['f-cons']) !== cons) return false;
+    return true;
+  });
+  var baseLeads = LEADS.filter(function(l){
+    if(l.convertido) return false;
+    if(cons && (l.consultor||'') !== cons) return false;
+    return true;
+  });
+
+  var hoje = new Date().toISOString().split('T')[0];
+  var atrasadosOrc = baseOrc.filter(function(o){
     var cs = (o.dados && o.dados.comercialStatus) || '';
-    if(isSemEtapa){
-      return !['enviada','negociacao','standby','ganha','perdida'].includes(cs);
+    if(cs === 'ganha' || cs === 'perdida') return false;
+    var fu = o.dados && o.dados.followupData;
+    return fu && fu < hoje;
+  });
+  var atrasadosLead = baseLeads.filter(function(l){ return l.followupData && l.followupData < hoje; });
+  var totalAtrasados = atrasadosOrc.length + atrasadosLead.length;
+
+  if(alertaEl){
+    if(totalAtrasados > 0){
+      alertaEl.style.display = 'inline-block';
+      alertaEl.textContent = '⏰ ' + totalAtrasados + ' follow-up(s) atrasado(s)';
+    } else {
+      alertaEl.style.display = 'none';
+      alertaEl.textContent = '';
     }
-    if(isTodos) return true;
-    return cs === etapa;
-  });
+  }
 
-  // Ordenar por data do evento (mais próximo primeiro) ou data do orçamento
-  filtrados.sort(function(a,b){
-    var da = (a.form&&(a.form['f-dia']||a.form['f-data']))||'';
-    var db = (b.form&&(b.form['f-dia']||b.form['f-data']))||'';
-    return da < db ? -1 : da > db ? 1 : 0;
-  });
-
-  var si = isSemEtapa
-    ? {label:'⚠️ Aprovados sem Etapa', lbg:'#fff3e0', ltx:'#e65100', lbd:'#ffb74d'}
-    : isTodos
-      ? {label:'📋 Todos os Aprovados', lbg:'#f5f5f5', ltx:'#333', lbd:'#ddd'}
-      : FUNIL_SI[etapa];
-
-  var total = filtrados.length;
-  var totalVal = filtrados.reduce(function(t,o){ return t+dashValOrc(o); }, 0);
-
+  var totalGeral = baseOrc.length + baseLeads.length;
+  var valorGeral = baseOrc.reduce(function(t,o){ return t+dashValOrc(o); }, 0)
+    + baseLeads.reduce(function(t,l){ return t+(parseFloat(l.valorEstimado)||0); }, 0);
   if(stEl){
-    var aviso = isSemEtapa && total > 0
-      ? ' &nbsp;⚠️ <span style="color:#e65100;font-weight:800">Cobrar classificação dos consultores!</span>'
-      : '';
-    stEl.innerHTML = '<b style="color:#333">' + (si?si.label:'') + '</b> &mdash; '
-      + total + ' orçamento(s) &nbsp;·&nbsp; Total: <b style="color:#c0001a">' + fmt(totalVal) + '</b>'
-      + aviso;
+    stEl.innerHTML = '<b style="color:inherit">' + totalGeral + '</b> negociação(ões) no funil &nbsp;·&nbsp; Total: <b style="color:#c0001a">' + fmt(valorGeral) + '</b>';
   }
 
-  if(!filtrados.length){
-    listaEl.innerHTML = '<div style="padding:24px;text-align:center;color:#aaa;font-size:12px">'
-      + (isSemEtapa
-          ? '✅ Todos os orçamentos aprovados já têm etapa do funil definida!'
-          : 'Nenhum orçamento nesta etapa.')
-      + '</div>';
-    return;
-  }
+  var html = FUNIL_COL_ORDEM.map(function(colKey){
+    var si = FUNIL_COL_SI[colKey];
+    var isLeadCol = LEAD_COL_ORDEM.indexOf(colKey) >= 0;
+    var itens, cardsHtml, totVal;
 
-  // Cabeçalho
-  var cabBg = si ? si.lbg : '#f5f5f5';
-  var cabTx = si ? si.ltx : '#333';
-  var cabBd = si ? si.lbd : '#ddd';
-  var header = '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:'+cabBg+';border-bottom:2px solid '+cabBd+'">'
-    + '<span style="font-size:11px;font-weight:800;color:'+cabTx+'">'+( si ? si.label : '' )+'</span>'
-    + '<span style="margin-left:auto;font-size:10px;color:'+cabTx+';opacity:.7">'+total+' orc. · '+fmt(totalVal)+'</span>'
-    + '</div>';
+    if(isLeadCol){
+      itens = baseLeads.filter(function(l){ return (l.etapa||'sem_contato') === colKey; });
+      itens.sort(function(a,b){ return (a.criadoEmISO||'') < (b.criadoEmISO||'') ? -1 : 1; });
+      totVal = itens.reduce(function(t,l){ return t+(parseFloat(l.valorEstimado)||0); }, 0);
+      cardsHtml = itens.length
+        ? itens.map(function(l){ return _fkLeadCardHtml(l, hoje); }).join('')
+        : '<div class="fk-empty">Nenhum lead</div>';
+    } else {
+      itens = baseOrc.filter(function(o){
+        var cs = (o.dados && o.dados.comercialStatus) || '';
+        return colKey === 'sem_etapa' ? !FUNIL_SI[cs] : cs === colKey;
+      });
+      itens.sort(function(a,b){
+        var da = (a.form&&(a.form['f-dia']||a.form['f-data']))||'';
+        var db = (b.form&&(b.form['f-dia']||b.form['f-data']))||'';
+        return da < db ? -1 : da > db ? 1 : 0;
+      });
+      totVal = itens.reduce(function(t,o){ return t+dashValOrc(o); }, 0);
+      cardsHtml = itens.length
+        ? itens.map(function(o){ return _fkCardHtml(o, hoje); }).join('')
+        : '<div class="fk-empty">Nenhum orçamento</div>';
+    }
 
-  var rows = filtrados.map(function(o){
-    var f = o.form || {};
-    var cs = (o.dados && o.dados.comercialStatus) || '';
-    var siCs = FUNIL_SI[cs];
-    var etapaBadge = siCs
-      ? '<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:'+siCs.bg+';color:'+siCs.tx+';font-weight:800;white-space:nowrap;flex-shrink:0">'+siCs.label+'</span>'
-      : '<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:#fff3cd;color:#856404;border:1px solid #ffc107;font-weight:800;white-space:nowrap;flex-shrink:0">⚠️ Sem Etapa</span>';
-
-    var val = dashValOrc(o);
-
-    var dataOrc = f['f-data'] ? fD(f['f-data']) : '—';
-    var dataEv  = f['f-dia']  ? fD(f['f-dia'])  : null;
-
-    // Último comentário comercial
-    var histCom = (o.dados && o.dados.comercialHist) || [];
-    var ult = histCom.length ? histCom[histCom.length-1] : null;
-    var ultObs = ult && ult.obs
-      ? '<div style="font-size:9px;color:#888;font-style:italic;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">💬 '+eh(ult.obs)+'</div>'
-      : '';
-    var ultData = ult
-      ? '<span style="font-size:9px;color:#aaa"> · últ. reg: '+ult.data+'</span>'
-      : '';
-
-    var driveId = o.driveId || '';
-
-    return '<div onclick="funilAbrirOrcamento(\''+driveId+'\',\''+eh(o.nome||'')+'\')" '
-      + 'style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #f0f0f0;cursor:pointer;transition:background .12s" '
-      + 'onmouseover="this.style.background=\'#f9f9f9\'" onmouseout="this.style.background=\'#fff\'">'
-      + '<div style="flex:1;min-width:0">'
-      + '<div style="font-size:12px;font-weight:700;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
-      + '<div style="font-size:10px;color:#888;margin-top:1px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
-      + '<span style="color:#555;font-weight:700">'+eh(f['f-num']||'—')+'</span>'
-      + (f['f-cons'] ? '<span>· '+eh(f['f-cons'])+'</span>' : '')
-      + '<span>· Orc: '+dataOrc+'</span>'
-      + (dataEv ? '<span style="color:#1565c0;font-weight:700">· Evento: '+dataEv+'</span>' : '')
-      + ultData
+    var dropAttr = colKey === 'sem_etapa' ? '' : ' ondrop="_fkDrop(event,\''+colKey+'\')"';
+    return '<div class="fk-col" data-etapa="'+colKey+'" ondragover="_fkDragOver(event)" ondragleave="_fkDragLeave(event)"'+dropAttr+'>'
+      + '<div class="fk-col-head" style="background:'+si.bg+';color:'+si.tx+'">'
+      + '<span>'+si.label+'</span>'
+      + '<span class="fk-col-count">'+itens.length+'</span>'
       + '</div>'
-      + ultObs
-      + '</div>'
-      + etapaBadge
-      + '<div style="text-align:right;flex-shrink:0;min-width:80px">'
-      + '<div style="font-size:11px;font-weight:800;color:#222">'+fmt(val)+'</div>'
-      + '<div style="font-size:9px;color:#aaa;margin-top:1px">clique p/ abrir</div>'
-      + '</div>'
+      + '<div class="fk-col-total">'+fmt(totVal)+'</div>'
+      + '<div class="fk-col-body">'+cardsHtml+'</div>'
       + '</div>';
   }).join('');
 
-  listaEl.innerHTML = header + rows;
+  kEl.innerHTML = html;
+}
+
+function _fkCardHtml(o, hoje){
+  var f = o.form || {};
+  var val = dashValOrc(o);
+  var driveId = o.driveId || '';
+  var dataEv = f['f-dia'] ? fD(f['f-dia']) : null;
+  var cs = (o.dados && o.dados.comercialStatus) || '';
+  var fu = o.dados && o.dados.followupData;
+  var atrasado = fu && fu < hoje && cs !== 'ganha' && cs !== 'perdida';
+  var fuBadge = fu
+    ? '<span class="fk-fu-badge'+(atrasado?' fk-fu-atrasado':'')+'">'+(atrasado?'⏰':'📅')+' '+fD(fu)+'</span>'
+    : '';
+  var histCom = (o.dados && o.dados.comercialHist) || [];
+  var ult = histCom.length ? histCom[histCom.length-1] : null;
+  var ultObs = ult && ult.obs ? '<div class="fk-card-obs">💬 '+eh(ult.obs)+'</div>' : '';
+
+  return '<div class="fk-card" draggable="true" ondragstart="_fkDragStart(event,\''+driveId+'\',\'orc\')" ondragend="_fkDragEnd(event)" onclick="fkAbrirDetalhe(\''+driveId+'\')">'
+    + '<div class="fk-card-cli">'+eh(f['f-cliente']||'—')+'</div>'
+    + '<div class="fk-card-meta"><span>'+eh(f['f-num']||'—')+'</span>'
+    + (f['f-cons'] ? '<span>· '+eh(f['f-cons'])+'</span>' : '')
+    + '</div>'
+    + (dataEv ? '<div class="fk-card-evento">📆 '+dataEv+'</div>' : '')
+    + ultObs
+    + '<div class="fk-card-foot"><span class="fk-card-val">'+fmt(val)+'</span>'+fuBadge+'</div>'
+    + '</div>';
+}
+
+function _fkLeadCardHtml(lead, hoje){
+  var val = parseFloat(lead.valorEstimado) || 0;
+  var fu = lead.followupData;
+  var atrasado = fu && fu < hoje;
+  var fuBadge = fu
+    ? '<span class="fk-fu-badge'+(atrasado?' fk-fu-atrasado':'')+'">'+(atrasado?'⏰':'📅')+' '+fD(fu)+'</span>'
+    : '';
+  var ultNota = (lead.atividades && lead.atividades.length) ? lead.atividades[lead.atividades.length-1] : null;
+  var obsHtml = ultNota ? '<div class="fk-card-obs">💬 '+eh(ultNota.texto)+'</div>' : '';
+
+  return '<div class="fk-card fk-card-lead" draggable="true" ondragstart="_fkDragStart(event,\''+lead.id+'\',\'lead\')" ondragend="_fkDragEnd(event)" onclick="leadAbrirDetalhe(\''+lead.id+'\')">'
+    + '<div class="fk-card-cli">'+eh(lead.nome||'—')+'</div>'
+    + '<div class="fk-card-meta">'
+    + (lead.consultor ? '<span>'+eh(lead.consultor)+'</span>' : '')
+    + (lead.telefone ? '<span>· '+eh(lead.telefone)+'</span>' : '')
+    + '</div>'
+    + obsHtml
+    + '<div class="fk-card-foot"><span class="fk-card-val">'+fmt(val)+'</span>'+fuBadge+'</div>'
+    + '</div>';
+}
+
+// ── Drag and drop nativo (HTML5) ──
+var _fkDragId = null;
+var _fkDragType = null; // 'lead' | 'orc'
+
+function _fkDragStart(ev, id, tipo){
+  _fkDragId = id;
+  _fkDragType = tipo || 'orc';
+  ev.dataTransfer.effectAllowed = 'move';
+  try{ ev.dataTransfer.setData('text/plain', id); }catch(e){}
+  ev.target.classList.add('fk-dragging');
+}
+function _fkDragEnd(ev){
+  ev.target.classList.remove('fk-dragging');
+  document.querySelectorAll('.fk-col.fk-col-over').forEach(function(c){ c.classList.remove('fk-col-over'); });
+}
+function _fkDragOver(ev){
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'move';
+  ev.currentTarget.classList.add('fk-col-over');
+}
+function _fkDragLeave(ev){
+  ev.currentTarget.classList.remove('fk-col-over');
+}
+function _fkDrop(ev, novaEtapa){
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('fk-col-over');
+  var id = _fkDragId;
+  var tipo = _fkDragType;
+  _fkDragId = null;
+  _fkDragType = null;
+  if(!id) return;
+
+  if(tipo === 'lead'){
+    _fkDropLead(id, novaEtapa);
+  } else {
+    _fkDropOrc(id, novaEtapa);
+  }
+}
+
+function _fkDropLead(id, novaEtapa){
+  var lead = LEADS.find(function(l){ return l.id === id; });
+  if(!lead) return;
+  var etapaAtual = lead.etapa || 'sem_contato';
+  if(etapaAtual === novaEtapa) return;
+
+  if(LEAD_COL_ORDEM.indexOf(novaEtapa) >= 0){
+    _leadPatch(id, function(l){
+      l.etapa = novaEtapa;
+      l.hist = (l.hist||[]).concat([{
+        etapa: novaEtapa,
+        usuario: usuarioAtual ? usuarioAtual.nome : '—',
+        data: new Date().toLocaleString('pt-BR'),
+        dataISO: new Date().toISOString().split('T')[0]
+      }]);
+    }).then(function(ok){ if(ok){ funilFiltrarLista(); funilHomeFiltrarLista(); } });
+    return;
+  }
+  if(novaEtapa === 'enviada'){
+    leadIniciarConversao(id);
+    return;
+  }
+  alert('⚠️ Para avançar um lead além de "Orçando", use o botão "Converter em Orçamento" (isso cria o orçamento de verdade).');
+}
+
+function _fkDropOrc(driveId, novaEtapa){
+  if(LEAD_COL_ORDEM.indexOf(novaEtapa) >= 0){
+    alert('⚠️ Orçamentos já formalizados não retornam para as etapas de Lead.');
+    return;
+  }
+  var orc = _funilCache.find(function(o){ return o.driveId === driveId; });
+  if(!orc) return;
+  var etapaAtual = (orc.dados && orc.dados.comercialStatus) || '';
+  if(etapaAtual === novaEtapa) return;
+
+  if(novaEtapa === 'ganha' || novaEtapa === 'perdida'){
+    // Etapas terminais exigem confirmação (e motivo, se perdida) no modal de detalhe
+    fkAbrirDetalhe(driveId, novaEtapa);
+    return;
+  }
+  _fkMudarEtapaRapido(driveId, novaEtapa);
+}
+
+async function _fkMudarEtapaRapido(driveId, novaEtapa){
+  var novoDados = await _funilPatchOrcamento(driveId, function(dados){
+    dados.comercialStatus = novaEtapa;
+    dados.comercialHist = (dados.comercialHist||[]).concat([{
+      status: novaEtapa,
+      motivo: '',
+      usuario: usuarioAtual ? usuarioAtual.nome : '—',
+      obs: '',
+      data: new Date().toLocaleString('pt-BR'),
+      dataISO: new Date().toISOString().split('T')[0]
+    }]);
+  });
+  if(novoDados){ funilFiltrarLista(); funilHomeFiltrarLista(); }
+}
+
+// Salva uma alteração em um orçamento do cache do funil sem abrir o editor completo
+// (generaliza o padrão usado em aprovAcaoLista)
+async function _funilPatchOrcamento(driveId, mutatorFn){
+  var orc = _funilCache.find(function(o){ return o.driveId === driveId; });
+  if(!orc){ alert('⚠️ Orçamento não encontrado no cache do funil.'); return null; }
+  var novoDados = JSON.parse(JSON.stringify(orc.dados||{}));
+  mutatorFn(novoDados);
+  try{
+    var r = await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
+      action:'save',
+      id:orc.driveId,
+      numero:orc.form['f-num']||'SN',
+      cliente:orc.form['f-cliente']||'SemCliente',
+      data:orc.form['f-data']||new Date().toISOString().split('T')[0],
+      dados:novoDados
+    })});
+    var d = await r.json();
+    if(!d.ok) throw new Error(d.erro||'Erro ao salvar');
+    orc.dados = novoDados;
+    if(typeof _driveCache!=='undefined') delete _driveCache[orc.driveId];
+    if(driveIdAtual === orc.driveId){
+      comercialStatus = novoDados.comercialStatus||'';
+      comercialHist = novoDados.comercialHist||[];
+      if(typeof renderComercial==='function') renderComercial();
+      if(typeof renderFinanceiroInline==='function') renderFinanceiroInline();
+    }
+    return novoDados;
+  }catch(e){
+    alert('⚠️ Erro ao salvar: ' + e.message);
+    return null;
+  }
+}
+
+// ── Novo Lead (formulário de criação) ──
+function leadNovoAbrir(){
+  document.getElementById('lead-form-nome').value = '';
+  document.getElementById('lead-form-telefone').value = '';
+  document.getElementById('lead-form-email').value = '';
+  document.getElementById('lead-form-valor').value = '';
+  document.getElementById('lead-form-obs').value = '';
+  _leadPopularConsultorSelect();
+  document.getElementById('lead-form-modal').classList.add('open');
+  setTimeout(function(){ var el=document.getElementById('lead-form-nome'); if(el) el.focus(); }, 150);
+}
+
+function leadFecharForm(){
+  document.getElementById('lead-form-modal').classList.remove('open');
+}
+
+function _leadPopularConsultorSelect(){
+  var sel = document.getElementById('lead-form-consultor');
+  var orig = document.getElementById('f-cons');
+  if(sel && orig){
+    var atual = sel.value;
+    sel.innerHTML = orig.innerHTML;
+    sel.value = atual || '';
+  }
+}
+
+async function leadCriar(){
+  var nome = (document.getElementById('lead-form-nome').value||'').trim();
+  if(!nome){ alert('⚠️ Informe o nome do contato ou empresa.'); return; }
+  var agora = new Date();
+  var obj = {
+    id: 'lead_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    nome: nome,
+    telefone: (document.getElementById('lead-form-telefone').value||'').trim(),
+    email: (document.getElementById('lead-form-email').value||'').trim(),
+    valorEstimado: parseFloat(document.getElementById('lead-form-valor').value)||0,
+    consultor: document.getElementById('lead-form-consultor').value||'',
+    obs: (document.getElementById('lead-form-obs').value||'').trim(),
+    etapa: 'sem_contato',
+    hist: [{etapa:'sem_contato', usuario:usuarioAtual?usuarioAtual.nome:'—', data:agora.toLocaleString('pt-BR'), dataISO:agora.toISOString().split('T')[0]}],
+    atividades: [],
+    followupData: '',
+    convertido: false,
+    orcamentoNum: '',
+    criadoEm: agora.toLocaleString('pt-BR'),
+    criadoEmISO: agora.toISOString(),
+    criadoPor: usuarioAtual?usuarioAtual.nome:'',
+    atualizadoEm: agora.toLocaleString('pt-BR'),
+    atualizadoPor: usuarioAtual?usuarioAtual.nome:''
+  };
+
+  var btn = document.getElementById('lead-form-salvar');
+  var origTxt = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Salvando...'; }
+
+  LEADS.push(obj);
+  var ok = await _leadSalvarFirestore(obj);
+
+  if(btn){ btn.disabled = false; btn.textContent = origTxt; }
+  leadFecharForm();
+  funilFiltrarLista();
+  funilHomeFiltrarLista();
+  if(!ok) alert('⚠️ Lead criado, mas houve erro ao salvar no Firestore (mantido localmente).');
+}
+
+// ── Modal de detalhe do Lead: timeline, follow-up, mudança de etapa e conversão ──
+var _leadDetId = null;
+
+function leadAbrirDetalhe(id){
+  var lead = LEADS.find(function(l){ return l.id === id; });
+  if(!lead){ alert('⚠️ Lead não encontrado.'); return; }
+  _leadDetId = id;
+
+  document.getElementById('lead-det-titulo').textContent = lead.nome || '—';
+  document.getElementById('lead-det-sub').textContent = [lead.telefone, lead.email, lead.consultor].filter(Boolean).join(' · ');
+  document.getElementById('lead-det-valor').textContent = fmt(parseFloat(lead.valorEstimado)||0);
+
+  var etapaAtual = lead.etapa || 'sem_contato';
+  var si = LEAD_COL_SI[etapaAtual];
+  document.getElementById('lead-det-etapa-atual').innerHTML = si
+    ? '<span style="display:inline-block;padding:4px 11px;border-radius:12px;font-size:11px;font-weight:800;background:'+si.bg+';color:'+si.tx+'">'+si.label+'</span>'
+    : '';
+
+  var btnsHtml = LEAD_COL_ORDEM.map(function(k){
+    var s = LEAD_COL_SI[k];
+    var ativo = etapaAtual === k;
+    return '<button onclick="leadClicarEtapa(\''+k+'\')" style="padding:6px 12px;border-radius:16px;border:2px solid '+s.bg+';background:'+(ativo?s.bg:'transparent')+';color:'+(ativo?s.tx:s.bg)+';font-size:10px;font-weight:800;cursor:pointer">'+s.label+'</button>';
+  }).join('');
+  document.getElementById('lead-det-etapa-btns').innerHTML = btnsHtml;
+
+  document.getElementById('lead-det-followup-data').value = lead.followupData || '';
+  document.getElementById('lead-det-obs-inicial').textContent = lead.obs || '';
+  document.getElementById('lead-det-obs-inicial').style.display = lead.obs ? 'block' : 'none';
+
+  _leadRenderTimeline(lead);
+  document.getElementById('lead-det-nova-nota').value = '';
+
+  document.getElementById('lead-detail-modal').classList.add('open');
+}
+
+function leadFecharDetalhe(){
+  var m = document.getElementById('lead-detail-modal');
+  if(m) m.classList.remove('open');
+  _leadDetId = null;
+}
+
+async function leadClicarEtapa(etapa){
+  if(!_leadDetId) return;
+  var lead = LEADS.find(function(l){ return l.id === _leadDetId; });
+  if(!lead || (lead.etapa||'sem_contato') === etapa) return;
+  var idAlvo = _leadDetId;
+  await _leadPatch(idAlvo, function(l){
+    l.etapa = etapa;
+    l.hist = (l.hist||[]).concat([{
+      etapa: etapa,
+      usuario: usuarioAtual ? usuarioAtual.nome : '—',
+      data: new Date().toLocaleString('pt-BR'),
+      dataISO: new Date().toISOString().split('T')[0]
+    }]);
+  });
+  funilFiltrarLista();
+  funilHomeFiltrarLista();
+  if(_leadDetId === idAlvo) leadAbrirDetalhe(idAlvo);
+}
+
+async function leadSalvarFollowup(){
+  if(!_leadDetId) return;
+  var val = (document.getElementById('lead-det-followup-data')||{}).value || '';
+  await _leadPatch(_leadDetId, function(l){ l.followupData = val; });
+  funilFiltrarLista();
+  funilHomeFiltrarLista();
+}
+
+async function leadAdicionarAtividade(){
+  if(!_leadDetId) return;
+  var el = document.getElementById('lead-det-nova-nota');
+  var texto = (el.value||'').trim();
+  if(!texto) return;
+  var idAlvo = _leadDetId;
+  var lead = await _leadPatch(idAlvo, function(l){
+    l.atividades = (l.atividades||[]).concat([{
+      texto: texto,
+      usuario: usuarioAtual ? usuarioAtual.nome : '—',
+      data: new Date().toLocaleString('pt-BR'),
+      dataISO: new Date().toISOString().split('T')[0]
+    }]);
+  });
+  if(lead){
+    el.value = '';
+    if(_leadDetId === idAlvo) _leadRenderTimeline(lead);
+  }
+}
+
+function _leadRenderTimeline(lead){
+  var el = document.getElementById('lead-det-timeline');
+  if(!el) return;
+  var hist = (lead.hist||[]).map(function(h){
+    var si = LEAD_COL_SI[h.etapa];
+    var lbl = si ? si.label : (h.etapa==='convertido' ? '🚀 Convertido em Orçamento' : eh(h.etapa||''));
+    var ico = si ? si.label.split(' ')[0] : '🚀';
+    return { dataISO:h.dataISO||'', html:
+      '<div class="fk-tl-item"><span class="fk-tl-ico">'+ico+'</span>'
+      +'<div><div class="fk-tl-txt"><b>'+lbl+'</b></div>'
+      +'<div class="fk-tl-meta">'+eh(h.usuario||'')+' · '+eh(h.data||'')+'</div></div></div>' };
+  });
+  var ativ = (lead.atividades||[]).map(function(a){
+    return { dataISO:a.dataISO||'', html:
+      '<div class="fk-tl-item"><span class="fk-tl-ico">📝</span>'
+      +'<div><div class="fk-tl-txt">'+eh(a.texto||'')+'</div>'
+      +'<div class="fk-tl-meta">'+eh(a.usuario||'')+' · '+eh(a.data||'')+'</div></div></div>' };
+  });
+  var todos = hist.concat(ativ);
+  todos.sort(function(a,b){ return a.dataISO < b.dataISO ? 1 : a.dataISO > b.dataISO ? -1 : 0; });
+  el.innerHTML = todos.length
+    ? todos.map(function(t){ return t.html; }).join('')
+    : '<div style="color:#666;font-size:11px;text-align:center;padding:10px">Nenhum registro ainda.</div>';
+}
+
+async function leadExcluirAtual(){
+  if(!_leadDetId) return;
+  var lead = LEADS.find(function(l){ return l.id === _leadDetId; });
+  if(!lead) return;
+  if(!confirm('🗑️ Excluir o lead "'+(lead.nome||'')+'"?\n\nEsta ação não pode ser desfeita.')) return;
+  var idAlvo = _leadDetId;
+  LEADS = LEADS.filter(function(l){ return l.id !== idAlvo; });
+  await _leadExcluirFirestore(idAlvo);
+  leadFecharDetalhe();
+  funilFiltrarLista();
+  funilHomeFiltrarLista();
+}
+
+// Converte um lead em orçamento de verdade: marca o lead como convertido
+// (sai do quadro de Leads) e abre um orçamento em branco já preenchido
+// com os dados de contato, seguindo o fluxo normal do sistema a partir daí.
+async function leadIniciarConversao(id){
+  var lead = LEADS.find(function(l){ return l.id === id; });
+  if(!lead){ alert('⚠️ Lead não encontrado.'); return; }
+  if(!confirm('Converter o lead "'+(lead.nome||'')+'" em orçamento?\n\nUm novo orçamento em branco será aberto, já preenchido com os dados de contato. O lead sairá do quadro de Leads e passará a ser acompanhado normalmente como orçamento.')) return;
+
+  await _leadPatch(id, function(l){
+    l.convertido = true;
+    l.etapa = 'orcando';
+    l.hist = (l.hist||[]).concat([{
+      etapa: 'convertido',
+      usuario: usuarioAtual ? usuarioAtual.nome : '—',
+      data: new Date().toLocaleString('pt-BR'),
+      dataISO: new Date().toISOString().split('T')[0]
+    }]);
+  });
+
+  leadFecharDetalhe();
+  fecharFunilHome();
+  fecharHome();
+  funilFiltrarLista();
+  funilHomeFiltrarLista();
+
+  if(typeof limpar === 'function') await limpar();
+
+  setTimeout(function(){
+    var elC = document.getElementById('f-cliente'); if(elC) elC.value = lead.nome || '';
+    var elT = document.getElementById('f-tel'); if(elT) elT.value = lead.telefone || '';
+    var elE = document.getElementById('f-email'); if(elE) elE.value = lead.email || '';
+    var elCons = document.getElementById('f-cons'); if(elCons && lead.consultor) elCons.value = lead.consultor;
+    if(typeof marcarAlterado === 'function') marcarAlterado();
+    window.scrollTo({top:0, behavior:'smooth'});
+  }, 400);
+}
+
+// ── Modal de detalhe do card: timeline, follow-up e mudança de etapa ──
+var _fkDetDriveId = null;
+var _fkDetTerminalEtapa = null;
+
+function fkAbrirDetalhe(driveId, forcarEtapa){
+  var orc = _funilCache.find(function(o){ return o.driveId === driveId; });
+  if(!orc){ alert('⚠️ Orçamento não encontrado.'); return; }
+  _fkDetDriveId = driveId;
+  _fkDetTerminalEtapa = null;
+  var f = orc.form || {};
+  var d = orc.dados || {};
+
+  document.getElementById('fk-det-titulo').textContent = f['f-cliente'] || '—';
+  document.getElementById('fk-det-sub').textContent = (f['f-num']||'—')
+    + (f['f-cons'] ? ' · '+f['f-cons'] : '')
+    + (f['f-dia'] ? ' · Evento: '+fD(f['f-dia']) : '');
+
+  var cs = d.comercialStatus || '';
+  var siAtual = FUNIL_SI[cs];
+  document.getElementById('fk-det-etapa-atual').innerHTML = siAtual
+    ? '<span style="display:inline-block;padding:4px 11px;border-radius:12px;font-size:11px;font-weight:800;background:'+siAtual.bg+';color:'+siAtual.tx+'">'+siAtual.label+'</span>'
+    : '<span style="display:inline-block;padding:4px 11px;border-radius:12px;font-size:11px;font-weight:800;background:#5d4037;color:#fff">⚠️ Sem Etapa</span>';
+
+  var btnsHtml = ['enviada','negociacao','standby','ganha','perdida'].map(function(k){
+    var s = FUNIL_SI[k];
+    var ativo = cs === k;
+    return '<button onclick="fkClicarEtapa(\''+k+'\')" style="padding:6px 12px;border-radius:16px;border:2px solid '+s.bg+';background:'+(ativo?s.bg:'transparent')+';color:'+(ativo?s.tx:s.bg)+';font-size:10px;font-weight:800;cursor:pointer">'+s.label+'</button>';
+  }).join('');
+  document.getElementById('fk-det-etapa-btns').innerHTML = btnsHtml;
+  document.getElementById('fk-det-terminal-box').style.display = 'none';
+
+  document.getElementById('fk-det-followup-data').value = d.followupData || '';
+
+  _fkRenderTimeline(d);
+  document.getElementById('fk-det-nova-nota').value = '';
+
+  document.getElementById('fk-detail-modal').classList.add('open');
+
+  if(forcarEtapa === 'ganha' || forcarEtapa === 'perdida'){
+    fkClicarEtapa(forcarEtapa);
+  }
+}
+
+function fkFecharDetalhe(){
+  var m = document.getElementById('fk-detail-modal');
+  if(m) m.classList.remove('open');
+  _fkDetDriveId = null;
+  _fkDetTerminalEtapa = null;
+}
+
+function fkClicarEtapa(etapa){
+  var orc = _funilCache.find(function(o){ return o.driveId === _fkDetDriveId; });
+  if(!orc) return;
+  var atual = (orc.dados && orc.dados.comercialStatus) || '';
+  if(atual === etapa) return;
+
+  if(etapa === 'ganha' || etapa === 'perdida'){
+    _fkDetTerminalEtapa = etapa;
+    var si = FUNIL_SI[etapa];
+    var box = document.getElementById('fk-det-terminal-box');
+    document.getElementById('fk-det-terminal-label').textContent = etapa === 'ganha' ? '🏆 Confirmar Venda Ganha' : '❌ Confirmar Venda Perdida';
+    document.getElementById('fk-det-terminal-label').style.color = si.bg;
+    document.getElementById('fk-det-motivo-wrap').style.display = etapa === 'perdida' ? 'block' : 'none';
+    document.getElementById('fk-det-motivo').value = '';
+    document.getElementById('fk-det-terminal-obs').value = '';
+    document.getElementById('fk-det-terminal-confirmar').style.background = si.bg;
+    box.style.display = 'block';
+    box.scrollIntoView({behavior:'smooth', block:'nearest'});
+  } else {
+    fkMudarEtapaComSalvamento(etapa, '', '');
+  }
+}
+
+function fkCancelarTerminal(){
+  _fkDetTerminalEtapa = null;
+  document.getElementById('fk-det-terminal-box').style.display = 'none';
+}
+
+async function fkConfirmarTerminal(){
+  var etapa = _fkDetTerminalEtapa;
+  if(!etapa) return;
+  var motivo = '';
+  if(etapa === 'perdida'){
+    motivo = (document.getElementById('fk-det-motivo')||{}).value || '';
+    if(!motivo){ alert('⚠️ Selecione o motivo da perda.'); return; }
+  }
+  var obs = (document.getElementById('fk-det-terminal-obs')||{}).value || '';
+  await fkMudarEtapaComSalvamento(etapa, motivo, obs);
+  document.getElementById('fk-det-terminal-box').style.display = 'none';
+}
+
+async function fkMudarEtapaComSalvamento(etapa, motivo, obs){
+  var btn = document.getElementById('fk-det-terminal-confirmar');
+  var origTxt = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Salvando...'; }
+  var driveIdAlvo = _fkDetDriveId;
+  var novoDados = await _funilPatchOrcamento(driveIdAlvo, function(dados){
+    dados.comercialStatus = etapa;
+    dados.comercialHist = (dados.comercialHist||[]).concat([{
+      status: etapa,
+      motivo: motivo || '',
+      usuario: usuarioAtual ? usuarioAtual.nome : '—',
+      obs: obs || '',
+      data: new Date().toLocaleString('pt-BR'),
+      dataISO: new Date().toISOString().split('T')[0]
+    }]);
+  });
+  if(btn){ btn.disabled = false; btn.textContent = origTxt; }
+  if(novoDados){
+    funilFiltrarLista();
+    funilHomeFiltrarLista();
+    if(_fkDetDriveId === driveIdAlvo) fkAbrirDetalhe(driveIdAlvo);
+    if(etapa === 'ganha' && driveIdAtual === driveIdAlvo){
+      setTimeout(function(){ abrirFinanceiro(); }, 300);
+    }
+  }
+}
+
+async function fkSalvarFollowup(){
+  if(!_fkDetDriveId) return;
+  var val = (document.getElementById('fk-det-followup-data')||{}).value || '';
+  var driveIdAlvo = _fkDetDriveId;
+  await _funilPatchOrcamento(driveIdAlvo, function(dados){ dados.followupData = val; });
+  funilFiltrarLista();
+  funilHomeFiltrarLista();
+}
+
+async function fkAdicionarAtividade(){
+  if(!_fkDetDriveId) return;
+  var el = document.getElementById('fk-det-nova-nota');
+  var texto = (el.value || '').trim();
+  if(!texto) return;
+  var driveIdAlvo = _fkDetDriveId;
+  var novoDados = await _funilPatchOrcamento(driveIdAlvo, function(dados){
+    dados.atividades = (dados.atividades||[]).concat([{
+      texto: texto,
+      usuario: usuarioAtual ? usuarioAtual.nome : '—',
+      data: new Date().toLocaleString('pt-BR'),
+      dataISO: new Date().toISOString().split('T')[0]
+    }]);
+  });
+  if(novoDados){
+    el.value = '';
+    if(_fkDetDriveId === driveIdAlvo) _fkRenderTimeline(novoDados);
+  }
+}
+
+function _fkRenderTimeline(dados){
+  var el = document.getElementById('fk-det-timeline');
+  if(!el) return;
+  var hist = (dados.comercialHist||[]).map(function(h){
+    var si = FUNIL_SI[h.status];
+    return { dataISO:h.dataISO||'', html:
+      '<div class="fk-tl-item"><span class="fk-tl-ico">'+(si?si.label.split(' ')[0]:'🔹')+'</span>'
+      +'<div><div class="fk-tl-txt"><b>'+(si?si.label:eh(h.status||'')) +'</b>'+(h.motivo?' — '+eh(h.motivo):'')+'</div>'
+      +(h.obs?'<div class="fk-tl-obs">'+eh(h.obs)+'</div>':'')
+      +'<div class="fk-tl-meta">'+eh(h.usuario||'')+' · '+eh(h.data||'')+'</div></div></div>' };
+  });
+  var ativ = (dados.atividades||[]).map(function(a){
+    return { dataISO:a.dataISO||'', html:
+      '<div class="fk-tl-item"><span class="fk-tl-ico">📝</span>'
+      +'<div><div class="fk-tl-txt">'+eh(a.texto||'')+'</div>'
+      +'<div class="fk-tl-meta">'+eh(a.usuario||'')+' · '+eh(a.data||'')+'</div></div></div>' };
+  });
+  var todos = hist.concat(ativ);
+  todos.sort(function(a,b){ return a.dataISO < b.dataISO ? 1 : a.dataISO > b.dataISO ? -1 : 0; });
+  el.innerHTML = todos.length
+    ? todos.map(function(t){ return t.html; }).join('')
+    : '<div style="color:#666;font-size:11px;text-align:center;padding:10px">Nenhum registro ainda.</div>';
+}
+
+function fkAbrirOrcamentoCompleto(){
+  if(!_fkDetDriveId) return;
+  var orc = _funilCache.find(function(o){ return o.driveId === _fkDetDriveId; });
+  if(!orc) return;
+  var driveId = orc.driveId, nome = orc.nome || '';
+  fkFecharDetalhe();
+  var homeOv = document.getElementById('funil-home-ov');
+  if(homeOv && homeOv.style.display !== 'none'){
+    funilHomeAbrirOrcamento(driveId, nome);
+  } else {
+    funilAbrirOrcamento(driveId, nome);
+  }
 }
 
 async function funilAbrirOrcamento(driveId, nome){
@@ -5809,7 +6562,6 @@ function abrirFunilHome(){
   funilHomePopularConsultores();
   // Carregar dados (reusar cache do funil principal se disponível)
   if(_funilCarregado && _funilCache.length > 0){
-    funilHomeRenderCounters();
     funilHomeFiltrarLista();
   } else {
     funilHomeCarregarDados();
@@ -5836,27 +6588,28 @@ function funilHomePopularConsultores(){
 function funilHomeRecarregar(){
   _driveCacheClear();
   _funilCarregado = false;
+  _leadsCarregado = false;
   _funilCarregando = false;
   funilHomeCarregarDados();
 }
 
 async function funilHomeCarregarDados(){
   if(_funilCarregando) return;
-  if(_funilCarregado){
-    funilHomeRenderCounters();
+  if(_funilCarregado && _leadsCarregado){
     funilHomeFiltrarLista();
     return;
   }
   _funilCarregando = true;
   var stEl = document.getElementById('funil-home-lista-status');
-  var listaEl = document.getElementById('funil-home-lista');
-  if(stEl) stEl.textContent = 'Carregando orcamentos...';
-  if(listaEl) listaEl.innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:12px">'
+  var kEl = document.getElementById('funil-home-kanban');
+  if(stEl) stEl.textContent = 'Carregando leads e orcamentos...';
+  if(kEl) kEl.innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:12px;width:100%">'
     + 'Buscando...'
-    + '<div style="background:#e0e0e0;border-radius:4px;height:5px;margin-top:10px;overflow:hidden">'
+    + '<div style="background:#333;border-radius:4px;height:5px;margin-top:10px;overflow:hidden">'
     + '<div id="funil-home-prog" style="height:100%;background:#c0001a;width:0%;transition:width .3s;border-radius:4px"></div>'
     + '</div></div>';
   try{
+    if(!_leadsCarregado){ await leadsCarregarStorage(); _leadsCarregado = true; }
     var r = await fetch(SCRIPT_URL+'?action=list&q=');
     var d = await r.json();
     if(!d.ok) throw new Error(d.erro||'Erro ao listar');
@@ -5871,148 +6624,25 @@ async function funilHomeCarregarDados(){
       if(pb) pb.style.width=pct+'%';
       if(stEl) stEl.textContent = parciais.length+' / '+total+' carregados...';
       var aprov=parciais.filter(function(o){return o&&o.st==='aprovado';});
-      if(aprov.length>0){ _funilCache=aprov; funilHomeRenderCounters(); }
+      if(aprov.length>0){ _funilCache=aprov; funilRenderKanban('funil-home-kanban','funil-home-filtro-cons',null,'funil-home-followup-alerta'); }
     });
     _funilCache = todos.filter(Boolean).filter(function(o){ return o.st === 'aprovado'; });
     _funilCarregado = true;
     // Sincronizar com funil principal
-    funilRenderCounters();
-    funilHomeRenderCounters();
+    funilFiltrarLista();
     funilHomeFiltrarLista();
     if(stEl) stEl.textContent = _funilCache.length + ' orcamento(s) aprovado(s)';
   }catch(e){
     if(stEl) stEl.textContent = 'Erro: ' + e.message;
-    if(listaEl) listaEl.innerHTML = '<div style="padding:20px;text-align:center;color:#c0001a;font-size:12px">&#9888; ' + e.message + '</div>';
+    if(kEl) kEl.innerHTML = '<div style="padding:20px;text-align:center;color:#c0001a;font-size:12px">&#9888; ' + e.message + '</div>';
   }finally{
     _funilCarregando = false;
   }
 }
 
-function funilHomeRenderCounters(){
-  var el = document.getElementById('funil-home-counters');
-  if(!el) return;
-  var semEtapa = _funilCache.filter(function(o){
-    var cs = (o.dados&&o.dados.comercialStatus)||'';
-    return !['enviada','negociacao','standby','ganha','perdida'].includes(cs);
-  }).length;
-  var html = '';
-  if(semEtapa > 0){
-    html += '<span onclick="funilHomeSelecionarEtapa(\'__sem_etapa__\')" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:800;background:#e65100;color:#fff;border:2px solid #e65100">'
-      + 'Sem Etapa: ' + semEtapa + '</span>';
-  }
-  ['enviada','negociacao','standby','ganha','perdida'].forEach(function(k){
-    var si = FUNIL_SI[k];
-    var n = _funilCache.filter(function(o){ return (o.dados&&o.dados.comercialStatus)===k; }).length;
-    html += '<span onclick="funilHomeSelecionarEtapa(\''+k+'\')" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:800;background:'+si.bg+';color:'+si.tx+';border:2px solid '+si.bg+'">'
-      + si.label + ': ' + n + '</span>';
-  });
-  var total = _funilCache.length;
-  html += '<span onclick="funilHomeSelecionarEtapa(\'__todos__\')" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:700;background:#333;color:#ccc;border:2px solid #444">'
-    + 'Todos: ' + total + '</span>';
-  el.innerHTML = html;
-}
-
-function funilHomeSelecionarEtapa(etapa){
-  var sel = document.getElementById('funil-home-filtro-etapa');
-  if(sel) sel.value = etapa;
-  funilHomeFiltrarLista();
-}
-
 function funilHomeFiltrarLista(){
-  var etapa = (document.getElementById('funil-home-filtro-etapa')||{}).value || '__sem_etapa__';
-  var cons  = (document.getElementById('funil-home-filtro-cons')||{}).value  || '';
-  var stEl  = document.getElementById('funil-home-lista-status');
-  var listaEl = document.getElementById('funil-home-lista');
-  if(!listaEl) return;
   if(!_funilCarregado){ funilHomeCarregarDados(); return; }
-
-  var isSemEtapa = etapa === '__sem_etapa__';
-  var isTodos    = etapa === '__todos__';
-
-  var filtrados = _funilCache.filter(function(o){
-    if(cons && (o.form&&o.form['f-cons']) !== cons) return false;
-    var cs = (o.dados&&o.dados.comercialStatus)||'';
-    if(isSemEtapa) return !['enviada','negociacao','standby','ganha','perdida'].includes(cs);
-    if(isTodos) return true;
-    return cs === etapa;
-  });
-
-  filtrados.sort(function(a,b){
-    var da=(a.form&&(a.form['f-dia']||a.form['f-data']))||'';
-    var db=(b.form&&(b.form['f-dia']||b.form['f-data']))||'';
-    return da<db?-1:da>db?1:0;
-  });
-
-  var si = isSemEtapa
-    ? {label:'Aprovados sem Etapa', lbg:'#fff3e0', ltx:'#e65100', lbd:'#ffb74d'}
-    : isTodos
-      ? {label:'Todos os Aprovados', lbg:'#f5f5f5', ltx:'#333', lbd:'#ddd'}
-      : FUNIL_SI[etapa];
-
-  var total = filtrados.length;
-  var totalVal = filtrados.reduce(function(t,o){ return t+dashValOrc(o); }, 0);
-
-  if(stEl){
-    var aviso = isSemEtapa && total > 0
-      ? ' &nbsp;<span style="color:#e65100;font-weight:800">Cobrar classificacao dos consultores!</span>' : '';
-    stEl.innerHTML = '<b style="color:#ccc">' + (si?si.label:'') + '</b> &mdash; '
-      + total + ' orcamento(s) &nbsp;&middot;&nbsp; Total: <b style="color:#c0001a">' + fmt(totalVal) + '</b>' + aviso;
-  }
-
-  if(!filtrados.length){
-    listaEl.innerHTML = '<div style="padding:28px;text-align:center;color:#888;font-size:12px">'
-      + (isSemEtapa ? 'Todos os aprovados ja tem etapa definida!' : 'Nenhum orcamento nesta etapa.')
-      + '</div>';
-    return;
-  }
-
-  var cabBg = si?si.lbg:'#f5f5f5';
-  var cabTx = si?si.ltx:'#333';
-  var cabBd = si?si.lbd:'#ddd';
-  var header = '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:'+cabBg+';border-bottom:2px solid '+cabBd+'">'
-    + '<span style="font-size:11px;font-weight:800;color:'+cabTx+'">'+(si?si.label:'')+'</span>'
-    + '<span style="margin-left:auto;font-size:10px;color:'+cabTx+';opacity:.7">'+total+' orc. &middot; '+fmt(totalVal)+'</span>'
-    + '</div>';
-
-  var rows = filtrados.map(function(o){
-    var f = o.form||{};
-    var cs = (o.dados&&o.dados.comercialStatus)||'';
-    var siCs = FUNIL_SI[cs];
-    var etapaBadge = siCs
-      ? '<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:'+siCs.bg+';color:'+siCs.tx+';font-weight:800;white-space:nowrap;flex-shrink:0">'+siCs.label+'</span>'
-      : '<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:#fff3cd;color:#856404;border:1px solid #ffc107;font-weight:800;white-space:nowrap;flex-shrink:0">Sem Etapa</span>';
-    var val = dashValOrc(o);
-    var dataOrc = f['f-data']?fD(f['f-data']):'--';
-    var dataEv  = f['f-dia'] ?fD(f['f-dia']) :null;
-    var histCom = (o.dados&&o.dados.comercialHist)||[];
-    var ult = histCom.length?histCom[histCom.length-1]:null;
-    var ultObs = ult&&ult.obs
-      ? '<div style="font-size:9px;color:#888;font-style:italic;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(ult.obs)+'</div>' : '';
-    var ultData = ult ? '<span style="font-size:9px;color:#aaa"> &middot; ult. reg: '+ult.data+'</span>' : '';
-    var driveId = o.driveId||'';
-    return '<div onclick="funilHomeAbrirOrcamento(\''+driveId+'\',\''+eh(o.nome||'')+'\')" '
-      + 'style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f0f0f0;cursor:pointer;transition:background .12s;background:#fff" '
-      + 'onmouseover="this.style.background=\'#f9f9f9\'" onmouseout="this.style.background=\'#fff\'">'
-      + '<div style="flex:1;min-width:0">'
-      + '<div style="font-size:12px;font-weight:700;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'--')+'</div>'
-      + '<div style="font-size:10px;color:#888;margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
-      + '<span style="color:#555;font-weight:700">'+eh(f['f-num']||'--')+'</span>'
-      + (f['f-cons']?'<span>&middot; '+eh(f['f-cons'])+'</span>':'')
-      + '<span>&middot; Orc: '+dataOrc+'</span>'
-      + (dataEv?'<span style="color:#1565c0;font-weight:700">&middot; Evento: '+dataEv+'</span>':'')
-      + ultData
-      + '</div>'
-      + ultObs
-      + '</div>'
-      + etapaBadge
-      + '<div style="text-align:right;flex-shrink:0;min-width:90px">'
-      + '<div style="font-size:12px;font-weight:800;color:#222">'+fmt(val)+'</div>'
-      + '<div style="font-size:9px;color:#aaa;margin-top:1px">clique p/ abrir</div>'
-      + '</div>'
-      + '</div>';
-  }).join('');
-
-  listaEl.innerHTML = header + rows;
+  funilRenderKanban('funil-home-kanban','funil-home-filtro-cons','funil-home-lista-status','funil-home-followup-alerta');
 }
 
 async function funilHomeAbrirOrcamento(driveId, nome){
