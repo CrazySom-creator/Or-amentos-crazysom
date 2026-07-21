@@ -1476,6 +1476,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div><h2 style="margin-bottom:2px">📦 Cadastro de Produtos</h2><p class="sub" style="margin:0">Catálogo de equipamentos com ficha técnica e foto</p></div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-g btn-sm" onclick="produtoNovo()">+ Novo Produto</button>
+        <button class="btn btn-o btn-sm" onclick="scannerAbrir()">🔎 Bipar Equipamento</button>
         <button class="btn btn-o btn-sm" onclick="document.getElementById('produtos-ov').classList.remove('open')">✕</button>
       </div>
     </div>
@@ -1550,6 +1551,49 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <button class="btn btn-g btn-sm" onclick="produtoSalvar()">💾 Salvar Produto</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  MODAL UNIDADES DO PRODUTO (rastreamento individual/QR)  -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="produto-unidades-ov">
+  <div class="modal-box" style="max-width:640px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <div><h2 style="margin-bottom:2px" id="pu-titulo">📦 Unidades do Produto</h2><p class="sub" style="margin:0" id="pu-sub">Controle individual por QR Code</p></div>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('produto-unidades-ov').classList.remove('open')">✕</button>
+    </div>
+    <div id="pu-status" style="display:none;padding:9px 12px;border-radius:6px;font-size:11.5px;font-weight:700;margin:10px 0"></div>
+    <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap">
+      <button class="btn btn-g btn-sm" onclick="produtoUnidadesGerar()">➕ Gerar Unidades Faltantes</button>
+      <button class="btn btn-o btn-sm" onclick="produtoUnidadesImprimir()">🏷️ Imprimir Etiquetas</button>
+    </div>
+    <div id="pu-lista" style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  MODAL BIPAR EQUIPAMENTO (leitor de QR — câmera/USB)     -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="scanner-ov">
+  <div class="modal-box" style="max-width:520px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <div><h2 style="margin-bottom:2px">🔎 Bipar Equipamento</h2><p class="sub" style="margin:0">Escaneie o QR Code da etiqueta ou use um leitor USB</p></div>
+      <button class="btn btn-o btn-sm" onclick="scannerFechar()">✕</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn btn-g btn-sm" id="scanner-btn-camera" onclick="scannerIniciarCamera()">📷 Usar Câmera</button>
+      <button class="btn btn-o btn-sm" id="scanner-btn-parar" style="display:none" onclick="scannerPararCamera()">⏹️ Parar Câmera</button>
+    </div>
+    <div id="scanner-camera-wrap" style="display:none;margin-bottom:10px">
+      <video id="scanner-video" style="width:100%;border-radius:6px;background:#000" playsinline></video>
+      <canvas id="scanner-canvas" style="display:none"></canvas>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:5px">Leitor USB / Digitar Código</label>
+      <input id="scanner-input" type="text" placeholder="Bipe aqui ou digite o código da unidade e pressione Enter" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);color:var(--text);font-size:12px" onkeydown="if(event.key==='Enter'){event.preventDefault();scannerProcessarCodigo(this.value);this.value='';}">
+    </div>
+    <div id="scanner-resultado"></div>
   </div>
 </div>
 
@@ -3008,6 +3052,8 @@ async function doLogin(){
   tarefasCarregarStorage().then(atualizarBadgeTarefas);
   tiposTarefaCarregar();
   produtosCarregarStorage();
+  unidadesCarregarStorage();
+  movimentacoesCarregarStorage();
   categoriasProdutoCarregar();
   enderecosProdutoCarregar();
   carregarExcluidosDrive();
@@ -11732,7 +11778,7 @@ function produtosRenderLista(filtro){
     var idx=PRODUTOS.indexOf(p);
     var acao=_produtoBuscaModoSelecao
       ? '<button class="btn btn-g btn-sm" onclick="produtoSelecionarParaOrcamento('+idx+')">✅ Selecionar</button>'
-      : '<button class="btn btn-o btn-sm" onclick="produtoEditar('+idx+')">✏️ Editar</button>';
+      : '<button class="btn btn-o btn-sm" onclick="produtoEditar('+idx+')">✏️ Editar</button> <button class="btn btn-o btn-sm" onclick="produtoAbrirUnidades('+idx+')">📦 Unidades</button>';
     var fotoSrc=p.fotoThumb||'';
     var thumb=fotoSrc
       ? '<img src="'+eh(fotoSrc)+'" style="width:44px;height:44px;object-fit:cover;border-radius:6px;background:var(--surface-3);flex-shrink:0" onerror="this.style.display=\'none\'">'
@@ -11983,6 +12029,334 @@ async function produtoVerFoto(idx){
       +'<div style="margin-top:12px"><a href="'+d.data+'" download="'+eh(d.nome||'produto.jpg')+'" style="display:inline-block;background:#1565c0;color:#fff;text-decoration:none;padding:8px 14px;border-radius:6px;font-size:12px;font-weight:700">⬇️ Baixar</a></div>'
       +'</div>';
   }catch(e){ ov.innerHTML='<div style="background:var(--surface-2);border-radius:8px;padding:20px;color:var(--text)">Erro ao carregar: '+eh((e&&e.message)||'')+'</div>'; }
+}
+
+// ── UNIDADES DE ESTOQUE (rastreamento individual por QR Code) ──────
+// Cada produto do catálogo pode ter N unidades físicas rastreáveis
+// individualmente (uma por item físico, geradas automaticamente a partir
+// do campo "Quantidade"). Cada unidade tem seu próprio QR Code (o próprio
+// id do documento) e um status simples disponível/em uso — o sistema de
+// sinaleira completo (4 cores por reserva/orçamento) é uma fase futura.
+// Guardadas numa coleção própria (mesmo padrão de produtoFotos) pra não
+// inflar o documento do produto. ───────────────────────────────────────
+var UNIDADES_ESTOQUE=[];
+var _unidadesUltimoErro='';
+
+async function unidadesCarregarStorage(){
+  try{
+    var snap=await fbDb.collection('unidadesEstoque').get();
+    var lista=[];
+    snap.forEach(function(doc){ lista.push(doc.data()); });
+    UNIDADES_ESTOQUE=lista;
+    try{ localStorage.setItem('crazySomUnidadesEstoque', JSON.stringify(UNIDADES_ESTOQUE)); }catch(e){}
+    return true;
+  }catch(e){
+    _unidadesUltimoErro=(e&&e.message)||String(e);
+    console.warn('unidadesCarregarStorage:',e);
+    try{
+      var cache=localStorage.getItem('crazySomUnidadesEstoque');
+      if(cache) UNIDADES_ESTOQUE=JSON.parse(cache);
+    }catch(e2){}
+    return false;
+  }
+}
+
+async function _unidadeSalvarFirestore(u){
+  try{
+    await fbDb.collection('unidadesEstoque').doc(u.id).set(u);
+    try{ localStorage.setItem('crazySomUnidadesEstoque', JSON.stringify(UNIDADES_ESTOQUE)); }catch(e){}
+    return true;
+  }catch(e){ _unidadesUltimoErro=(e&&e.message)||String(e); console.warn('_unidadeSalvarFirestore:',e); return false; }
+}
+
+function unidadesDoProduto(produtoId){
+  return UNIDADES_ESTOQUE.filter(function(u){return u.produtoId===produtoId;}).sort(function(a,b){return (a.numero||0)-(b.numero||0);});
+}
+
+// Gera as unidades faltantes de um produto, com base no campo "quantidade"
+// cadastrado — não remove unidades existentes se a quantidade diminuir
+// (o admin decide manualmente se quer excluir alguma unidade específica).
+async function unidadesGerarFaltantes(produtoId){
+  var p=PRODUTOS.find(function(x){return x.id===produtoId;});
+  if(!p) return {geradas:0, erro:'Produto não encontrado.'};
+  var qtd=parseInt(p.quantidade,10)||0;
+  if(qtd<=0) return {geradas:0, erro:'Cadastre uma quantidade maior que zero antes de gerar unidades.'};
+  var existentes=unidadesDoProduto(produtoId);
+  var maiorNumero=existentes.reduce(function(m,u){return Math.max(m,u.numero||0);},0);
+  var faltam=qtd-existentes.length;
+  if(faltam<=0) return {geradas:0, erro:''};
+  var geradas=0;
+  for(var i=1;i<=faltam;i++){
+    var numero=maiorNumero+i;
+    var un={
+      id:('un_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+'_'+numero),
+      produtoId:produtoId,
+      produtoNome:p.nome||'',
+      numero:numero,
+      status:'disponivel',
+      localAtual:p.endereco||'',
+      criadoEm:new Date().toISOString(),
+      atualizadoEm:new Date().toISOString()
+    };
+    UNIDADES_ESTOQUE.push(un);
+    var ok=await _unidadeSalvarFirestore(un);
+    if(ok) geradas++;
+  }
+  return {geradas:geradas, erro:''};
+}
+
+// ── MOVIMENTAÇÕES DE ESTOQUE (histórico de entrada/saída) ───────────
+// Registro livre, sem vínculo obrigatório com evento/orçamento: guarda
+// só data, quem fez e uma observação opcional.
+var MOVIMENTACOES_ESTOQUE=[];
+
+async function movimentacoesCarregarStorage(){
+  try{
+    var snap=await fbDb.collection('movimentacoesEstoque').get();
+    var lista=[];
+    snap.forEach(function(doc){ lista.push(doc.data()); });
+    MOVIMENTACOES_ESTOQUE=lista.sort(function(a,b){return (b.criadoEm||'').localeCompare(a.criadoEm||'');});
+    return true;
+  }catch(e){ console.warn('movimentacoesCarregarStorage:',e); return false; }
+}
+
+async function _movimentacaoSalvarFirestore(m){
+  try{
+    await fbDb.collection('movimentacoesEstoque').doc(m.id).set(m);
+    return true;
+  }catch(e){ console.warn('_movimentacaoSalvarFirestore:',e); return false; }
+}
+
+// Registra saída ou entrada de uma unidade. tipo: 'saida' | 'entrada'.
+async function unidadeRegistrarMovimento(unidadeId, tipo, obs){
+  var u=UNIDADES_ESTOQUE.find(function(x){return x.id===unidadeId;});
+  if(!u) return {ok:false, erro:'Unidade não encontrada.'};
+  if(tipo==='saida' && u.status!=='disponivel') return {ok:false, erro:'Essa unidade já está em uso (saída já registrada).'};
+  if(tipo==='entrada' && u.status!=='em_uso') return {ok:false, erro:'Essa unidade já está disponível (não está em uso).'};
+  u.status = tipo==='saida' ? 'em_uso' : 'disponivel';
+  u.atualizadoEm=new Date().toISOString();
+  var okU=await _unidadeSalvarFirestore(u);
+  var mov={
+    id:('mov_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)),
+    unidadeId:unidadeId,
+    produtoId:u.produtoId,
+    produtoNome:u.produtoNome,
+    numeroUnidade:u.numero,
+    tipo:tipo,
+    data:new Date().toLocaleString('pt-BR'),
+    quem:(usuarioAtual?usuarioAtual.nome:''),
+    obs:obs||'',
+    criadoEm:new Date().toISOString()
+  };
+  MOVIMENTACOES_ESTOQUE.unshift(mov);
+  var okM=await _movimentacaoSalvarFirestore(mov);
+  return {ok:(okU&&okM), erro:(!okU||!okM)?_unidadesUltimoErro:''};
+}
+
+// ── Modal "Unidades do Produto" ─────────────────────────────────────
+var _puProdutoIdAtual='';
+
+function produtoAbrirUnidades(idx){
+  var p=PRODUTOS[idx];if(!p)return;
+  _puProdutoIdAtual=p.id;
+  document.getElementById('pu-titulo').textContent='📦 Unidades — '+(p.nome||'');
+  document.getElementById('pu-sub').textContent=(parseInt(p.quantidade,10)||0)+' unidade(s) cadastrada(s) no estoque';
+  var st=document.getElementById('pu-status'); if(st) st.style.display='none';
+  produtoUnidadesRenderLista();
+  document.getElementById('produto-unidades-ov').classList.add('open');
+}
+
+function _puStatus(msg,tipo){
+  var el=document.getElementById('pu-status');
+  if(!el) return;
+  el.style.display='block';
+  el.textContent=msg;
+  el.style.background = tipo==='ok' ? '#0d3320' : '#3a0d0d';
+  el.style.color = tipo==='ok' ? '#66bb6a' : '#ef5350';
+}
+
+function produtoUnidadesRenderLista(){
+  var box=document.getElementById('pu-lista');
+  if(!box) return;
+  var lista=unidadesDoProduto(_puProdutoIdAtual);
+  if(!lista.length){box.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">Nenhuma unidade gerada ainda. Clique em "➕ Gerar Unidades Faltantes".</div>';return;}
+  box.innerHTML=lista.map(function(u){
+    var badge = u.status==='em_uso'
+      ? '<span style="background:#c62828;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">🔴 Em uso</span>'
+      : '<span style="background:#2e7d32;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">🟢 Disponível</span>';
+    var acao = u.status==='em_uso'
+      ? '<button class="btn btn-g btn-sm" onclick="produtoUnidadeAcao(\''+u.id+'\',\'entrada\')">↩️ Dar Entrada</button>'
+      : '<button class="btn btn-sm" style="background:#c62828;color:#fff" onclick="produtoUnidadeAcao(\''+u.id+'\',\'saida\')">↪️ Dar Saída</button>';
+    return '<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
+      +'<div><div style="color:var(--text);font-size:12px;font-weight:700">Unidade #'+u.numero+'</div>'
+      +'<div style="color:var(--text-muted);font-size:10px;margin-top:2px">'+eh(u.id)+'</div></div>'
+      +'<div style="display:flex;align-items:center;gap:8px">'+badge+acao+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+async function produtoUnidadesGerar(){
+  var r=await unidadesGerarFaltantes(_puProdutoIdAtual);
+  produtoUnidadesRenderLista();
+  if(r.erro) _puStatus('⚠️ '+r.erro,'err');
+  else if(r.geradas>0) _puStatus('✅ '+r.geradas+' unidade(s) gerada(s)','ok');
+  else _puStatus('ℹ️ Nenhuma unidade nova — o cadastro já tem unidades suficientes para a quantidade informada.','ok');
+}
+
+async function produtoUnidadeAcao(unidadeId, tipo){
+  var obs=(typeof prompt==='function') ? (prompt(tipo==='saida' ? 'Observação (opcional) — quem retirou, pra onde vai, etc.:' : 'Observação (opcional):')||'') : '';
+  var r=await unidadeRegistrarMovimento(unidadeId, tipo, obs);
+  produtoUnidadesRenderLista();
+  if(r.ok) _puStatus(tipo==='saida' ? '↪️ Saída registrada' : '↩️ Entrada registrada','ok');
+  else _puStatus('⚠️ '+(r.erro||'Não foi possível registrar (verifique a conexão).'),'err');
+}
+
+// Abre uma janela de impressão com uma etiqueta (QR Code + nome + nº da
+// unidade) por unidade gerada, em tamanho padrão (5x3cm) pronta pra
+// impressora térmica ou comum. A geração do QR roda dentro da própria
+// janela de impressão, usando a biblioteca "qrcodejs" via CDN.
+function produtoUnidadesImprimir(){
+  var lista=unidadesDoProduto(_puProdutoIdAtual);
+  if(!lista.length){alert('⚠️ Não há unidades geradas para este produto. Gere as unidades antes de imprimir as etiquetas.');return;}
+  var p=PRODUTOS.find(function(x){return x.id===_puProdutoIdAtual;});
+  var win=window.open('','_blank');
+  if(!win){alert('⚠️ Não foi possível abrir a janela de impressão. Verifique se o navegador está bloqueando pop-ups.');return;}
+  var nomeProduto=eh(p?p.nome:'');
+  var serieProduto=eh(p&&p.numeroSerie?p.numeroSerie:'');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Etiquetas — '+nomeProduto+'</title><style>'
+    +'body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:10px}'
+    +'.etiquetas{display:flex;flex-wrap:wrap;gap:6px}'
+    +'.etq{width:5cm;height:3cm;border:1px dashed #999;display:flex;align-items:center;gap:6px;padding:4px;box-sizing:border-box;page-break-inside:avoid}'
+    +'.etq .qr{width:2.2cm;height:2.2cm;flex-shrink:0}'
+    +'.etq .info{font-size:9px;line-height:1.3;overflow:hidden}'
+    +'.etq .info b{font-size:10px;display:block;margin-bottom:2px}'
+    +'@media print{.etq{border:none}}'
+    +'</style></head><body>'
+    +'<div class="etiquetas">'
+    +lista.map(function(u,i){
+      return '<div class="etq"><div class="qr" id="qr-'+i+'"></div><div class="info"><b>'+nomeProduto+'</b>Unidade #'+u.numero+(serieProduto?'<br>S/N: '+serieProduto:'')+'</div></div>';
+    }).join('')
+    +'</div>'
+    +'<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>'
+    +'<script>window.onload=function(){'
+    +lista.map(function(u,i){
+      return 'new QRCode(document.getElementById("qr-'+i+'"),{text:"'+u.id+'",width:80,height:80,correctLevel:QRCode.CorrectLevel.M});';
+    }).join('')
+    +'setTimeout(function(){window.print();},400);};<\/script>'
+    +'</body></html>');
+  win.document.close();
+}
+
+// ── Bipar Equipamento (leitor de QR — câmera ou leitor USB) ─────────
+var _scannerStream=null;
+var _scannerLoopAtivo=false;
+
+function scannerAbrir(){
+  document.getElementById('scanner-ov').classList.add('open');
+  document.getElementById('scanner-resultado').innerHTML='';
+  setTimeout(function(){var inp=document.getElementById('scanner-input');if(inp)inp.focus();},150);
+}
+
+function scannerFechar(){
+  scannerPararCamera();
+  document.getElementById('scanner-ov').classList.remove('open');
+}
+
+function scannerIniciarCamera(){
+  if(typeof jsQR==='undefined'){
+    var s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js';
+    s.onload=function(){ _scannerIniciarCameraInterna(); };
+    s.onerror=function(){ alert('⚠️ Não foi possível carregar a biblioteca de leitura de QR Code. Verifique sua conexão com a internet.'); };
+    document.head.appendChild(s);
+  } else {
+    _scannerIniciarCameraInterna();
+  }
+}
+
+function _scannerIniciarCameraInterna(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    alert('⚠️ Este navegador/dispositivo não permite acesso à câmera.');
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(function(stream){
+    _scannerStream=stream;
+    var video=document.getElementById('scanner-video');
+    video.srcObject=stream;
+    video.play();
+    document.getElementById('scanner-camera-wrap').style.display='block';
+    document.getElementById('scanner-btn-camera').style.display='none';
+    document.getElementById('scanner-btn-parar').style.display='inline-block';
+    _scannerLoopAtivo=true;
+    requestAnimationFrame(_scannerLoop);
+  }).catch(function(e){
+    alert('⚠️ Não foi possível acessar a câmera: '+((e&&e.message)||e));
+  });
+}
+
+function _scannerLoop(){
+  if(!_scannerLoopAtivo) return;
+  var video=document.getElementById('scanner-video');
+  var canvas=document.getElementById('scanner-canvas');
+  if(video && video.readyState===video.HAVE_ENOUGH_DATA){
+    canvas.width=video.videoWidth;
+    canvas.height=video.videoHeight;
+    var ctx=canvas.getContext('2d');
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    var img=ctx.getImageData(0,0,canvas.width,canvas.height);
+    var codigo=jsQR(img.data,img.width,img.height);
+    if(codigo && codigo.data){
+      scannerProcessarCodigo(codigo.data);
+      scannerPararCamera();
+      return;
+    }
+  }
+  requestAnimationFrame(_scannerLoop);
+}
+
+function scannerPararCamera(){
+  _scannerLoopAtivo=false;
+  if(_scannerStream){
+    _scannerStream.getTracks().forEach(function(t){t.stop();});
+    _scannerStream=null;
+  }
+  var wrap=document.getElementById('scanner-camera-wrap'); if(wrap) wrap.style.display='none';
+  var btnCam=document.getElementById('scanner-btn-camera'); if(btnCam) btnCam.style.display='inline-block';
+  var btnParar=document.getElementById('scanner-btn-parar'); if(btnParar) btnParar.style.display='none';
+}
+
+function scannerProcessarCodigo(codigo){
+  codigo=(codigo||'').trim();
+  if(!codigo) return;
+  var box=document.getElementById('scanner-resultado');
+  var u=UNIDADES_ESTOQUE.find(function(x){return x.id===codigo;});
+  if(!u){
+    box.innerHTML='<div style="background:#3a0d0d;color:#ef5350;padding:10px 12px;border-radius:6px;font-size:12px">⚠️ Código não reconhecido: "'+eh(codigo)+'"</div>';
+    return;
+  }
+  var badge = u.status==='em_uso'
+    ? '<span style="background:#c62828;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">🔴 Em uso</span>'
+    : '<span style="background:#2e7d32;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">🟢 Disponível</span>';
+  var acaoBtn = u.status==='em_uso'
+    ? '<button class="btn btn-g btn-sm" onclick="_scannerConfirmarAcao(\''+u.id+'\',\'entrada\')">↩️ Dar Entrada</button>'
+    : '<button class="btn btn-sm" style="background:#c62828;color:#fff" onclick="_scannerConfirmarAcao(\''+u.id+'\',\'saida\')">↪️ Dar Saída</button>';
+  box.innerHTML='<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:12px">'
+    +'<div style="font-size:13px;font-weight:700;color:var(--text)">📦 '+eh(u.produtoNome||'')+' — Unidade #'+u.numero+'</div>'
+    +'<div style="margin:8px 0">'+badge+'</div>'
+    +'<div style="display:flex;gap:8px">'+acaoBtn+'</div>'
+    +'</div>';
+}
+
+async function _scannerConfirmarAcao(unidadeId, tipo){
+  var obs=(typeof prompt==='function') ? (prompt(tipo==='saida' ? 'Observação (opcional) — quem retirou, pra onde vai, etc.:' : 'Observação (opcional):')||'') : '';
+  var r=await unidadeRegistrarMovimento(unidadeId, tipo, obs);
+  var box=document.getElementById('scanner-resultado');
+  if(r.ok){
+    scannerProcessarCodigo(unidadeId);
+    box.innerHTML+='<div style="margin-top:8px;color:#66bb6a;font-size:11px">✅ '+(tipo==='saida'?'Saída':'Entrada')+' registrada.</div>';
+  } else {
+    box.innerHTML+='<div style="margin-top:8px;color:#ef5350;font-size:11px">⚠️ '+eh(r.erro||'Não foi possível registrar.')+'</div>';
+  }
 }
 
 async function usuariosCarregarFirestore(){
@@ -13446,6 +13820,8 @@ tiposEventoCarregar();
 tarefasCarregarStorage();
 tiposTarefaCarregar();
 produtosCarregarStorage();
+unidadesCarregarStorage();
+movimentacoesCarregarStorage();
 categoriasProdutoCarregar();
 enderecosProdutoCarregar();
 calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
