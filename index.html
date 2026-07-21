@@ -2322,6 +2322,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
   <div class="com-panel" id="com-panel" style="display:none">
     <h4>🤝 Acompanhamento Comercial</h4>
     <div id="com-status-atual" style="margin-bottom:10px"></div>
+    <div id="com-estoque-reservado" style="margin-bottom:10px"></div>
     <div class="com-btns" id="com-btns">
       <button class="com-btn" id="cbtn-enviada"   onclick="setComercial('enviada')"   style="background:#1565c0;color:#fff">📤 Proposta Enviada</button>
       <button class="com-btn" id="cbtn-negociacao" onclick="setComercial('negociacao')" style="background:#e65100;color:#fff">🤝 Em Negociação</button>
@@ -2757,6 +2758,10 @@ var aprovStatus='rascunho';
 var aprovHist=[];
 var comercialStatus='';
 var comercialHist=[];
+// Toggle manual do consultor/admin pra marcar os equipamentos deste orçamento
+// como "Reservados" (laranja) na sinaleira de estoque, antes da venda ser
+// fechada — ver PERM_MODULOS/'estoque' pra quem pode usar este toggle.
+var equipReservadoManual=false;
 var snapshotAnterior=null;
 var snapshotAprovado=null; // snapshot tirado no momento da última aprovação
 var solExclusao=[]; // fila de solicitações de exclusão pendentes/aprovadas
@@ -3054,6 +3059,7 @@ async function doLogin(){
   produtosCarregarStorage();
   unidadesCarregarStorage();
   movimentacoesCarregarStorage();
+  estoqueCompromissosCarregarStorage();
   categoriasProdutoCarregar();
   enderecosProdutoCarregar();
   carregarExcluidosDrive();
@@ -3120,7 +3126,7 @@ async function logout(forcado){
     }catch(e4){}
   }
   try{await fbAuth.signOut();}catch(e7){}
-  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';driveIdAtual=null;driveNumAtual=null;
+  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];equipReservadoManual=false;snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';driveIdAtual=null;driveNumAtual=null;
   _atualizarBtnClonar();
   fecharHome();
   // Resetar funil
@@ -3674,9 +3680,40 @@ function renderAmbContent(s){
   el.innerHTML='<table class="it" id="tbl-'+s+'"><thead>'+thead+'</thead><tbody id="tbody-'+s+'"></tbody></table>'+addBar;
   setTimeout(function(){
     var sel=document.getElementById('sel-'+s);
-    if(sel&&PRECOS[s]){PRECOS[s].forEach(function(it){var vAj=precoComMarkup(it.v);var o=document.createElement('option');o.value=JSON.stringify({n:it.n,v:vAj});o.text=it.n+(vAj?' – R$ '+fmtN(vAj):'');sel.appendChild(o);});}
+    _popularSelecaoComSinaleira(s,sel);
+    if(typeof estoqueCompromissosCarregarStorage==='function'){
+      estoqueCompromissosCarregarStorage().then(function(){
+        var sel2=document.getElementById('sel-'+s);
+        if(sel2) _popularSelecaoComSinaleira(s,sel2);
+      });
+    }
     renderRows(s);
   },0);
+}
+
+// Popula o dropdown "Selecione da tabela" com um indicador de disponibilidade
+// (🟢/⚠️) na frente de cada item que tenha um Produto do Estoque correspondente
+// (casado por nome). Itens sem produto correspondente aparecem sem indicador.
+function _popularSelecaoComSinaleira(s,sel){
+  if(!sel||!PRECOS[s]) return;
+  var valorAtual=sel.value;
+  sel.innerHTML='<option value="">— Selecione da tabela —</option>';
+  PRECOS[s].forEach(function(it){
+    var vAj=precoComMarkup(it.v);
+    var o=document.createElement('option');
+    o.value=JSON.stringify({n:it.n,v:vAj});
+    var rotulo=it.n+(vAj?' – R$ '+fmtN(vAj):'');
+    if(typeof _produtoPorNomeItem==='function'){
+      var p=_produtoPorNomeItem(it.n);
+      if(p){
+        var sinal=_estoqueSinaleiraSync(p.id, typeof driveIdAtual!=='undefined'?driveIdAtual:null);
+        rotulo = (sinal.verde>0 ? '🟢 ' : '⚠️ ') + rotulo + ' (' + sinal.verde + ' livre' + (sinal.verde!==1?'s':'') + ')';
+      }
+    }
+    o.text=rotulo;
+    sel.appendChild(o);
+  });
+  sel.value=valorAtual||'';
 }
 
 function moveRow(s,aid,id,dir){var rows=state[s].rows[aid];var i=rows.findIndex(function(r){return r.id===id;});if(i<0||(dir===-1&&i===0)||(dir===1&&i===rows.length-1))return;var item=rows.splice(i,1)[0];rows.splice(i+dir,0,item);renderRows(s);calc();marcarAlterado();}
@@ -3754,6 +3791,26 @@ function secTotAll(s){
   return base;
 }
 
+// Bolinha de sinaleira pra um item já adicionado no orçamento (não aplicada
+// a itens personalizados, painéis ou palcos — esses não correspondem a
+// unidades discretas do Estoque). Reflete a etapa comercial DESTE orçamento
+// (🔴 ganha / 🟠 reservado manual / 🟡 proposta enviada-negociação-standby),
+// ou, se ainda em rascunho/análise, avisa (⚠️) quando a quantidade pedida
+// excede o que está livre agora — sem bloquear a adição do item.
+function _rowSinaleiraBadge(r){
+  if(!r||r.custom||typeof _produtoPorNomeItem!=='function') return '';
+  var p=_produtoPorNomeItem(r.name);
+  if(!p) return '';
+  var cor=_estoqueCorOrcamentoAtual();
+  var sinal=_estoqueSinaleiraSync(p.id, typeof driveIdAtual!=='undefined'?driveIdAtual:null);
+  var qtd=parseFloat(r.qty)||0;
+  if(cor==='vermelho') return '<span title="🔴 Ocupado — venda ganha" style="margin-right:4px">🔴</span>';
+  if(cor==='laranja') return '<span title="🟠 Reservado manualmente" style="margin-right:4px">🟠</span>';
+  if(cor==='amarelo') return '<span title="🟡 Pré-reserva — proposta enviada/negociação/standby" style="margin-right:4px">🟡</span>';
+  if(qtd>sinal.verde) return '<span title="⚠️ Estoque insuficiente agora — só '+sinal.verde+' livre(s). Considere locação com terceiros." style="margin-right:4px">⚠️</span>';
+  return '<span title="🟢 Disponível — '+sinal.verde+' livre(s) no estoque" style="margin-right:4px">🟢</span>';
+}
+
 function renderRows(s){
   var st=state[s],aid=st.ambAtiva,rows=st.rows[aid]||[];
   var tbody=document.getElementById('tbody-'+s);if(!tbody)return;
@@ -3804,13 +3861,13 @@ function renderRows(s){
         +'<td><button class="bdel" onclick="delRow(\''+s+'\',\''+aid+'\',\''+r.id+'\')">✕</button></td>';
     }else if(s==='logistica'){
       tr.innerHTML=mv+'<td><input type="number" value="'+r.qty+'" min="1" style="width:46px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'qty\',this.value)"></td>'
-        +'<td colspan="2">'+(r.custom?'<input type="text" value="'+eh(r.name)+'" placeholder="Nome" style="min-width:220px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'name\',this.value)"><span class="ctag">CUSTOM</span>':'<span>'+r.name+'</span>')+'</td>'
+        +'<td colspan="2">'+(r.custom?'<input type="text" value="'+eh(r.name)+'" placeholder="Nome" style="min-width:220px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'name\',this.value)"><span class="ctag">CUSTOM</span>':(_rowSinaleiraBadge(r)+'<span>'+r.name+'</span>'))+'</td>'
         +'<td><input type="number" value="'+r.val+'" min="0" step="0.01" style="width:76px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'val\',this.value)"></td>'
         +'<td style="font-weight:700">'+fmt(tot)+'</td><td style="color:var(--text-muted);font-size:10px">'+fmt(tot*(1+IMP))+'</td>'
         +'<td><button class="bdel" onclick="delRow(\''+s+'\',\''+aid+'\',\''+r.id+'\')">✕</button></td>';
     }else{
       tr.innerHTML=mv+'<td><input type="number" value="'+r.qty+'" min="1" style="width:46px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'qty\',this.value)"></td>'
-        +'<td>'+(r.custom?'<input type="text" value="'+eh(r.name)+'" placeholder="Nome" style="min-width:175px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'name\',this.value)"><span class="ctag">CUSTOM</span>':'<span>'+r.name+'</span>')+'</td>'
+        +'<td>'+(r.custom?'<input type="text" value="'+eh(r.name)+'" placeholder="Nome" style="min-width:175px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'name\',this.value)"><span class="ctag">CUSTOM</span>':(_rowSinaleiraBadge(r)+'<span>'+r.name+'</span>'))+'</td>'
         +'<td>'+diariaCell(s,aid,r)+'</td>'
         +'<td><input type="number" value="'+r.val+'" min="0" step="0.01" style="width:76px" onchange="updRow(\''+s+'\',\''+aid+'\',\''+r.id+'\',\'val\',this.value)"></td>'
         +'<td style="font-weight:700">'+fmt(tot)+'</td><td style="color:var(--text-muted);font-size:10px">'+fmt(tot*(1+IMP))+'</td>'
@@ -4174,6 +4231,7 @@ function getDadosCompletos(){
     aprovHist:aprovHist,
     comercialStatus:comercialStatus,
     comercialHist:comercialHist,
+    equipReservadoManual:equipReservadoManual,
     snapshotAnterior:snapshotAnterior,
     snapshotAprovado:snapshotAprovado,
     finParcelas:finParcelas,
@@ -4246,7 +4304,7 @@ async function _salvarNoDriveInterno(opts){
         return null;
       }
       aprovStatus='rascunho';aprovHist=[];
-      comercialStatus='';comercialHist=[];
+      comercialStatus='';comercialHist=[];equipReservadoManual=false;
       snapshotAnterior=null;snapshotAprovado=null;
       if(typeof _limparCamposComercialDOM==='function') _limparCamposComercialDOM();
       if(typeof renderStatusOrc==='function') renderStatusOrc();
@@ -4387,6 +4445,7 @@ async function _executarSave(num,cli,dt,opts){
     if(opts.mostrarStatus!==false) driveStatus('✅ Salvo: '+d.nome,'ok');
     driveListarSilencioso();
     _eventoAutoRegistrar();
+    if(typeof estoqueRecalcularCompromissos==='function') estoqueRecalcularCompromissos(d.id);
     if(opts.onSucesso) opts.onSucesso(d);
     return d;
   }catch(e){
@@ -4826,7 +4885,7 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     _versaoAtual=dados._versao||null;
     if(dados.state){SECS.forEach(function(s){if(dados.state[s]){state[s].ambientes=dados.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=dados.state[s].ambAtiva||'default';state[s].rows=dados.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
     if(dados.form)setForm(dados.form);
-    aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
+    aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
     _limparCamposComercialDOM(); // limpar campos DOM ao carregar novo orçamento
     driveIdAtual=id;driveNumAtual=dados.form&&dados.form['f-num']?dados.form['f-num']:null;
     _naoSalvo=false;
@@ -4977,7 +5036,7 @@ async function limpar(){
   driveIdAtual=null;driveNumAtual=null;
   _naoSalvo=false;
   aprovStatus='rascunho';aprovHist=[];
-  comercialStatus='';comercialHist=[];
+  comercialStatus='';comercialHist=[];equipReservadoManual=false;
   _limparCamposComercialDOM();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
@@ -5061,7 +5120,7 @@ async function clonarOrcamento(){
 
   // ── Zerar aprovações, funil e financeiro
   aprovStatus='rascunho';aprovHist=[];
-  comercialStatus='';comercialHist=[];
+  comercialStatus='';comercialHist=[];equipReservadoManual=false;
   _limparCamposComercialDOM();
   snapshotAnterior=null;
   snapshotAprovado=null;
@@ -5371,7 +5430,7 @@ async function homeSairSemSalvar(){
   sv('orc-disp','—');
   driveIdAtual=null;driveNumAtual=null;_naoSalvo=false;_versaoAtual=null;
   aprovStatus='rascunho';aprovHist=[];
-  comercialStatus='';comercialHist=[];
+  comercialStatus='';comercialHist=[];equipReservadoManual=false;
   _limparCamposComercialDOM();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
@@ -6101,6 +6160,19 @@ function renderComercial(){
     sa.innerHTML='<span style="color:var(--text-muted);font-size:11px">Nenhum status comercial definido ainda.</span>';
   }
 
+  // Toggle de reserva manual de estoque (sinaleira laranja) — só aparece pra
+  // quem tem a permissão 'estoque-reservado-manual', e só faz sentido enquanto
+  // a venda ainda não foi ganha (depois disso a sinaleira já fica vermelha).
+  var estBox=document.getElementById('com-estoque-reservado');
+  if(estBox){
+    if(typeof permTemAcesso==='function' && permTemAcesso('estoque-reservado-manual') && comercialStatus!=='ganha'){
+      estBox.innerHTML='<button onclick="toggleEquipReservadoManual()" style="padding:6px 14px;background:'+(equipReservadoManual?'#e65100':'var(--surface-3)')+';color:'+(equipReservadoManual?'#fff':'var(--text)')+';border:none;border-radius:4px;font-weight:800;cursor:pointer;font-size:11px">'
+        +(equipReservadoManual?'🟠 Equipamentos Reservados no Estoque (clique para desmarcar)':'🟠 Marcar Equipamentos como Reservados no Estoque')+'</button>';
+    } else {
+      estBox.innerHTML='';
+    }
+  }
+
   // Histórico
   var hist=document.getElementById('com-hist');
   var histList=document.getElementById('com-hist-list');
@@ -6138,6 +6210,19 @@ function _limparCamposComercialDOM(){
     var btn=document.getElementById('cbtn-'+id);
     if(btn){btn.style.boxShadow='none';btn.style.transform='scale(1)';btn.style.opacity='1';}
   });
+}
+
+// Alterna a reserva manual de estoque (sinaleira laranja) deste orçamento —
+// gated pela permissão 'estoque-reservado-manual' (Admin > Permissões por Cargo).
+function toggleEquipReservadoManual(){
+  if(typeof permTemAcesso==='function' && !permTemAcesso('estoque-reservado-manual')){
+    alert('⚠️ Você não tem permissão para reservar equipamentos manualmente no estoque.');
+    return;
+  }
+  equipReservadoManual=!equipReservadoManual;
+  renderComercial();
+  if(typeof marcarAlterado==='function') marcarAlterado();
+  if(typeof driveIdAtual!=='undefined' && driveIdAtual) salvarNoDrive({mostrarStatus:true});
 }
 
 function setComercial(status){
@@ -10256,6 +10341,9 @@ var PERM_MODULOS = [
   {id:'obs', label:'📝 Observações', campos:[
     {id:'f-obs',     label:'Observações Gerais'},
     {id:'f-obs-os',  label:'Observações da OS'}
+  ]},
+  {id:'estoque', label:'📦 Estoque', campos:[
+    {id:'estoque-reservado-manual', label:'Marcar Equipamentos como Reservados (sinaleira laranja)'}
   ]}
 ];
 
@@ -11745,6 +11833,7 @@ async function abrirProdutos(){
     if(!ok){
       _produtosStatus('⚠️ Não foi possível carregar os produtos do servidor'+(_produtosUltimoErro?': "'+_produtosUltimoErro+'"':'')+'. Verifique as regras do Firestore para a coleção "produtos" no console do Firebase. Mostrando apenas o cache salvo neste navegador.','err');
     }
+    if(typeof estoqueCompromissosCarregarStorage==='function') await estoqueCompromissosCarregarStorage();
     produtosRenderLista('');
   }finally{
     esconderCarregando();
@@ -11784,6 +11873,16 @@ function produtosRenderLista(filtro){
       ? '<img src="'+eh(fotoSrc)+'" style="width:44px;height:44px;object-fit:cover;border-radius:6px;background:var(--surface-3);flex-shrink:0" onerror="this.style.display=\'none\'">'
       : '<div style="width:44px;height:44px;border-radius:6px;background:var(--surface-3);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">'+_iconeCategoriaProduto(p.categoria)+'</div>';
     var qtd=(p.quantidade!==undefined&&p.quantidade!==null&&p.quantidade!=='')?' · Qtd: <b>'+eh(p.quantidade)+'</b>':'';
+    var sinal=(typeof _estoqueSinaleiraSync==='function')?_estoqueSinaleiraSync(p.id,null):null;
+    var sinaleiraHtml='';
+    if(sinal&&sinal.total>0){
+      var partes=[];
+      if(sinal.verde>0) partes.push('🟢 '+sinal.verde);
+      if(sinal.amarelo>0) partes.push('🟡 '+sinal.amarelo);
+      if(sinal.laranja>0) partes.push('🟠 '+sinal.laranja);
+      if(sinal.vermelho>0) partes.push('🔴 '+sinal.vermelho);
+      sinaleiraHtml='<div style="color:var(--text-muted);font-size:10px;margin-top:1px">'+partes.join('  ')+'</div>';
+    }
     return '<div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
       +'<div style="display:flex;align-items:center;gap:10px;min-width:0">'
       +thumb
@@ -11791,6 +11890,7 @@ function produtosRenderLista(filtro){
       +'<div style="color:var(--text);font-size:13px;font-weight:700">'+eh(p.nome||'—')+'</div>'
       +'<div style="color:var(--text-muted);font-size:11px;margin-top:2px">'+_iconeCategoriaProduto(p.categoria)+' '+eh(_categoriaProdutoNormalizada(p.categoria)||'—')+(p.marca?' · '+eh(p.marca):'')+(p.modelo?' '+eh(p.modelo):'')+qtd+'</div>'
       +(p.endereco?'<div style="color:var(--text-muted);font-size:10px;margin-top:1px">📍 '+eh(p.endereco)+'</div>':'')
+      +sinaleiraHtml
       +'</div>'
       +'</div>'
       +'<div>'+acao+'</div>'
@@ -12153,6 +12253,126 @@ async function unidadeRegistrarMovimento(unidadeId, tipo, obs){
   return {ok:(okU&&okM), erro:(!okU||!okM)?_unidadesUltimoErro:''};
 }
 
+// ── SINALEIRA DE DISPONIBILIDADE (liga itens do orçamento aos Produtos
+// do Estoque por nome, e mantém uma coleção de "compromissos" — quanto de
+// cada produto está preso em cada orçamento, e com que cor/gravidade,
+// conforme a etapa comercial daquele orçamento) ─────────────────────────
+// Verde = disponível (rascunho/análise, sem reserva manual)
+// Amarelo = pré-reserva (proposta enviada / em negociação / standby)
+// Laranja = reservado manualmente (perto de fechar, ação do consultor)
+// Vermelho = ocupado (venda ganha) — automático, mas pode ser revertido
+// mudando a etapa comercial (não há mais "override" manual pro vermelho,
+// pois ele já é o estágio mais forte e reflete a venda confirmada).
+function _normalizarNomeItem(s){
+  var t=String(s||'').toLowerCase().normalize('NFD');
+  var out='';
+  for(var i=0;i<t.length;i++){
+    var code=t.charCodeAt(i);
+    if(code>=768&&code<=879) continue; // marcas diacríticas combinantes (acentos após NFD)
+    out+=t[i];
+  }
+  return out.replace(/[^a-z0-9]+/g,' ').trim();
+}
+
+function _produtoPorNomeItem(nome){
+  var alvo=_normalizarNomeItem(nome);
+  if(!alvo) return null;
+  return PRODUTOS.find(function(p){ return _normalizarNomeItem(p.nome)===alvo; }) || null;
+}
+
+// Cor do compromisso que ESTE orçamento (em edição) está gerando, com base
+// na etapa comercial atual e no toggle manual de reserva.
+function _estoqueCorOrcamentoAtual(){
+  if(typeof comercialStatus==='undefined') return null;
+  if(comercialStatus==='ganha') return 'vermelho';
+  if(typeof equipReservadoManual!=='undefined' && equipReservadoManual) return 'laranja';
+  if(comercialStatus==='enviada'||comercialStatus==='negociacao'||comercialStatus==='standby') return 'amarelo';
+  return null; // rascunho/análise/perdida sem reserva manual -> não compromete estoque
+}
+
+var ESTOQUE_COMPROMISSOS=[];
+
+async function estoqueCompromissosCarregarStorage(){
+  if(!fbDb) return false;
+  try{
+    var snap=await fbDb.collection('estoqueCompromissos').get();
+    var lista=[];
+    snap.forEach(function(doc){ lista.push(doc.data()); });
+    ESTOQUE_COMPROMISSOS=lista;
+    return true;
+  }catch(e){ console.warn('estoqueCompromissosCarregarStorage:',e); return false; }
+}
+
+// Soma, a partir do cache local ESTOQUE_COMPROMISSOS, quantas unidades de um
+// produto estão livres/pré-reservadas/reservadas/ocupadas agora — opcionalmente
+// ignorando os compromissos do próprio orçamento em edição (pra não "travar"
+// o item contra si mesmo enquanto ele é editado).
+function _estoqueSinaleiraSync(produtoId, orcamentoIdExcluir){
+  var p=PRODUTOS.find(function(x){return x.id===produtoId;});
+  var total=p?(parseInt(p.quantidade,10)||0):0;
+  var r={total:total, verde:total, amarelo:0, laranja:0, vermelho:0};
+  var comprometido=0;
+  ESTOQUE_COMPROMISSOS.forEach(function(c){
+    if(c.produtoId!==produtoId) return;
+    if(orcamentoIdExcluir && c.orcamentoId===orcamentoIdExcluir) return;
+    var q=parseFloat(c.quantidade)||0;
+    if(c.cor==='vermelho') r.vermelho+=q;
+    else if(c.cor==='laranja') r.laranja+=q;
+    else if(c.cor==='amarelo') r.amarelo+=q;
+    comprometido+=q;
+  });
+  r.verde=Math.max(0,total-comprometido);
+  return r;
+}
+
+// Recalcula e regrava (em Firestore) os compromissos de estoque deste
+// orçamento específico — chamada sempre que ele é salvo no Drive (inclui
+// mudanças de etapa comercial, que também disparam um save).
+async function estoqueRecalcularCompromissos(orcamentoId){
+  if(!fbDb || !orcamentoId) return;
+  try{
+    var cor=_estoqueCorOrcamentoAtual();
+    var col=fbDb.collection('estoqueCompromissos');
+    var snapAntigo=await col.where('orcamentoId','==',orcamentoId).get();
+    var antigos=[];
+    snapAntigo.forEach(function(doc){ antigos.push(doc.data()); });
+
+    var novos={};
+    if(cor && typeof state!=='undefined' && typeof SECS!=='undefined'){
+      SECS.forEach(function(s){
+        var st=state[s]; if(!st||!st.rows) return;
+        Object.keys(st.rows).forEach(function(aid){
+          (st.rows[aid]||[]).forEach(function(r){
+            if(!r||r.custom||!r.name) return;
+            var p=_produtoPorNomeItem(r.name);
+            if(!p) return;
+            var qtd=parseFloat(r.qty)||0;
+            if(qtd<=0) return;
+            if(!novos[p.id]) novos[p.id]={produtoNome:p.nome, quantidade:0};
+            novos[p.id].quantidade+=qtd;
+          });
+        });
+      });
+    }
+
+    var idsNovos=Object.keys(novos);
+    for(var i=0;i<idsNovos.length;i++){
+      var pid=idsNovos[i];
+      var docId=orcamentoId+'_'+pid;
+      await col.doc(docId).set({
+        id:docId, orcamentoId:orcamentoId, produtoId:pid,
+        produtoNome:novos[pid].produtoNome, quantidade:novos[pid].quantidade,
+        cor:cor, atualizadoEm:new Date().toISOString()
+      });
+    }
+    for(var j=0;j<antigos.length;j++){
+      var a=antigos[j];
+      if(idsNovos.indexOf(a.produtoId)<0) await col.doc(a.id).delete();
+    }
+    await estoqueCompromissosCarregarStorage();
+  }catch(e){ console.warn('estoqueRecalcularCompromissos:',e); }
+}
+
 // ── Modal "Unidades do Produto" ─────────────────────────────────────
 var _puProdutoIdAtual='';
 
@@ -12160,7 +12380,19 @@ function produtoAbrirUnidades(idx){
   var p=PRODUTOS[idx];if(!p)return;
   _puProdutoIdAtual=p.id;
   document.getElementById('pu-titulo').textContent='📦 Unidades — '+(p.nome||'');
-  document.getElementById('pu-sub').textContent=(parseInt(p.quantidade,10)||0)+' unidade(s) cadastrada(s) no estoque';
+  var subTxt=(parseInt(p.quantidade,10)||0)+' unidade(s) cadastrada(s) no estoque';
+  if(typeof _estoqueSinaleiraSync==='function'){
+    var sinal=_estoqueSinaleiraSync(p.id,null);
+    if(sinal.total>0){
+      var partes=[];
+      if(sinal.verde>0) partes.push('🟢 '+sinal.verde+' livre'+(sinal.verde!==1?'s':''));
+      if(sinal.amarelo>0) partes.push('🟡 '+sinal.amarelo+' pré-reservada'+(sinal.amarelo!==1?'s':''));
+      if(sinal.laranja>0) partes.push('🟠 '+sinal.laranja+' reservada'+(sinal.laranja!==1?'s':''));
+      if(sinal.vermelho>0) partes.push('🔴 '+sinal.vermelho+' ocupada'+(sinal.vermelho!==1?'s':''));
+      if(partes.length) subTxt += ' — ' + partes.join(' · ');
+    }
+  }
+  document.getElementById('pu-sub').textContent=subTxt;
   var st=document.getElementById('pu-status'); if(st) st.style.display='none';
   produtoUnidadesRenderLista();
   document.getElementById('produto-unidades-ov').classList.add('open');
@@ -13822,6 +14054,7 @@ tiposTarefaCarregar();
 produtosCarregarStorage();
 unidadesCarregarStorage();
 movimentacoesCarregarStorage();
+estoqueCompromissosCarregarStorage();
 categoriasProdutoCarregar();
 enderecosProdutoCarregar();
 calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
