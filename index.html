@@ -1235,6 +1235,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     </div>
     <div class="rel-tabs" style="margin-bottom:12px">
       <div class="rel-tab active" onclick="admAba('usuarios')">👤 Usuários</div>
+      <div class="rel-tab" onclick="admAba('cargos')">👔 Cargos</div>
       <div class="rel-tab" onclick="admAba('permissoes')">🔐 Permissões por Cargo</div>
       <div class="rel-tab" onclick="admAba('dashboards')">📊 Acesso a Dashboards</div>
       <div class="rel-tab" onclick="admAba('tiposevento')">🎪 Tipos de Evento</div>
@@ -1250,19 +1251,20 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <button class="btn btn-g btn-sm" onclick="admNovo()">+ Novo Usuário</button>
       </div>
     </div>
+    <!-- ABA Cargos -->
+    <div class="rel-pane" id="admpane-cargos">
+      <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Cargos disponíveis no cadastro de usuários, nas Permissões por Cargo e no Acesso a Dashboards. Adicione novos cargos conforme a estrutura do time crescer — a alteração vale pra todos os usuários assim que salva.</p>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <input id="cargos-novo" type="text" placeholder="Ex: Coordenador de Eventos" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);color:var(--text);font-size:12px" onkeydown="if(event.key==='Enter'){event.preventDefault();cargosAdicionar();}">
+        <button class="btn btn-g btn-sm" onclick="cargosAdicionar()">+ Adicionar</button>
+      </div>
+      <div id="cargos-lista" style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
+    </div>
     <!-- ABA Permissões por Cargo -->
     <div class="rel-pane" id="admpane-permissoes">
       <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <label style="font-size:11px;color:var(--text-muted);font-weight:700">Cargo:</label>
-        <select id="perm-cargo-sel" onchange="permRenderizar()" style="padding:6px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px">
-          <option value="Consultor">Consultor</option>
-          <option value="Consultor Externo">Consultor Externo</option>
-          <option value="Assistente Comercial">Assistente Comercial</option>
-          <option value="Análise Técnica">Análise Técnica</option>
-          <option value="Logística">Logística</option>
-          <option value="Gerente Comercial">Gerente Comercial</option>
-          <option value="Diretoria">Diretoria</option>
-        </select>
+        <select id="perm-cargo-sel" onchange="permRenderizar()" style="padding:6px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px"></select>
         <button onclick="permSalvar()" style="padding:6px 14px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer;font-size:11px">💾 Salvar</button>
         <span style="font-size:10px;color:var(--text-dim)">Marque os campos que o cargo pode editar</span>
       </div>
@@ -3002,6 +3004,7 @@ async function doLogin(){
   clientesCarregarStorage();
   eventosCarregarStorage();
   tiposEventoCarregar();
+  cargosCarregar();
   tarefasCarregarStorage().then(atualizarBadgeTarefas);
   tiposTarefaCarregar();
   produtosCarregarStorage();
@@ -10065,9 +10068,79 @@ function metasRenderizarAba(aba){
 }
 
 // ════════════════════════════════════════════════════════
-//  GERENCIAR USUÁRIOS — cargo
-// ════════════════════════════════════════════════════════
-var CARGOS=['Consultor','Consultor Externo','Assistente Comercial','Análise Técnica','Logística','Gerente Comercial','Diretoria'];
+//  GERENCIAR USUÁRIOS — cargo (editável pelo Admin, mesmo padrão de
+//  Tipos de Evento / Categorias de Produto: documento público em
+//  config/cargos, lido por todo mundo, editado só pelo Admin, com
+//  fallback pra lista padrão) ────────────────────────────────────
+var CARGOS_PADRAO=['Consultor','Consultor Externo','Assistente Comercial','Análise Técnica','Logística','Gerente Comercial','Diretoria'];
+var CARGOS=CARGOS_PADRAO.slice();
+
+// Popula o seletor de cargo da aba "Permissões por Cargo" — preserva o
+// cargo selecionado mesmo se o Admin tiver removido esse cargo da lista.
+function popularCargosSelect(){
+  var sel=document.getElementById('perm-cargo-sel');
+  if(!sel) return;
+  var atual=sel.value;
+  var lista=CARGOS.slice();
+  if(atual && lista.indexOf(atual)<0) lista.push(atual);
+  sel.innerHTML=lista.map(function(c){return '<option'+(c===atual?' selected':'')+'>'+eh(c)+'</option>';}).join('');
+}
+
+async function cargosCarregar(){
+  try{
+    var snap=await fbDb.collection('config').doc('cargos').get();
+    if(snap.exists && Array.isArray(snap.data().lista) && snap.data().lista.length) CARGOS=snap.data().lista.slice();
+    else CARGOS=CARGOS_PADRAO.slice();
+  }catch(e){
+    console.warn('cargosCarregar:',e);
+    CARGOS=CARGOS_PADRAO.slice();
+  }
+  popularCargosSelect();
+}
+
+async function _cargosSalvarFirestore(){
+  try{
+    await fbDb.collection('config').doc('cargos').set({lista:CARGOS});
+    return true;
+  }catch(e){ console.warn('_cargosSalvarFirestore:',e); return false; }
+}
+
+function cargosRenderAdmin(){
+  var box=document.getElementById('cargos-lista');
+  if(!box) return;
+  if(!CARGOS.length){box.innerHTML='<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:12px">Nenhum cargo cadastrado.</div>';return;}
+  box.innerHTML=CARGOS.map(function(c,i){
+    return '<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">'
+      +'<span style="color:var(--text);font-size:12px">👔 '+eh(c)+'</span>'
+      +'<button class="btn btn-sm" style="background:#c62828;color:#fff" onclick="cargosRemover('+i+')">🗑️ Remover</button>'
+      +'</div>';
+  }).join('');
+}
+
+async function cargosAdicionar(){
+  var inp=document.getElementById('cargos-novo');
+  var val=(inp.value||'').trim();
+  if(!val){alert('⚠️ Informe o nome do novo cargo.');return;}
+  var jaExiste=CARGOS.some(function(c){return c.toLowerCase()===val.toLowerCase();});
+  if(jaExiste){alert('⚠️ Esse cargo já existe na lista.');return;}
+  CARGOS.push(val);
+  inp.value='';
+  var ok=await _cargosSalvarFirestore();
+  cargosRenderAdmin();
+  popularCargosSelect();
+  if(ok) driveStatus('✅ Cargo adicionado','ok'); else driveStatus('⚠️ Salvo localmente (Firestore indisponível)','err');
+}
+
+async function cargosRemover(idx){
+  var c=CARGOS[idx];if(c===undefined)return;
+  if(CARGOS.length<=1){alert('⚠️ Precisa manter ao menos um cargo na lista.');return;}
+  if(!confirm('🗑️ Remover o cargo "'+c+'" da lista?\n\nUsuários que já têm esse cargo não serão alterados.'))return;
+  CARGOS.splice(idx,1);
+  var ok=await _cargosSalvarFirestore();
+  cargosRenderAdmin();
+  popularCargosSelect();
+  if(ok) driveStatus('🗑️ Cargo removido','ok'); else driveStatus('⚠️ Removido localmente (Firestore indisponível)','err');
+}
 
 // ════════════════════════════════════════════════════════
 //  SISTEMA DE PERMISSÕES POR CARGO
@@ -10361,13 +10434,14 @@ function dashTemAcesso(dashId){
 
 function admAba(aba){
   document.querySelectorAll('#adm-ov .rel-tab').forEach(function(t,i){
-    var abas=['usuarios','permissoes','dashboards','tiposevento','tipostarefa','categoriasproduto','enderecosproduto'];
+    var abas=['usuarios','cargos','permissoes','dashboards','tiposevento','tipostarefa','categoriasproduto','enderecosproduto'];
     t.classList.toggle('active',abas[i]===aba);
   });
   document.querySelectorAll('#adm-ov .rel-pane').forEach(function(p){p.classList.remove('active');});
   var el=document.getElementById('admpane-'+aba);
   if(el)el.classList.add('active');
-  if(aba==='permissoes') permRenderizar();
+  if(aba==='cargos') cargosRenderAdmin();
+  if(aba==='permissoes'){ popularCargosSelect(); permRenderizar(); }
   if(aba==='dashboards') dashAcessoRenderizar();
   if(aba==='tiposevento') tiposEventoRenderAdmin();
   if(aba==='tipostarefa') tiposTarefaRenderAdmin();
@@ -11981,8 +12055,10 @@ function renderAdmList(){
     var nivelOpts=Object.keys(NIVEIS).map(function(k){
       return '<option value="'+k+'"'+(u.nivel===k?' selected':'')+'>'+NIVEIS[k]+'</option>';
     }).join('');
+    var cargosLista=CARGOS.slice();
+    if(cargoVal && cargosLista.indexOf(cargoVal)<0) cargosLista.push(cargoVal);
     var cargoOpts='<option value="">— Selecione o Cargo —</option>'
-      +CARGOS.map(function(c){
+      +cargosLista.map(function(c){
         return '<option value="'+c+'"'+(cargoVal===c?' selected':'')+'>'+c+'</option>';
       }).join('');
 
@@ -13366,6 +13442,7 @@ permCarregar();
 clientesCarregarStorage();
 eventosCarregarStorage();
 tiposEventoCarregar();
+  cargosCarregar();
 tarefasCarregarStorage();
 tiposTarefaCarregar();
 produtosCarregarStorage();
