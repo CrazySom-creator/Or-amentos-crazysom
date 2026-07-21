@@ -1595,6 +1595,15 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <button class="btn btn-o btn-sm" onclick="document.getElementById('faltantes-ov').classList.remove('open');abrirHome()">✕</button>
       </div>
     </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;padding:10px;background:var(--surface-2);border-radius:6px">
+      <input id="falt-f-num" placeholder="Nº orçamento" oninput="faltantesRenderizar()" style="flex:1;min-width:110px">
+      <input id="falt-f-cliente" placeholder="Cliente" oninput="faltantesRenderizar()" style="flex:1;min-width:130px">
+      <input id="falt-f-cons" placeholder="Consultor" oninput="faltantesRenderizar()" style="flex:1;min-width:120px">
+      <input id="falt-f-evento" placeholder="Evento cadastrado" oninput="faltantesRenderizar()" style="flex:1;min-width:150px">
+      <input type="date" id="falt-f-data-de" oninput="faltantesRenderizar()" title="Data do evento — de" style="min-width:135px">
+      <input type="date" id="falt-f-data-ate" oninput="faltantesRenderizar()" title="Data do evento — até" style="min-width:135px">
+      <button class="btn btn-o btn-sm" onclick="_faltantesLimparFiltros()">✕ Limpar</button>
+    </div>
     <div id="faltantes-resumo" style="margin:10px 0"></div>
     <div id="faltantes-lista" style="max-height:480px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
   </div>
@@ -12397,6 +12406,15 @@ async function estoqueRecalcularCompromissos(orcamentoId){
       });
     }
 
+    // Dados do orçamento (denormalizados no compromisso pra não depender de
+    // busca no Drive depois — o formulário ainda está preenchido nesse ponto,
+    // logo após o save).
+    var numero = (typeof gv==='function') ? (gv('f-num')||'') : '';
+    var cliente = (typeof gv==='function') ? (gv('f-cliente')||'') : '';
+    var consultor = (typeof gv==='function') ? (gv('f-cons')||'') : '';
+    var dataEvento = (typeof gv==='function') ? (gv('f-dia')||'') : '';
+    var nomeEvento = (typeof gv==='function') ? (gv('f-nome-evento')||'') : '';
+
     var idsNovos=Object.keys(novos);
     for(var i=0;i<idsNovos.length;i++){
       var pid=idsNovos[i];
@@ -12404,7 +12422,9 @@ async function estoqueRecalcularCompromissos(orcamentoId){
       await col.doc(docId).set({
         id:docId, orcamentoId:orcamentoId, produtoId:pid,
         produtoNome:novos[pid].produtoNome, quantidade:novos[pid].quantidade,
-        cor:cor, atualizadoEm:new Date().toISOString()
+        cor:cor, atualizadoEm:new Date().toISOString(),
+        numero:numero, cliente:cliente, consultor:consultor,
+        dataEvento:dataEvento, nomeEvento:nomeEvento
       });
     }
     for(var j=0;j<antigos.length;j++){
@@ -12420,7 +12440,22 @@ async function estoqueRecalcularCompromissos(orcamentoId){
 // (soma dos compromissos amarelo+laranja+vermelho) excede a quantidade
 // cadastrada, calcula quanto falta e o custo estimado de complementar com
 // locação de terceiros (usando o campo custoLocacaoTerceiros do produto).
-function estoqueListaFaltantes(){
+function _faltantesTemFiltroAtivo(filtro){
+  return !!(filtro && (filtro.numero||filtro.cliente||filtro.consultor||filtro.nomeEvento||filtro.dataDe||filtro.dataAte));
+}
+function _faltantesPassaFiltro(c, filtro){
+  if(!filtro) return true;
+  if(filtro.numero && String(c.numero||'').toLowerCase().indexOf(filtro.numero.toLowerCase())<0) return false;
+  if(filtro.cliente && String(c.cliente||'').toLowerCase().indexOf(filtro.cliente.toLowerCase())<0) return false;
+  if(filtro.consultor && String(c.consultor||'').toLowerCase().indexOf(filtro.consultor.toLowerCase())<0) return false;
+  if(filtro.nomeEvento && String(c.nomeEvento||'').toLowerCase().indexOf(filtro.nomeEvento.toLowerCase())<0) return false;
+  if(filtro.dataDe && (!c.dataEvento || c.dataEvento<filtro.dataDe)) return false;
+  if(filtro.dataAte && (!c.dataEvento || c.dataEvento>filtro.dataAte)) return false;
+  return true;
+}
+function estoqueListaFaltantes(filtro){
+  filtro=filtro||{};
+  var temFiltro=_faltantesTemFiltroAtivo(filtro);
   var lista=[];
   PRODUTOS.forEach(function(p){
     var sinal=_estoqueSinaleiraSync(p.id, null);
@@ -12428,14 +12463,21 @@ function estoqueListaFaltantes(){
     var faltam=comprometido-sinal.total;
     if(faltam<=0) return;
     var custoDia=parseFloat(p.custoLocacaoTerceiros)||0;
-    var orcamentos=ESTOQUE_COMPROMISSOS.filter(function(c){return c.produtoId===p.id;}).map(function(c){
-      var nomeOrc=c.orcamentoId;
-      if(typeof _driveListaCache!=='undefined' && Array.isArray(_driveListaCache)){
+    var orcamentos=ESTOQUE_COMPROMISSOS.filter(function(c){
+      return c.produtoId===p.id && _faltantesPassaFiltro(c,filtro);
+    }).map(function(c){
+      var nomeOrc = (c.numero||c.cliente) ? ((c.numero||'—')+(c.cliente?' - '+c.cliente:'')) : c.orcamentoId;
+      if(!c.numero && !c.cliente && typeof _driveListaCache!=='undefined' && Array.isArray(_driveListaCache)){
         var achado=_driveListaCache.find(function(d){return d.id===c.orcamentoId;});
         if(achado&&achado.nome) nomeOrc=achado.nome;
       }
-      return {orcamentoId:c.orcamentoId, nome:nomeOrc, quantidade:c.quantidade, cor:c.cor};
+      return {
+        orcamentoId:c.orcamentoId, nome:nomeOrc, numero:c.numero||'', cliente:c.cliente||'',
+        consultor:c.consultor||'', nomeEvento:c.nomeEvento||'', dataEvento:c.dataEvento||'',
+        quantidade:c.quantidade, cor:c.cor
+      };
     }).sort(function(a,b){return (b.quantidade||0)-(a.quantidade||0);});
+    if(temFiltro && !orcamentos.length) return; // produto não tem nenhum orçamento batendo o filtro
     lista.push({
       produtoId:p.id, produtoNome:p.nome, total:sinal.total, comprometido:comprometido,
       faltam:faltam, custoDia:custoDia, custoEstimado:faltam*custoDia, orcamentos:orcamentos
@@ -12457,8 +12499,32 @@ async function abrirFaltantes(){
   faltantesRenderizar();
 }
 
+function _faltantesLerFiltros(){
+  function v(id){ var el=document.getElementById(id); return el ? String(el.value||'').trim() : ''; }
+  return {
+    numero:v('falt-f-num'), cliente:v('falt-f-cliente'), consultor:v('falt-f-cons'),
+    nomeEvento:v('falt-f-evento'), dataDe:v('falt-f-data-de'), dataAte:v('falt-f-data-ate')
+  };
+}
+function _faltantesLimparFiltros(){
+  ['falt-f-num','falt-f-cliente','falt-f-cons','falt-f-evento','falt-f-data-de','falt-f-data-ate'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='';
+  });
+  faltantesRenderizar();
+}
+function _faltantesFmtDataBr(d){
+  if(!d) return '';
+  var p=String(d).split('-');
+  return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : d;
+}
+function faltantesAbrirOrcamento(orcamentoId, nomeExibido){
+  var ov=document.getElementById('faltantes-ov'); if(ov) ov.classList.remove('open');
+  if(typeof fecharHome==='function') fecharHome();
+  if(typeof driveCarregar==='function') driveCarregar(orcamentoId, nomeExibido);
+}
 function faltantesRenderizar(){
-  var lista=estoqueListaFaltantes();
+  var filtro=_faltantesLerFiltros();
+  var lista=estoqueListaFaltantes(filtro);
   var resumo=document.getElementById('faltantes-resumo');
   var box=document.getElementById('faltantes-lista');
   if(!box) return;
@@ -12466,7 +12532,7 @@ function faltantesRenderizar(){
   if(resumo){
     resumo.innerHTML = lista.length
       ? '<div style="background:#3a1a00;border:1px solid #e65100;border-radius:6px;padding:10px 12px;font-size:12px;color:#ffb74d"><b>'+lista.length+' equipamento(s)</b> com demanda maior que o estoque cadastrado — custo estimado de locação com terceiros: <b>'+fmt(custoTotal)+'</b></div>'
-      : '<div style="background:#0d3320;border:1px solid #2e7d32;border-radius:6px;padding:10px 12px;font-size:12px;color:#66bb6a">✅ Nenhum equipamento faltando no momento — a demanda dos orçamentos ativos está dentro do estoque cadastrado.</div>';
+      : '<div style="background:#0d3320;border:1px solid #2e7d32;border-radius:6px;padding:10px 12px;font-size:12px;color:#66bb6a">✅ '+(_faltantesTemFiltroAtivo(filtro)?'Nenhum item faltante encontrado para este filtro.':'Nenhum equipamento faltando no momento — a demanda dos orçamentos ativos está dentro do estoque cadastrado.')+'</div>';
   }
   if(!lista.length){ box.innerHTML=''; return; }
   box.innerHTML=lista.map(function(it,i){
@@ -12474,8 +12540,14 @@ function faltantesRenderizar(){
     var custoTxt=it.custoDia>0 ? fmt(it.custoEstimado)+' <span style="color:var(--text-muted);font-size:10px">('+fmt(it.custoDia)+'/diária cadastrada)</span>' : '<span style="color:var(--text-muted)">Sem custo de terceiros cadastrado no produto</span>';
     var detalheHtml=it.orcamentos.map(function(o){
       var badge = o.cor==='vermelho' ? '🔴' : o.cor==='laranja' ? '🟠' : '🟡';
-      return '<div style="padding:6px 10px;border-bottom:1px solid var(--border);font-size:11px;display:flex;justify-content:space-between;gap:8px">'
-        +'<span>'+badge+' '+eh(o.nome)+'</span><span style="font-weight:700">Qtd: '+o.quantidade+'</span>'
+      var subPartes=[];
+      if(o.consultor) subPartes.push('👤 '+eh(o.consultor));
+      if(o.nomeEvento) subPartes.push('🎪 '+eh(o.nomeEvento));
+      if(o.dataEvento) subPartes.push('📅 '+_faltantesFmtDataBr(o.dataEvento));
+      var subTxt = subPartes.length ? '<div style="color:var(--text-muted);font-size:10px;margin-top:2px">'+subPartes.join(' · ')+'</div>' : '';
+      var nomeJs = eh(o.nome).replace(/'/g,"\\'");
+      return '<div style="padding:6px 10px;border-bottom:1px solid var(--border);font-size:11px;display:flex;justify-content:space-between;gap:8px;cursor:pointer" onclick="faltantesAbrirOrcamento(\''+o.orcamentoId+'\',\''+nomeJs+'\')" title="Clique para abrir este orçamento para análise">'
+        +'<div><span>'+badge+' '+eh(o.nome)+'</span>'+subTxt+'</div><span style="font-weight:700;white-space:nowrap">Qtd: '+o.quantidade+'</span>'
         +'</div>';
     }).join('');
     return '<div style="border-bottom:1px solid var(--border)">'
