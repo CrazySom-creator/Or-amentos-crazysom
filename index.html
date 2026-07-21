@@ -1596,10 +1596,14 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       </div>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;padding:10px;background:var(--surface-2);border-radius:6px">
-      <input id="falt-f-num" placeholder="Nº orçamento" oninput="faltantesRenderizar()" style="flex:1;min-width:110px">
-      <input id="falt-f-cliente" placeholder="Cliente" oninput="faltantesRenderizar()" style="flex:1;min-width:130px">
-      <input id="falt-f-cons" placeholder="Consultor" oninput="faltantesRenderizar()" style="flex:1;min-width:120px">
-      <input id="falt-f-evento" placeholder="Evento cadastrado" oninput="faltantesRenderizar()" style="flex:1;min-width:150px">
+      <div style="position:relative;flex:1;min-width:200px">
+        <input id="falt-f-orc" placeholder="🔍 Buscar orçamento (número ou cliente)" autocomplete="off"
+          oninput="_faltantesBuscarOrcSugestoes(this.value);faltantesRenderizar()"
+          onblur="setTimeout(_faltantesFecharOrcSugestoes,200)" style="width:100%;box-sizing:border-box">
+        <div id="falt-f-orc-sugest"></div>
+      </div>
+      <select id="falt-f-cons" onchange="faltantesRenderizar()" style="flex:1;min-width:150px"><option value="">Todos os consultores</option></select>
+      <select id="falt-f-evento" onchange="faltantesRenderizar()" style="flex:1;min-width:170px"><option value="">Todos os eventos cadastrados</option></select>
       <input type="date" id="falt-f-data-de" oninput="faltantesRenderizar()" title="Data do evento — de" style="min-width:135px">
       <input type="date" id="falt-f-data-ate" oninput="faltantesRenderizar()" title="Data do evento — até" style="min-width:135px">
       <button class="btn btn-o btn-sm" onclick="_faltantesLimparFiltros()">✕ Limpar</button>
@@ -12399,8 +12403,10 @@ async function estoqueRecalcularCompromissos(orcamentoId){
             if(!p) return;
             var qtd=parseFloat(r.qty)||0;
             if(qtd<=0) return;
-            if(!novos[p.id]) novos[p.id]={produtoNome:p.nome, quantidade:0};
+            var diariaLinha=parseFloat(r.diaria)||1;
+            if(!novos[p.id]) novos[p.id]={produtoNome:p.nome, quantidade:0, somaQtdDias:0};
             novos[p.id].quantidade+=qtd;
+            novos[p.id].somaQtdDias+=qtd*diariaLinha;
           });
         });
       });
@@ -12419,9 +12425,11 @@ async function estoqueRecalcularCompromissos(orcamentoId){
     for(var i=0;i<idsNovos.length;i++){
       var pid=idsNovos[i];
       var docId=orcamentoId+'_'+pid;
+      var dias = novos[pid].quantidade>0 ? (novos[pid].somaQtdDias/novos[pid].quantidade) : 1;
       await col.doc(docId).set({
         id:docId, orcamentoId:orcamentoId, produtoId:pid,
         produtoNome:novos[pid].produtoNome, quantidade:novos[pid].quantidade,
+        dias:dias,
         cor:cor, atualizadoEm:new Date().toISOString(),
         numero:numero, cliente:cliente, consultor:consultor,
         dataEvento:dataEvento, nomeEvento:nomeEvento
@@ -12440,13 +12448,33 @@ async function estoqueRecalcularCompromissos(orcamentoId){
 // (soma dos compromissos amarelo+laranja+vermelho) excede a quantidade
 // cadastrada, calcula quanto falta e o custo estimado de complementar com
 // locação de terceiros (usando o campo custoLocacaoTerceiros do produto).
-function _faltantesTemFiltroAtivo(filtro){
-  return !!(filtro && (filtro.numero||filtro.cliente||filtro.consultor||filtro.nomeEvento||filtro.dataDe||filtro.dataAte));
+// Resolve número/cliente de um compromisso: usa os campos denormalizados
+// (gravados a partir da versão mais recente do sistema); se estiverem vazios
+// (compromisso gravado antes desta função existir, ainda não resalvo), cai
+// pro cache de listagem do Drive (formato "NUMERO - CLIENTE - DATA") — assim
+// o relatório e os filtros funcionam mesmo sem precisar resalvar orçamentos antigos.
+function _faltantesResolverIdentidade(c){
+  var numero=c.numero||'', cliente=c.cliente||'';
+  if(!numero && !cliente && typeof _driveListaCache!=='undefined' && Array.isArray(_driveListaCache)){
+    var achado=_driveListaCache.find(function(d){return d.id===c.orcamentoId;});
+    if(achado && achado.nome){
+      var partes=String(achado.nome).split(' - ');
+      numero=partes[0]||'';
+      cliente = partes.length>2 ? partes.slice(1,-1).join(' - ') : (partes[1]||'');
+    }
+  }
+  return {numero:numero, cliente:cliente};
 }
-function _faltantesPassaFiltro(c, filtro){
+function _faltantesTemFiltroAtivo(filtro){
+  return !!(filtro && (filtro.busca||filtro.consultor||filtro.nomeEvento||filtro.dataDe||filtro.dataAte));
+}
+function _faltantesPassaFiltro(c, filtro, identidade){
   if(!filtro) return true;
-  if(filtro.numero && String(c.numero||'').toLowerCase().indexOf(filtro.numero.toLowerCase())<0) return false;
-  if(filtro.cliente && String(c.cliente||'').toLowerCase().indexOf(filtro.cliente.toLowerCase())<0) return false;
+  if(filtro.busca){
+    var q=filtro.busca.toLowerCase();
+    var alvo=(String(identidade.numero||'')+' '+String(identidade.cliente||'')).toLowerCase();
+    if(alvo.indexOf(q)<0) return false;
+  }
   if(filtro.consultor && String(c.consultor||'').toLowerCase().indexOf(filtro.consultor.toLowerCase())<0) return false;
   if(filtro.nomeEvento && String(c.nomeEvento||'').toLowerCase().indexOf(filtro.nomeEvento.toLowerCase())<0) return false;
   if(filtro.dataDe && (!c.dataEvento || c.dataEvento<filtro.dataDe)) return false;
@@ -12463,24 +12491,37 @@ function estoqueListaFaltantes(filtro){
     var faltam=comprometido-sinal.total;
     if(faltam<=0) return;
     var custoDia=parseFloat(p.custoLocacaoTerceiros)||0;
-    var orcamentos=ESTOQUE_COMPROMISSOS.filter(function(c){
-      return c.produtoId===p.id && _faltantesPassaFiltro(c,filtro);
-    }).map(function(c){
-      var nomeOrc = (c.numero||c.cliente) ? ((c.numero||'—')+(c.cliente?' - '+c.cliente:'')) : c.orcamentoId;
-      if(!c.numero && !c.cliente && typeof _driveListaCache!=='undefined' && Array.isArray(_driveListaCache)){
-        var achado=_driveListaCache.find(function(d){return d.id===c.orcamentoId;});
-        if(achado&&achado.nome) nomeOrc=achado.nome;
-      }
+
+    // Duração representativa da locação (média ponderada pela quantidade de
+    // cada compromisso, calculada sobre TODA a demanda — não só a filtrada —
+    // pra que o custo estimado do produto sempre reflita a realidade do estoque,
+    // independente do que está sendo pesquisado no momento).
+    var todosDoProduto=ESTOQUE_COMPROMISSOS.filter(function(c){return c.produtoId===p.id;});
+    var somaQtd=0, somaQtdDias=0;
+    todosDoProduto.forEach(function(c){
+      var q=c.quantidade||0;
+      somaQtd+=q; somaQtdDias+=q*(c.dias||1);
+    });
+    var diasMedio = somaQtd>0 ? (somaQtdDias/somaQtd) : 1;
+
+    var orcamentos=todosDoProduto.map(function(c){
+      var identidade=_faltantesResolverIdentidade(c);
+      return {c:c, identidade:identidade};
+    }).filter(function(x){
+      return _faltantesPassaFiltro(x.c, filtro, x.identidade);
+    }).map(function(x){
+      var c=x.c, identidade=x.identidade;
+      var nomeOrc = (identidade.numero||identidade.cliente) ? ((identidade.numero||'—')+(identidade.cliente?' - '+identidade.cliente:'')) : c.orcamentoId;
       return {
-        orcamentoId:c.orcamentoId, nome:nomeOrc, numero:c.numero||'', cliente:c.cliente||'',
+        orcamentoId:c.orcamentoId, nome:nomeOrc, numero:identidade.numero, cliente:identidade.cliente,
         consultor:c.consultor||'', nomeEvento:c.nomeEvento||'', dataEvento:c.dataEvento||'',
-        quantidade:c.quantidade, cor:c.cor
+        quantidade:c.quantidade, dias:c.dias||1, cor:c.cor
       };
     }).sort(function(a,b){return (b.quantidade||0)-(a.quantidade||0);});
     if(temFiltro && !orcamentos.length) return; // produto não tem nenhum orçamento batendo o filtro
     lista.push({
       produtoId:p.id, produtoNome:p.nome, total:sinal.total, comprometido:comprometido,
-      faltam:faltam, custoDia:custoDia, custoEstimado:faltam*custoDia, orcamentos:orcamentos
+      faltam:faltam, custoDia:custoDia, dias:diasMedio, custoEstimado:faltam*custoDia*diasMedio, orcamentos:orcamentos
     });
   });
   return lista.sort(function(a,b){return b.faltam-a.faltam;});
@@ -12493,23 +12534,81 @@ async function abrirFaltantes(){
     if(typeof estoqueCompromissosCarregarStorage==='function') await estoqueCompromissosCarregarStorage();
     if(typeof produtosCarregarStorage==='function') await produtosCarregarStorage();
     if(typeof driveListarSilencioso==='function') await driveListarSilencioso();
+    await Promise.all([_faltantesPopularConsultores(), _faltantesPopularEventos()]);
   }finally{
     if(typeof esconderCarregando==='function') esconderCarregando();
   }
   faltantesRenderizar();
 }
 
+// Consultor e Evento são preenchidos como <select> com TODOS os cadastrados
+// (não texto livre), pra evitar erro de digitação e deixar claro que é uma
+// lista fechada de opções.
+async function _faltantesPopularConsultores(){
+  var sel=document.getElementById('falt-f-cons');
+  if(!sel) return;
+  var atual=sel.value;
+  var nomes=[];
+  try{
+    if(fbDb){
+      var snap=await fbDb.collection('config').doc('consultoresNomes').get();
+      if(snap.exists && Array.isArray(snap.data().nomes)) nomes=snap.data().nomes.slice();
+    }
+  }catch(e){ console.warn('_faltantesPopularConsultores:',e); }
+  if(!nomes.length && typeof USUARIOS!=='undefined' && Array.isArray(USUARIOS)) nomes=USUARIOS.map(function(u){return u.nome;});
+  nomes=nomes.filter(function(n,i){return n&&nomes.indexOf(n)===i;}).sort(function(a,b){return a.localeCompare(b,'pt-BR');});
+  sel.innerHTML='<option value="">Todos os consultores</option>'+nomes.map(function(n){return '<option'+(n===atual?' selected':'')+'>'+eh(n)+'</option>';}).join('');
+}
+async function _faltantesPopularEventos(){
+  var sel=document.getElementById('falt-f-evento');
+  if(!sel) return;
+  var atual=sel.value;
+  if(typeof eventosCarregarStorage==='function' && (!Array.isArray(EVENTOS) || !EVENTOS.length)) await eventosCarregarStorage();
+  var nomes=(typeof EVENTOS!=='undefined' && Array.isArray(EVENTOS)) ? EVENTOS.map(function(e){return e.nome;}).filter(Boolean) : [];
+  nomes=nomes.filter(function(n,i){return nomes.indexOf(n)===i;}).sort(function(a,b){return a.localeCompare(b,'pt-BR');});
+  sel.innerHTML='<option value="">Todos os eventos cadastrados</option>'+nomes.map(function(n){return '<option'+(n===atual?' selected':'')+'>'+eh(n)+'</option>';}).join('');
+}
+
+// Busca de orçamento (número/cliente) igual à busca da Home: digita e aparece
+// uma lista de sugestões abaixo do campo, clicando preenche e filtra o relatório.
+function _faltantesBuscarOrcSugestoes(texto){
+  var box=document.getElementById('falt-f-orc-sugest');
+  if(!box) return;
+  texto=(texto||'').trim();
+  if(texto.length<2 || typeof _driveListaCache==='undefined' || !Array.isArray(_driveListaCache)){ box.innerHTML=''; return; }
+  var t=texto.toLowerCase();
+  var resultados=_driveListaCache.filter(function(x){
+    return (x.nome||'').toLowerCase().indexOf(t)>=0;
+  }).slice(0,8);
+  if(!resultados.length){ box.innerHTML=''; return; }
+  box.innerHTML='<div class="cli-sugest">'+resultados.map(function(x){
+    var partes=(x.nome||'').split(' - ');
+    var num=partes[0]||'—';
+    var cli=partes.length>2 ? partes.slice(1,-1).join(' - ') : (partes[1]||'');
+    var dt=partes[partes.length-1]||'';
+    return '<div class="cli-sugest-item" data-num="'+eh(num)+'" onmousedown="_faltantesSelecionarOrcSugestao(this)"><b>'+eh(num)+' — '+eh(cli)+'</b><small>'+eh(dt)+'</small></div>';
+  }).join('')+'</div>';
+}
+function _faltantesFecharOrcSugestoes(){ var box=document.getElementById('falt-f-orc-sugest'); if(box) box.innerHTML=''; }
+function _faltantesSelecionarOrcSugestao(el){
+  var num=el.getAttribute('data-num')||'';
+  var inp=document.getElementById('falt-f-orc'); if(inp) inp.value=num;
+  _faltantesFecharOrcSugestoes();
+  faltantesRenderizar();
+}
+
 function _faltantesLerFiltros(){
   function v(id){ var el=document.getElementById(id); return el ? String(el.value||'').trim() : ''; }
   return {
-    numero:v('falt-f-num'), cliente:v('falt-f-cliente'), consultor:v('falt-f-cons'),
+    busca:v('falt-f-orc'), consultor:v('falt-f-cons'),
     nomeEvento:v('falt-f-evento'), dataDe:v('falt-f-data-de'), dataAte:v('falt-f-data-ate')
   };
 }
 function _faltantesLimparFiltros(){
-  ['falt-f-num','falt-f-cliente','falt-f-cons','falt-f-evento','falt-f-data-de','falt-f-data-ate'].forEach(function(id){
+  ['falt-f-orc','falt-f-cons','falt-f-evento','falt-f-data-de','falt-f-data-ate'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
+  _faltantesFecharOrcSugestoes();
   faltantesRenderizar();
 }
 function _faltantesFmtDataBr(d){
@@ -12537,13 +12636,15 @@ function faltantesRenderizar(){
   if(!lista.length){ box.innerHTML=''; return; }
   box.innerHTML=lista.map(function(it,i){
     var detId='falt-det-'+i;
-    var custoTxt=it.custoDia>0 ? fmt(it.custoEstimado)+' <span style="color:var(--text-muted);font-size:10px">('+fmt(it.custoDia)+'/diária cadastrada)</span>' : '<span style="color:var(--text-muted)">Sem custo de terceiros cadastrado no produto</span>';
+    var diasArred=Math.round(it.dias*10)/10;
+    var custoTxt=it.custoDia>0 ? fmt(it.custoEstimado)+' <span style="color:var(--text-muted);font-size:10px">('+fmt(it.custoDia)+'/diária × '+diasArred+' diária(s) × '+it.faltam+' equip. faltante(s))</span>' : '<span style="color:var(--text-muted)">Sem custo de terceiros cadastrado no produto</span>';
     var detalheHtml=it.orcamentos.map(function(o){
       var badge = o.cor==='vermelho' ? '🔴' : o.cor==='laranja' ? '🟠' : '🟡';
       var subPartes=[];
       if(o.consultor) subPartes.push('👤 '+eh(o.consultor));
       if(o.nomeEvento) subPartes.push('🎪 '+eh(o.nomeEvento));
       if(o.dataEvento) subPartes.push('📅 '+_faltantesFmtDataBr(o.dataEvento));
+      if(o.dias) subPartes.push('🗓️ '+(Math.round(o.dias*10)/10)+' diária(s)');
       var subTxt = subPartes.length ? '<div style="color:var(--text-muted);font-size:10px;margin-top:2px">'+subPartes.join(' · ')+'</div>' : '';
       var nomeJs = eh(o.nome).replace(/'/g,"\\'");
       return '<div style="padding:6px 10px;border-bottom:1px solid var(--border);font-size:11px;display:flex;justify-content:space-between;gap:8px;cursor:pointer" onclick="faltantesAbrirOrcamento(\''+o.orcamentoId+'\',\''+nomeJs+'\')" title="Clique para abrir este orçamento para análise">'
