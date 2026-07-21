@@ -12263,6 +12263,13 @@ async function unidadeRegistrarMovimento(unidadeId, tipo, obs){
 // Vermelho = ocupado (venda ganha) — automático, mas pode ser revertido
 // mudando a etapa comercial (não há mais "override" manual pro vermelho,
 // pois ele já é o estágio mais forte e reflete a venda confirmada).
+// Normaliza pra comparação "frouxa": minúsculas, sem acento, e SEM nenhum
+// separador (espaço/pontuação removidos por completo, não só colapsados) —
+// isso é necessário porque o catálogo do Estoque e a tabela de preços do
+// orçamento são cadastrados por pessoas/telas diferentes, e frequentemente
+// têm pequenas diferenças de espaçamento no mesmo nome (ex.: "JBL EON 612"
+// vs "Jbl Eon612"). Sem remover os separadores, esses dois nomes ficam
+// diferentes e o vínculo com o Estoque falha silenciosamente.
 function _normalizarNomeItem(s){
   var t=String(s||'').toLowerCase().normalize('NFD');
   var out='';
@@ -12271,7 +12278,7 @@ function _normalizarNomeItem(s){
     if(code>=768&&code<=879) continue; // marcas diacríticas combinantes (acentos após NFD)
     out+=t[i];
   }
-  return out.replace(/[^a-z0-9]+/g,' ').trim();
+  return out.replace(/[^a-z0-9]+/g,'');
 }
 
 function _produtoPorNomeItem(nome){
