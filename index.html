@@ -2204,9 +2204,9 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     <button style="display:none" onclick="abrirDashGerencial()" id="btn-dash-ger"></button>
     <button style="display:none" onclick="abrirModuloOS()" id="btn-mod-os"></button>
     <button style="display:none" id="btn-adm" onclick="abrirAdm()"></button>
-    <!-- Botão principal do menu -->
-    <button class="ubtn" onclick="abrirHome()" style="font-size:13px;padding:6px 14px;font-weight:800;letter-spacing:.5px">☰ Menu</button>
-    <button class="ubtn" onclick="abrirHome()" title="Voltar à tela inicial do sistema" style="font-size:13px;padding:6px 14px;font-weight:800;letter-spacing:.5px">🏠 Home</button>
+    <!-- Botão principal do menu: sai do orçamento (perguntando se há alterações
+         não salvas) e volta para a Home — mesmo comportamento de "Sair sem Salvar" -->
+    <button class="ubtn" onclick="homeSairSemSalvar()" title="Sair do orçamento e voltar à tela inicial do sistema" style="font-size:13px;padding:6px 14px;font-weight:800;letter-spacing:.5px">🏠 Home</button>
     <button class="ubtn" onclick="logout()" style="background:rgba(255,255,255,.15)">Logout</button>
   </div>
 </div>
@@ -5543,13 +5543,9 @@ async function salvarESair(){
   try{
     var resultado = await salvarNoDrive({mostrarStatus:true});
     if(resultado !== null){ // null = usuário cancelou (ex: número duplicado)
-      // Liberar lock antes de sair — garante que outros usuários possam abrir o orçamento
-      var _idSair = driveIdAtual;
-      if(_idSair && !_modoLeitura){
-        lockPararHeartbeat();
-        try{ await lockLiberar(_idSair); }catch(e){}
-      }
-      desativarModoLeitura();
+      // Sai por completo do orçamento (mesmo comportamento de "Sair sem
+      // salvar"), já que os dados acabaram de ser salvos com segurança
+      await _resetarEstadoOrcamento();
       abrirHome();
     }
   }catch(e){
@@ -5559,15 +5555,13 @@ async function salvarESair(){
   }
 }
 
-// ── Sair sem salvar — descarta orçamento local e volta para home ──
-async function homeSairSemSalvar(){
-  var num=gv('f-num')||'sem número';
-  var cli=gv('f-cliente')||'este orçamento';
-  // Só pede confirmação se há alterações não salvas
-  if(_naoSalvo){
-    var label=num+(cli&&cli!=='este orçamento'?' - '+cli:'');
-    if(!confirm('⚠️ Sair sem salvar "'+label+'"?\n\nTodas as alterações não salvas serão perdidas.'))return;
-  }
+// ── Reset completo do orçamento em edição — usado tanto por "Sair sem
+// salvar" quanto por "Salvar e Sair" (após salvar) e pelo botão Home do
+// topo, para garantir que a saída da tela de elaboração seja sempre
+// "completa": libera lock, limpa todos os campos/estado em memória e sai
+// do modo leitura. Não mexe em confirmação nem em navegação — quem chama
+// decide se pergunta antes e chama abrirHome() depois. ──
+async function _resetarEstadoOrcamento(){
   // Liberar lock se houver
   if(driveIdAtual&&!_modoLeitura){
     try{await lockLiberar(driveIdAtual);}catch(e){}
@@ -5594,7 +5588,19 @@ async function homeSairSemSalvar(){
   finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';
   buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
   _atualizarBtnClonar();
-  _renderizarHome();
+}
+
+// ── Sair sem salvar — descarta orçamento local e volta para home ──
+async function homeSairSemSalvar(){
+  var num=gv('f-num')||'sem número';
+  var cli=gv('f-cliente')||'este orçamento';
+  // Só pede confirmação se há alterações não salvas
+  if(_naoSalvo){
+    var label=num+(cli&&cli!=='este orçamento'?' - '+cli:'');
+    if(!confirm('⚠️ Sair sem salvar "'+label+'"?\n\nTodas as alterações não salvas serão perdidas.'))return;
+  }
+  await _resetarEstadoOrcamento();
+  abrirHome();
 }
 
 
