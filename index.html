@@ -7196,8 +7196,19 @@ function _fkResumoAcompanhamento(criadoISO, histEtapa, ativ, hojeISO){
   var diasEtapa = ultEtapa ? _diasEntre(ultEtapa.dataISO, hojeISO) : null;
   var todasInteracoes = (histEtapa||[]).concat(ativ||[]).map(function(x){return x.dataISO||'';}).filter(Boolean);
   var ultimaInteracaoISO = todasInteracoes.length ? todasInteracoes.reduce(function(m,x){return x>m?x:m;}) : '';
+  // Orçamentos antigos (nunca resalvos depois desta versão) não têm criadoEmISO
+  // gravado. Nesse caso, usamos a data mais antiga conhecida no histórico de
+  // etapas/atividades como estimativa da criação — melhor que deixar em branco.
+  var criadoReal = criadoISO ? criadoISO.slice(0,10) : '';
+  var criadoFinal = criadoReal;
+  var criadoEstimado = false;
+  if(!criadoFinal && todasInteracoes.length){
+    criadoFinal = todasInteracoes.reduce(function(m,x){return x<m?x:m;});
+    criadoEstimado = true;
+  }
   return {
-    criadoISO: criadoISO ? criadoISO.slice(0,10) : '',
+    criadoISO: criadoFinal,
+    criadoEstimado: criadoEstimado,
     diasEtapa: diasEtapa,
     ultimaInteracaoISO: ultimaInteracaoISO
   };
@@ -7220,10 +7231,11 @@ function _fkCardHtml(o, hoje){
 
   var resumo = _fkResumoAcompanhamento(o.dados&&o.dados.criadoEmISO, histCom, (o.dados&&o.dados.atividades)||[], hoje);
   var infoPartes=[];
-  if(resumo.criadoISO) infoPartes.push('🗓️ '+fD(resumo.criadoISO));
+  if(resumo.criadoISO) infoPartes.push('🗓️ '+(resumo.criadoEstimado?'~':'')+fD(resumo.criadoISO));
   if(resumo.diasEtapa!==null) infoPartes.push('⏱️ '+_fkDiasTexto(resumo.diasEtapa)+' nesta etapa');
   if(resumo.ultimaInteracaoISO) infoPartes.push('🕒 '+fD(resumo.ultimaInteracaoISO));
-  var infoHtml = infoPartes.length ? '<div class="fk-card-info" title="Criado · Dias na etapa · Última interação">'+infoPartes.join(' · ')+'</div>' : '';
+  var infoTitle = 'Criado · Dias na etapa · Última interação'+(resumo.criadoEstimado?' ("~" = data de criação estimada pelo histórico, orçamento cadastrado antes deste recurso)':'');
+  var infoHtml = infoPartes.length ? '<div class="fk-card-info" title="'+infoTitle+'">'+infoPartes.join(' · ')+'</div>' : '';
 
   return '<div class="fk-card" draggable="true" ondragstart="_fkDragStart(event,\''+driveId+'\',\'orc\')" ondragend="_fkDragEnd(event)" onclick="fkAbrirDetalhe(\''+driveId+'\')">'
     + '<div class="fk-card-cli">'+eh(f['f-cliente']||'—')+'</div>'
@@ -7667,7 +7679,7 @@ function fkAbrirDetalhe(driveId, forcarEtapa){
 
   var resumo = _fkResumoAcompanhamento(d.criadoEmISO, d.comercialHist||[], d.atividades||[]);
   var infoPartes=[];
-  if(resumo.criadoISO) infoPartes.push('🗓️ Criado em '+fD(resumo.criadoISO));
+  if(resumo.criadoISO) infoPartes.push('🗓️ Criado'+(resumo.criadoEstimado?' (estimado)':'')+' em '+fD(resumo.criadoISO));
   if(resumo.diasEtapa!==null) infoPartes.push('⏱️ '+_fkDiasTexto(resumo.diasEtapa)+' nesta etapa');
   if(resumo.ultimaInteracaoISO) infoPartes.push('🕒 Última interação: '+fD(resumo.ultimaInteracaoISO));
   document.getElementById('fk-det-info').textContent = infoPartes.length ? infoPartes.join(' · ') : '';
