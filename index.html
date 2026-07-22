@@ -486,6 +486,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 .fk-card-cli{font-size:11.5px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;}
 .fk-card-meta{font-size:9.5px;color:var(--text-muted);display:flex;gap:5px;flex-wrap:wrap;margin-bottom:2px;}
 .fk-card-evento{font-size:9.5px;color:#1565c0;font-weight:700;margin-bottom:2px;}
+.fk-card-info{font-size:8.5px;color:var(--text-dim);margin-bottom:2px;line-height:1.35;}
 .fk-card-obs{font-size:9px;color:var(--text-muted);font-style:italic;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .fk-card-foot{display:flex;align-items:center;justify-content:space-between;gap:5px;margin-top:3px;}
 .fk-card-val{font-size:11px;font-weight:800;color:var(--text);}
@@ -892,9 +893,10 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">&nbsp;</label>
         <button class="fk-filtros-btn" onclick="fkAbrirFiltros()">🔍 Filtros<span class="fk-filtros-badge" id="fk-badge-funil-home"></span></button>
       </div>
-      <div style="margin-left:auto">
+      <div style="margin-left:auto;display:flex;gap:6px">
         <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">&nbsp;</label>
-        <span id="funil-home-followup-alerta" style="display:none;padding:7px 14px;background:#c62828;color:#fff;border-radius:14px;font-size:11px;font-weight:800;cursor:default"></span>
+        <span id="funil-home-followup-alerta" onclick="fkAbrirAtrasados('followup')" style="display:none;padding:7px 14px;background:#c62828;color:#fff;border-radius:14px;font-size:11px;font-weight:800;cursor:pointer" title="Clique para ver todos os follow-ups atrasados"></span>
+        <span id="funil-home-tarefas-alerta" onclick="fkAbrirAtrasados('tarefas')" style="display:none;padding:7px 14px;background:#e65100;color:#fff;border-radius:14px;font-size:11px;font-weight:800;cursor:pointer" title="Clique para ver todas as tarefas atrasadas"></span>
       </div>
     </div>
 
@@ -966,6 +968,20 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       </div>
     </div>
 
+    <div id="fk-det-info" style="font-size:10px;color:var(--text-muted);margin-bottom:10px"></div>
+
+    <!-- Histórico completo primeiro — tudo que a equipe já registrou nesta
+         negociação, antes de qualquer ação nova (agendar tarefa/follow-up). -->
+    <div style="margin-bottom:10px">
+      <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:5px">🕒 Linha do Tempo</label>
+      <div id="fk-det-timeline" class="fk-timeline"></div>
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:16px">
+      <input id="fk-det-nova-nota" placeholder="Adicionar nota/atividade..." style="flex:1;padding:7px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--surface-2);color:var(--text);box-sizing:border-box">
+      <button onclick="fkAdicionarAtividade()" style="padding:7px 14px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">+ Nota</button>
+    </div>
+
     <div style="background:var(--surface-3);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:12px">
       <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:5px">📅 Próximo Follow-up</label>
       <div style="display:flex;gap:6px">
@@ -982,19 +998,20 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div id="fk-det-tarefas"></div>
     </div>
 
-    <div style="margin-bottom:10px">
-      <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:5px">🕒 Linha do Tempo</label>
-      <div id="fk-det-timeline" class="fk-timeline"></div>
-    </div>
-
-    <div style="display:flex;gap:6px">
-      <input id="fk-det-nova-nota" placeholder="Adicionar nota/atividade..." style="flex:1;padding:7px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--surface-2);color:var(--text);box-sizing:border-box">
-      <button onclick="fkAdicionarAtividade()" style="padding:7px 14px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">+ Nota</button>
-    </div>
-
     <div style="margin-top:14px;text-align:center">
       <a href="javascript:void(0)" onclick="fkAbrirOrcamentoCompleto()" style="font-size:11px;color:#1565c0;font-weight:700">Abrir orçamento completo →</a>
     </div>
+  </div>
+</div>
+
+<!-- Modal de Follow-ups/Tarefas Atrasadas (aberto pelos badges do funil) -->
+<div class="ov" id="fk-atrasados-modal" style="z-index:95500">
+  <div class="modal-box" style="max-width:520px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <div><h2 id="fk-atrasados-titulo" style="margin-bottom:2px">⏰ Atrasados</h2><p class="sub" style="margin:0" id="fk-atrasados-sub"></p></div>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('fk-atrasados-modal').classList.remove('open')">✕</button>
+    </div>
+    <div id="fk-atrasados-lista" style="max-height:480px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-top:10px"></div>
   </div>
 </div>
 
@@ -1118,6 +1135,19 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px" id="lead-det-etapa-btns"></div>
 
+    <div id="lead-det-info" style="font-size:10px;color:var(--text-muted);margin-bottom:10px"></div>
+
+    <!-- Histórico completo primeiro — igual ao card de orçamento do funil. -->
+    <div style="margin-bottom:10px">
+      <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:5px">🕒 Linha do Tempo</label>
+      <div id="lead-det-timeline" class="fk-timeline"></div>
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:16px">
+      <input id="lead-det-nova-nota" placeholder="Adicionar nota/atividade..." style="flex:1;padding:7px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--surface-2);color:var(--text);box-sizing:border-box">
+      <button onclick="leadAdicionarAtividade()" style="padding:7px 14px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">+ Nota</button>
+    </div>
+
     <div style="margin-bottom:14px">
       <button onclick="leadIniciarConversao(_leadDetId)" style="width:100%;padding:9px;background:var(--R);color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:800;cursor:pointer">🚀 Converter em Orçamento →</button>
     </div>
@@ -1136,16 +1166,6 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <button onclick="tarefaAbrirNovaDoLead()" style="padding:4px 10px;background:#1565c0;color:#fff;border:none;border-radius:4px;font-size:10px;font-weight:800;cursor:pointer">+ Agendar</button>
       </div>
       <div id="lead-det-tarefas"></div>
-    </div>
-
-    <div style="margin-bottom:10px">
-      <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:5px">🕒 Linha do Tempo</label>
-      <div id="lead-det-timeline" class="fk-timeline"></div>
-    </div>
-
-    <div style="display:flex;gap:6px;margin-bottom:14px">
-      <input id="lead-det-nova-nota" placeholder="Adicionar nota/atividade..." style="flex:1;padding:7px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--surface-2);color:var(--text);box-sizing:border-box">
-      <button onclick="leadAdicionarAtividade()" style="padding:7px 14px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">+ Nota</button>
     </div>
 
     <div style="text-align:center">
@@ -2492,9 +2512,10 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <label>&nbsp;</label>
       <button class="fk-filtros-btn" onclick="fkAbrirFiltros()">🔍 Filtros<span class="fk-filtros-badge" id="fk-badge-funil-card"></span></button>
     </div>
-    <div style="margin-left:auto">
-      <label>&nbsp;</label>
-      <span id="funil-followup-alerta" style="display:none;padding:6px 12px;background:#c62828;color:#fff;border-radius:14px;font-size:10px;font-weight:800;cursor:default"></span>
+    <div style="margin-left:auto;display:flex;gap:6px">
+      <label style="display:none">&nbsp;</label>
+      <span id="funil-followup-alerta" onclick="fkAbrirAtrasados('followup')" style="display:none;padding:6px 12px;background:#c62828;color:#fff;border-radius:14px;font-size:10px;font-weight:800;cursor:pointer" title="Clique para ver todos os follow-ups atrasados"></span>
+      <span id="funil-tarefas-alerta" onclick="fkAbrirAtrasados('tarefas')" style="display:none;padding:6px 12px;background:#e65100;color:#fff;border-radius:14px;font-size:10px;font-weight:800;cursor:pointer" title="Clique para ver todas as tarefas atrasadas"></span>
     </div>
   </div>
 
@@ -2819,6 +2840,16 @@ var comercialHist=[];
 // como "Reservados" (laranja) na sinaleira de estoque, antes da venda ser
 // fechada — ver PERM_MODULOS/'estoque' pra quem pode usar este toggle.
 var equipReservadoManual=false;
+// Atividades (notas) e próximo follow-up do Funil de Vendas — precisam
+// trafegar junto com o resto do orçamento em getDadosCompletos()/
+// _driveCarregarDados(), senão qualquer save feito pelo editor principal
+// (fora do card do funil) sobrescreve o documento inteiro no Firestore e
+// apaga essas informações (bug corrigido: "histórico não fica salvo").
+var atividades=[];
+var followupData='';
+// Data de criação do orçamento (imutável) — só existe de forma confiável
+// depois desta correção; orçamentos antigos, nunca resalvos, mostram "—".
+var orcCriadoEmISO='';
 var snapshotAnterior=null;
 var snapshotAprovado=null; // snapshot tirado no momento da última aprovação
 var solExclusao=[]; // fila de solicitações de exclusão pendentes/aprovadas
@@ -3183,7 +3214,7 @@ async function logout(forcado){
     }catch(e4){}
   }
   try{await fbAuth.signOut();}catch(e7){}
-  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];equipReservadoManual=false;snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';driveIdAtual=null;driveNumAtual=null;
+  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';driveIdAtual=null;driveNumAtual=null;
   _atualizarBtnClonar();
   fecharHome();
   // Resetar funil
@@ -4281,6 +4312,9 @@ function driveRenderLista(el, lista, podeDel, SI_COR2, SI_LBL, q){
 
 // ── Função central de salvamento — usada por todos os fluxos ─────────────────
 function getDadosCompletos(){
+  // Marca a data de criação na primeira vez que este orçamento é salvo —
+  // preservada em todos os saves seguintes (nunca reatribuída depois).
+  if(!orcCriadoEmISO) orcCriadoEmISO=new Date().toISOString();
   return {
     form:getForm(),
     state:state,
@@ -4289,6 +4323,9 @@ function getDadosCompletos(){
     comercialStatus:comercialStatus,
     comercialHist:comercialHist,
     equipReservadoManual:equipReservadoManual,
+    atividades:atividades,
+    followupData:followupData,
+    criadoEmISO:orcCriadoEmISO,
     snapshotAnterior:snapshotAnterior,
     snapshotAprovado:snapshotAprovado,
     finParcelas:finParcelas,
@@ -4361,7 +4398,7 @@ async function _salvarNoDriveInterno(opts){
         return null;
       }
       aprovStatus='rascunho';aprovHist=[];
-      comercialStatus='';comercialHist=[];equipReservadoManual=false;
+      comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcCriadoEmISO='';
       snapshotAnterior=null;snapshotAprovado=null;
       if(typeof _limparCamposComercialDOM==='function') _limparCamposComercialDOM();
       if(typeof renderStatusOrc==='function') renderStatusOrc();
@@ -4942,7 +4979,7 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     _versaoAtual=dados._versao||null;
     if(dados.state){SECS.forEach(function(s){if(dados.state[s]){state[s].ambientes=dados.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=dados.state[s].ambAtiva||'default';state[s].rows=dados.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
     if(dados.form)setForm(dados.form);
-    aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
+    aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
     _limparCamposComercialDOM(); // limpar campos DOM ao carregar novo orçamento
     driveIdAtual=id;driveNumAtual=dados.form&&dados.form['f-num']?dados.form['f-num']:null;
     _naoSalvo=false;
@@ -5093,7 +5130,7 @@ async function limpar(){
   driveIdAtual=null;driveNumAtual=null;
   _naoSalvo=false;
   aprovStatus='rascunho';aprovHist=[];
-  comercialStatus='';comercialHist=[];equipReservadoManual=false;
+  comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcCriadoEmISO='';
   _limparCamposComercialDOM();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
@@ -5177,7 +5214,7 @@ async function clonarOrcamento(){
 
   // ── Zerar aprovações, funil e financeiro
   aprovStatus='rascunho';aprovHist=[];
-  comercialStatus='';comercialHist=[];equipReservadoManual=false;
+  comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcCriadoEmISO='';
   _limparCamposComercialDOM();
   snapshotAnterior=null;
   snapshotAprovado=null;
@@ -5488,7 +5525,7 @@ async function homeSairSemSalvar(){
   sv('orc-disp','—');
   driveIdAtual=null;driveNumAtual=null;_naoSalvo=false;_versaoAtual=null;
   aprovStatus='rascunho';aprovHist=[];
-  comercialStatus='';comercialHist=[];equipReservadoManual=false;
+  comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcCriadoEmISO='';
   _limparCamposComercialDOM();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
@@ -6398,6 +6435,10 @@ function salvarComercial(){
 var _funilCache = [];
 var _funilCarregado = false;
 var _funilCarregando = false;
+// Guarda os follow-ups/tarefas atrasados do último render do kanban (card
+// fixo OU overlay da Home, o que tiver renderizado por último) — alimenta o
+// modal aberto pelos badges "⏰ follow-up(s) atrasado(s)" / "📋 tarefa(s) atrasada(s)".
+var _fkAtrasadosCache = { followup:{orc:[],lead:[]}, tarefas:[] };
 
 var FUNIL_SI = {
   enviada:   {label:'📤 Proposta Enviada', bg:'#1565c0', tx:'#fff'},
@@ -6943,7 +6984,17 @@ function funilFiltrarLista(){
 function funilRenderKanban(kanbanId, filtroConsElId, statusElId, alertaElId){
   var kEl = document.getElementById(kanbanId);
   if(!kEl) return;
-  var cons = (document.getElementById(filtroConsElId)||{}).value || '';
+  var filtroConsEl = document.getElementById(filtroConsElId);
+  var cons = (filtroConsEl||{}).value || '';
+  // Cargo sem permissão "Ver Funil de Toda a Equipe" -> força ver só os
+  // próprios, ignorando qualquer seleção manual no filtro de Consultor.
+  var soMeus = typeof permTemAcesso==='function' && !permTemAcesso('funil-ver-equipe') && usuarioAtual;
+  if(soMeus){
+    cons = usuarioAtual.nome;
+    if(filtroConsEl){ filtroConsEl.value = cons; filtroConsEl.disabled = true; filtroConsEl.title='Seu cargo só pode ver o próprio funil'; }
+  } else if(filtroConsEl){
+    filtroConsEl.disabled = false; filtroConsEl.title='';
+  }
   var stEl = statusElId ? document.getElementById(statusElId) : null;
   var alertaEl = alertaElId ? document.getElementById(alertaElId) : null;
 
@@ -6969,6 +7020,10 @@ function funilRenderKanban(kanbanId, filtroConsElId, statusElId, alertaElId){
   var atrasadosLead = baseLeads.filter(function(l){ return l.followupData && l.followupData < hoje; });
   var totalAtrasados = atrasadosOrc.length + atrasadosLead.length;
 
+  // Guarda os atrasados deste render (respeitando os mesmos filtros aplicados
+  // ao quadro) pra alimentar o modal aberto pelos badges clicáveis.
+  _fkAtrasadosCache.followup = { orc: atrasadosOrc, lead: atrasadosLead };
+
   if(alertaEl){
     if(totalAtrasados > 0){
       alertaEl.style.display = 'inline-block';
@@ -6976,6 +7031,30 @@ function funilRenderKanban(kanbanId, filtroConsElId, statusElId, alertaElId){
     } else {
       alertaEl.style.display = 'none';
       alertaEl.textContent = '';
+    }
+  }
+
+  // Tarefas atrasadas vinculadas aos itens deste mesmo quadro (respeitando
+  // consultor/permissão) — badge irmão do follow-up, id derivado por convenção
+  // ('...followup-alerta' -> '...tarefas-alerta').
+  var tarefasElId = alertaElId ? alertaElId.replace('followup-alerta','tarefas-alerta') : null;
+  var tarefasEl = tarefasElId ? document.getElementById(tarefasElId) : null;
+  if(tarefasEl){
+    var vinculosIds = {};
+    baseOrc.forEach(function(o){ vinculosIds['orcamento|'+o.driveId] = true; });
+    baseLeads.forEach(function(l){ vinculosIds['lead|'+l.id] = true; });
+    var tarefasAtrasadas = (typeof TAREFAS!=='undefined' ? TAREFAS : []).filter(function(t){
+      if(t.status==='concluida') return false;
+      if(!vinculosIds[t.vinculoTipo+'|'+t.vinculoId]) return false;
+      return _tarefaUrgencia(t)==='atrasada';
+    });
+    _fkAtrasadosCache.tarefas = tarefasAtrasadas;
+    if(tarefasAtrasadas.length > 0){
+      tarefasEl.style.display = 'inline-block';
+      tarefasEl.textContent = '📋 ' + tarefasAtrasadas.length + ' tarefa(s) atrasada(s)';
+    } else {
+      tarefasEl.style.display = 'none';
+      tarefasEl.textContent = '';
     }
   }
 
@@ -7028,6 +7107,102 @@ function funilRenderKanban(kanbanId, filtroConsElId, statusElId, alertaElId){
   kEl.innerHTML = html;
 }
 
+// ── Modal "Atrasados" — aberto pelos badges clicáveis do funil ──────────
+// tipo: 'followup' (leads+orçamentos com follow-up vencido) ou 'tarefas'
+// (tarefas vencidas vinculadas a itens do funil). Usa o que foi calculado no
+// último funilRenderKanban() — respeita os mesmos filtros de consultor/
+// permissão já aplicados ao quadro.
+function fkAbrirAtrasados(tipo){
+  var titulo = document.getElementById('fk-atrasados-titulo');
+  var sub = document.getElementById('fk-atrasados-sub');
+  var box = document.getElementById('fk-atrasados-lista');
+  if(!box) return;
+
+  if(tipo === 'tarefas'){
+    var tarefas = _fkAtrasadosCache.tarefas || [];
+    if(titulo) titulo.textContent = '📋 Tarefas Atrasadas';
+    if(sub) sub.textContent = tarefas.length+' tarefa'+(tarefas.length!==1?'s':'')+' vencida'+(tarefas.length!==1?'s':'')+' — clique pra abrir';
+    box.innerHTML = tarefas.length
+      ? tarefas.sort(function(a,b){return (a.data+(a.hora||''))<(b.data+(b.hora||''))?-1:1;}).map(function(t){
+          return '<div onclick="fkAtrasadosAbrirVinculo(\''+t.vinculoTipo+'\',\''+t.vinculoId+'\')" style="padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px" onmouseover="this.style.background=\'var(--surface)\'" onmouseout="this.style.background=\'\'">'
+            +'<div><div style="font-weight:700;color:var(--text);font-size:12px">'+eh(t.tipo||'')+'</div>'
+            +'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">'+eh(_tarefaFormatarData(t))+' · '+eh(t.consultor||'')+'</div>'
+            +(t.obs?'<div style="font-size:10px;color:var(--text-muted);font-style:italic;margin-top:2px">'+eh(t.obs)+'</div>':'')
+            +'</div>'
+            +'<span style="white-space:nowrap;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:800;background:#c62828;color:#fff">⚠️ Atrasada</span>'
+            +'</div>';
+        }).join('')
+      : '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:12px">✅ Nenhuma tarefa atrasada.</div>';
+  } else {
+    var orc = (_fkAtrasadosCache.followup && _fkAtrasadosCache.followup.orc) || [];
+    var lead = (_fkAtrasadosCache.followup && _fkAtrasadosCache.followup.lead) || [];
+    var total = orc.length + lead.length;
+    if(titulo) titulo.textContent = '⏰ Follow-ups Atrasados';
+    if(sub) sub.textContent = total+' negociaç'+(total!==1?'ões':'ão')+' com follow-up vencido — clique pra abrir';
+    var itensOrc = orc.map(function(o){
+      var f=o.form||{};
+      return {tipo:'orc', id:o.driveId, titulo:f['f-cliente']||'—', sub:(f['f-num']||'—')+(f['f-cons']?' · '+f['f-cons']:''), fu:(o.dados&&o.dados.followupData)||''};
+    });
+    var itensLead = lead.map(function(l){
+      return {tipo:'lead', id:l.id, titulo:l.nome||'—', sub:(l.consultor||'')+(l.telefone?' · '+l.telefone:''), fu:l.followupData||''};
+    });
+    var todos = itensOrc.concat(itensLead).sort(function(a,b){return a.fu<b.fu?-1:1;});
+    box.innerHTML = todos.length
+      ? todos.map(function(x){
+          return '<div onclick="fkAtrasadosAbrirVinculo(\''+(x.tipo==='lead'?'lead':'orcamento')+'\',\''+x.id+'\')" style="padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px" onmouseover="this.style.background=\'var(--surface)\'" onmouseout="this.style.background=\'\'">'
+            +'<div><div style="font-weight:700;color:var(--text);font-size:12px">'+eh(x.titulo)+'</div>'
+            +'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">'+eh(x.sub)+'</div>'
+            +'</div>'
+            +'<span style="white-space:nowrap;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:800;background:#c62828;color:#fff">⏰ '+fD(x.fu)+'</span>'
+            +'</div>';
+        }).join('')
+      : '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:12px">✅ Nenhum follow-up atrasado.</div>';
+  }
+
+  document.getElementById('fk-atrasados-modal').classList.add('open');
+}
+
+// Fecha o modal de atrasados e abre o orçamento/lead vinculado, direto no
+// quadro do funil que já está aberto (sem precisar navegar pela Home).
+function fkAtrasadosAbrirVinculo(vinculoTipo, vinculoId){
+  document.getElementById('fk-atrasados-modal').classList.remove('open');
+  if(vinculoTipo === 'lead') leadAbrirDetalhe(vinculoId);
+  else fkAbrirDetalhe(vinculoId);
+}
+
+// ── Datas de acompanhamento (criação / dias na etapa / última interação) ──
+// Compartilhado entre os cards do kanban (orçamento e lead) e os modais de
+// detalhe — mede sempre a partir de strings ISO (YYYY-MM-DD), comparáveis
+// lexicograficamente sem precisar converter pra Date na maioria dos casos.
+function _diasEntre(dataISO, hojeISO){
+  if(!dataISO) return null;
+  var d1=new Date(dataISO.slice(0,10)+'T00:00:00');
+  var d2=new Date((hojeISO||new Date().toISOString().split('T')[0])+'T00:00:00');
+  if(isNaN(d1.getTime())||isNaN(d2.getTime())) return null;
+  return Math.round((d2-d1)/86400000);
+}
+function _fkDiasTexto(dias){
+  if(dias===null||dias===undefined) return '—';
+  if(dias<=0) return 'hoje';
+  return dias+' dia'+(dias!==1?'s':'');
+}
+// Calcula, a partir do histórico de mudança de etapa (hist) e das atividades
+// (notas), há quanto tempo o item está na etapa atual e quando foi a última
+// interação registrada por alguém da equipe (o que vier depois: mudança de
+// etapa OU nota) — usado tanto pro card quanto pro modal de detalhe.
+function _fkResumoAcompanhamento(criadoISO, histEtapa, ativ, hojeISO){
+  hojeISO = hojeISO || new Date().toISOString().split('T')[0];
+  var ultEtapa = (histEtapa&&histEtapa.length) ? histEtapa[histEtapa.length-1] : null;
+  var diasEtapa = ultEtapa ? _diasEntre(ultEtapa.dataISO, hojeISO) : null;
+  var todasInteracoes = (histEtapa||[]).concat(ativ||[]).map(function(x){return x.dataISO||'';}).filter(Boolean);
+  var ultimaInteracaoISO = todasInteracoes.length ? todasInteracoes.reduce(function(m,x){return x>m?x:m;}) : '';
+  return {
+    criadoISO: criadoISO ? criadoISO.slice(0,10) : '',
+    diasEtapa: diasEtapa,
+    ultimaInteracaoISO: ultimaInteracaoISO
+  };
+}
+
 function _fkCardHtml(o, hoje){
   var f = o.form || {};
   var val = dashValOrc(o);
@@ -7043,12 +7218,20 @@ function _fkCardHtml(o, hoje){
   var ult = histCom.length ? histCom[histCom.length-1] : null;
   var ultObs = ult && ult.obs ? '<div class="fk-card-obs">💬 '+eh(ult.obs)+'</div>' : '';
 
+  var resumo = _fkResumoAcompanhamento(o.dados&&o.dados.criadoEmISO, histCom, (o.dados&&o.dados.atividades)||[], hoje);
+  var infoPartes=[];
+  if(resumo.criadoISO) infoPartes.push('🗓️ '+fD(resumo.criadoISO));
+  if(resumo.diasEtapa!==null) infoPartes.push('⏱️ '+_fkDiasTexto(resumo.diasEtapa)+' nesta etapa');
+  if(resumo.ultimaInteracaoISO) infoPartes.push('🕒 '+fD(resumo.ultimaInteracaoISO));
+  var infoHtml = infoPartes.length ? '<div class="fk-card-info" title="Criado · Dias na etapa · Última interação">'+infoPartes.join(' · ')+'</div>' : '';
+
   return '<div class="fk-card" draggable="true" ondragstart="_fkDragStart(event,\''+driveId+'\',\'orc\')" ondragend="_fkDragEnd(event)" onclick="fkAbrirDetalhe(\''+driveId+'\')">'
     + '<div class="fk-card-cli">'+eh(f['f-cliente']||'—')+'</div>'
     + '<div class="fk-card-meta"><span>'+eh(f['f-num']||'—')+'</span>'
     + (f['f-cons'] ? '<span>· '+eh(f['f-cons'])+'</span>' : '')
     + '</div>'
     + (dataEv ? '<div class="fk-card-evento">📆 '+dataEv+'</div>' : '')
+    + infoHtml
     + ultObs
     + '<div class="fk-card-foot"><span class="fk-card-val">'+fmt(val)+'</span>'+fuBadge+'</div>'
     + '</div>';
@@ -7064,12 +7247,20 @@ function _fkLeadCardHtml(lead, hoje){
   var ultNota = (lead.atividades && lead.atividades.length) ? lead.atividades[lead.atividades.length-1] : null;
   var obsHtml = ultNota ? '<div class="fk-card-obs">💬 '+eh(ultNota.texto)+'</div>' : '';
 
+  var resumo = _fkResumoAcompanhamento(lead.criadoEmISO, lead.hist||[], lead.atividades||[], hoje);
+  var infoPartes=[];
+  if(resumo.criadoISO) infoPartes.push('🗓️ '+fD(resumo.criadoISO));
+  if(resumo.diasEtapa!==null) infoPartes.push('⏱️ '+_fkDiasTexto(resumo.diasEtapa)+' nesta etapa');
+  if(resumo.ultimaInteracaoISO) infoPartes.push('🕒 '+fD(resumo.ultimaInteracaoISO));
+  var infoHtml = infoPartes.length ? '<div class="fk-card-info" title="Criado · Dias na etapa · Última interação">'+infoPartes.join(' · ')+'</div>' : '';
+
   return '<div class="fk-card fk-card-lead" draggable="true" ondragstart="_fkDragStart(event,\''+lead.id+'\',\'lead\')" ondragend="_fkDragEnd(event)" onclick="leadAbrirDetalhe(\''+lead.id+'\')">'
     + '<div class="fk-card-cli">'+eh(lead.nome||'—')+'</div>'
     + '<div class="fk-card-meta">'
     + (lead.consultor ? '<span>'+eh(lead.consultor)+'</span>' : '')
     + (lead.telefone ? '<span>· '+eh(lead.telefone)+'</span>' : '')
     + '</div>'
+    + infoHtml
     + obsHtml
     + '<div class="fk-card-foot"><span class="fk-card-val">'+fmt(val)+'</span>'+fuBadge+'</div>'
     + '</div>';
@@ -7195,6 +7386,8 @@ async function _funilPatchOrcamento(driveId, mutatorFn){
     if(driveIdAtual === orc.driveId){
       comercialStatus = novoDados.comercialStatus||'';
       comercialHist = novoDados.comercialHist||[];
+      atividades = novoDados.atividades||[];
+      followupData = novoDados.followupData||'';
       if(typeof renderComercial==='function') renderComercial();
       if(typeof renderFinanceiroInline==='function') renderFinanceiroInline();
     }
@@ -7294,6 +7487,13 @@ function leadAbrirDetalhe(id){
     return '<button onclick="leadClicarEtapa(\''+k+'\')" style="padding:6px 12px;border-radius:16px;border:2px solid '+s.bg+';background:'+(ativo?s.bg:'transparent')+';color:'+(ativo?s.tx:s.bg)+';font-size:10px;font-weight:800;cursor:pointer">'+s.label+'</button>';
   }).join('');
   document.getElementById('lead-det-etapa-btns').innerHTML = btnsHtml;
+
+  var resumoLead = _fkResumoAcompanhamento(lead.criadoEmISO, lead.hist||[], lead.atividades||[]);
+  var infoPartesLead=[];
+  if(resumoLead.criadoISO) infoPartesLead.push('🗓️ Criado em '+fD(resumoLead.criadoISO));
+  if(resumoLead.diasEtapa!==null) infoPartesLead.push('⏱️ '+_fkDiasTexto(resumoLead.diasEtapa)+' nesta etapa');
+  if(resumoLead.ultimaInteracaoISO) infoPartesLead.push('🕒 Última interação: '+fD(resumoLead.ultimaInteracaoISO));
+  document.getElementById('lead-det-info').textContent = infoPartesLead.length ? infoPartesLead.join(' · ') : '';
 
   document.getElementById('lead-det-followup-data').value = lead.followupData || '';
   document.getElementById('lead-det-obs-inicial').textContent = lead.obs || '';
@@ -7464,6 +7664,13 @@ function fkAbrirDetalhe(driveId, forcarEtapa){
   }).join('');
   document.getElementById('fk-det-etapa-btns').innerHTML = btnsHtml;
   document.getElementById('fk-det-terminal-box').style.display = 'none';
+
+  var resumo = _fkResumoAcompanhamento(d.criadoEmISO, d.comercialHist||[], d.atividades||[]);
+  var infoPartes=[];
+  if(resumo.criadoISO) infoPartes.push('🗓️ Criado em '+fD(resumo.criadoISO));
+  if(resumo.diasEtapa!==null) infoPartes.push('⏱️ '+_fkDiasTexto(resumo.diasEtapa)+' nesta etapa');
+  if(resumo.ultimaInteracaoISO) infoPartes.push('🕒 Última interação: '+fD(resumo.ultimaInteracaoISO));
+  document.getElementById('fk-det-info').textContent = infoPartes.length ? infoPartes.join(' · ') : '';
 
   document.getElementById('fk-det-followup-data').value = d.followupData || '';
 
@@ -7908,6 +8115,15 @@ function tarefasRenderMinhas(){
   if(!corpo) return;
   var selCons=document.getElementById('tarefas-filtro-cons');
   var consFiltro=selCons?selCons.value:'';
+  // Cargo sem permissão "Ver Funil de Toda a Equipe" -> só as próprias tarefas,
+  // ignorando qualquer seleção manual no filtro de Consultor.
+  var soMinhas = typeof permTemAcesso==='function' && !permTemAcesso('funil-ver-equipe') && usuarioAtual;
+  if(soMinhas){
+    consFiltro = usuarioAtual.nome;
+    if(selCons){ selCons.value = consFiltro; selCons.disabled = true; selCons.title='Seu cargo só pode ver as próprias tarefas'; }
+  } else if(selCons){
+    selCons.disabled = false; selCons.title='';
+  }
   var lista=TAREFAS.filter(function(t){ return !consFiltro || t.consultor===consFiltro; });
 
   var grupos={atrasada:[], hoje:[], proxima:[], futura:[], concluida:[]};
@@ -10402,6 +10618,9 @@ var PERM_MODULOS = [
   ]},
   {id:'estoque', label:'📦 Estoque', campos:[
     {id:'estoque-reservado-manual', label:'Marcar Equipamentos como Reservados (sinaleira laranja)'}
+  ]},
+  {id:'funil', label:'📊 Funil de Vendas', campos:[
+    {id:'funil-ver-equipe', label:'Ver Funil/Tarefas de Toda a Equipe (desmarcado = vê só os próprios)'}
   ]}
 ];
 
@@ -11585,7 +11804,7 @@ function tarefasContarUrgentes(nomeConsultor){
 function atualizarBadgeTarefas(){
   var badge=document.getElementById('home-badge-tarefas');
   if(!badge||!usuarioAtual) return;
-  var vejaTodos=['adm','gerente','diretor'].includes(usuarioAtual.nivel);
+  var vejaTodos=typeof permTemAcesso==='function' ? permTemAcesso('funil-ver-equipe') : ['adm','gerente','diretor'].includes(usuarioAtual.nivel);
   var n=tarefasContarUrgentes(vejaTodos?null:usuarioAtual.nome);
   badge.textContent=n>0?n:'!';
   badge.classList.toggle('show', n>0);
