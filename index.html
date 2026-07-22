@@ -85,7 +85,7 @@ table.it th{background:var(--D);color:var(--text);padding:5px 6px;text-align:lef
 table.it td{padding:3px 5px;border-bottom:1px solid #f0f0f0;vertical-align:middle;background:var(--surface);color:var(--text);}
 table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .bmov{background:none;border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:10px;padding:1px 5px;color:var(--text-muted);line-height:1;}
-.bmov:hover{background:var(--R);color:var(--text);border-color:var(--R);}
+.bmov:hover{background:var(--R);color:#fff;border-color:var(--R);}
 .btn{padding:6px 12px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;}
 .btn-r{background:var(--R);color:#fff;}
 .btn-d{background:var(--D);color:var(--text);}
@@ -100,7 +100,7 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 /* Toolbar principal do orçamento — padronizada (poucas cores: outline neutro
    pra ações normais, vermelho sólido só pra "Salvar e Sair" e pro grupo de
    risco no final, separado por uma linha divisória) */
-.btn-danger{background:#8b0000;color:var(--text);}
+.btn-danger{background:#8b0000;color:#fff;}
 .btn-danger:hover{background:#a30000;}
 .toolbar-orc{display:flex;gap:8px;margin-top:9px;justify-content:flex-end;align-items:center;flex-wrap:wrap;}
 .toolbar-orc .btn{font-weight:700;letter-spacing:.2px;padding:7px 14px;}
@@ -116,7 +116,7 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .stot b{color:var(--R);font-size:12px;}
 .badge{display:inline-block;padding:1px 5px;border-radius:8px;font-size:9px;font-weight:700;background:rgba(255,255,255,.25);color:var(--text);margin-left:3px;}
 .tbtn.active .badge{color:#fff;}
-.tbtn:not(.active) .badge{background:#bbb;color:var(--text-dim);}
+.tbtn:not(.active) .badge{background:#bbb;color:#555;}
 .ctag{background:#fff3cd;color:#856404;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:700;margin-left:3px;}
 .totbox{background:var(--D);color:var(--text);padding:16px 18px;border-radius:0 0 10px 10px;}
 .tg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:10px;}
@@ -131,7 +131,7 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .drow input{background:var(--surface);color:var(--text);border:1px solid var(--border-strong);padding:5px 7px;max-width:100px;}
 .grand{background:var(--R);padding:11px 15px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;margin-top:11px;flex-wrap:wrap;gap:8px;}
 .grand span{font-size:12px;color:rgba(255,255,255,.85);font-weight:600;}
-.grand b{font-size:20px;color:var(--text);}
+.grand b{font-size:20px;color:#fff;}
 .mbox{background:var(--surface-3);border:1px solid var(--border);border-radius:6px;padding:11px 14px;margin-top:9px;}
 .mbox h3{color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:7px;}
 .mg{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
@@ -222,7 +222,7 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .com-hist{margin-top:10px;border-top:1px solid #1a2e1a;padding-top:8px;}
 .com-hist-item{display:flex;gap:7px;padding:4px 0;border-bottom:1px solid var(--border-strong);font-size:10px;color:var(--text-muted);}
 .com-hist-item:last-child{border-bottom:none;}
-.com-motivo{width:100%;padding:7px 9px;border:1px solid #c62828;border-radius:4px;font-size:11px;background:#1a0000;color:var(--text);margin-bottom:8px;display:none;}
+.com-motivo{width:100%;padding:7px 9px;border:1px solid #c62828;border-radius:4px;font-size:11px;background:#1a0000;color:#fff;margin-bottom:8px;display:none;}
 .com-motivo-label{color:#ff7070;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px;display:none;}
 .diff-box{background:#1a1200;border:1px solid #ff9800;border-radius:5px;padding:8px 11px;margin-top:6px;font-size:10px;}
 .diff-box .diff-title{color:#ff9800;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;font-size:10px;}
@@ -246,7 +246,7 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .drive-list{max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;}
 .drive-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;}
 .drive-item:hover{background:var(--surface);}
-.di-nome{flex:1;font-weight:600;color:#e0e0e0;}
+.di-nome{flex:1;font-weight:600;color:var(--text);}
 .di-data{color:var(--text-muted);font-size:10px;white-space:nowrap;}
 .btn-dl{background:#1565c0;color:#fff;border:none;border-radius:3px;padding:3px 8px;font-size:10px;cursor:pointer;font-weight:700;}
 .btn-ddel{background:#e53935;color:#fff;border:none;border-radius:3px;padding:3px 6px;font-size:10px;cursor:pointer;}
@@ -258,10 +258,10 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .home-ov.hidden{display:none;}
 .home-top{background:var(--R);padding:22px 32px 18px;display:flex;align-items:center;gap:18px;flex-shrink:0;}
 .home-top-logo{display:flex;flex-direction:column;}
-.home-top-logo h1{color:var(--text);font-size:22px;font-weight:900;letter-spacing:2px;line-height:1;}
+.home-top-logo h1{color:#fff;font-size:22px;font-weight:900;letter-spacing:2px;line-height:1;}
 .home-top-logo p{color:rgba(255,255,255,.65);font-size:11px;margin-top:3px;letter-spacing:.5px;}
 .home-top-user{margin-left:auto;text-align:right;}
-.home-top-user span{color:var(--text);font-size:13px;font-weight:700;display:block;}
+.home-top-user span{color:#fff;font-size:13px;font-weight:700;display:block;}
 .home-top-user small{color:rgba(255,255,255,.6);font-size:10px;}
 .home-top-user .ubtn{margin-top:6px;}
 .home-body{flex:1;padding:28px 32px;max-width:1000px;width:100%;margin:0 auto;}
@@ -318,8 +318,8 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .evpbox{border:1px solid var(--border);border-left:3px solid var(--R);border-radius:3px;padding:7px 11px;margin-bottom:9px;background:var(--input-bg);}
 .evpbox .en{font-size:12px;font-weight:800;color:var(--R);margin-bottom:2px;}
 .evpbox .es{font-size:11px;color:var(--text-dim);line-height:1.7;}
-.psec{background:#ececec;color:#fff;padding:4px 9px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;border-radius:2px 2px 0 0;border-left:3px solid var(--R);}
-.ambhdr{background:#e2e2e2;color:var(--text);padding:5px 9px;font-size:12px;font-weight:800;text-transform:uppercase;border-radius:2px;margin:10px 0 4px;border-left:3px solid #aaa;}
+.psec{background:#ececec;color:#333;padding:4px 9px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;border-radius:2px 2px 0 0;border-left:3px solid var(--R);}
+.ambhdr{background:#e2e2e2;color:#333;padding:5px 9px;font-size:12px;font-weight:800;text-transform:uppercase;border-radius:2px;margin:10px 0 4px;border-left:3px solid #aaa;}
 table.pi{width:100%;border-collapse:collapse;margin-bottom:8px;font-size:11px;}
 table.pi th{background:var(--surface-3);color:var(--text-dim);padding:4px 7px;text-align:left;font-size:11px;text-transform:uppercase;}
 table.pi th.r{text-align:right;}
@@ -530,7 +530,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 .fk-tl-item{display:flex;gap:8px;padding:7px 0;border-bottom:1px solid #1f1f1f;}
 .fk-tl-item:last-child{border-bottom:none;}
 .fk-tl-ico{font-size:13px;flex-shrink:0;}
-.fk-tl-txt{font-size:11.5px;color:#eee;}
+.fk-tl-txt{font-size:11.5px;color:var(--text);}
 .fk-tl-obs{font-size:10.5px;color:var(--text-muted);font-style:italic;margin-top:1px;}
 .fk-tl-meta{font-size:9.5px;color:var(--text-dim);margin-top:2px;}
 
@@ -2301,7 +2301,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
   <div class="g3">
     <div><label>Público Estimado</label><input type="number" id="f-pub" placeholder="500" oninput="marcarAlterado()"></div>
     <div style="grid-column:span 2"><label>Observações Gerais</label><textarea id="f-obs" style="background:#fffde7;border-color:#ffe082;min-height:52px" placeholder="Detalhes, restrições, motivo de revisão..." oninput="marcarAlterado()"></textarea></div>
-    <div style="grid-column:span 2"><label style="display:flex;align-items:center;gap:6px">🔧 Observações da OS <span style="background:var(--R);color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;letter-spacing:.5px">SOMENTE PARA MONTAGEM</span></label><textarea id="f-obs-os" style="background:#2d2d2d;border:1px solid var(--border-strong);color:var(--text-dim);min-height:60px;margin-top:3px" placeholder="Informações internas para o time de montagem: particularidades do local, contato no evento, cuidados especiais com equipamentos, sequência de montagem..." oninput="marcarAlterado()"></textarea><span style="font-size:10px;color:var(--text-muted);margin-top:2px;display:block">⚠️ Este campo aparece apenas na OS — não é exibido no orçamento do cliente.</span></div>
+    <div style="grid-column:span 2"><label style="display:flex;align-items:center;gap:6px">🔧 Observações da OS <span style="background:var(--R);color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;letter-spacing:.5px">SOMENTE PARA MONTAGEM</span></label><textarea id="f-obs-os" style="background:var(--surface-3);border:1px solid var(--border-strong);color:var(--text);min-height:60px;margin-top:3px" placeholder="Informações internas para o time de montagem: particularidades do local, contato no evento, cuidados especiais com equipamentos, sequência de montagem..." oninput="marcarAlterado()"></textarea><span style="font-size:10px;color:var(--text-muted);margin-top:2px;display:block">⚠️ Este campo aparece apenas na OS — não é exibido no orçamento do cliente.</span></div>
   </div>
 </div>
 
@@ -3724,10 +3724,10 @@ function buildSecPane(s){
 
   if(s==='extra')info='<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:4px;padding:7px 11px;font-size:10px;color:#7a5a00;margin-bottom:7px"><b>💰 Custos Extra</b> — Uso interno. Não aparece no PDF do cliente.<div id="bv-extra-info" style="margin-top:5px;font-weight:700"></div></div>';
 
-  var bvHtml=s==='servico'?'<div id="bv-box" style="background:#2d2d2d;border:1px solid var(--border-strong);border-radius:4px;padding:6px 10px;margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+  var bvHtml=s==='servico'?'<div id="bv-box" style="background:var(--surface-3);border:1px solid var(--border-strong);border-radius:4px;padding:6px 10px;margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
     +'<span style="font-size:10px;color:var(--text-dim);white-space:nowrap">🎁 BV Produtora</span>'
     +'<input type="text" id="f-bv" inputmode="decimal" placeholder="0%" '
-    +'style="max-width:80px;background:#2a2a2a;border:1px solid var(--border-strong);color:var(--text-dim);font-size:12px;padding:4px 9px;border-radius:3px" '
+    +'style="max-width:80px;background:var(--surface);border:1px solid var(--border-strong);color:var(--text);font-size:12px;padding:4px 9px;border-radius:3px" '
     +'oninput="var v=parseFloat(this.value.replace(/[^0-9,]/g,\'\').replace(\',\',\'.\'))||0;_bvStorage=v;calc();marcarAlterado()" '
     +'onfocus="if(this.value===\'0%\'||this.value===\'\')this.value=\'\';" '
     +'onblur="this.value=_bvStorage>0?String(_bvStorage).replace(\'.\',\',\')+\'%\':\'0%\'">'
@@ -4312,7 +4312,7 @@ function driveRenderLista(el, lista, podeDel, SI_COR2, SI_LBL, q){
       var nomeDisplay=highlight(x.nome||'',q);
       var driveId=x.driveId||x.id;
       return '<div class="drive-item" style="background:var(--surface-2);border-bottom:1px solid var(--border)">'
-        +'<div class="di-nome" style="color:#e0e0e0;flex:1">📄 '+nomeDisplay+stBadge+badge+'</div>'
+        +'<div class="di-nome" style="flex:1">📄 '+nomeDisplay+stBadge+badge+'</div>'
         +'<div class="di-data" style="color:var(--text-muted);font-size:10px;white-space:nowrap">'+x.modificado+'</div>'
         +'<button class="btn-dl" onclick="driveCarregar(\''+driveId+'\',\''+eh(x.nome)+'\')">📂 Abrir</button>'
         +(solPend
