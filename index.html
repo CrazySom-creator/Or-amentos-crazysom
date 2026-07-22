@@ -7210,6 +7210,7 @@ function _fkResumoAcompanhamento(criadoISO, histEtapa, ativ, hojeISO){
     criadoISO: criadoFinal,
     criadoEstimado: criadoEstimado,
     diasEtapa: diasEtapa,
+    etapaDataISO: ultEtapa ? (ultEtapa.dataISO||null) : null,
     ultimaInteracaoISO: ultimaInteracaoISO
   };
 }
@@ -7232,9 +7233,15 @@ function _fkCardHtml(o, hoje){
   var resumo = _fkResumoAcompanhamento(o.dados&&o.dados.criadoEmISO, histCom, (o.dados&&o.dados.atividades)||[], hoje);
   var infoPartes=[];
   if(resumo.criadoISO) infoPartes.push('🗓️ '+(resumo.criadoEstimado?'~':'')+fD(resumo.criadoISO));
-  if(resumo.diasEtapa!==null) infoPartes.push('⏱️ '+_fkDiasTexto(resumo.diasEtapa)+' nesta etapa');
+  // Nas colunas terminais (Venda Ganha/Perdida) "dias nesta etapa" não faz sentido
+  // — a negociação já está fechada. Mostramos a data do fechamento em vez disso.
+  if(cs==='ganha' || cs==='perdida'){
+    if(resumo.etapaDataISO) infoPartes.push((cs==='ganha'?'✅ Ganho em ':'❌ Perdido em ')+fD(resumo.etapaDataISO));
+  } else if(resumo.diasEtapa!==null){
+    infoPartes.push('⏱️ '+_fkDiasTexto(resumo.diasEtapa)+' nesta etapa');
+  }
   if(resumo.ultimaInteracaoISO) infoPartes.push('🕒 '+fD(resumo.ultimaInteracaoISO));
-  var infoTitle = 'Criado · Dias na etapa · Última interação'+(resumo.criadoEstimado?' ("~" = data de criação estimada pelo histórico, orçamento cadastrado antes deste recurso)':'');
+  var infoTitle = 'Criado · '+((cs==='ganha'||cs==='perdida')?'Data de fechamento':'Dias na etapa')+' · Última interação'+(resumo.criadoEstimado?' ("~" = data de criação estimada pelo histórico, orçamento cadastrado antes deste recurso)':'');
   var infoHtml = infoPartes.length ? '<div class="fk-card-info" title="'+infoTitle+'">'+infoPartes.join(' · ')+'</div>' : '';
 
   return '<div class="fk-card" draggable="true" ondragstart="_fkDragStart(event,\''+driveId+'\',\'orc\')" ondragend="_fkDragEnd(event)" onclick="fkAbrirDetalhe(\''+driveId+'\')">'
@@ -7680,7 +7687,11 @@ function fkAbrirDetalhe(driveId, forcarEtapa){
   var resumo = _fkResumoAcompanhamento(d.criadoEmISO, d.comercialHist||[], d.atividades||[]);
   var infoPartes=[];
   if(resumo.criadoISO) infoPartes.push('🗓️ Criado'+(resumo.criadoEstimado?' (estimado)':'')+' em '+fD(resumo.criadoISO));
-  if(resumo.diasEtapa!==null) infoPartes.push('⏱️ '+_fkDiasTexto(resumo.diasEtapa)+' nesta etapa');
+  if(cs==='ganha' || cs==='perdida'){
+    if(resumo.etapaDataISO) infoPartes.push((cs==='ganha'?'✅ Ganho em ':'❌ Perdido em ')+fD(resumo.etapaDataISO));
+  } else if(resumo.diasEtapa!==null){
+    infoPartes.push('⏱️ '+_fkDiasTexto(resumo.diasEtapa)+' nesta etapa');
+  }
   if(resumo.ultimaInteracaoISO) infoPartes.push('🕒 Última interação: '+fD(resumo.ultimaInteracaoISO));
   document.getElementById('fk-det-info').textContent = infoPartes.length ? infoPartes.join(' · ') : '';
 
