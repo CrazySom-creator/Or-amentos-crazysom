@@ -7379,7 +7379,7 @@ async function _fkMudarEtapaRapido(driveId, novaEtapa){
       dataISO: new Date().toISOString().split('T')[0]
     }]);
   });
-  if(novoDados){ funilFiltrarLista(); funilHomeFiltrarLista(); }
+  if(novoDados){ funilFiltrarLista(); funilHomeFiltrarLista(); _fkAutoCriarTarefaEtapa(driveId, novaEtapa); }
 }
 
 // Salva uma alteração em um orçamento do cache do funil sem abrir o editor completo
@@ -7414,6 +7414,56 @@ async function _funilPatchOrcamento(driveId, mutatorFn){
   }catch(e){
     alert('⚠️ Erro ao salvar: ' + e.message);
     return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// AUTOMAÇÃO DE VENDAS — cria tarefa de follow-up automaticamente
+// quando o orçamento entra em determinadas etapas do funil
+// (inspirado nas automações de movimentação do RD Station CRM).
+// Evita duplicar: só cria se não existir, para o MESMO orçamento e
+// a MESMA etapa que disparou, uma tarefa automática ainda pendente
+// (assim reabrir/negociar de novo a mesma etapa não empilha tarefas).
+// ═══════════════════════════════════════════════════════
+var FUNIL_AUTO_TAREFA = {
+  enviada:    { diasPrazo:2, msg:'Fazer follow-up da proposta enviada.' },
+  negociacao: { diasPrazo:1, msg:'Dar continuidade à negociação em andamento.' }
+};
+
+async function _fkAutoCriarTarefaEtapa(driveId, novaEtapa){
+  var cfg = FUNIL_AUTO_TAREFA[novaEtapa];
+  if(!cfg || typeof TAREFAS==='undefined' || !fbDb) return;
+  var jaExiste = (TAREFAS||[]).some(function(t){
+    return t.vinculoTipo==='orcamento' && t.vinculoId===driveId && t.autoEtapa===novaEtapa && t.status!=='concluida';
+  });
+  if(jaExiste) return;
+  var orc = _funilCache.find(function(o){ return o.driveId===driveId; });
+  var f = (orc&&orc.form) || {};
+  var dataPrazo = new Date();
+  dataPrazo.setDate(dataPrazo.getDate() + cfg.diasPrazo);
+  var obj = {
+    id: 'trf_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    tipo: 'Follow-up',
+    data: dataPrazo.toISOString().split('T')[0],
+    hora: '',
+    obs: '🤖 Tarefa criada automaticamente ao entrar em "'+(FUNIL_SI[novaEtapa]?FUNIL_SI[novaEtapa].label:novaEtapa)+'": '+cfg.msg,
+    consultor: f['f-cons'] || (usuarioAtual?usuarioAtual.nome:''),
+    vinculoTipo: 'orcamento',
+    vinculoId: driveId,
+    vinculoLabel: (f['f-cliente']||'—')+' · '+(f['f-num']||'—'),
+    autoEtapa: novaEtapa,
+    status: 'pendente',
+    criadoEm: new Date().toLocaleString('pt-BR'),
+    criadoPor: 'Sistema (automação)',
+    concluidoEm: '',
+    concluidoPor: ''
+  };
+  try{
+    TAREFAS.push(obj);
+    await _tarefaSalvarFirestore(obj);
+    _tarefasAtualizarTelasAbertas('orcamento', driveId);
+  }catch(e){
+    console.warn('_fkAutoCriarTarefaEtapa:', e);
   }
 }
 
@@ -7776,6 +7826,7 @@ async function fkMudarEtapaComSalvamento(etapa, motivo, obs){
   if(novoDados){
     funilFiltrarLista();
     funilHomeFiltrarLista();
+    _fkAutoCriarTarefaEtapa(driveIdAlvo, etapa);
     if(_fkDetDriveId === driveIdAlvo) fkAbrirDetalhe(driveIdAlvo);
     if(etapa === 'ganha' && driveIdAtual === driveIdAlvo){
       setTimeout(function(){ abrirFinanceiro(); }, 300);
