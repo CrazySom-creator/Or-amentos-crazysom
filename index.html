@@ -1900,7 +1900,11 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
   <div class="modal-box rel-modal">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <h2>📊 Relatórios</h2>
-      <button class="btn btn-o btn-sm" onclick="document.getElementById('rel-ov').classList.remove('open');abrirHome()">✕ Fechar</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="file" id="historico-rd-file" accept=".csv" style="display:none" onchange="historicoRDImportarArquivo(this)">
+        <button id="btn-importar-historico-rd" class="btn btn-o btn-sm" onclick="historicoRDAbrirImportacao()" title="Importa o histórico de negociações exportado do RD Station (CSV) para enriquecer estes relatórios">📥 Importar Histórico (RD)</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('rel-ov').classList.remove('open');abrirHome()">✕ Fechar</button>
+      </div>
     </div>
     <p class="sub" id="rel-sub">Carregando orçamentos do Drive...</p>
 
@@ -1946,6 +1950,11 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div class="rel-filtros">
         <div><label>De</label><input type="date" id="rf-cons-de"></div>
         <div><label>Até</label><input type="date" id="rf-cons-ate"></div>
+        <div style="display:flex;align-items:center;gap:5px">
+          <label style="font-size:10px;color:var(--text-muted);white-space:nowrap;display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="checkbox" id="rf-cons-incluir-rd" checked style="width:auto"> Incluir histórico importado (RD Station)
+          </label>
+        </div>
         <div><button class="btn btn-r btn-sm" onclick="relGerar('consultor')">🔍 Gerar</button></div>
       </div>
       <div id="rel-consultor-kpi" class="rel-kpi"></div>
@@ -1957,6 +1966,11 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div class="rel-filtros">
         <div><label>De</label><input type="date" id="rf-perda-de"></div>
         <div><label>Até</label><input type="date" id="rf-perda-ate"></div>
+        <div style="display:flex;align-items:center;gap:5px">
+          <label style="font-size:10px;color:var(--text-muted);white-space:nowrap;display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="checkbox" id="rf-perda-incluir-rd" checked style="width:auto"> Incluir histórico importado (RD Station)
+          </label>
+        </div>
         <div><button class="btn btn-r btn-sm" onclick="relGerar('perda')">🔍 Gerar</button></div>
       </div>
       <div id="rel-perda-body"></div>
@@ -6495,6 +6509,177 @@ async function _leadExcluirFirestore(id){
   }catch(e){ console.warn('_leadExcluirFirestore:', e); return false; }
 }
 
+// ═══════════════════════════════════════════════════════
+// HISTÓRICO IMPORTADO (RD Station) — dados somente-leitura usados
+// exclusivamente para enriquecer os Relatórios (Motivos de Perda, Por
+// Consultor) com o histórico de negociações que rodava no RD Station
+// antes deste sistema. NÃO aparece no funil/kanban ao vivo — evita
+// duplicar negociações que já viraram orçamentos reais aqui.
+// Coleção Firestore própria: 'historicoRD'.
+// ═══════════════════════════════════════════════════════
+var HISTORICO_RD = [];
+var _historicoRDCarregado = false;
+
+// Normaliza nomes de consultor do export do RD para os nomes usados neste
+// sistema, para os relatórios agruparem certo (ex.: "Jéssica" -> "Jessica
+// Elisandra"). Nomes sem correspondência conhecida são mantidos como estão.
+var HISTORICO_RD_CONSULTOR_MAP = {
+  'Jéssica': 'Jessica Elisandra',
+  'Jessica': 'Jessica Elisandra',
+  'Giovana': 'Giovana Borges',
+  'Fabiano': 'Fabiano Santos',
+  'Wagner Wolff': 'Wagner Wolff'
+};
+
+async function historicoRDCarregar(){
+  if(!fbDb) return;
+  try{
+    var snap = await fbDb.collection('historicoRD').get();
+    var lista = [];
+    snap.forEach(function(doc){ lista.push(doc.data()); });
+    HISTORICO_RD = lista;
+    _historicoRDCarregado = true;
+  }catch(e){ console.warn('historicoRDCarregar:', e); }
+}
+
+// ── Parser CSV RFC4180-ish: suporta campos entre aspas com vírgulas,
+// aspas duplicadas escapadas ("") e quebras de linha dentro de campos
+// entre aspas (ex.: anotações de motivo de perda com múltiplas linhas). ──
+function _csvParseLinhas(text){
+  var rows = [], row = [], field = '', inQuotes = false, i = 0, len = text.length;
+  while(i < len){
+    var c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i += 2; continue; }
+        inQuotes = false; i++; continue;
+      }
+      field += c; i++; continue;
+    } else {
+      if(c === '"'){ inQuotes = true; i++; continue; }
+      if(c === ','){ row.push(field); field=''; i++; continue; }
+      if(c === '\r'){ i++; continue; }
+      if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; i++; continue; }
+      field += c; i++; continue;
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+function _csvParaObjetos(text){
+  if(text.indexOf('sep=,') === 0){
+    var nl = text.indexOf('\n');
+    text = text.slice(nl+1);
+  }
+  var rows = _csvParseLinhas(text);
+  if(!rows.length) return [];
+  var header = rows[0];
+  var out = [];
+  for(var r=1; r<rows.length; r++){
+    var row = rows[r];
+    if(row.length===1 && (row[0]===''||row[0]===undefined)) continue;
+    var obj = {};
+    for(var c=0;c<header.length;c++){ obj[header[c]] = row[c]!==undefined ? row[c] : ''; }
+    out.push(obj);
+  }
+  return out;
+}
+
+// Converte data no formato brasileiro DD/MM/YYYY para ISO YYYY-MM-DD.
+// Datas parciais/inválidas (comuns no campo "Data do Evento" do RD, que é
+// texto livre) retornam ''.
+function _rdDataParaISO(str){
+  if(!str) return '';
+  var m = String(str).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(!m) return '';
+  var dd = m[1].padStart(2,'0'), mm = m[2].padStart(2,'0'), yyyy = m[3];
+  return yyyy+'-'+mm+'-'+dd;
+}
+
+// Mapeia uma linha do CSV exportado do RD Station para o registro que
+// guardamos em 'historicoRD'.
+function _historicoRDMapearLinha(row, idx){
+  var estado = (row['Estado']||'').trim();
+  var status = estado === 'Vendida' ? 'ganha' : estado === 'Perdida' ? 'perdida' : 'aberta';
+  var consultorOriginal = (row['Responsável']||'').trim();
+  var consultor = HISTORICO_RD_CONSULTOR_MAP[consultorOriginal] || consultorOriginal || 'Sem Consultor';
+  return {
+    id: 'rd_'+String(idx).padStart(4,'0'),
+    nome: (row['Nome']||'').trim(),
+    cliente: (row['Empresa']||'').trim() || (row['Nome']||'').trim(),
+    consultor: consultor,
+    consultorOriginal: consultorOriginal,
+    status: status,
+    etapaRD: (row['Etapa']||'').trim(),
+    motivo: (row['Motivo de Perda']||'').trim(),
+    motivoAnotacao: (row['Anotação do motivo de perda']||'').trim(),
+    valor: parseFloat(row['Valor Único']||0) || 0,
+    fonte: (row['Fonte']||'').trim(),
+    dataCriacaoISO: _rdDataParaISO(row['Data de criação']),
+    dataFechamentoISO: _rdDataParaISO(row['Data de fechamento']),
+    dataEvento: (row['Data do evento']||'').trim(),
+    origem: 'RD Station (importado)',
+    importadoEm: new Date().toISOString()
+  };
+}
+
+// Aciona o seletor de arquivo oculto.
+function historicoRDAbrirImportacao(){
+  var inp = document.getElementById('historico-rd-file');
+  if(inp) inp.click();
+}
+
+// Handler do <input type=file>: lê o CSV, confirma com o usuário e grava
+// em lote no Firestore (substituindo qualquer importação anterior).
+async function historicoRDImportarArquivo(input){
+  var arquivo = input.files && input.files[0];
+  if(!arquivo) return;
+  try{
+    var texto = await arquivo.text();
+    var linhas = _csvParaObjetos(texto);
+    if(!linhas.length){ alert('⚠️ Não foi possível ler nenhuma linha do arquivo.'); input.value=''; return; }
+    var registros = linhas.map(function(row, idx){ return _historicoRDMapearLinha(row, idx); });
+    var qtdGanha = registros.filter(function(r){ return r.status==='ganha'; }).length;
+    var qtdPerdida = registros.filter(function(r){ return r.status==='perdida'; }).length;
+    var qtdAberta = registros.filter(function(r){ return r.status==='aberta'; }).length;
+    var msg = '📥 Importar '+registros.length+' negociações do RD Station?\n\n'
+      +'✅ Ganhas: '+qtdGanha+'\n❌ Perdidas: '+qtdPerdida+'\n🔵 Em andamento: '+qtdAberta+'\n\n'
+      +'Esses dados alimentam somente os Relatórios (Motivos de Perda, Por Consultor) — '
+      +'não aparecem no funil/kanban ao vivo.\n\n'
+      +(HISTORICO_RD.length ? '⚠️ Já existe um histórico importado ('+HISTORICO_RD.length+' registros). Ele será SUBSTITUÍDO.\n\n' : '')
+      +'Deseja continuar?';
+    if(!confirm(msg)){ input.value=''; return; }
+
+    driveStatus('⏳ Importando histórico do RD Station...','ok');
+
+    // Remove qualquer importação anterior antes de gravar a nova (evita
+    // sobrar registros "fantasma" se o novo export tiver menos linhas).
+    if(HISTORICO_RD.length){
+      var antigos = HISTORICO_RD.slice();
+      for(var d=0; d<antigos.length; d+=400){
+        var loteDel = fbDb.batch();
+        antigos.slice(d, d+400).forEach(function(r){ loteDel.delete(fbDb.collection('historicoRD').doc(r.id)); });
+        await loteDel.commit();
+      }
+    }
+    for(var i=0; i<registros.length; i+=400){
+      var lote = fbDb.batch();
+      registros.slice(i, i+400).forEach(function(r){ lote.set(fbDb.collection('historicoRD').doc(r.id), r); });
+      await lote.commit();
+    }
+    HISTORICO_RD = registros;
+    _historicoRDCarregado = true;
+    driveStatus('✅ Histórico importado: '+registros.length+' negociações','ok');
+    if(document.getElementById('rpane-perda') && document.getElementById('rpane-perda').classList.contains('active')) relGerar('perda');
+    if(document.getElementById('rpane-consultor') && document.getElementById('rpane-consultor').classList.contains('active')) relGerar('consultor');
+  }catch(e){
+    console.warn('historicoRDImportarArquivo:', e);
+    alert('⚠️ Erro ao importar: '+(e&&e.message?e.message:e));
+  }
+  input.value = '';
+}
+
 // Salva uma alteração num lead do cache local (padrão igual ao _funilPatchOrcamento)
 async function _leadPatch(id, mutatorFn){
   var lead = LEADS.find(function(l){ return l.id === id; });
@@ -8725,6 +8910,12 @@ function relAba(aba){
 
 async function abrirRelatorios(){
   document.getElementById('rel-ov').classList.add('open');
+  var btnImportarRD=document.getElementById('btn-importar-historico-rd');
+  if(btnImportarRD){
+    var podeImportar=usuarioAtual && ['adm','gerente','diretor'].includes(usuarioAtual.nivel);
+    btnImportarRD.style.display=podeImportar?'':'none';
+  }
+  historicoRDCarregar();
   // Datas padrão: ano atual
   var hoje=new Date().toISOString().split('T')[0];
   var inicioAno=new Date().getFullYear()+'-01-01';
@@ -8867,7 +9058,7 @@ function relGerarConsultor(){
   var porCons={};
   dados.forEach(function(o){
     var cons=(o.form&&o.form['f-cons'])||'Sem Consultor';
-    if(!porCons[cons])porCons[cons]={total:0,qtd:0,ganhos:0,perdidos:0,aprovados:0,val:0};
+    if(!porCons[cons])porCons[cons]={total:0,qtd:0,ganhos:0,perdidos:0,aprovados:0,val:0,qtdRD:0};
     var pc=porCons[cons];
     pc.qtd++;
     var bruto=0;
@@ -8886,12 +9077,30 @@ function relGerarConsultor(){
     if(cs==='perdida')pc.perdidos++;
   });
 
+  // Histórico importado do RD Station — soma nos mesmos totais por consultor
+  // (qtd, ganhos, perdidos, valor), sinalizado à parte em qtdRD para transparência.
+  var incluirRD = (document.getElementById('rf-cons-incluir-rd')||{checked:true}).checked;
+  var qtdHistorico = 0;
+  if(incluirRD && HISTORICO_RD.length){
+    HISTORICO_RD.forEach(function(r){
+      if(de && r.dataCriacaoISO && r.dataCriacaoISO < de) return;
+      if(ate && r.dataCriacaoISO && r.dataCriacaoISO > ate) return;
+      var cons = r.consultor || 'Sem Consultor';
+      if(!porCons[cons])porCons[cons]={total:0,qtd:0,ganhos:0,perdidos:0,aprovados:0,val:0,qtdRD:0};
+      var pc=porCons[cons];
+      pc.qtd++; pc.qtdRD++; pc.val+=r.valor||0;
+      if(r.status==='ganha')pc.ganhos++;
+      if(r.status==='perdida')pc.perdidos++;
+      qtdHistorico++;
+    });
+  }
+
   var totalGeral=Object.values(porCons).reduce(function(t,c){return t+c.val;},0);
   var maxVal=Math.max.apply(null,Object.values(porCons).map(function(c){return c.val;}));
 
   relKpi(document.getElementById('rel-consultor-kpi'),[
     {label:'Consultores Ativos',val:Object.keys(porCons).length,cor:'#fff'},
-    {label:'Total Orçamentos',val:dados.length,cor:'#ffa726'},
+    {label:'Total Orçamentos',val:dados.length+(qtdHistorico?' + '+qtdHistorico+' (RD)':''),cor:'#ffa726'},
     {label:'Volume Total',val:fmt(totalGeral),cor:'#66bb6a'}
   ]);
 
@@ -8900,7 +9109,7 @@ function relGerarConsultor(){
     var pct=totalGeral>0?Math.round(pc.val/totalGeral*100):0;
     var taxaConv=pc.qtd>0?Math.round(pc.ganhos/pc.qtd*100):0;
     return '<tr>'
-      +'<td><b style="color:var(--text)">'+eh(c)+'</b></td>'
+      +'<td><b style="color:var(--text)">'+eh(c)+'</b>'+(pc.qtdRD?' <span style="font-size:9px;color:var(--text-muted);font-weight:400">('+pc.qtdRD+' do RD)</span>':'')+'</td>'
       +'<td class="r">'+pc.qtd+'</td>'
       +'<td class="r" style="color:#66bb6a">'+pc.aprovados+'</td>'
       +'<td class="r" style="color:#42a5f5">'+pc.ganhos+'</td>'
@@ -8916,7 +9125,7 @@ function relGerarConsultor(){
       +'</tr>';
   }).join('');
 
-  document.getElementById('rel-consultor-body').innerHTML=dados.length?
+  document.getElementById('rel-consultor-body').innerHTML=Object.keys(porCons).length?
     '<div style="overflow-x:auto"><table class="rel-table"><thead><tr>'
     +'<th>Consultor</th><th class="r">Orç.</th><th class="r">Aprov.</th><th class="r">Ganhos</th><th class="r">Perdidos</th><th class="r">Conv.</th><th class="r">Volume</th><th>Participação</th>'
     +'</tr></thead><tbody>'+rows+'</tbody></table></div>'
@@ -8948,7 +9157,27 @@ function relGerarPerda(){
     porConsultor[cons].motivos[motivo]++;
   });
 
-  var total=perdidos.length;
+  // Histórico importado do RD Station — soma as negociações perdidas de lá
+  // junto com as do sistema atual, nos mesmos gráficos/tabelas.
+  var incluirRD = (document.getElementById('rf-perda-incluir-rd')||{checked:true}).checked;
+  var totalRD = 0;
+  if(incluirRD && HISTORICO_RD.length){
+    HISTORICO_RD.filter(function(r){ return r.status==='perdida'; }).forEach(function(r){
+      if(de && r.dataCriacaoISO && r.dataCriacaoISO < de) return;
+      if(ate && r.dataCriacaoISO && r.dataCriacaoISO > ate) return;
+      var motivo = r.motivo || 'Não informado';
+      if(!porMotivo[motivo])porMotivo[motivo]=0;
+      porMotivo[motivo]++;
+      var cons = r.consultor || '—';
+      if(!porConsultor[cons])porConsultor[cons]={total:0,motivos:{}};
+      porConsultor[cons].total++;
+      if(!porConsultor[cons].motivos[motivo])porConsultor[cons].motivos[motivo]=0;
+      porConsultor[cons].motivos[motivo]++;
+      totalRD++;
+    });
+  }
+
+  var total=perdidos.length+totalRD;
   var maxMotivo=Math.max.apply(null,Object.values(porMotivo).concat([1]));
 
   var barras=Object.keys(porMotivo).sort(function(a,b){return porMotivo[b]-porMotivo[a];}).map(function(m){
@@ -8972,7 +9201,7 @@ function relGerarPerda(){
   document.getElementById('rel-perda-body').innerHTML=total?
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">'
     +'<div>'
-    +'<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;font-weight:700">📊 Motivos ('+total+' vendas perdidas)</div>'
+    +'<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;font-weight:700">📊 Motivos ('+total+' vendas perdidas'+(totalRD?', incluindo '+totalRD+' do RD Station':'')+')</div>'
     +barras
     +'</div>'
     +'<div>'
