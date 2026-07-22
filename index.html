@@ -98,8 +98,8 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .btn-sm{padding:3px 8px;font-size:10px;}
 .bdel{background:#e53935;color:#fff;padding:2px 7px;font-size:10px;border:none;border-radius:3px;cursor:pointer;}
 /* Toolbar principal do orçamento — padronizada (poucas cores: outline neutro
-   pra ações normais, vermelho sólido só pra "Salvar e Sair" e pro grupo de
-   risco no final, separado por uma linha divisória) */
+   pra ações normais, verde sólido pros botões de salvamento, vermelho sólido
+   só pro grupo de risco no final, separado por uma linha divisória) */
 .btn-danger{background:#8b0000;color:#fff;}
 .btn-danger:hover{background:#a30000;}
 .toolbar-orc{display:flex;gap:8px;margin-top:9px;justify-content:flex-end;align-items:center;flex-wrap:wrap;}
@@ -704,7 +704,8 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <span id="home-user-nome">—</span>
       <small id="home-user-cargo">—</small>
       <br>
-      <button class="ubtn" onclick="logout()" style="margin-top:6px">Sair</button>
+      <button id="theme-toggle-btn" class="ubtn" onclick="alternarTema()" title="Alternar tema claro/escuro" style="margin-top:6px;font-size:14px;padding:6px 10px">🌙</button>
+      <button class="ubtn" onclick="logout()" style="margin-top:6px">Logout</button>
     </div>
   </div>
 
@@ -751,11 +752,21 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
           <span style="color:var(--text);font-size:13px;font-weight:800">🔍 Buscar Orçamento</span>
           <button onclick="homeFecharBusca()" style="margin-left:auto;background:none;border:1px solid var(--border-strong);color:var(--text-muted);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:11px">✕ Fechar</button>
         </div>
-        <div style="display:flex;gap:8px;margin-bottom:10px">
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
           <input id="home-busca-input" type="text" placeholder="Número, cliente, data, consultor, local…"
-            style="flex:1;padding:10px 13px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface-2);color:var(--text);font-size:13px"
+            style="flex:2;min-width:180px;padding:10px 13px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface-2);color:var(--text);font-size:13px"
             oninput="homeFiltrarBusca(this.value)"
             onkeydown="if(event.key==='Escape')homeFecharBusca()">
+          <select id="home-busca-filtro-st" onchange="homeFiltrarBusca(document.getElementById('home-busca-input').value)"
+            style="flex:1;min-width:140px;padding:10px 13px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface-2);color:var(--text);font-size:12px">
+            <option value="">Todos os status</option>
+            <option value="rascunho">Rascunho</option>
+            <option value="analise">Em Análise</option>
+            <option value="gerencial">Ap. Gerencial</option>
+            <option value="diretoria">Ap. Diretoria</option>
+            <option value="aprovado">Aprovado</option>
+            <option value="revisao">Revisão</option>
+          </select>
           <button onclick="homeExecutarBusca()" style="background:var(--R);color:#fff;border:none;border-radius:6px;padding:10px 18px;font-size:12px;font-weight:700;cursor:pointer">Buscar</button>
         </div>
         <div id="home-busca-status" style="font-size:10px;color:var(--text-muted);margin-bottom:8px"></div>
@@ -1249,7 +1260,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <button class="btn btn-o btn-sm" id="btn-atualizar-aprov" onclick="atualizarAprovacoes(this)" title="Atualizar lista de pendências" style="white-space:nowrap">🔄 Atualizar</button>
     </div>
     <div id="aprov-lista"><div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">Clique em uma aba para carregar</div></div>
-    <div style="margin-top:16px;text-align:right"><button class="btn btn-o btn-sm" onclick="document.getElementById('aprov-ov').classList.remove('open')">Fechar</button></div>
+    <div style="margin-top:16px;text-align:right"><button class="btn btn-o btn-sm" onclick="document.getElementById('aprov-ov').classList.remove('open');abrirHome()">Fechar</button></div>
   </div>
 </div>
 
@@ -1376,7 +1387,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div><h2 style="margin-bottom:2px">👥 Cadastro de Clientes</h2><p class="sub" style="margin:0">Clientes cadastrados (PF/PJ)</p></div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-g btn-sm" onclick="clienteNovo()">+ Novo Cliente</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('clientes-ov').classList.remove('open')">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('clientes-ov').classList.remove('open');if(!_clienteBuscaModoSelecao)abrirHome();">✕</button>
       </div>
     </div>
     <input id="clientes-busca" type="text" placeholder="🔍 Buscar por nome, CNPJ/CPF ou e-mail..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text);font-size:12px;margin:12px 0 10px" oninput="clientesRenderLista(this.value)">
@@ -1458,7 +1469,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div><h2 style="margin-bottom:2px">🎪 Cadastro de Eventos</h2><p class="sub" style="margin:0">Eventos recorrentes — reaproveite tipo e endereço em orçamentos futuros</p></div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-g btn-sm" onclick="eventoNovo()">+ Novo Evento</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('eventos-ov').classList.remove('open')">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('eventos-ov').classList.remove('open');if(!_eventoBuscaModoSelecao)abrirHome();">✕</button>
       </div>
     </div>
     <div id="eventos-status" style="display:none;padding:9px 12px;border-radius:6px;font-size:11.5px;font-weight:700;margin:10px 0"></div>
@@ -1517,7 +1528,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <button class="btn btn-g btn-sm" onclick="produtoNovo()">+ Novo Produto</button>
         <button class="btn btn-o btn-sm" onclick="scannerAbrir()">🔎 Bipar Equipamento</button>
         <button class="btn btn-o btn-sm" onclick="abrirFaltantes()">⚠️ Itens Faltantes</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('produtos-ov').classList.remove('open')">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('produtos-ov').classList.remove('open');if(!_produtoBuscaModoSelecao)abrirHome();">✕</button>
       </div>
     </div>
     <div id="produtos-status" style="display:none;padding:9px 12px;border-radius:6px;font-size:11.5px;font-weight:700;margin:10px 0"></div>
@@ -2076,7 +2087,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <input type="date" id="dash-ger-ate" style="padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px">
         <select id="dash-ger-cons" style="padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px"><option value="">Todos os Consultores</option></select>
         <button onclick="dashGerAtualizar()" style="padding:6px 12px;background:var(--R);color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">&#128260; Atualizar</button>
-        <button onclick="document.getElementById('dash-ger-ov').classList.remove('open')" style="padding:6px 12px;background:var(--surface-3);color:var(--text-muted);border:none;border-radius:4px;font-size:11px;cursor:pointer">&times; Fechar</button>
+        <button onclick="document.getElementById('dash-ger-ov').classList.remove('open');abrirHome()" style="padding:6px 12px;background:var(--surface-3);color:var(--text-muted);border:none;border-radius:4px;font-size:11px;cursor:pointer">&times; Fechar</button>
       </div>
     </div>
     <div id="dash-ger-corpo" style="padding:16px;overflow-y:auto;max-height:80vh">
@@ -2180,7 +2191,6 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 
 <div class="app-hdr">
   <div><h1>CRAZY SOM – ORÇAMENTO</h1><p>Audiovisual e Estrutura – Uso Interno</p></div>
-  <button id="theme-toggle-btn" class="ubtn" onclick="alternarTema()" title="Alternar tema claro/escuro" style="font-size:14px;padding:6px 10px">🌙</button>
   <div class="orc-n"><small>Nº Orçamento</small><b id="orc-disp">—</b></div>
   <div class="user-badge" id="user-badge" style="display:none">
     <div><span id="user-nome">—</span><small id="user-cargo">—</small></div>
@@ -2196,7 +2206,8 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     <button style="display:none" id="btn-adm" onclick="abrirAdm()"></button>
     <!-- Botão principal do menu -->
     <button class="ubtn" onclick="abrirHome()" style="font-size:13px;padding:6px 14px;font-weight:800;letter-spacing:.5px">☰ Menu</button>
-    <button class="ubtn" onclick="logout()" style="background:rgba(255,255,255,.15)">Sair</button>
+    <button class="ubtn" onclick="abrirHome()" title="Voltar à tela inicial do sistema" style="font-size:13px;padding:6px 14px;font-weight:800;letter-spacing:.5px">🏠 Home</button>
+    <button class="ubtn" onclick="logout()" style="background:rgba(255,255,255,.15)">Logout</button>
   </div>
 </div>
 
@@ -2455,46 +2466,27 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     </div>
   </div>
 
-  <div class="drive-panel">
-    <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:10px">☁️ Orçamentos – Google Drive</div>
-    <div class="drive-search">
-      <input id="drive-q" placeholder="🔍 Buscar por nº, cliente ou data..." oninput="driveFiltrarLocal()" style="flex:2">
-      <select id="drive-filtro-st" onchange="driveFiltrarLocal()" style="background:var(--surface-2);border:1px solid var(--border);border-radius:4px;color:var(--text-muted);padding:4px 7px;font-size:11px;flex:1">
-        <option value="">Todos os status</option>
-        <option value="rascunho">Rascunho</option>
-        <option value="analise">Em Análise</option>
-        <option value="gerencial">Ap. Gerencial</option>
-        <option value="diretoria">Ap. Diretoria</option>
-        <option value="aprovado">Aprovado</option>
-        <option value="revisao">Revisão</option>
-      </select>
-      <button class="btn btn-b btn-sm" onclick="driveListar()">🔍 Localizar</button>
-      <button class="btn btn-g btn-sm" onclick="driveSalvar()">☁️ Salvar no Drive</button>
-      <button class="btn btn-sm" onclick="toggleExcluidos()" id="btn-excl-hist" style="background:#3e0000;color:#ef9a9a;border:1px solid #c62828">🗑️ Excluídos</button>
-    </div>
-    <div id="drive-list" class="drive-list" style="display:none"></div>
-    <div id="drive-excl-hist" style="display:none;margin-top:8px;border:1px solid #3e0000;border-radius:4px;background:#1a0000;max-height:220px;overflow-y:auto"></div>
-    <div id="drive-status" class="drive-status"></div>
-  </div>
-
-  <div class="sbar">
-    <span>💾 Orçamento</span>
-    <button class="btn btn-g btn-sm" onclick="salvar()">💾 Salvar local</button>
-    <label class="btn btn-b btn-sm" style="cursor:pointer">📂 Carregar<input type="file" accept=".json" style="display:none" onchange="carregar(this)"></label>
-    <button class="btn btn-d btn-sm" onclick="gerarOS()">📋 OS</button>
-  </div>
   <div class="toolbar-orc">
     <button class="btn btn-o" onclick="abrirHome()" title="Voltar ao Menu">☰ Menu</button>
     <button class="btn btn-o" onclick="limpar()" title="Começar um orçamento novo em branco">📄 Novo</button>
     <button class="btn btn-o" id="btn-clonar" onclick="clonarOrcamento()" title="Clonar este orçamento para um novo">📋 Clonar</button>
-    <button class="btn btn-r" onclick="salvarESair()" title="Salva no Drive e volta para o Menu principal">💾 Salvar e Sair</button>
     <button class="btn btn-o" onclick="abrirTipo()" title="Gerar PDF do orçamento">📄 PDF</button>
     <button class="btn btn-o" onclick="downloadPDF()" title="Baixar o PDF gerado">⬇️ Download</button>
     <button class="btn btn-o" onclick="abrirPreviewContrato()" title="Pré-visualizar e editar dados antes de gerar o contrato em PDF">📝 Contrato</button>
+    <button class="btn btn-o" onclick="gerarOS()" title="Gerar Ordem de Serviço">📋 OS</button>
+    <button class="btn btn-g" onclick="salvar()" title="Salvar uma cópia local (.json) no seu computador">💾 Salvar Local</button>
+    <label class="btn btn-o" style="cursor:pointer" title="Carregar um orçamento salvo localmente (.json)">📂 Carregar Local<input type="file" accept=".json" style="display:none" onchange="carregar(this)"></label>
+    <button class="btn btn-g" onclick="driveSalvar()" title="Salvar no servidor">💾 Salvar</button>
+    <button class="btn btn-g" onclick="salvarESair()" title="Salva no servidor e volta para o Menu principal">💾 Salvar e Sair</button>
     <span class="toolbar-sep"></span>
     <button class="btn btn-o" onclick="homeSairSemSalvar()" title="Sair sem salvar — descarta alterações não salvas">✕ Sair sem salvar</button>
     <button class="btn btn-danger" onclick="homeExcluirOrcAtual()" title="Excluir este orçamento definitivamente">🗑️ Excluir Orçamento</button>
   </div>
+  <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:6px">
+    <button class="btn btn-sm" onclick="toggleExcluidos()" id="btn-excl-hist" style="background:#3e0000;color:#ef9a9a;border:1px solid #c62828" title="Ver histórico de orçamentos excluídos">🗑️ Ver Excluídos</button>
+  </div>
+  <div id="drive-excl-hist" style="display:none;margin-top:8px;border:1px solid #3e0000;border-radius:4px;background:#1a0000;max-height:220px;overflow-y:auto"></div>
+  <div id="drive-status" class="drive-status"></div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════ -->
@@ -4169,10 +4161,18 @@ function calc(){
 function driveStatus(msg,tipo){var el=document.getElementById('drive-status');if(!el)return;el.textContent=msg;el.className='drive-status '+(tipo||'');if(msg)setTimeout(function(){if(el.textContent===msg)el.textContent='';},5000);}
 var _driveListaCache = []; // Cache da lista completa carregada do Drive
 
+// NOTA: a busca visual do Drive (bloco "Orçamentos – Google Drive") foi
+// removida da tela de orçamento — a busca de orçamentos agora acontece só
+// pela Home ("Abrir/Buscar", veja homeCarregarBusca/homeFiltrarBusca).
+// driveListar() continua existindo (e sendo chamada após salvar/excluir)
+// apenas para manter _driveListaCache atualizado; fica null-safe caso o
+// elemento #drive-list não exista mais na tela atual.
 async function driveListar(){
   var el=document.getElementById('drive-list');
-  el.style.display='block';
-  el.innerHTML='<div class="drive-item" style="color:var(--text-muted)">⏳ Buscando no Drive...</div>';
+  if(el){
+    el.style.display='block';
+    el.innerHTML='<div class="drive-item" style="color:var(--text-muted)">⏳ Buscando no Drive...</div>';
+  }
   _driveListaCache=[];
   try{
     var r=await fetch(SCRIPT_URL+'?action=list&q=');
@@ -4183,12 +4183,14 @@ async function driveListar(){
     var lista=(d.lista||[]).filter(function(x){
       return !NOMES_INTERNOS.some(function(n){return x.nome&&x.nome.indexOf(n)>=0;});
     });
-    // Debug: mostrar quantos o Drive retornou
-    driveStatus('Drive retornou '+totalBruto+' arquivo(s), exibindo '+lista.length,'');
     _driveListaCache=lista;
-    driveFiltrarLocal();
+    if(el){
+      // Debug: mostrar quantos o Drive retornou (só quando a lista visual existe)
+      driveStatus('Drive retornou '+totalBruto+' arquivo(s), exibindo '+lista.length,'');
+      driveFiltrarLocal();
+    }
   }catch(e){
-    el.innerHTML='<div class="drive-item" style="color:#ef5350">⚠️ Erro: '+e.message+'</div>';
+    if(el) el.innerHTML='<div class="drive-item" style="color:#ef5350">⚠️ Erro: '+e.message+'</div>';
   }
 }
 
@@ -5415,16 +5417,57 @@ function homeExecutarBusca(){
   homeFiltrarBusca(q);
 }
 
+var HOME_BUSCA_SI_COR={rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
+var HOME_BUSCA_SI_LBL={rascunho:'Rascunho',analise:'Em Análise',gerencial:'Ap. Gerencial',diretoria:'Ap. Diretoria',aprovado:'Aprovado',revisao:'Revisão'};
+
 function homeFiltrarBusca(q){
   if(!_homeBuscaCarregada) return;
   var st = document.getElementById('home-busca-status');
   q = (q||'').toLowerCase().trim();
+  var filtroSt = (document.getElementById('home-busca-filtro-st')||{}).value||'';
   var filtrados = q ? _homeBuscaCache.filter(function(x){
     var nome = (x.nome||'').toLowerCase();
     return nome.indexOf(q) >= 0;
   }) : _homeBuscaCache;
-  if(st) st.textContent = filtrados.length+' resultado(s)'+(q?' para "'+q+'"':'');
-  homeRenderBusca(filtrados);
+
+  if(!filtroSt){
+    if(st) st.textContent = filtrados.length+' resultado(s)'+(q?' para "'+q+'"':'');
+    homeRenderBusca(filtrados);
+    return;
+  }
+
+  // Filtro por status: o status de cada orçamento não vem na listagem leve do
+  // Drive — precisa carregar os dados completos (usa o mesmo cache/progressão
+  // já usado no restante do sistema, para não refazer requisições à toa).
+  var comStatus = filtrados.filter(function(x){
+    var cached = _driveCacheGet(x.id);
+    return cached && cached.st === filtroSt;
+  });
+  var semCache = filtrados.filter(function(x){ return !_driveCacheGet(x.id); });
+
+  if(semCache.length > 0){
+    if(st) st.textContent = '⏳ Filtrando por status ('+comStatus.length+'/'+filtrados.length+' prontos)...';
+    homeRenderBusca(comStatus);
+    fetchProgressivo(semCache, 15, function(){
+      var atualizados = filtrados.filter(function(x){
+        var c = _driveCacheGet(x.id);
+        return c && c.st === filtroSt;
+      });
+      if(st) st.textContent = atualizados.length+' resultado(s)'+(q?' para "'+q+'"':'')+' — '+(HOME_BUSCA_SI_LBL[filtroSt]||filtroSt);
+      homeRenderBusca(atualizados);
+    }).then(function(){
+      var final = filtrados.filter(function(x){
+        var c = _driveCacheGet(x.id);
+        return c && c.st === filtroSt;
+      });
+      if(st) st.textContent = final.length+' resultado(s)'+(q?' para "'+q+'"':'')+' — '+(HOME_BUSCA_SI_LBL[filtroSt]||filtroSt);
+      homeRenderBusca(final);
+    });
+    return;
+  }
+
+  if(st) st.textContent = comStatus.length+' resultado(s)'+(q?' para "'+q+'"':'')+' — '+(HOME_BUSCA_SI_LBL[filtroSt]||filtroSt);
+  homeRenderBusca(comStatus);
 }
 
 function homeRenderBusca(lista){
@@ -5442,11 +5485,15 @@ function homeRenderBusca(lista){
     var dt  = partes[partes.length-1]||'';
     var driveId = (x.id||x.driveId||'').replace(/"/g,'');
     var nomeEsc = (x.nome||'').replace(/"/g,'&quot;');
+    var cached = _driveCacheGet(x.id);
+    var stVal = cached ? cached.st : '';
+    var cor = HOME_BUSCA_SI_COR[stVal]||'var(--text-dim)';
+    var stBadge = stVal ? '<span style="background:'+cor+'22;color:'+cor+';border:1px solid '+cor+';font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:5px">'+(HOME_BUSCA_SI_LBL[stVal]||stVal)+'</span>' : '';
     return '<div class="home-busca-item" data-id="'+driveId+'" data-nome="'+nomeEsc+'" style="'
       +'display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer">'
       +'<div style="min-width:72px;font-size:13px;font-weight:800;color:var(--R)">'+eh(num)+'</div>'
       +'<div style="flex:1">'
-      +'<div style="color:var(--text);font-size:12px;font-weight:600">'+eh(cli)+'</div>'
+      +'<div style="color:var(--text);font-size:12px;font-weight:600">'+eh(cli)+stBadge+'</div>'
       +'<div style="color:var(--text-muted);font-size:10px;margin-top:1px">'+eh(dt)+'</div>'
       +'</div>'
       +'<div style="color:var(--text-dim);font-size:16px">›</div>'
@@ -15034,9 +15081,23 @@ setInterval(function(){
 document.getElementById('l-pass').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
 document.getElementById('l-user').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('l-pass').focus();});
 // Fechar modais ao tocar no overlay (mobile UX)
+// Telas principais (acessadas a partir da Home) devem voltar para a Home ao
+// fechar — igual ao botão "✕"/"Fechar" de cada uma. Sub-modais (formulários,
+// históricos, etc., abertos DENTRO de uma tela principal) apenas se fecham,
+// permanecendo na tela que os abriu.
+var _OV_TELAS_PRINCIPAIS={'adm-ov':1,'aprov-ov':1,'faltantes-ov':1,'dashfin-ov':1,'metas-ov':1,'dash-elab-ov':1,'dash-ov':1,'os-mod-ov':1,'rel-ov':1,'dash-ger-ov':1};
+function _fecharOvVoltarHome(id){
+  if(id==='clientes-ov'){ if(!_clienteBuscaModoSelecao&&typeof abrirHome==='function') abrirHome(); return; }
+  if(id==='produtos-ov'){ if(!_produtoBuscaModoSelecao&&typeof abrirHome==='function') abrirHome(); return; }
+  if(id==='eventos-ov'){ if(!_eventoBuscaModoSelecao&&typeof abrirHome==='function') abrirHome(); return; }
+  if(_OV_TELAS_PRINCIPAIS[id]&&typeof abrirHome==='function') abrirHome();
+}
 document.querySelectorAll('.ov').forEach(function(ov){
   ov.addEventListener('click',function(e){
-    if(e.target===ov) ov.classList.remove('open');
+    if(e.target===ov){
+      ov.classList.remove('open');
+      _fecharOvVoltarHome(ov.id);
+    }
   });
 });
 
