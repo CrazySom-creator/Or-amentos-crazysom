@@ -2092,8 +2092,8 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     <h2>Visualizar PDF</h2>
     <p class="sub">Escolha o formato e tipo de valores</p>
     <div class="tcards">
-      <div class="tcard sel" id="card-det" onclick="selTipo('det')"><div class="ic">📋</div><div class="tt">Detalhado</div><div class="td2">Todos os itens com valores</div></div>
-      <div class="tcard" id="card-res" onclick="selTipo('res')"><div class="ic">📄</div><div class="tt">Resumido</div><div class="td2">Itens sem valores + total</div></div>
+      <div class="tcard" id="card-det" onclick="selTipo('det')"><div class="ic">📋</div><div class="tt">Detalhado</div><div class="td2">Todos os itens com valores</div></div>
+      <div class="tcard sel" id="card-res" onclick="selTipo('res')"><div class="ic">📄</div><div class="tt">Resumido</div><div class="td2">Itens sem valores + total</div></div>
     </div>
     <div class="imp-row">
       <button class="ibtn sel" id="ibtn-cimp" onclick="selImp('cimp')">Com Imposto<br><span style="font-weight:400;font-size:10px;opacity:.8">Inclui 13,5%</span></button>
@@ -2942,7 +2942,7 @@ var _aprovadosCache=[];
 var _aprovadosOffset=0;
 var APROVADOS_POR_PAG=10;
 var _listaAprov=[];
-var tipoAtual='det';
+var tipoAtual='res';
 var impAtual='cimp';
 var _carregandoOrc=false;
 
