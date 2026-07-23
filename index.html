@@ -1279,6 +1279,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div class="rel-tab" onclick="admAba('tipostarefa')">📋 Tipos de Tarefa</div>
       <div class="rel-tab" onclick="admAba('categoriasproduto')">📂 Categorias de Produto</div>
       <div class="rel-tab" onclick="admAba('enderecosproduto')">📍 Endereçamento</div>
+      <div class="rel-tab" onclick="admAba('googleagenda')">🗓️ Google Agenda</div>
     </div>
     <!-- ABA Usuários -->
     <div class="rel-pane active" id="admpane-usuarios">
@@ -1348,6 +1349,26 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <button class="btn btn-g btn-sm" onclick="enderecosProdutoAdicionar()">+ Adicionar</button>
       </div>
       <div id="enderecosproduto-lista" style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
+    </div>
+    <!-- ABA Google Agenda -->
+    <div class="rel-pane" id="admpane-googleagenda">
+      <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Configura o envio automático dos eventos de Montagem, Evento e Desmontagem da OS para o Google Agenda da empresa, ao clicar em "📅 Agenda" na tela do orçamento. Requer um Client ID OAuth criado no Google Cloud Console (peça ao suporte técnico o passo a passo de configuração) e o ID do calendário compartilhado que vai receber os eventos.</p>
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:520px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--text);display:block;margin-bottom:4px">Client ID OAuth (Google Cloud Console)</label>
+          <input id="ga-client-id" type="text" placeholder="Ex: 123456789-abc123.apps.googleusercontent.com" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--text);display:block;margin-bottom:4px">ID do Calendário</label>
+          <input id="ga-calendar-id" type="text" placeholder="Ex: c_abc123@group.calendar.google.com ou o email do calendário" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);color:var(--text);font-size:12px">
+          <p style="font-size:10px;color:var(--text-dim);margin-top:4px">No Google Agenda: Configurações → escolha o calendário → "Integrar agenda" → copie o "ID do calendário".</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-g btn-sm" onclick="googleAgendaSalvarConfig()">💾 Salvar Configuração</button>
+          <button class="btn btn-o btn-sm" onclick="googleAgendaTestarConexao()">🔌 Testar Conexão</button>
+        </div>
+        <div id="ga-status" style="font-size:11px;color:var(--text-muted)"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -2474,6 +2495,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     <button class="btn btn-o" onclick="downloadPDF()" title="Baixar o PDF gerado">⬇️ Download</button>
     <button class="btn btn-o" onclick="abrirPreviewContrato()" title="Pré-visualizar e editar dados antes de gerar o contrato em PDF">📝 Contrato</button>
     <button class="btn btn-o" onclick="gerarOS()" title="Gerar Ordem de Serviço">📋 OS</button>
+    <button class="btn btn-b" onclick="googleAgendaEnviarOS()" title="Enviar Montagem/Evento/Desmontagem para o Google Agenda da empresa">📅 Agenda</button>
     <button class="btn btn-g" onclick="salvar()" title="Salvar uma cópia local (.json) no seu computador">💾 Salvar Local</button>
     <label class="btn btn-o" style="cursor:pointer" title="Carregar um orçamento salvo localmente (.json)">📂 Carregar Local<input type="file" accept=".json" style="display:none" onchange="carregar(this)"></label>
     <button class="btn btn-g" onclick="driveSalvar()" title="Salvar no servidor">💾 Salvar</button>
@@ -2535,6 +2557,10 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<!-- Google Identity Services — usado apenas para autorizar o envio de eventos
+     da OS (Montagem/Evento/Desmontagem) para o Google Agenda da empresa.
+     Não interfere no login do sistema (que continua via Firebase Auth). -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 var _firebaseOk=false;
 var fbAuth=null, fbDb=null;
@@ -2853,6 +2879,11 @@ var equipReservadoManual=false;
 // apaga essas informações (bug corrigido: "histórico não fica salvo").
 var atividades=[];
 var followupData='';
+// IDs dos eventos já criados no Google Agenda para este orçamento (chaves:
+// montagemEventId/eventoEventId/desmontagemEventId) — segue o mesmo cuidado
+// acima: precisa trafegar em getDadosCompletos()/_driveCarregarDados() para
+// não ser apagado por um save normal feito depois do envio pra agenda.
+var orcAtualGoogleAgenda={};
 // Data de criação do orçamento (imutável) — só existe de forma confiável
 // depois desta correção; orçamentos antigos, nunca resalvos, mostram "—".
 var orcCriadoEmISO='';
@@ -3220,7 +3251,7 @@ async function logout(forcado){
     }catch(e4){}
   }
   try{await fbAuth.signOut();}catch(e7){}
-  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';driveIdAtual=null;driveNumAtual=null;
+  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';driveIdAtual=null;driveNumAtual=null;
   _atualizarBtnClonar();
   fecharHome();
   // Resetar funil
@@ -4341,6 +4372,7 @@ function getDadosCompletos(){
     equipReservadoManual:equipReservadoManual,
     atividades:atividades,
     followupData:followupData,
+    googleAgenda:orcAtualGoogleAgenda,
     criadoEmISO:orcCriadoEmISO,
     snapshotAnterior:snapshotAnterior,
     snapshotAprovado:snapshotAprovado,
@@ -4414,7 +4446,7 @@ async function _salvarNoDriveInterno(opts){
         return null;
       }
       aprovStatus='rascunho';aprovHist=[];
-      comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcCriadoEmISO='';
+      comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';
       snapshotAnterior=null;snapshotAprovado=null;
       if(typeof _limparCamposComercialDOM==='function') _limparCamposComercialDOM();
       if(typeof renderStatusOrc==='function') renderStatusOrc();
@@ -4995,7 +5027,7 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     _versaoAtual=dados._versao||null;
     if(dados.state){SECS.forEach(function(s){if(dados.state[s]){state[s].ambientes=dados.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=dados.state[s].ambAtiva||'default';state[s].rows=dados.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
     if(dados.form)setForm(dados.form);
-    aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
+    aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcAtualGoogleAgenda=Object.assign({},dados.googleAgenda||{});orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
     _limparCamposComercialDOM(); // limpar campos DOM ao carregar novo orçamento
     driveIdAtual=id;driveNumAtual=dados.form&&dados.form['f-num']?dados.form['f-num']:null;
     _naoSalvo=false;
@@ -5146,7 +5178,7 @@ async function limpar(){
   driveIdAtual=null;driveNumAtual=null;
   _naoSalvo=false;
   aprovStatus='rascunho';aprovHist=[];
-  comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcCriadoEmISO='';
+  comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';
   _limparCamposComercialDOM();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
@@ -5230,7 +5262,7 @@ async function clonarOrcamento(){
 
   // ── Zerar aprovações, funil e financeiro
   aprovStatus='rascunho';aprovHist=[];
-  comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcCriadoEmISO='';
+  comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';
   _limparCamposComercialDOM();
   snapshotAnterior=null;
   snapshotAprovado=null;
@@ -5580,7 +5612,7 @@ async function _resetarEstadoOrcamento(){
   sv('orc-disp','—');
   driveIdAtual=null;driveNumAtual=null;_naoSalvo=false;_versaoAtual=null;
   aprovStatus='rascunho';aprovHist=[];
-  comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcCriadoEmISO='';
+  comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';
   _limparCamposComercialDOM();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
@@ -5594,8 +5626,12 @@ async function _resetarEstadoOrcamento(){
 async function homeSairSemSalvar(){
   var num=gv('f-num')||'sem número';
   var cli=gv('f-cliente')||'este orçamento';
-  // Só pede confirmação se há alterações não salvas
-  if(_naoSalvo){
+  // Pede confirmação se há alterações não salvas OU se o orçamento ainda nem
+  // foi salvo no servidor e já tem algum dado preenchido (número/cliente) —
+  // dupla checagem para nunca deixar passar uma perda de dados silenciosa,
+  // mesmo que algum campo específico não tenha disparado marcarAlterado().
+  var temDadoPreenchido = !!(gv('f-num')||gv('f-cliente'));
+  if(_naoSalvo || (!driveIdAtual && temDadoPreenchido)){
     var label=num+(cli&&cli!=='este orçamento'?' - '+cli:'');
     if(!confirm('⚠️ Sair sem salvar "'+label+'"?\n\nTodas as alterações não salvas serão perdidas.'))return;
   }
@@ -6116,6 +6152,264 @@ function gerarOS(){
     +'</div></body></html>';
   var w=window.open('','_blank');if(!w){alert('⚠️ Pop-up bloqueado!');return;}
   w.document.open();w.document.write(osHTML);w.document.close();
+}
+
+// ════════════════════════════════════════════════════════
+//  INTEGRAÇÃO GOOGLE AGENDA — envia Montagem/Evento/Desmontagem da OS para
+//  o calendário compartilhado da empresa (Google Identity Services + Calendar
+//  API). Configuração (Client ID OAuth + ID do calendário) em Admin >
+//  Google Agenda, salva em config/googleAgenda no Firestore. Os IDs dos
+//  eventos já criados ficam em orcAtualGoogleAgenda, que trafega junto com o
+//  resto do orçamento (getDadosCompletos()/_driveCarregarDados()) para que
+//  reenviar após editar o orçamento ATUALIZE os eventos ao invés de duplicar.
+// ════════════════════════════════════════════════════════
+var GOOGLE_AGENDA_CONFIG={clientId:'',calendarId:''};
+var _gaConfigCarregada=false;
+var _gaTokenClient=null;
+var _gaAccessToken=null;
+var _gaTokenExpiraEm=0;
+
+async function googleAgendaCarregarConfig(){
+  try{
+    var snap=await fbDb.collection('config').doc('googleAgenda').get();
+    if(snap.exists){
+      var d=snap.data();
+      GOOGLE_AGENDA_CONFIG.clientId=d.clientId||'';
+      GOOGLE_AGENDA_CONFIG.calendarId=d.calendarId||'';
+    }
+  }catch(e){ console.warn('googleAgendaCarregarConfig:',e); }
+  _gaConfigCarregada=true;
+}
+
+async function googleAgendaRenderAdmin(){
+  if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
+  var elC=document.getElementById('ga-client-id'); if(elC) elC.value=GOOGLE_AGENDA_CONFIG.clientId;
+  var elCal=document.getElementById('ga-calendar-id'); if(elCal) elCal.value=GOOGLE_AGENDA_CONFIG.calendarId;
+  var st=document.getElementById('ga-status'); if(st) st.textContent='';
+}
+
+async function googleAgendaSalvarConfig(){
+  var clientId=((document.getElementById('ga-client-id')||{}).value||'').trim();
+  var calendarId=((document.getElementById('ga-calendar-id')||{}).value||'').trim();
+  var st=document.getElementById('ga-status');
+  try{
+    await fbDb.collection('config').doc('googleAgenda').set({clientId:clientId,calendarId:calendarId});
+    GOOGLE_AGENDA_CONFIG.clientId=clientId;
+    GOOGLE_AGENDA_CONFIG.calendarId=calendarId;
+    _gaTokenClient=null;_gaAccessToken=null; // força recriar o token client com o Client ID novo
+    if(st){ st.style.color='#4caf50'; st.textContent='✅ Configuração salva.'; }
+  }catch(e){
+    if(st){ st.style.color='#ff5555'; st.textContent='⚠️ Erro ao salvar: '+e.message; }
+  }
+}
+
+// Garante o token client do Google Identity Services inicializado com o
+// Client ID atual. Retorna null se a lib do Google ainda não carregou ou
+// se não há Client ID configurado — quem chama decide como avisar o usuário.
+function _gaGarantirTokenClient(){
+  if(!GOOGLE_AGENDA_CONFIG.clientId) return null;
+  if(typeof google==='undefined'||!google.accounts||!google.accounts.oauth2) return null;
+  if(!_gaTokenClient){
+    _gaTokenClient=google.accounts.oauth2.initTokenClient({
+      client_id:GOOGLE_AGENDA_CONFIG.clientId,
+      scope:'https://www.googleapis.com/auth/calendar.events',
+      callback:function(){} // sobrescrito a cada chamada em googleAgendaObterToken()
+    });
+  }
+  return _gaTokenClient;
+}
+
+// Promise que resolve com um access token válido, pedindo consentimento ao
+// usuário (popup do Google) só quando necessário (token ainda não obtido ou
+// expirado nesta sessão do navegador).
+function googleAgendaObterToken(){
+  return new Promise(function(resolve,reject){
+    if(_gaAccessToken && Date.now()<_gaTokenExpiraEm){ resolve(_gaAccessToken); return; }
+    var client=_gaGarantirTokenClient();
+    if(!client){
+      reject(new Error('Integração com o Google Agenda não configurada ou biblioteca do Google ainda carregando. Configure em Admin > Google Agenda.'));
+      return;
+    }
+    client.callback=function(resp){
+      if(resp&&resp.access_token){
+        _gaAccessToken=resp.access_token;
+        _gaTokenExpiraEm=Date.now()+((resp.expires_in||3300)*1000)-30000;
+        resolve(_gaAccessToken);
+      } else {
+        reject(new Error((resp&&resp.error)?('Autorização recusada: '+resp.error):'Não foi possível autorizar o acesso ao Google Agenda.'));
+      }
+    };
+    client.requestAccessToken();
+  });
+}
+
+async function googleAgendaTestarConexao(){
+  var st=document.getElementById('ga-status');
+  var clientId=((document.getElementById('ga-client-id')||{}).value||'').trim();
+  var calendarId=((document.getElementById('ga-calendar-id')||{}).value||'').trim();
+  if(!clientId||!calendarId){
+    if(st){ st.style.color='#ff5555'; st.textContent='⚠️ Preencha o Client ID e o ID do calendário antes de testar.'; }
+    return;
+  }
+  GOOGLE_AGENDA_CONFIG.clientId=clientId;GOOGLE_AGENDA_CONFIG.calendarId=calendarId;
+  _gaTokenClient=null;_gaAccessToken=null;
+  if(st){ st.style.color='var(--text-muted)'; st.textContent='⏳ Abrindo janela de autorização do Google...'; }
+  try{
+    var token=await googleAgendaObterToken();
+    var r=await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calendarId)+'?fields=summary',{headers:{'Authorization':'Bearer '+token}});
+    var d=await r.json();
+    if(!r.ok) throw new Error((d.error&&d.error.message)||('HTTP '+r.status));
+    if(st){ st.style.color='#4caf50'; st.textContent='✅ Conectado! Calendário: "'+(d.summary||calendarId)+'".'; }
+  }catch(e){
+    if(st){ st.style.color='#ff5555'; st.textContent='⚠️ Falha na conexão: '+e.message; }
+  }
+}
+
+// Descrição em texto simples do evento — inclui os mesmos dados que hoje são
+// preenchidos manualmente no evento da agenda (cliente, local, endereço,
+// contato, datas, consultor, lista de equipamentos por seção).
+function _gaMontarDescricao(){
+  var linhas=[];
+  linhas.push('Cliente: '+(gv('f-cliente')||'—'));
+  var localEv=[gv('f-nome-evento'),gv('f-local')].filter(Boolean).join(' — ');
+  linhas.push('Local e nome do evento: '+(localEv||'—'));
+  var endEv=[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
+  if(endEv) linhas.push('Endereço: '+endEv);
+  if(gv('f-tel')) linhas.push('Contato: '+gv('f-tel'));
+  if(gv('f-resp')) linhas.push('Resp. no local: '+gv('f-resp'));
+  var horEv=fD(gv('f-dia'));
+  if(gv('f-sem')) horEv+=' ('+gv('f-sem')+')';
+  var dFim=gv('f-dia-fim');
+  if(dFim&&dFim!==gv('f-dia')){ horEv+=' a '+fD(dFim); if(gv('f-sem-fim')) horEv+=' ('+gv('f-sem-fim')+')'; }
+  if(gv('f-hi')) horEv+=' – '+gv('f-hi');
+  if(gv('f-hf')) horEv+=' às '+gv('f-hf');
+  linhas.push('Dia do evento: '+horEv);
+  if(gv('f-dm')){ var mStr=fD(gv('f-dm')); if(gv('f-hm')) mStr+=' às '+gv('f-hm'); linhas.push('Montagem data e hora: '+mStr); }
+  if(gv('f-dd')){ var dStr=fD(gv('f-dd')); if(gv('f-hd')) dStr+=' às '+gv('f-hd'); linhas.push('Desmontagem data e hora: '+dStr); }
+  if(gv('f-cons')) linhas.push('Consultor: '+gv('f-cons'));
+  linhas.push('');
+  linhas.push('OS Nº: '+(gv('f-num')||'—'));
+  var SECS_GA=['som','video','luz','estrutura','servico'];
+  SECS_GA.forEach(function(s){
+    var todasRows=[];
+    state[s].ambientes.forEach(function(a){ (state[s].rows[a.id]||[]).forEach(function(r){ if(!isOcult(r.name)) todasRows.push(r); }); });
+    if(!todasRows.length) return;
+    linhas.push('');
+    linhas.push((SEC_LBL[s]||s).toUpperCase());
+    todasRows.forEach(function(r){ linhas.push(r.qty+'x '+r.name); });
+  });
+  return linhas.join('\n');
+}
+
+// Monta a lista de eventos a enviar com base nas datas preenchidas no
+// orçamento. Cada item tem um "tipo" fixo (montagem/evento/desmontagem) usado
+// como chave em orcAtualGoogleAgenda pra lembrar o ID do evento já criado.
+function _gaEventosDisponiveis(){
+  var eventos=[];
+  var cliente=gv('f-cliente')||'Sem cliente';
+  if(gv('f-dm')){
+    eventos.push({tipo:'montagem',summary:'MONTAGEM: '+cliente,colorId:'5',inicio:gv('f-dm')+'T'+(gv('f-hm')||'08:00')+':00',duracaoHoras:2});
+  }
+  if(gv('f-dia')){
+    var fimE=gv('f-dia-fim')||gv('f-dia');
+    eventos.push({tipo:'evento',summary:'EVENTO: '+cliente,colorId:'6',inicio:gv('f-dia')+'T'+(gv('f-hi')||'08:00')+':00',fim:fimE+'T'+(gv('f-hf')||'23:59')+':00'});
+  }
+  if(gv('f-dd')){
+    eventos.push({tipo:'desmontagem',summary:'DESMONTAGEM: '+cliente,colorId:'10',inicio:gv('f-dd')+'T'+(gv('f-hd')||'08:00')+':00',duracaoHoras:2});
+  }
+  return eventos;
+}
+
+async function googleAgendaEnviarOS(){
+  var faltando=[];
+  if(!gv('f-cliente')) faltando.push('Nome do cliente');
+  if(!gv('f-dm')&&!gv('f-dia')&&!gv('f-dd')) faltando.push('Ao menos uma data (Montagem, Evento ou Desmontagem)');
+  if(faltando.length){
+    alert('⚠️ DADOS INCOMPLETOS PARA ENVIAR À AGENDA\n\nOs seguintes campos precisam ser preenchidos:\n\n• '+faltando.join('\n• '));
+    return;
+  }
+  if(!driveIdAtual){
+    alert('⚠️ Salve o orçamento antes de enviar para a Agenda.\n\nAssim o sistema consegue lembrar quais eventos já foram criados e evitar duplicar da próxima vez que você reenviar.');
+    return;
+  }
+  if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
+  if(!GOOGLE_AGENDA_CONFIG.clientId||!GOOGLE_AGENDA_CONFIG.calendarId){
+    alert('⚠️ A integração com o Google Agenda ainda não foi configurada.\n\nPeça a um administrador para configurar em Admin > Google Agenda.');
+    return;
+  }
+
+  driveStatus('📅 Autorizando acesso ao Google Agenda...','');
+  var token;
+  try{ token=await googleAgendaObterToken(); }
+  catch(e){ driveStatus('⚠️ '+e.message,'err'); return; }
+
+  var descricao=_gaMontarDescricao();
+  var eventosDisp=_gaEventosDisponiveis();
+  var idsExistentes=Object.assign({},orcAtualGoogleAgenda||{});
+  var novosIds={};
+  var erros=[];
+  driveStatus('📅 Enviando '+eventosDisp.length+' evento(s) para o Google Agenda...','');
+
+  for(var i=0;i<eventosDisp.length;i++){
+    var ev=eventosDisp[i];
+    var body={
+      summary:ev.summary,
+      description:descricao,
+      location:[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', '),
+      colorId:ev.colorId
+    };
+    if(ev.fim){
+      body.start={dateTime:ev.inicio,timeZone:'America/Sao_Paulo'};
+      body.end={dateTime:ev.fim,timeZone:'America/Sao_Paulo'};
+    } else {
+      var inicioDt=new Date(ev.inicio);
+      var fimDt=new Date(inicioDt.getTime()+(ev.duracaoHoras||1)*3600*1000);
+      body.start={dateTime:ev.inicio,timeZone:'America/Sao_Paulo'};
+      body.end={dateTime:fimDt.toISOString().slice(0,19),timeZone:'America/Sao_Paulo'};
+    }
+    var chaveId=ev.tipo+'EventId';
+    var idExistente=idsExistentes[chaveId];
+    try{
+      var baseUrl='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(GOOGLE_AGENDA_CONFIG.calendarId)+'/events';
+      var url=idExistente?(baseUrl+'/'+idExistente):baseUrl;
+      var metodo=idExistente?'PUT':'POST';
+      var r=await fetch(url,{method:metodo,headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body)});
+      var d=await r.json();
+      if(!r.ok){
+        // Evento apagado manualmente na agenda depois de criado: cria de novo
+        if(idExistente&&r.status===404){
+          var r2=await fetch(baseUrl,{method:'POST',headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body)});
+          var d2=await r2.json();
+          if(!r2.ok) throw new Error((d2.error&&d2.error.message)||('HTTP '+r2.status));
+          novosIds[chaveId]=d2.id;
+          continue;
+        }
+        throw new Error((d.error&&d.error.message)||('HTTP '+r.status));
+      }
+      novosIds[chaveId]=d.id;
+    }catch(e){
+      erros.push(ev.summary+': '+e.message);
+    }
+  }
+
+  orcAtualGoogleAgenda=Object.assign({},idsExistentes,novosIds);
+  try{
+    // Merge imediato no Firestore — além de manter orcAtualGoogleAgenda em
+    // memória (que já garante persistência no próximo save normal via
+    // getDadosCompletos()), grava direto para o caso do usuário sair sem
+    // salvar de novo depois de enviar pra agenda.
+    await fbDb.collection('orcamentos').doc(driveIdAtual).set({googleAgenda:orcAtualGoogleAgenda},{merge:true});
+  }catch(e){
+    erros.push('Não foi possível salvar os IDs dos eventos no orçamento: '+e.message);
+  }
+
+  if(erros.length){
+    driveStatus('⚠️ Enviado com '+erros.length+' erro(s).','err');
+    console.warn('googleAgendaEnviarOS erros:',erros);
+    alert('⚠️ Alguns eventos não puderam ser enviados:\n\n• '+erros.join('\n• '));
+  } else {
+    driveStatus('✅ '+eventosDisp.length+' evento(s) enviado(s) para o Google Agenda!','ok');
+  }
 }
 
 function tirarSnapshot(){
@@ -11202,7 +11496,7 @@ function dashTemAcesso(dashId){
 
 function admAba(aba){
   document.querySelectorAll('#adm-ov .rel-tab').forEach(function(t,i){
-    var abas=['usuarios','cargos','permissoes','dashboards','tiposevento','tipostarefa','categoriasproduto','enderecosproduto'];
+    var abas=['usuarios','cargos','permissoes','dashboards','tiposevento','tipostarefa','categoriasproduto','enderecosproduto','googleagenda'];
     t.classList.toggle('active',abas[i]===aba);
   });
   document.querySelectorAll('#adm-ov .rel-pane').forEach(function(p){p.classList.remove('active');});
@@ -11215,6 +11509,7 @@ function admAba(aba){
   if(aba==='tipostarefa') tiposTarefaRenderAdmin();
   if(aba==='categoriasproduto') categoriasProdutoRenderAdmin();
   if(aba==='enderecosproduto') enderecosProdutoRenderAdmin();
+  if(aba==='googleagenda') googleAgendaRenderAdmin();
 }
 
 function permRenderizar(){
