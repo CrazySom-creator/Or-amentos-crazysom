@@ -6173,18 +6173,23 @@ function gerarOS(){
 //  resto do orçamento (getDadosCompletos()/_driveCarregarDados()) para que
 //  reenviar após editar o orçamento ATUALIZE os eventos ao invés de duplicar.
 // ════════════════════════════════════════════════════════
-var GOOGLE_AGENDA_CONFIG={clientId:'',calendarId:'',corMontagem:'',corEvento:'',corDesmontagem:''};
+var GOOGLE_AGENDA_CONFIG={clientId:'',calendarId:'',corMontagem:'',corEvento:'',corDesmontagem:'',labelMontagem:'',labelEvento:'',labelDesmontagem:''};
 var _gaConfigCarregada=false;
 var _gaTokenClient=null;
 var _gaAccessToken=null;
 var _gaTokenExpiraEm=0;
-// Cache da paleta de cores de evento (colors.get da API), carregada sob
-// demanda em Admin > Google Agenda ao clicar em "Carregar cores disponíveis".
-// Formato: {"1":{background:"#...",foreground:"#..."}, "2":{...}, ...}. Desde
-// jun/2026 o Google passou a oferecer até 24 cores padrão por evento
-// (incluindo tons como "Chocolate" que não existiam na paleta clássica de 11
-// cores) — como a API não expõe o NOME de cada cor, só o hex, o admin escolhe
-// visualmente comparando com o seletor de cor do próprio Google Agenda.
+// Cache da paleta de cores de evento carregada sob demanda em Admin > Google
+// Agenda ao clicar em "Carregar cores disponíveis". Dois formatos possíveis:
+//
+// 1) _gaLabelsDisponiveis: labels do calendário (recurso NOVO, GA em
+//    jul/2026 — calendars.labelProperties.eventLabels), cada um com id (UUID),
+//    backgroundColor (hex) e name (ex.: "Chocolate"). É o que dá nome real pra
+//    cada cor, inclusive as novas que não existiam na paleta clássica de 11.
+//    Preferido sempre que o calendário já tiver labels definidos.
+// 2) _gaPaletaEventos: fallback pra paleta clássica (colors.get, 11 cores
+//    fixas), usado só se o calendário ainda não tiver nenhum label definido.
+//    A API não expõe nome nessa paleta antiga, só hex.
+var _gaLabelsDisponiveis=null;
 var _gaPaletaEventos=null;
 
 async function googleAgendaCarregarConfig(){
@@ -6197,6 +6202,9 @@ async function googleAgendaCarregarConfig(){
       GOOGLE_AGENDA_CONFIG.corMontagem=d.corMontagem||'';
       GOOGLE_AGENDA_CONFIG.corEvento=d.corEvento||'';
       GOOGLE_AGENDA_CONFIG.corDesmontagem=d.corDesmontagem||'';
+      GOOGLE_AGENDA_CONFIG.labelMontagem=d.labelMontagem||'';
+      GOOGLE_AGENDA_CONFIG.labelEvento=d.labelEvento||'';
+      GOOGLE_AGENDA_CONFIG.labelDesmontagem=d.labelDesmontagem||'';
     }
   }catch(e){ console.warn('googleAgendaCarregarConfig:',e); }
   _gaConfigCarregada=true;
@@ -6209,7 +6217,11 @@ async function googleAgendaRenderAdmin(){
   var st=document.getElementById('ga-status'); if(st) st.textContent='';
   // Se a paleta já foi carregada nesta sessão (usuário voltou pra aba), redesenha
   // os seletores de cor sem precisar pedir autorização de novo.
-  if(_gaPaletaEventos){
+  if(_gaLabelsDisponiveis){
+    _gaRenderLabels('ga-cor-montagem',GOOGLE_AGENDA_CONFIG.labelMontagem);
+    _gaRenderLabels('ga-cor-evento',GOOGLE_AGENDA_CONFIG.labelEvento);
+    _gaRenderLabels('ga-cor-desmontagem',GOOGLE_AGENDA_CONFIG.labelDesmontagem);
+  } else if(_gaPaletaEventos){
     _gaRenderSwatches('ga-cor-montagem',GOOGLE_AGENDA_CONFIG.corMontagem);
     _gaRenderSwatches('ga-cor-evento',GOOGLE_AGENDA_CONFIG.corEvento);
     _gaRenderSwatches('ga-cor-desmontagem',GOOGLE_AGENDA_CONFIG.corDesmontagem);
@@ -6219,17 +6231,34 @@ async function googleAgendaRenderAdmin(){
 async function googleAgendaSalvarConfig(){
   var clientId=((document.getElementById('ga-client-id')||{}).value||'').trim();
   var calendarId=((document.getElementById('ga-calendar-id')||{}).value||'').trim();
-  var corMontagem=_gaCorSelecionada('ga-cor-montagem',GOOGLE_AGENDA_CONFIG.corMontagem);
-  var corEvento=_gaCorSelecionada('ga-cor-evento',GOOGLE_AGENDA_CONFIG.corEvento);
-  var corDesmontagem=_gaCorSelecionada('ga-cor-desmontagem',GOOGLE_AGENDA_CONFIG.corDesmontagem);
+  var selMontagem=_gaSelecaoContainer('ga-cor-montagem');
+  var selEvento=_gaSelecaoContainer('ga-cor-evento');
+  var selDesmontagem=_gaSelecaoContainer('ga-cor-desmontagem');
+  // Guarda tanto o label (recurso novo, com nome) quanto o colorId clássico —
+  // _gaEventosDisponiveis() prefere o label quando os dois existirem. Se o
+  // seletor não foi mexido nesta sessão (modo vazio), mantém o que já estava
+  // salvo antes, pra não apagar uma escolha anterior.
+  var corMontagem=selMontagem.modo==='colorId'?selMontagem.valor:(GOOGLE_AGENDA_CONFIG.corMontagem||'');
+  var corEvento=selEvento.modo==='colorId'?selEvento.valor:(GOOGLE_AGENDA_CONFIG.corEvento||'');
+  var corDesmontagem=selDesmontagem.modo==='colorId'?selDesmontagem.valor:(GOOGLE_AGENDA_CONFIG.corDesmontagem||'');
+  var labelMontagem=selMontagem.modo==='label'?selMontagem.valor:(GOOGLE_AGENDA_CONFIG.labelMontagem||'');
+  var labelEvento=selEvento.modo==='label'?selEvento.valor:(GOOGLE_AGENDA_CONFIG.labelEvento||'');
+  var labelDesmontagem=selDesmontagem.modo==='label'?selDesmontagem.valor:(GOOGLE_AGENDA_CONFIG.labelDesmontagem||'');
   var st=document.getElementById('ga-status');
   try{
-    await fbDb.collection('config').doc('googleAgenda').set({clientId:clientId,calendarId:calendarId,corMontagem:corMontagem,corEvento:corEvento,corDesmontagem:corDesmontagem});
+    await fbDb.collection('config').doc('googleAgenda').set({
+      clientId:clientId,calendarId:calendarId,
+      corMontagem:corMontagem,corEvento:corEvento,corDesmontagem:corDesmontagem,
+      labelMontagem:labelMontagem,labelEvento:labelEvento,labelDesmontagem:labelDesmontagem
+    });
     GOOGLE_AGENDA_CONFIG.clientId=clientId;
     GOOGLE_AGENDA_CONFIG.calendarId=calendarId;
     GOOGLE_AGENDA_CONFIG.corMontagem=corMontagem;
     GOOGLE_AGENDA_CONFIG.corEvento=corEvento;
     GOOGLE_AGENDA_CONFIG.corDesmontagem=corDesmontagem;
+    GOOGLE_AGENDA_CONFIG.labelMontagem=labelMontagem;
+    GOOGLE_AGENDA_CONFIG.labelEvento=labelEvento;
+    GOOGLE_AGENDA_CONFIG.labelDesmontagem=labelDesmontagem;
     _gaTokenClient=null;_gaAccessToken=null; // força recriar o token client com o Client ID novo
     if(st){ st.style.color='#4caf50'; st.textContent='✅ Configuração salva.'; }
   }catch(e){
@@ -6237,13 +6266,14 @@ async function googleAgendaSalvarConfig(){
   }
 }
 
-// Lê a cor marcada como selecionada no seletor visual (data-selected, setado
-// por _gaRenderSwatches ao clicar numa cor); se nada foi clicado ainda, mantém
-// o valor já configurado anteriormente (fallback).
-function _gaCorSelecionada(containerId,valorAtual){
+// Lê a seleção marcada no seletor visual: modo ('label' ou 'colorId', setado
+// por _gaRenderLabels()/_gaRenderSwatches() conforme qual paleta foi usada) e
+// o valor escolhido (data-selected). Se nada foi clicado nesta sessão, modo
+// fica vazio e quem chama decide manter o valor já configurado antes.
+function _gaSelecaoContainer(containerId){
   var el=document.getElementById(containerId);
-  var v=el&&el.getAttribute?el.getAttribute('data-selected'):'';
-  return v||valorAtual||'';
+  if(!el||!el.getAttribute) return {modo:'',valor:''};
+  return {modo:el.getAttribute('data-modo')||'',valor:el.getAttribute('data-selected')||''};
 }
 
 // Garante o token client do Google Identity Services inicializado com o
@@ -6314,44 +6344,92 @@ async function googleAgendaTestarConexao(){
   }
 }
 
-// Busca a paleta REAL de cores de evento na API do Google (colors.get) e
-// desenha os seletores visuais no Admin > Google Agenda. Não existe endpoint
-// que devolva o NOME de cada cor (ex.: "Chocolate") — só o hex — por isso o
-// admin escolhe comparando visualmente com o seletor de cor do próprio
-// Google Agenda, em vez do sistema tentar adivinhar um colorId fixo.
+// Busca a paleta REAL de cores de evento na conta do Google e desenha os
+// seletores visuais no Admin > Google Agenda. Tenta primeiro o recurso NOVO
+// de labels (calendars.labelProperties.eventLabels — GA em jul/2026), que tem
+// NOME de cada cor (ex.: "Chocolate") além do hex; se o calendário ainda não
+// tiver nenhum label definido, cai pro fallback da paleta clássica de 11
+// cores (colors.get, sem nome, só hex) — a mesma família de bug que já
+// resolvemos uma vez (laranja em vez de marrom) motivou não tentar mais
+// "adivinhar" um colorId fixo no código.
 async function googleAgendaCarregarPaleta(){
   var clientId=((document.getElementById('ga-client-id')||{}).value||'').trim();
+  var calendarId=((document.getElementById('ga-calendar-id')||{}).value||'').trim();
   var st=document.getElementById('ga-status');
-  if(!clientId){
-    if(st){ st.style.color='#ff5555'; st.textContent='⚠️ Preencha e salve o Client ID antes de carregar as cores.'; }
+  if(!clientId||!calendarId){
+    if(st){ st.style.color='#ff5555'; st.textContent='⚠️ Preencha o Client ID e o ID do calendário antes de carregar as cores.'; }
     return;
   }
   GOOGLE_AGENDA_CONFIG.clientId=clientId;
   if(st){ st.style.color='var(--text-muted)'; st.textContent='⏳ Abrindo autorização do Google para carregar as cores...'; }
   try{
     var token=await googleAgendaObterToken();
+    var rCal=await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calendarId)+'?fields=labelProperties',{headers:{'Authorization':'Bearer '+token}});
+    var dCal=await rCal.json();
+    var labels=(rCal.ok&&dCal.labelProperties&&dCal.labelProperties.eventLabels)||[];
+    if(labels.length){
+      _gaLabelsDisponiveis=labels;
+      _gaPaletaEventos=null;
+      _gaRenderLabels('ga-cor-montagem',GOOGLE_AGENDA_CONFIG.labelMontagem);
+      _gaRenderLabels('ga-cor-evento',GOOGLE_AGENDA_CONFIG.labelEvento);
+      _gaRenderLabels('ga-cor-desmontagem',GOOGLE_AGENDA_CONFIG.labelDesmontagem);
+      if(st){ st.style.color='#4caf50'; st.textContent='✅ Cores carregadas (com nome, ex. "Chocolate")! Clique em uma cor em cada linha e depois em "Salvar Configuração".'; }
+      return;
+    }
+    // Calendário ainda sem labels definidos: usa a paleta clássica de 11 cores.
     var r=await fetch('https://www.googleapis.com/calendar/v3/colors',{headers:{'Authorization':'Bearer '+token}});
     var d=await r.json();
     if(!r.ok) throw new Error((d.error&&d.error.message)||('HTTP '+r.status));
     _gaPaletaEventos=d.event||{};
+    _gaLabelsDisponiveis=null;
     _gaRenderSwatches('ga-cor-montagem',GOOGLE_AGENDA_CONFIG.corMontagem);
     _gaRenderSwatches('ga-cor-evento',GOOGLE_AGENDA_CONFIG.corEvento);
     _gaRenderSwatches('ga-cor-desmontagem',GOOGLE_AGENDA_CONFIG.corDesmontagem);
-    if(st){ st.style.color='#4caf50'; st.textContent='✅ Cores carregadas! Clique em uma cor em cada linha (compare com o seletor de cor do Google Agenda) e depois em "Salvar Configuração".'; }
+    if(st){ st.style.color='#4caf50'; st.textContent='✅ Cores carregadas! Este calendário ainda não tem cores nomeadas (ex. "Chocolate") — mostrando a paleta clássica de 11 cores. Clique em uma cor em cada linha e depois em "Salvar Configuração".'; }
   }catch(e){
     if(st){ st.style.color='#ff5555'; st.textContent='⚠️ Não foi possível carregar as cores: '+e.message; }
   }
 }
 
-// Desenha os quadradinhos de cor clicáveis dentro do container indicado,
-// usando a paleta cacheada em _gaPaletaEventos. Marca como selecionado o
-// colorId passado em colorIdAtual (se houver) e guarda a escolha do usuário
-// no atributo data-selected do próprio container, lido depois por
-// _gaCorSelecionada() ao salvar a configuração.
+// Desenha "chips" com nome + cor real, a partir dos labels do calendário
+// (_gaLabelsDisponiveis). Marca como selecionado o eventLabelId passado em
+// labelIdAtual e grava a escolha em data-selected/data-modo='label' no
+// próprio container, lidos depois por _gaSelecaoContainer() ao salvar.
+function _gaRenderLabels(containerId,labelIdAtual){
+  var el=document.getElementById(containerId);
+  if(!el||!_gaLabelsDisponiveis) return;
+  el.innerHTML='';
+  el.setAttribute('data-modo','label');
+  el.setAttribute('data-selected',labelIdAtual||'');
+  _gaLabelsDisponiveis.forEach(function(lb){
+    var chip=document.createElement('span');
+    var nome=lb.name||('Cor '+String(lb.id).slice(0,6));
+    chip.title=nome;
+    chip.setAttribute('data-colorid',lb.id);
+    var selecionado=String(lb.id)===String(labelIdAtual);
+    chip.style.cssText='display:inline-flex;align-items:center;gap:5px;padding:3px 9px 3px 4px;border-radius:14px;margin:2px;cursor:pointer;font-size:10px;color:var(--text);background:var(--surface-2);border:2px solid '+(selecionado?'#4caf50':'transparent');
+    var bolinha=document.createElement('span');
+    bolinha.style.cssText='display:inline-block;width:16px;height:16px;border-radius:50%;background:'+(lb.backgroundColor||'#888');
+    chip.appendChild(bolinha);
+    chip.appendChild(document.createTextNode(nome));
+    chip.onclick=function(){
+      var irmaos=el.querySelectorAll?el.querySelectorAll('[data-colorid]'):[];
+      for(var i=0;i<irmaos.length;i++) irmaos[i].style.borderColor='transparent';
+      chip.style.borderColor='#4caf50';
+      el.setAttribute('data-selected',lb.id);
+    };
+    el.appendChild(chip);
+  });
+}
+
+// Fallback: desenha os quadradinhos de cor clicáveis (sem nome) a partir da
+// paleta clássica cacheada em _gaPaletaEventos, usado só quando o calendário
+// ainda não tem nenhum label definido.
 function _gaRenderSwatches(containerId,colorIdAtual){
   var el=document.getElementById(containerId);
   if(!el||!_gaPaletaEventos) return;
   el.innerHTML='';
+  el.setAttribute('data-modo','colorId');
   el.setAttribute('data-selected',colorIdAtual||'');
   Object.keys(_gaPaletaEventos).sort(function(a,b){ return Number(a)-Number(b); }).forEach(function(id){
     var cor=_gaPaletaEventos[id]||{};
@@ -6410,30 +6488,32 @@ function _gaMontarDescricao(){
 // orçamento. Cada item tem um "tipo" fixo (montagem/evento/desmontagem) usado
 // como chave em orcAtualGoogleAgenda pra lembrar o ID do evento já criado.
 function _gaEventosDisponiveis(){
-  // A cor de cada tipo de evento é configurável em Admin > Google Agenda
-  // (GOOGLE_AGENDA_CONFIG.corMontagem/corEvento/corDesmontagem), escolhida
-  // visualmente pelo admin a partir da paleta real da API (ver
-  // googleAgendaCarregarPaleta()/_gaRenderSwatches()). Isso existe porque o
-  // Google lançou em jun/2026 uma paleta de evento expandida (até 24 cores,
-  // incluindo tons como "Chocolate") que substituiu a paleta clássica de 11
-  // cores — e a API não expõe nome pra cor nenhuma, só hex, então não dá pra
-  // "adivinhar" um colorId fixo com confiança. '5'/'11'/'10' abaixo são só o
-  // fallback usado enquanto a cor ainda não foi configurada manualmente.
+  // A cor de cada tipo de evento é configurável em Admin > Google Agenda,
+  // escolhida visualmente pelo admin (ver googleAgendaCarregarPaleta()).
+  // Preferimos eventLabelId (recurso novo, GA em jul/2026 — tem nome real,
+  // ex. "Chocolate", e substitui o colorId clássico) sempre que configurado;
+  // colorId (paleta fixa de 11 cores, '5'/'11'/'10' como fallback) só entra
+  // se o calendário ainda não tiver labels definidos. A API não expõe nome
+  // pra cor nenhuma na paleta antiga, só hex — por isso não fixamos um
+  // colorId "adivinhado" no código.
   var cfg=(typeof GOOGLE_AGENDA_CONFIG!=='undefined'&&GOOGLE_AGENDA_CONFIG)||{};
   var corMontagem=cfg.corMontagem||'5';
   var corEvento=cfg.corEvento||'11';
   var corDesmontagem=cfg.corDesmontagem||'10';
+  var labelMontagem=cfg.labelMontagem||'';
+  var labelEvento=cfg.labelEvento||'';
+  var labelDesmontagem=cfg.labelDesmontagem||'';
   var eventos=[];
   var cliente=gv('f-cliente')||'Sem cliente';
   if(gv('f-dm')){
-    eventos.push({tipo:'montagem',summary:'MONTAGEM: '+cliente,colorId:corMontagem,inicio:gv('f-dm')+'T'+(gv('f-hm')||'08:00')+':00',duracaoHoras:2});
+    eventos.push({tipo:'montagem',summary:'MONTAGEM: '+cliente,colorId:corMontagem,eventLabelId:labelMontagem,inicio:gv('f-dm')+'T'+(gv('f-hm')||'08:00')+':00',duracaoHoras:2});
   }
   if(gv('f-dia')){
     var fimE=gv('f-dia-fim')||gv('f-dia');
-    eventos.push({tipo:'evento',summary:'EVENTO: '+cliente,colorId:corEvento,inicio:gv('f-dia')+'T'+(gv('f-hi')||'08:00')+':00',fim:fimE+'T'+(gv('f-hf')||'23:59')+':00'});
+    eventos.push({tipo:'evento',summary:'EVENTO: '+cliente,colorId:corEvento,eventLabelId:labelEvento,inicio:gv('f-dia')+'T'+(gv('f-hi')||'08:00')+':00',fim:fimE+'T'+(gv('f-hf')||'23:59')+':00'});
   }
   if(gv('f-dd')){
-    eventos.push({tipo:'desmontagem',summary:'DESMONTAGEM: '+cliente,colorId:corDesmontagem,inicio:gv('f-dd')+'T'+(gv('f-hd')||'08:00')+':00',duracaoHoras:2});
+    eventos.push({tipo:'desmontagem',summary:'DESMONTAGEM: '+cliente,colorId:corDesmontagem,eventLabelId:labelDesmontagem,inicio:gv('f-dd')+'T'+(gv('f-hd')||'08:00')+':00',duracaoHoras:2});
   }
   return eventos;
 }
@@ -6470,12 +6550,18 @@ async function googleAgendaEnviarOS(){
 
   for(var i=0;i<eventosDisp.length;i++){
     var ev=eventosDisp[i];
+    // Preferimos o label (eventLabelId) sempre que o admin configurou um —
+    // é o mecanismo novo (GA jul/2026) que suporta as cores nomeadas
+    // (ex. "Chocolate"). Exige o parâmetro ?eventLabelVersion=1 na URL, e
+    // quando presente o Google ignora o colorId — por isso só mandamos um
+    // dos dois campos no corpo do evento.
+    var usaLabel=!!ev.eventLabelId;
     var body={
       summary:ev.summary,
       description:descricao,
-      location:[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', '),
-      colorId:ev.colorId
+      location:[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ')
     };
+    if(usaLabel){ body.eventLabelId=ev.eventLabelId; } else { body.colorId=ev.colorId; }
     if(ev.fim){
       body.start={dateTime:ev.inicio,timeZone:'America/Sao_Paulo'};
       body.end={dateTime:ev.fim,timeZone:'America/Sao_Paulo'};
@@ -6489,14 +6575,15 @@ async function googleAgendaEnviarOS(){
     var idExistente=idsExistentes[chaveId];
     try{
       var baseUrl='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(GOOGLE_AGENDA_CONFIG.calendarId)+'/events';
-      var url=idExistente?(baseUrl+'/'+idExistente):baseUrl;
+      var sufixo=usaLabel?'?eventLabelVersion=1':'';
+      var url=(idExistente?(baseUrl+'/'+idExistente):baseUrl)+sufixo;
       var metodo=idExistente?'PUT':'POST';
       var r=await fetch(url,{method:metodo,headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body)});
       var d=await r.json();
       if(!r.ok){
         // Evento apagado manualmente na agenda depois de criado: cria de novo
         if(idExistente&&r.status===404){
-          var r2=await fetch(baseUrl,{method:'POST',headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body)});
+          var r2=await fetch(baseUrl+sufixo,{method:'POST',headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body)});
           var d2=await r2.json();
           if(!r2.ok) throw new Error((d2.error&&d2.error.message)||('HTTP '+r2.status));
           novosIds[chaveId]=d2.id;
