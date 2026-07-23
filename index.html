@@ -2335,10 +2335,16 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     <div><label>Diárias Equip. (½)</label><input id="f-diarias-equip" readonly style="background:#e8f4fd;border-color:#90caf9;font-weight:700;color:#1565c0"></div>
   </div>
   <div class="g4" style="margin-bottom:8px">
-    <div><label>Data Montagem</label><input type="date" id="f-dm" oninput="marcarAlterado()"></div>
+    <div><label>Início Montagem</label><input type="date" id="f-dm" oninput="marcarAlterado()"></div>
     <div><label>Hora Montagem</label><input type="time" id="f-hm" oninput="marcarAlterado()"></div>
-    <div><label>Data Desmontagem</label><input type="date" id="f-dd" oninput="marcarAlterado()"></div>
+    <div><label>Fim Montagem</label><input type="date" id="f-dm-fim" oninput="marcarAlterado()"></div>
+    <div></div>
+  </div>
+  <div class="g4" style="margin-bottom:8px">
+    <div><label>Início Desmontagem</label><input type="date" id="f-dd" oninput="marcarAlterado()"></div>
     <div><label>Hora Desmontagem</label><input type="time" id="f-hd" oninput="marcarAlterado()"></div>
+    <div><label>Fim Desmontagem</label><input type="date" id="f-dd-fim" oninput="marcarAlterado()"></div>
+    <div></div>
   </div>
   <div class="g3">
     <div><label>Público Estimado</label><input type="number" id="f-pub" placeholder="500" oninput="marcarAlterado()"></div>
@@ -3049,6 +3055,22 @@ function setDS(){try{var d=new Date(gv('f-dia')+'T12:00:00');document.getElement
 function setDSFim(){try{var d=new Date(gv('f-dia-fim')+'T12:00:00');document.getElementById('f-sem-fim').value=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d.getDay()]||'';}catch(e){}}
 function getDiasEvento(){var ini=gv('f-dia'),fim=gv('f-dia-fim');if(!ini)return 1;var d1=new Date(ini+'T12:00:00'),d2=fim?new Date(fim+'T12:00:00'):d1;return Math.max(1,Math.round((d2-d1)/(1000*60*60*24))+1);}
 function getDiariasEquip(){var d=getDiasEvento();return d===1?1:1+(d-1)*0.5;}
+
+// Formata "Início Montagem"/"Início Desmontagem" + hora, mostrando o intervalo
+// completo ("a Fim...") quando o campo de fim (f-dm-fim/f-dd-fim) está
+// preenchido e é diferente do início — mesmo padrão já usado pra Início/Fim
+// do Evento (f-dia/f-dia-fim). Usado na OS, no PDF, no contrato e no envio
+// pro Google Agenda, sempre lendo do DOM via gv().
+function fmtMontDesm(iniId,horaId,fimId){
+  var ini=gv(iniId);
+  if(!ini) return '';
+  var s=fD(ini);
+  var fim=gv(fimId);
+  if(fim&&fim!==ini) s+=' a '+fD(fim);
+  var h=gv(horaId);
+  if(h) s+=' às '+h;
+  return s;
+}
 // Armazena o último valor de dEquip calculado automaticamente
 // para detectar se o usuário editou manualmente uma diária
 var _ultimoDEquipAuto = null;
@@ -5125,7 +5147,7 @@ async function driveDeletar(id,nome){
   }
 }
 
-var FORM_IDS=['f-num','f-data','f-val','f-cons','f-fonte','f-cliente','f-doc','f-email','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-nome-evento','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dd','f-hd','f-pub','f-obs','f-obs-os','f-pgto','f-svinc','desc-pct','desc-rs','val-liq','val-liq-si','f-bv'];
+var FORM_IDS=['f-num','f-data','f-val','f-cons','f-fonte','f-cliente','f-doc','f-email','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-nome-evento','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dm-fim','f-dd','f-hd','f-dd-fim','f-pub','f-obs','f-obs-os','f-pgto','f-svinc','desc-pct','desc-rs','val-liq','val-liq-si','f-bv'];
 function getForm(){var o={};FORM_IDS.forEach(function(id){var e=document.getElementById(id);if(e)o[id]=e.value;});if((!o['f-bv']||o['f-bv']==='0')&&_bvStorage>0)o['f-bv']=String(_bvStorage);return o;}
 function setForm(f){Object.keys(f).forEach(function(id){var e=document.getElementById(id);if(e)e.value=f[id];});sv('orc-disp',f['f-num']||'—');}
 function salvar(){var blob=new Blob([JSON.stringify({form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,snapshotAprovado:snapshotAprovado,finParcelas:finParcelas,finObs:finObs},null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(gv('f-num')||'orc')+' - '+(gv('f-cliente')||'cliente')+'.json';a.click();URL.revokeObjectURL(a.href);}
@@ -5783,8 +5805,8 @@ function buildPDF(tipo){
   var dFim=gv('f-dia-fim');if(dFim&&dFim!==gv('f-dia')){horEv+=' a '+fD(dFim);if(gv('f-sem-fim'))horEv+=' ('+gv('f-sem-fim')+')';}
   if(gv('f-hi'))horEv+=' – Início: '+gv('f-hi');if(gv('f-hf'))horEv+=' Fim: '+gv('f-hf');
   var diasEvStr=getDiasEvento();if(diasEvStr>1)horEv+=' ('+diasEvStr+' dias)';
-  var mStr=fD(gv('f-dm'));if(gv('f-hm'))mStr+=' às '+gv('f-hm');
-  var dStr=fD(gv('f-dd'));if(gv('f-hd'))dStr+=' às '+gv('f-hd');
+  var mStr=fmtMontDesm('f-dm','f-hm','f-dm-fim');
+  var dStr=fmtMontDesm('f-dd','f-hd','f-dd-fim');
 
   function hdr(full){
     return '<div class="ph"><div class="ph-i" style="display:flex;align-items:center;gap:10px">'
@@ -6097,8 +6119,8 @@ function gerarOS(){
     return;
   }
 
-  var mStr=fD(gv('f-dm'));if(gv('f-hm'))mStr+=' às '+gv('f-hm');
-  var dStr=fD(gv('f-dd'));if(gv('f-hd'))dStr+=' às '+gv('f-hd');
+  var mStr=fmtMontDesm('f-dm','f-hm','f-dm-fim');
+  var dStr=fmtMontDesm('f-dd','f-hd','f-dd-fim');
   var horEv=fD(gv('f-dia'));if(gv('f-sem'))horEv+=' ('+gv('f-sem')+')';
   var dFim=gv('f-dia-fim');if(dFim&&dFim!==gv('f-dia')){horEv+=' a '+fD(dFim);if(gv('f-sem-fim'))horEv+=' ('+gv('f-sem-fim')+')';}
   if(gv('f-hi'))horEv+=' – Início: '+gv('f-hi');if(gv('f-hf'))horEv+=' Fim: '+gv('f-hf');
@@ -6467,8 +6489,18 @@ function _gaMontarDescricao(){
   if(gv('f-hi')) horEv+=' – '+gv('f-hi');
   if(gv('f-hf')) horEv+=' às '+gv('f-hf');
   linhas.push('Dia do evento: '+horEv);
-  if(gv('f-dm')){ var mStr=fD(gv('f-dm')); if(gv('f-hm')) mStr+=' às '+gv('f-hm'); linhas.push('Montagem data e hora: '+mStr); }
-  if(gv('f-dd')){ var dStr=fD(gv('f-dd')); if(gv('f-hd')) dStr+=' às '+gv('f-hd'); linhas.push('Desmontagem data e hora: '+dStr); }
+  if(gv('f-dm')){
+    var mStr=fD(gv('f-dm')); var dmFim=gv('f-dm-fim');
+    if(dmFim&&dmFim!==gv('f-dm')) mStr+=' a '+fD(dmFim);
+    if(gv('f-hm')) mStr+=' às '+gv('f-hm');
+    linhas.push('Montagem data e hora: '+mStr);
+  }
+  if(gv('f-dd')){
+    var dStr=fD(gv('f-dd')); var ddFim=gv('f-dd-fim');
+    if(ddFim&&ddFim!==gv('f-dd')) dStr+=' a '+fD(ddFim);
+    if(gv('f-hd')) dStr+=' às '+gv('f-hd');
+    linhas.push('Desmontagem data e hora: '+dStr);
+  }
   if(gv('f-cons')) linhas.push('Consultor: '+gv('f-cons'));
   linhas.push('');
   linhas.push('OS Nº: '+(gv('f-num')||'—'));
@@ -6506,14 +6538,25 @@ function _gaEventosDisponiveis(){
   var eventos=[];
   var cliente=gv('f-cliente')||'Sem cliente';
   if(gv('f-dm')){
-    eventos.push({tipo:'montagem',summary:'MONTAGEM: '+cliente,colorId:corMontagem,eventLabelId:labelMontagem,inicio:gv('f-dm')+'T'+(gv('f-hm')||'08:00')+':00',duracaoHoras:2});
+    // Montagem pode levar mais de um dia (campo "Fim Montagem", f-dm-fim) —
+    // quando preenchido e diferente do início, cria um evento de intervalo
+    // (igual ao Evento), cobrindo todos os dias de montagem na agenda; sem
+    // fim, mantém o comportamento antigo de um bloco fixo de 2h no dia único.
+    var evM={tipo:'montagem',summary:'MONTAGEM: '+cliente,colorId:corMontagem,eventLabelId:labelMontagem,inicio:gv('f-dm')+'T'+(gv('f-hm')||'08:00')+':00'};
+    var dmFim=gv('f-dm-fim');
+    if(dmFim&&dmFim!==gv('f-dm')){ evM.fim=dmFim+'T23:59:00'; } else { evM.duracaoHoras=2; }
+    eventos.push(evM);
   }
   if(gv('f-dia')){
     var fimE=gv('f-dia-fim')||gv('f-dia');
     eventos.push({tipo:'evento',summary:'EVENTO: '+cliente,colorId:corEvento,eventLabelId:labelEvento,inicio:gv('f-dia')+'T'+(gv('f-hi')||'08:00')+':00',fim:fimE+'T'+(gv('f-hf')||'23:59')+':00'});
   }
   if(gv('f-dd')){
-    eventos.push({tipo:'desmontagem',summary:'DESMONTAGEM: '+cliente,colorId:corDesmontagem,eventLabelId:labelDesmontagem,inicio:gv('f-dd')+'T'+(gv('f-hd')||'08:00')+':00',duracaoHoras:2});
+    // Mesma lógica de intervalo da Montagem, usando "Fim Desmontagem" (f-dd-fim).
+    var evD={tipo:'desmontagem',summary:'DESMONTAGEM: '+cliente,colorId:corDesmontagem,eventLabelId:labelDesmontagem,inicio:gv('f-dd')+'T'+(gv('f-hd')||'08:00')+':00'};
+    var ddFim=gv('f-dd-fim');
+    if(ddFim&&ddFim!==gv('f-dd')){ evD.fim=ddFim+'T23:59:00'; } else { evD.duracaoHoras=2; }
+    eventos.push(evD);
   }
   return eventos;
 }
@@ -11436,8 +11479,10 @@ var PERM_MODULOS = [
     {id:'f-dia-fim',label:'Fim do Evento'},
     {id:'f-hi',     label:'Horário Início'},
     {id:'f-hf',     label:'Horário Fim'},
-    {id:'f-dm',     label:'Montagem'},
-    {id:'f-dd',     label:'Desmontagem'}
+    {id:'f-dm',     label:'Início Montagem'},
+    {id:'f-dm-fim', label:'Fim Montagem'},
+    {id:'f-dd',     label:'Início Desmontagem'},
+    {id:'f-dd-fim', label:'Fim Desmontagem'}
   ]},
   {id:'equipamentos', label:'🎛️ Equipamentos', campos:[
     {id:'tab-som',       label:'Aba Sonorização'},
@@ -11606,7 +11651,7 @@ function aplicarPermissoes(){
     'f-num','f-data','f-val','f-cons','f-fonte',
     'f-cliente','f-doc','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade',
     'f-nome-evento','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev',
-    'f-dia','f-dia-fim','f-hi','f-hf','f-dm','f-hm','f-dd','f-hd','f-pub',
+    'f-dia','f-dia-fim','f-hi','f-hf','f-dm','f-hm','f-dm-fim','f-dd','f-hd','f-dd-fim','f-pub',
     'f-obs','f-obs-os','f-pgto','f-svinc',
     'desc-pct','desc-rs','val-liq','f-bv'
   ];
@@ -14701,8 +14746,8 @@ function osModGerarOS(lista){
     if(f['f-dia-fim']&&f['f-dia-fim']!==f['f-dia']){horEv+=' a '+fD(f['f-dia-fim']);if(f['f-sem-fim'])horEv+=' ('+f['f-sem-fim']+')';}
     if(f['f-hi'])horEv+=' – Início: '+f['f-hi'];
     if(f['f-hf'])horEv+=' Fim: '+f['f-hf'];
-    var mStr=f['f-dm']?fD(f['f-dm']):'';if(f['f-hm'])mStr+=' às '+f['f-hm'];
-    var dStr=f['f-dd']?fD(f['f-dd']):'';if(f['f-hd'])dStr+=' às '+f['f-hd'];
+    var mStr=f['f-dm']?fD(f['f-dm']):'';if(f['f-dm-fim']&&f['f-dm-fim']!==f['f-dm'])mStr+=' a '+fD(f['f-dm-fim']);if(f['f-hm'])mStr+=' às '+f['f-hm'];
+    var dStr=f['f-dd']?fD(f['f-dd']):'';if(f['f-dd-fim']&&f['f-dd-fim']!==f['f-dd'])dStr+=' a '+fD(f['f-dd-fim']);if(f['f-hd'])dStr+=' às '+f['f-hd'];
     var endEv=[f['f-end-ev'],f['f-num-ev'],f['f-bairro-ev'],f['f-cid-ev']].filter(Boolean).join(', ');
     var incLines=(f['f-svinc']||'').split('\n').map(function(l){return l.trim();}).filter(Boolean);
 
@@ -15909,9 +15954,8 @@ function abrirPreviewContrato(){
   var dataFimFmt=(diaFim&&diaFim!==diaIni)?fmtDataPc(diaFim)+(semFim?' ('+semFim+')':''):'';
   var datasEvento=dataFimFmt?dataInicioFmt+' a '+dataFimFmt:dataInicioFmt;
   var horarioEv=(hiEv&&hfEv)?hiEv+' as '+hfEv:(hiEv||hfEv||'');
-  var dmData=gv('f-dm'),dmHora=gv('f-hm'),ddData=gv('f-dd'),ddHora=gv('f-hd');
-  var montagemFmt=(fmtDataPc(dmData)+(dmHora?' às '+dmHora:'')).trim();
-  var desmontagemFmt=(fmtDataPc(ddData)+(ddHora?' às '+ddHora:'')).trim();
+  var montagemFmt=fmtMontDesm('f-dm','f-hm','f-dm-fim');
+  var desmontagemFmt=fmtMontDesm('f-dd','f-hd','f-dd-fim');
   var endEvRua=[gv('f-end-ev'),gv('f-num-ev')].filter(Boolean).join(', ');
   var endEvCompleto=[endEvRua,gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
   var endCliStr=[gv('f-end'),gv('f-endnum')].filter(Boolean).join(', ');
@@ -16045,8 +16089,8 @@ function gerarContrato(){
       return df?di+' a '+df:di;
     })();
     var horarioEv = _pc.horario || (function(){ var h=gv('f-hi'),hf=gv('f-hf'); return (h&&hf)?h+' as '+hf:(h||hf||''); })();
-    var montagemStr = _pc.montagem || (function(){ var d=gv('f-dm'),h=gv('f-hm'); return (fmtData(d)+(h?' às '+h:'')).trim(); })();
-    var desmontagemStr = _pc.desmontagem || (function(){ var d=gv('f-dd'),h=gv('f-hd'); return (fmtData(d)+(h?' às '+h:'')).trim(); })();
+    var montagemStr = _pc.montagem || fmtMontDesm('f-dm','f-hm','f-dm-fim');
+    var desmontagemStr = _pc.desmontagem || fmtMontDesm('f-dd','f-hd','f-dd-fim');
     var obsExtra = _pc.obs || '';
     var valorFmt = 'R$ '+valorLiq.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
     var hoje = new Date();
