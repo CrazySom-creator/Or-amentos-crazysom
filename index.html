@@ -2395,6 +2395,10 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div>
         <div class="drow"><label>Desconto %</label><input type="number" id="desc-pct" value="0" min="0" max="100" step="0.5" oninput="syncDesc('pct');marcarAlterado()"><span style="color:var(--text-muted);font-size:10px">= <span id="r-dv" style="color:#ff6060">R$ 0,00</span></span></div>
         <div class="drow"><label>Desconto R$</label><input type="number" id="desc-rs" value="0" min="0" step="1" oninput="syncDesc('rs');marcarAlterado()"></div>
+        <div class="drow" style="align-items:center">
+          <label for="chk-desc-discriminar" style="cursor:pointer">Discriminar desconto no PDF</label>
+          <input type="checkbox" id="chk-desc-discriminar" checked style="width:auto" onchange="descDiscriminarPDF=this.checked;marcarAlterado()" title="Desmarque quando o desconto for só um arredondamento e não precisar aparecer no PDF enviado ao cliente — o PDF mostra apenas o total já com desconto embutido, sem a linha 'Desconto'.">
+        </div>
       </div>
       <div class="tg2" style="gap:8px;margin:0">
         <div class="ti"><label>c/Desc s/imp</label><span class="tval" id="r-vdsi">R$ 0,00</span></div>
@@ -2912,6 +2916,12 @@ var finParcelas=[];
 var finObs='';
 var finImposto='cimp';
 var finNumVenda='';
+// Se true (padrão), o PDF do orçamento mostra a linha "Valor Total" +
+// "Desconto" separadas quando há desconto aplicado. Se false, o PDF mostra
+// só o total já com desconto embutido, sem expor que houve desconto — usado
+// quando o desconto é só um arredondamento que não precisa aparecer pro
+// cliente. Controlado pelo checkbox "Discriminar desconto no PDF".
+var descDiscriminarPDF=true;
 var driveIdAtual=null;
 // Lembra de qual tela o orçamento atual foi aberto (Aprovações, Funil,
 // Dashboards, Clientes...), pra o botão flutuante "voltar" retornar pra lá
@@ -3283,7 +3293,7 @@ async function logout(forcado){
     }catch(e4){}
   }
   try{await fbAuth.signOut();}catch(e7){}
-  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';driveIdAtual=null;driveNumAtual=null;
+  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();driveIdAtual=null;driveNumAtual=null;
   _atualizarBtnClonar();
   fecharHome();
   // Resetar funil
@@ -4411,7 +4421,8 @@ function getDadosCompletos(){
     finParcelas:finParcelas,
     finObs:finObs,
     finImposto:finImposto,
-    finNumVenda:finNumVenda
+    finNumVenda:finNumVenda,
+    descDiscriminarPDF:descDiscriminarPDF
   };
 }
 
@@ -5060,6 +5071,8 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     if(dados.state){SECS.forEach(function(s){if(dados.state[s]){state[s].ambientes=dados.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=dados.state[s].ambAtiva||'default';state[s].rows=dados.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
     if(dados.form)setForm(dados.form);
     aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcAtualGoogleAgenda=Object.assign({},dados.googleAgenda||{});orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
+    descDiscriminarPDF=(dados.descDiscriminarPDF!==undefined)?!!dados.descDiscriminarPDF:true;
+    var _chkDescDiscr=document.getElementById('chk-desc-discriminar');if(_chkDescDiscr)_chkDescDiscr.checked=descDiscriminarPDF;
     _limparCamposComercialDOM(); // limpar campos DOM ao carregar novo orçamento
     driveIdAtual=id;driveNumAtual=dados.form&&dados.form['f-num']?dados.form['f-num']:null;
     _naoSalvo=false;
@@ -5161,6 +5174,8 @@ function carregar(input){
       if(data.state){SECS.forEach(function(s){if(data.state[s]){state[s].ambientes=data.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=data.state[s].ambAtiva||'default';state[s].rows=data.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
       if(data.form)setForm(data.form);
       aprovStatus=data.aprovStatus||'rascunho';aprovHist=data.aprovHist||[];comercialStatus=data.comercialStatus||'';comercialHist=data.comercialHist||[];snapshotAnterior=data.snapshotAnterior||null;snapshotAprovado=data.snapshotAprovado||null;finParcelas=data.finParcelas||[];finObs=data.finObs||'';finImposto=data.finImposto||'cimp';finNumVenda=data.finNumVenda||'';
+      descDiscriminarPDF=(data.descDiscriminarPDF!==undefined)?!!data.descDiscriminarPDF:true;
+      var _chkDescDiscrLocal=document.getElementById('chk-desc-discriminar');if(_chkDescDiscrLocal)_chkDescDiscrLocal.checked=descDiscriminarPDF;
       _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
       _limparCamposComercialDOM();
       buildTabs();setDS();setDSFim();
@@ -5215,7 +5230,7 @@ async function limpar(){
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
   snapshotAprovado=null;
-  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';
+  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();
   buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
   _atualizarBtnClonar();
   // Gerar número automático para o novo orçamento
@@ -5298,7 +5313,7 @@ async function clonarOrcamento(){
   _limparCamposComercialDOM();
   snapshotAnterior=null;
   snapshotAprovado=null;
-  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';
+  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
 
   // ── Manter forma de pagamento padrão se não havia (campo f-pgto já copiado do form original)
@@ -5649,7 +5664,7 @@ async function _resetarEstadoOrcamento(){
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
   snapshotAprovado=null;
-  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';
+  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();
   buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
   _atualizarBtnClonar();
 }
@@ -5969,9 +5984,12 @@ function buildPDF(tipo){
   }
 
   // Mostrar desconto APENAS se ha desconto real (comparando total sem desconto vs totalFinal)
+  // E somente se descDiscriminarPDF estiver marcado — desmarcado, o PDF some com
+  // a linha "Desconto" e mostra só o total já líquido (ex.: quando o desconto é
+  // só um arredondamento que não precisa aparecer pro cliente).
   var semDescPDF=modoSimpPDF?bruto:cImp;
   var difDesc=semDescPDF-totalFinal;
-  if(difDesc>0.01){
+  if(difDesc>0.01&&descDiscriminarPDF){
     res+='<tr class="trow"><td style="text-align:right">Valor Total</td><td class="r">'+fmt(semDescPDF)+'</td></tr>';
     res+='<tr class="drow2"><td style="text-align:right">Desconto</td><td class="r">– '+fmt(difDesc)+'</td></tr>';
   }
