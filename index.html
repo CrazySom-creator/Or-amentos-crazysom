@@ -6796,12 +6796,19 @@ function _toastMostrar(msg, tipo){
 // interrompe o fluxo comercial com um alert() bloqueante — mas sempre avisa
 // visualmente (toast) se o envio deu certo ou não, pra equipe saber que os
 // eventos foram (ou não) parar na agenda sem precisar checar o console.
-function _gaAutoEnviarSeGanha(driveId, dadosCompletos){
+async function _gaAutoEnviarSeGanha(driveId, dadosCompletos){
   try{
     if(!driveId||!dadosCompletos||!dadosCompletos.form) return;
     var form=dadosCompletos.form;
     if(!form['f-cliente']) return;
     if(!form['f-dm']&&!form['f-dia']&&!form['f-dd']) return;
+    // Importante: carregar a config do Firestore ANTES de checar clientId/
+    // calendarId — GOOGLE_AGENDA_CONFIG começa vazio em toda sessão nova e só
+    // é populado por googleAgendaCarregarConfig(). Sem este await, a
+    // automação sempre bailava em silêncio logo no início de uma sessão
+    // (antes de qualquer clique manual em "📅 Agenda"), mesmo com a
+    // integração corretamente configurada no Firestore.
+    if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
     var cfg=(typeof GOOGLE_AGENDA_CONFIG!=='undefined'&&GOOGLE_AGENDA_CONFIG)||{};
     if(!cfg.clientId||!cfg.calendarId) return;
     var eventosDisp=_gaEventosDisponiveisDe(form);
