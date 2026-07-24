@@ -2410,8 +2410,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
   <div class="mbox">
     <h3>📈 Margem do Negócio</h3>
     <div class="mg">
-      <div class="mi"><label>Margem s/ Imposto</label><span class="mval" id="m-sd" style="color:#66bb6a">R$ 0,00</span><span id="m-sd-pct" style="font-size:11px;color:#66bb6a;display:block;margin-top:2px">0,00%</span></div>
-      <div class="mi"><label>Margem c/ Imposto</label><span class="mval" id="m-cd" style="color:#ffa726">R$ 0,00</span><span id="m-cd-pct" style="font-size:11px;color:#ffa726;display:block;margin-top:2px">0,00%</span></div>
+      <div class="mi"><label>Margem</label><span class="mval" id="m-sd" style="color:#66bb6a">R$ 0,00</span><span id="m-sd-pct" style="font-size:11px;color:#66bb6a;display:block;margin-top:2px">0,00%</span></div>
     </div>
   </div>
   <div class="sep" style="margin-top:11px">
@@ -4190,7 +4189,6 @@ function calc(){
   var srv=_secTotAllBase('servico'),log=_secTotAllBase('logistica');
   // Margem: baseada no vdsi (sem imposto) e vdci (com imposto)
   var msd=safe(vdsi-srv-log-xc),msdP=safe(vdsi>0?msd/vdsi*100:0);
-  var mcd=safe(vdci-srv*(1+IMP)-log*(1+IMP)-xc*(1+IMP)),mcdP=safe(vdci>0?mcd/vdci*100:0);
   // Total final: sempre o valor recém-calculado (vdsi/vdci) — os campos de
   // valor líquido não são mais editáveis manualmente, então não existe mais
   // "valor ajustado" para priorizar; usar o valor do campo aqui causava uma
@@ -4203,7 +4201,7 @@ function calc(){
     var gl=document.getElementById('grand-label');
     if(gl) gl.textContent=modoSimp?'TOTAL FINAL (s/ impostos)':'TOTAL FINAL (c/ impostos)';
   })();
-  sv('m-sd',fmt(msd));sv('m-cd',fmt(mcd));sv('m-sd-pct',fmtN(msdP)+'%');sv('m-cd-pct',fmtN(mcdP)+'%');
+  sv('m-sd',fmt(msd));sv('m-sd-pct',fmtN(msdP)+'%');
   var dl=document.getElementById('desc-label');if(dl){var modoLabel=modoSimp?'s/ imposto':'c/ imposto';dl.textContent=dv_display>0?'Desconto: -'+fmt(dv_display)+' ('+modoLabel+')':'';}
   // Agrupa subtotal por NOME do ambiente somando todas as secoes (evita repeticao de ambientes iguais entre secoes)
   var ambTotPorNome={},ambOrdem=[];
