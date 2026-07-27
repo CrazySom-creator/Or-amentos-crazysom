@@ -6737,6 +6737,20 @@ function _gaMontarDescricaoDe(form, state){
 // na tela) — usado pela automação de Venda Ganha, que pode disparar a partir
 // do card do Funil sem que o orçamento esteja aberto no editor. Lança erro em
 // caso de falha (quem chama decide se avisa o usuário ou falha em silêncio).
+// Exclui um evento do Google Agenda por ID — usado para apagar a Pré-Reserva
+// quando ela é substituída pelos eventos reais de Montagem/Evento/
+// Desmontagem ao marcar Venda Ganha. 404/410 (evento já não existe, por
+// exemplo se alguém apagou manualmente antes) não é tratado como erro.
+async function _gaExcluirEvento(calendarId, eventId, token){
+  var url='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calendarId)+'/events/'+encodeURIComponent(eventId);
+  var r=await fetch(url,{method:'DELETE',headers:{'Authorization':'Bearer '+token}});
+  if(!r.ok && r.status!==404 && r.status!==410){
+    var d={};
+    try{ d=await r.json(); }catch(e){}
+    throw new Error((d.error&&d.error.message)||('HTTP '+r.status));
+  }
+}
+
 async function _gaEnviarEventosParaOrcamento(driveId, form, dadosCompletos, eventosDisp){
   if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
   if(!GOOGLE_AGENDA_CONFIG.clientId||!GOOGLE_AGENDA_CONFIG.calendarId){
@@ -6750,7 +6764,35 @@ async function _gaEnviarEventosParaOrcamento(driveId, form, dadosCompletos, even
   var novosIds=resultado.novosIds, erros=resultado.erros;
   var googleAgendaAtualizado=Object.assign({},idsExistentes,novosIds);
 
+  // Venda Ganha substitui qualquer Pré-Reserva feita antes (negociação
+  // avançada, "segurando a data") pelos eventos definitivos — apaga o evento
+  // de pré-reserva da agenda pra não sobrar um evento "fantasma" duplicando
+  // a data junto com Montagem/Evento/Desmontagem.
+  var preReservaRemovida=false;
+  if(idsExistentes.preReservaEventId){
+    try{
+      await _gaExcluirEvento(GOOGLE_AGENDA_CONFIG.calendarId, idsExistentes.preReservaEventId, token);
+      preReservaRemovida=true;
+    }catch(e){
+      erros.push('Não foi possível remover a pré-reserva anterior: '+e.message);
+    }
+    delete googleAgendaAtualizado.preReservaEventId;
+  }
+
   await fbDb.collection('orcamentos').doc(driveId).set({googleAgenda:googleAgendaAtualizado},{merge:true});
+  if(preReservaRemovida){
+    // Um .set(...,{merge:true}) nunca apaga uma chave que já existia no
+    // documento — só sobrescreve as chaves presentes no objeto enviado. Por
+    // isso o ID antigo da pré-reserva precisa ser removido explicitamente,
+    // com FieldValue.delete(), senão fica órfão salvo (o evento em si já foi
+    // apagado da agenda, mas o ID continuaria lá, "morto", pra sempre).
+    try{
+      await fbDb.collection('orcamentos').doc(driveId).update({'googleAgenda.preReservaEventId':firebase.firestore.FieldValue.delete()});
+    }catch(e){
+      // Não crítico: o evento na agenda já foi apagado; na pior hipótese só
+      // sobra um ID inútil salvo no Firestore, que nunca mais é referenciado.
+    }
+  }
 
   if(typeof driveIdAtual!=='undefined'&&driveIdAtual===driveId){
     orcAtualGoogleAgenda=googleAgendaAtualizado;
@@ -6760,7 +6802,7 @@ async function _gaEnviarEventosParaOrcamento(driveId, form, dadosCompletos, even
     if(orcCache&&orcCache.dados){ orcCache.dados.googleAgenda=googleAgendaAtualizado; }
   }
   if(erros.length){ throw new Error(erros.join('; ')); }
-  return googleAgendaAtualizado;
+  return {googleAgenda:googleAgendaAtualizado, preReservaRemovida:preReservaRemovida};
 }
 
 // Notificação flutuante (toast) que funciona em qualquer tela do sistema —
@@ -6813,9 +6855,11 @@ async function _gaAutoEnviarSeGanha(driveId, dadosCompletos){
     if(!eventosDisp.length) return;
     var cliente=form['f-cliente'];
     _gaEnviarEventosParaOrcamento(driveId,form,dadosCompletos,eventosDisp)
-      .then(function(){
+      .then(function(resultadoEnvio){
         console.log('[Google Agenda] Envio automático (Venda Ganha) concluído para',driveId);
-        _toastMostrar('📅 Enviado para o Google Agenda: '+cliente+' (Montagem/Evento/Desmontagem).','ok');
+        var msg='📅 Enviado para o Google Agenda: '+cliente+' (Montagem/Evento/Desmontagem).';
+        if(resultadoEnvio&&resultadoEnvio.preReservaRemovida) msg+=' A pré-reserva foi substituída pelos eventos definitivos.';
+        _toastMostrar(msg,'ok');
       })
       .catch(function(e){
         console.warn('[Google Agenda] Falha no envio automático (Venda Ganha):',e&&e.message);
