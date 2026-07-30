@@ -14803,7 +14803,7 @@ function dashDrill(key, tituloEnc){
     }
 
     return '<div style="padding:7px 10px;border-bottom:1px solid var(--border-strong);display:flex;align-items:center;gap:8px;background:var(--surface-3);cursor:pointer;transition:background .12s" '
-      +'onmouseover="this.style.background=\'#151515\'" onmouseout="this.style.background=\'#0d0d0d\'" '
+      +'onmouseover="this.style.background=\'var(--surface-2)\'" onmouseout="this.style.background=\'var(--surface-3)\'" '
       +(o.driveId?'onclick="dashDrillAbrirOrc(\''+o.driveId+'\',\''+eh(o.nome||'')+'\')" title="Clique para abrir o orçamento"':'')+'>'
       +'<div style="min-width:72px;color:var(--text-muted);font-size:9px;flex-shrink:0">'+(f['f-data']?fD(f['f-data']):'—')+'</div>'
       +'<div style="flex:1;min-width:0">'
