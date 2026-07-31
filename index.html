@@ -6540,7 +6540,21 @@ function _gaMontarDescricao(){
     if(!todasRows.length) return;
     linhas.push('');
     linhas.push((SEC_LBL[s]||s).toUpperCase());
-    todasRows.forEach(function(r){ linhas.push(r.qty+'x '+r.name); });
+    todasRows.forEach(function(r){
+      // Painel de LED e Palco têm formatação especial na OS (dimensões,
+      // resolução em px, elevação, carpete) — usar só r.name aqui perderia
+      // exatamente essas informações na descrição do evento da agenda.
+      var isPal=r.palco||isPalco(r.name);
+      var desc=r.name||'';
+      if(r.painel){
+        var pxW=Math.round(r.larg*getPx(r.name)),pxH=Math.round(r.alt*getPx(r.name));
+        desc+=' – '+Number(r.larg).toFixed(2)+'×'+Number(r.alt).toFixed(2)+'m ['+pxW+'×'+pxH+'px]';
+      } else if(isPal){
+        desc='Palco '+Number(r.larg).toFixed(2)+'×'+Number(r.prof).toFixed(2)+'m – Elev: '+(r.elObj?r.elObj.l:'—');
+        if(r.carp) desc+=' | Carpete '+(r.carpT==='novo'?'Novo':'Usado')+(r.carpC?' – '+r.carpC:'');
+      }
+      linhas.push(r.qty+'x '+desc);
+    });
   });
   return linhas.join('\n');
 }
@@ -6728,7 +6742,20 @@ function _gaMontarDescricaoDe(form, state){
     if(!todasRows.length) return;
     linhas.push('');
     linhas.push((SEC_LBL[s]||s).toUpperCase());
-    todasRows.forEach(function(r){ linhas.push(r.qty+'x '+r.name); });
+    todasRows.forEach(function(r){
+      // Mesma formatação especial de Painel de LED/Palco usada em
+      // _gaMontarDescricao() (e na própria OS) — ver comentário lá.
+      var isPal=r.palco||isPalco(r.name);
+      var desc=r.name||'';
+      if(r.painel){
+        var pxW=Math.round(r.larg*getPx(r.name)),pxH=Math.round(r.alt*getPx(r.name));
+        desc+=' – '+Number(r.larg).toFixed(2)+'×'+Number(r.alt).toFixed(2)+'m ['+pxW+'×'+pxH+'px]';
+      } else if(isPal){
+        desc='Palco '+Number(r.larg).toFixed(2)+'×'+Number(r.prof).toFixed(2)+'m – Elev: '+(r.elObj?r.elObj.l:'—');
+        if(r.carp) desc+=' | Carpete '+(r.carpT==='novo'?'Novo':'Usado')+(r.carpC?' – '+r.carpC:'');
+      }
+      linhas.push(r.qty+'x '+desc);
+    });
   });
   return linhas.join('\n');
 }
