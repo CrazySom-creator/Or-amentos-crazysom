@@ -2224,6 +2224,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 <div class="app-hdr">
   <div><h1>CRAZY SOM – ORÇAMENTO</h1><p>Audiovisual e Estrutura – Uso Interno</p></div>
   <div class="orc-n"><small>Nº Orçamento</small><b id="orc-disp">—</b></div>
+  <div class="orc-n" id="orc-status-hdr" title="Status de aprovação deste orçamento — visível assim que o orçamento é aberto, sem precisar rolar a tela"><small>Status</small><b id="orc-status-hdr-txt" style="font-size:12px;white-space:nowrap">—</b></div>
   <div class="user-badge" id="user-badge" style="display:none">
     <div><span id="user-nome">—</span><small id="user-cargo">—</small></div>
     <!-- Botões ocultos mantidos para compatibilidade com permissões/dashTemAcesso -->
@@ -3316,6 +3317,20 @@ function renderStatusOrc(){
   if(!sb||!sa)return;
   var si=SI[aprovStatus]||SI.rascunho;
   sb.innerHTML='<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:6px;margin-bottom:10px;font-size:11px;font-weight:700;background:'+si.bg+';border:1px solid '+si.bd+';color:'+si.tx+'"><div class="st-dot" style="background:'+si.dot+'"></div><span>'+si.label+'</span></div>';
+  // Selo de status também no cabeçalho (sempre visível assim que o orçamento
+  // é aberto, sem precisar rolar até o card "Status deste Orçamento" — que
+  // fica no meio da página).
+  var hdrTxt=document.getElementById('orc-status-hdr-txt');
+  if(hdrTxt){
+    hdrTxt.textContent=si.label;
+    hdrTxt.style.color=si.tx;
+    hdrTxt.style.background=si.bg;
+    hdrTxt.style.border='1px solid '+si.bd;
+    hdrTxt.style.borderRadius='4px';
+    hdrTxt.style.padding='2px 8px';
+    hdrTxt.style.display='inline-block';
+    hdrTxt.style.fontWeight='700';
+  }
   if(sh&&hl){
     if(aprovHist&&aprovHist.length){
       sh.style.display='block';
@@ -5084,6 +5099,11 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     if(dados.form&&dados.form['f-doc'])clienteHistoricoBuscar(_clienteSoDigitos(dados.form['f-doc']),dados.form['f-doc']);
     driveStatus('✅ Carregado: '+nome,'ok');
     _atualizarBtnClonar();
+    // Sempre abrir no topo da página (cabeçalho) — antes disso, o orçamento
+    // podia abrir com o scroll parado no meio da tela (posição deixada por uma
+    // navegação anterior), escondendo o cabeçalho e o selo de status logo
+    // abaixo do Nº do Orçamento.
+    window.scrollTo({top:0,left:0,behavior:'auto'});
     // ativarModoLeitura chamado pelo caller com o lock correto
   }catch(e){driveStatus('Erro: '+e.message,'err');}
   finally{setTimeout(function(){_carregandoOrc=false;},400);}
