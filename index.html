@@ -1777,7 +1777,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
           <div style="flex:1;min-width:220px"><label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;display:block;margin-bottom:4px">Meta Total do Ano (R$) — vendas marcadas Venda Ganha</label>
             <div style="position:relative">
               <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text-muted);pointer-events:none">R$</span>
-              <input type="number" id="meta-geral-total" placeholder="500000" style="width:100%;padding:7px 10px 7px 32px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px">
+              <input type="text" inputmode="decimal" id="meta-geral-total" placeholder="500.000,00" onfocus="metaMoedaFocarEditar(this)" onblur="metaMoedaFormatarExibir(this)" style="width:100%;padding:7px 10px 7px 32px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px">
             </div>
           </div>
           <button onclick="metasSalvar()" style="padding:8px 16px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer;white-space:nowrap">💾 Salvar Metas</button>
@@ -1806,7 +1806,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;display:block;margin-bottom:4px">Meta Total do Ano em Eventos Realizados (R$) — independente da Meta Geral</label>
         <div style="position:relative;max-width:320px">
           <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text-muted);pointer-events:none">R$</span>
-          <input type="number" id="meta-ev-total" placeholder="400000" style="width:100%;padding:7px 10px 7px 32px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px">
+          <input type="text" inputmode="decimal" id="meta-ev-total" placeholder="400.000,00" onfocus="metaMoedaFocarEditar(this)" onblur="metaMoedaFormatarExibir(this)" style="width:100%;padding:7px 10px 7px 32px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px">
         </div>
         <p style="font-size:9px;color:var(--text-dim);margin:8px 0">Agrupa pela data em que o EVENTO acontece (não pela data em que a venda foi fechada). Distribua os 100% entre os 12 meses de realização. O detalhamento por consultor usa os % configurados na aba "Consultores".</p>
         <div id="meta-ev-pct-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(85px,1fr));gap:6px"></div>
@@ -11544,13 +11544,54 @@ async function metasCarregar(){
   }catch(e){ console.warn('metasCarregar:',e); _metasDados=_metasDados||{}; }
 }
 
+// ── Formatação de moeda (R$) nos campos de meta total anual ──
+// Os campos de texto guardam/exibem no padrão brasileiro (ponto=milhar,
+// vírgula=decimal); internamente sempre convertemos pra número puro antes
+// de salvar ou calcular.
+function _metaMoedaParaNumero(str){
+  if(str===undefined||str===null) return 0;
+  str=String(str).trim();
+  if(!str) return 0;
+  str=str.replace(/[^\d.,-]/g,'');
+  if(str.indexOf(',')>=0){
+    // vírgula presente: ela é o separador decimal, pontos são milhar
+    str=str.replace(/\./g,'').replace(',','.');
+  } else {
+    // sem vírgula: um único ponto seguido de exatamente 3 dígitos é milhar
+    // (ex: "500.000"); qualquer outro caso trata o ponto como decimal
+    var partes=str.split('.');
+    if(partes.length>2 || (partes.length===2 && partes[1].length===3)){
+      str=partes.join('');
+    }
+  }
+  var n=parseFloat(str);
+  return isNaN(n)?0:n;
+}
+
+function _metaMoedaExibir(v){
+  v=parseFloat(v)||0;
+  if(!v) return '';
+  return v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+// Ao focar: mostra o número "cru" (mais fácil de editar) com vírgula decimal.
+function metaMoedaFocarEditar(el){
+  var v=_metaMoedaParaNumero(el.value);
+  el.value=v?String(v).replace('.',','):'';
+}
+
+// Ao sair do campo: formata com ponto de milhar + vírgula decimal.
+function metaMoedaFormatarExibir(el){
+  el.value=_metaMoedaExibir(_metaMoedaParaNumero(el.value));
+}
+
 async function metasSalvar(){
   var ano=metasAnoAtual();
   _metasGarantirAno(ano);
   var d=_metasDados[ano];
 
   // Meta Geral: total + % por mês
-  d.geral.total=parseFloat(document.getElementById('meta-geral-total').value)||0;
+  d.geral.total=_metaMoedaParaNumero(document.getElementById('meta-geral-total').value);
   document.querySelectorAll('.meta-geral-pct-inp').forEach(function(el){
     var mm=el.dataset.mes; var v=parseFloat(el.value)||0;
     d.geral.pctMes[mm]=v;
@@ -11562,7 +11603,7 @@ async function metasSalvar(){
   });
 
   // Meta de Eventos: total + % por mês
-  d.eventos.total=parseFloat(document.getElementById('meta-ev-total').value)||0;
+  d.eventos.total=_metaMoedaParaNumero(document.getElementById('meta-ev-total').value);
   document.querySelectorAll('.meta-ev-pct-inp').forEach(function(el){
     var mm=el.dataset.mes; var v=parseFloat(el.value)||0;
     d.eventos.pctMes[mm]=v;
@@ -11871,16 +11912,33 @@ async function abrirMetas(){
   document.getElementById('metas-sub').textContent=_dashDados.length+' orçamentos carregados';
   var ano=metasAnoAtual();
   _metasGarantirAno(ano);
-  document.getElementById('meta-geral-total').value=_metasDados[ano].geral.total||'';
-  document.getElementById('meta-ev-total').value=_metasDados[ano].eventos.total||'';
+  document.getElementById('meta-geral-total').value=_metaMoedaExibir(_metasDados[ano].geral.total);
+  document.getElementById('meta-ev-total').value=_metaMoedaExibir(_metasDados[ano].eventos.total);
   metasRenderizarAba('geral');
 }
 
 function metasRenderizar(){
   var ano=metasAnoAtual();
   _metasGarantirAno(ano);
-  document.getElementById('meta-geral-total').value=_metasDados[ano].geral.total||'';
-  document.getElementById('meta-ev-total').value=_metasDados[ano].eventos.total||'';
+  document.getElementById('meta-geral-total').value=_metaMoedaExibir(_metasDados[ano].geral.total);
+  document.getElementById('meta-ev-total').value=_metaMoedaExibir(_metasDados[ano].eventos.total);
+  metasRenderizarAba(_metasAbaAtual);
+}
+
+// Ao sair de um campo de Realizado Manual (evento onchange, disparado quando
+// o usuário tira o foco do campo), atualiza o valor em memória e re-renderiza
+// a aba na hora — sem isso, o card de resumo (Realizado/Faltam/Atingimento)
+// só refletia o novo valor depois de clicar em Salvar ou Atualizar, dando a
+// impressão de que o valor digitado não estava sendo somado.
+function metasAoVivoAtualizarRealizado(el){
+  var ano=metasAnoAtual();
+  _metasGarantirAno(ano);
+  var tipo=el.classList.contains('meta-ev-real-inp')?'eventos':'geral';
+  var cfg=_metasDados[ano][tipo];
+  var ym=el.dataset.ym;
+  var v=el.value===''?null:(parseFloat(el.value)||0);
+  if(v===null) delete cfg.realizadoManual[ym];
+  else cfg.realizadoManual[ym]=v;
   metasRenderizarAba(_metasAbaAtual);
 }
 
@@ -11937,6 +11995,7 @@ function _metasMontarTabelaMensal(tipo,cfg,ano,ganhosTodos,titulo){
       +'<span style="position:absolute;left:6px;top:50%;transform:translateY(-50%);font-size:9px;color:var(--text-muted);pointer-events:none">R$</span>'
       +'<input type="number" class="'+(tipo==='evento'?'meta-ev-real-inp':'meta-geral-real-inp')+'" data-ym="'+mesAno+'" '
       +'value="'+(isManual?cfg.realizadoManual[mesAno]:'')+'" placeholder="auto: '+fmtN(autoValor)+'" '
+      +'onchange="metasAoVivoAtualizarRealizado(this)" '
       +'style="width:130px;padding:4px 6px 4px 24px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:10px">'
       +'</div></td>'
       +'</tr>';
