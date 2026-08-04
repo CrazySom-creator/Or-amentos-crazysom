@@ -1795,9 +1795,8 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     <div class="rel-pane" id="mpane-consultor">
       <div id="metas-cons-resultado"></div>
       <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:12px;margin-top:14px">
-        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;display:block;margin-bottom:8px">Selecione quem participa da meta deste ano e o % de participação de cada um na Meta Geral (deve somar 100% entre os selecionados). O detalhamento mês a mês de cada consultor — incluindo % mensal próprio e realizado manual — fica direto na tabela de cada um, no topo desta aba. Esse mesmo % mensal também é usado na aba "Consultor x Eventos".</label>
+        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;display:block;margin-bottom:8px">Selecione quem participa da meta deste ano e digite a meta ANUAL de cada um em R$ (não precisa somar 100% da Meta Geral — dimensione por potencial, região ou segmento). A meta de cada mês é a meta anual do consultor × o % de peso mensal já configurado na aba Meta Geral (mesma curva sazonal da empresa). O detalhamento mês a mês de cada consultor — incluindo realizado manual — fica direto na tabela de cada um, no topo desta aba. Essa mesma meta anual também é usada na aba "Consultor x Eventos".</label>
         <div id="metas-cons-inputs"></div>
-        <div id="meta-cons-pct-soma" style="font-size:10px;font-weight:800;margin-top:6px"></div>
         <button onclick="metasSalvar()" style="margin-top:8px;padding:7px 16px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Metas</button>
         <span class="metas-save-status-txt" style="font-size:10px;font-weight:700;margin-left:8px"></span>
       </div>
@@ -1822,7 +1821,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 
     <!-- ABA: Consultor x Eventos -->
     <div class="rel-pane" id="mpane-consevento">
-      <p style="font-size:9px;color:var(--text-dim);margin:0 0 12px">Quanto cada consultor vendeu para eventos REALIZADOS em cada mês (agrupado pela data do evento, igual à aba "Meta de Eventos" — não pela data em que a venda foi fechada). A meta usa a meta mensal da aba "Meta de Eventos" x o % mensal de cada consultor (o mesmo configurado na aba Consultores).</p>
+      <p style="font-size:9px;color:var(--text-dim);margin:0 0 12px">Quanto cada consultor vendeu para eventos REALIZADOS em cada mês (agrupado pela data do evento, igual à aba "Meta de Eventos" — não pela data em que a venda foi fechada). A meta usa a mesma meta ANUAL do consultor configurada na aba Consultores × o % de peso mensal da aba Meta Geral (mesma curva sazonal da empresa).</p>
       <div id="metas-consevento-resultado"></div>
     </div>
 
@@ -11510,9 +11509,11 @@ function dashRenderizar(){
 }
 
 // ════════════════════════════════════════════════════════
-//  METAS COMERCIAIS — Firestore (config/metas), % de participação
-//  mensal e por consultor. Reformulado do zero (ver comentários
-//  de cada função pra entender o modelo de dados).
+//  METAS COMERCIAIS — Firestore (config/metas). Meta Geral e Meta de
+//  Eventos usam % mensal (distribuição da empresa); cada consultor tem uma
+//  meta ANUAL própria em R$ (dimensionável por potencial/região/segmento),
+//  distribuída nos 12 meses usando o % mensal da Meta Geral. Ver comentários
+//  de cada função pra entender o modelo de dados.
 // ════════════════════════════════════════════════════════
 var MESES_NOMES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 var _metasAbaAtual = 'geral';
@@ -11522,7 +11523,7 @@ var _metasNomes = []; // lista dinâmica de consultores (config/consultoresNomes
 // Estrutura em memória, um bloco por ano: _metasDados[ano] = {
 //   geral:   { total, pctMes:{'01':10,...}, realizadoManual:{'2026-01':12345,...} },
 //   eventos: { total, pctMes:{'01':10,...}, realizadoManual:{'2026-01':12345,...} },
-//   consultores: { selecionados:['Fabiano Santos',...], pct:{'Fabiano Santos':30,...} }
+//   consultores: { selecionados:['Fabiano Santos',...], metaAnual:{'Fabiano Santos':900000,...} }
 // }
 // pctMes é por MÊS (chave 'MM'), não por ano — é um padrão de sazonalidade que
 // se redefine todo ano junto com o total. realizadoManual é por MÊS DO ANO
@@ -11534,14 +11535,18 @@ function _metasVazio(){
   return {
     geral:{ total:0, pctMes:{}, realizadoManual:{} },
     eventos:{ total:0, pctMes:{}, realizadoManual:{} },
-    // pctMes e realizadoManual aqui são POR CONSULTOR: pctMes[nome]={'01':x,...}
-    // e realizadoManual[nome]={'2026-01':v,...} — cada consultor fatia a
-    // própria meta anual (total x pct[nome]) com seu próprio ritmo mensal, e
-    // pode lançar o realizado manual (histórico anterior ao sistema) mês a mês.
-    // realizadoManualEventos é o mesmo conceito, mas pro realizado por data
-    // do EVENTO (aba "Consultor x Eventos") — mês/valor independente de
-    // realizadoManual (que é por data de Venda Ganha).
-    consultores:{ selecionados:[], pct:{}, pctMes:{}, realizadoManual:{}, realizadoManualEventos:{} }
+    // metaAnual e realizadoManual aqui são POR CONSULTOR: metaAnual[nome]=R$
+    // e realizadoManual[nome]={'2026-01':v,...}. metaAnual é um valor absoluto
+    // em R$ (não % do total da empresa) — permite dimensionar cada consultor
+    // por potencial/região/segmento, sem precisar somar 100% entre eles. A
+    // meta de cada mês é metaAnual[nome] x o % de peso mensal já configurado
+    // na aba Meta Geral (mesma curva sazonal da empresa aplicada sobre o
+    // valor absoluto do consultor). realizadoManual é o histórico anterior
+    // ao sistema, lançado mês a mês. realizadoManualEventos é o mesmo
+    // conceito, mas pro realizado por data do EVENTO (aba "Consultor x
+    // Eventos") — independente de realizadoManual (que é por data de Venda
+    // Ganha).
+    consultores:{ selecionados:[], metaAnual:{}, realizadoManual:{}, realizadoManualEventos:{} }
   };
 }
 
@@ -11638,26 +11643,21 @@ async function metasSalvar(){
     else d.eventos.realizadoManual[ym]=v;
   });
 
-  // Consultores: seleção + % de participação anual + % mensal PRÓPRIO de cada
-  // consultor (como ele mesmo fatia a própria meta ao longo do ano — cobre
-  // quem não trabalhou o ano inteiro, bastando deixar 0% nos meses sem
-  // atividade) + realizado manual por consultor/mês (histórico anterior ao
-  // uso do sistema).
+  // Consultores: seleção + meta anual EM R$ de cada um (dimensionada por
+  // potencial/região/segmento — não precisa mais somar 100% do total da
+  // empresa) + realizado manual por consultor/mês (histórico anterior ao
+  // uso do sistema). A meta de cada mês é a meta anual do consultor x o %
+  // de peso mensal já configurado na aba Meta Geral (mesma curva sazonal da
+  // empresa, aplicada sobre o valor absoluto de cada consultor).
   var selecionados=[];
-  var pct={};
+  var metaAnualCons={};
   document.querySelectorAll('.meta-cons-chk').forEach(function(chk){
     var c=chk.dataset.cons;
     if(chk.checked){
       selecionados.push(c);
-      var inp=document.querySelector('.meta-cons-pct-inp[data-cons="'+CSS.escape(c)+'"]');
-      pct[c]=inp?(parseFloat(inp.value)||0):0;
+      var inp=document.querySelector('.meta-cons-anual-inp[data-cons="'+CSS.escape(c)+'"]');
+      metaAnualCons[c]=inp?_metaMoedaParaNumero(inp.value):0;
     }
-  });
-  var pctMesCons={};
-  document.querySelectorAll('.meta-cons-mes-pct-inp').forEach(function(el){
-    var c=el.dataset.cons, mm=el.dataset.mes; var v=parseFloat(el.value)||0;
-    pctMesCons[c]=pctMesCons[c]||{};
-    pctMesCons[c][mm]=v;
   });
   var realizadoManualCons={};
   document.querySelectorAll('.meta-cons-mes-real-inp').forEach(function(el){
@@ -11675,8 +11675,7 @@ async function metasSalvar(){
     if(v!==null) realizadoManualEventosCons[c][ym]=v;
   });
   d.consultores.selecionados=selecionados;
-  d.consultores.pct=pct;
-  d.consultores.pctMes=pctMesCons;
+  d.consultores.metaAnual=metaAnualCons;
   d.consultores.realizadoManual=realizadoManualCons;
   d.consultores.realizadoManualEventos=realizadoManualEventosCons;
 
@@ -11704,11 +11703,11 @@ function _metasGarantirAno(ano){
   var d=_metasDados[ano];
   if(!d.geral) d.geral={total:0,pctMes:{},realizadoManual:{}};
   if(!d.eventos) d.eventos={total:0,pctMes:{},realizadoManual:{}};
-  if(!d.consultores) d.consultores={selecionados:[],pct:{},pctMes:{},realizadoManual:{},realizadoManualEventos:{}};
+  if(!d.consultores) d.consultores={selecionados:[],metaAnual:{},realizadoManual:{},realizadoManualEventos:{}};
   d.geral.pctMes=d.geral.pctMes||{}; d.geral.realizadoManual=d.geral.realizadoManual||{};
   d.eventos.pctMes=d.eventos.pctMes||{}; d.eventos.realizadoManual=d.eventos.realizadoManual||{};
-  d.consultores.selecionados=d.consultores.selecionados||[]; d.consultores.pct=d.consultores.pct||{};
-  d.consultores.pctMes=d.consultores.pctMes||{};
+  d.consultores.selecionados=d.consultores.selecionados||[];
+  d.consultores.metaAnual=d.consultores.metaAnual||{};
   d.consultores.realizadoManual=d.consultores.realizadoManual||{};
   d.consultores.realizadoManualEventos=d.consultores.realizadoManualEventos||{};
 }
@@ -11788,39 +11787,27 @@ function _metaSomaPct(cfg){
   return Object.keys(pctMes).reduce(function(t,k){return t+(parseFloat(pctMes[k])||0);},0);
 }
 
-// Valor-alvo (R$) de um consultor: total anual × % de participação do consultor.
-function _metaValorConsultor(consultoresCfg,total,nome){
-  var pct=(consultoresCfg&&consultoresCfg.pct&&consultoresCfg.pct[nome])||0;
-  return (total||0)*(pct/100);
+// % informativo que a meta anual (em R$) de um consultor representa sobre o
+// total da Meta Geral da empresa — só pra exibição (ex: "32% da Meta
+// Geral"), não é mais um valor editável nem precisa somar 100% entre os
+// consultores: cada um tem sua meta em R$ dimensionada por potencial/
+// região/segmento, independente do total da empresa.
+function _metaConsultorPctAnual(consultoresCfg,geralCfg,nome){
+  var metaAnualC=(consultoresCfg&&consultoresCfg.metaAnual&&consultoresCfg.metaAnual[nome])||0;
+  var totalGeral=(geralCfg&&geralCfg.total)||0;
+  return totalGeral>0?Math.round(metaAnualC/totalGeral*100):0;
 }
 
-// Soma de todos os % de consultores selecionados (deve fechar em 100).
-function _metaSomaPctConsultores(consultoresCfg){
-  var sel=(consultoresCfg&&consultoresCfg.selecionados)||[];
-  var pct=(consultoresCfg&&consultoresCfg.pct)||{};
-  return sel.reduce(function(t,c){return t+(parseFloat(pct[c])||0);},0);
-}
-
-// % do consultor sobre a meta de um MÊS específico (não o % anual fixo) —
-// se não houver um valor salvo pra esse mês, cai no % anual fixo do
-// consultor (mesma % pra todos os meses, comportamento padrão sem precisar
-// mexer em nada). O consultor só precisa ajustar os meses que forem
-// diferentes — por exemplo colocar 0% num mês em que ainda não trabalhava.
-function _metaConsultorPctMes(consultoresCfg,nome,mm){
-  var pctMesCons=(consultoresCfg&&consultoresCfg.pctMes&&consultoresCfg.pctMes[nome]);
-  if(pctMesCons && pctMesCons[mm]!==undefined && pctMesCons[mm]!==null) return parseFloat(pctMesCons[mm])||0;
-  return (consultoresCfg&&consultoresCfg.pct&&consultoresCfg.pct[nome])||0;
-}
-
-// Meta mensal (R$) de um consultor: a meta MENSAL DA META GERAL (já fatiada
-// pelos % mensais da empresa, aba Meta Geral) × o % do consultor sobre
-// aquele mês. Importante: a base é sempre o valor mensal já calculado da
-// Meta Geral — nunca o total anual sozinho — pra não inflar a meta do
-// consultor além da meta da empresa pro período.
+// Meta mensal (R$) de um consultor: a meta ANUAL do consultor (valor
+// absoluto em R$, definido por potencial/região/segmento — não é mais uma
+// fatia % do total da empresa) × o % de peso mensal já configurado na aba
+// Meta Geral (mesma curva sazonal da empresa, aplicada sobre o valor
+// absoluto do consultor). Usada tanto na aba Consultores (venda) quanto na
+// aba Consultor x Eventos — em ambas o peso mensal vem sempre da Meta Geral.
 function _metaValorConsultorMes(consultoresCfg,geralCfg,nome,mm){
-  var metaMesGeral=_metaValorMes(geralCfg,mm);
-  var pctMesC=_metaConsultorPctMes(consultoresCfg,nome,mm);
-  return metaMesGeral*(pctMesC/100);
+  var metaAnualC=(consultoresCfg&&consultoresCfg.metaAnual&&consultoresCfg.metaAnual[nome])||0;
+  var pctMesGeral=(geralCfg&&geralCfg.pctMes&&geralCfg.pctMes[mm])||0;
+  return metaAnualC*(pctMesGeral/100);
 }
 
 // Realizado manual de um consultor num mês (YYYY-MM), ou null se não preenchido.
@@ -11918,43 +11905,27 @@ function metasRenderizarConsInputs(){
   var cfg=_metasDados[ano].consultores;
   var lista=_metasNomes.length?_metasNomes:cfg.selecionados;
   el.style.display='grid';
-  el.style.gridTemplateColumns='repeat(auto-fill,minmax(220px,1fr))';
+  el.style.gridTemplateColumns='repeat(auto-fill,minmax(260px,1fr))';
   el.style.gap='8px';
   el.innerHTML=lista.map(function(c){
     var sel=cfg.selecionados.indexOf(c)>=0;
-    var v=cfg.pct[c]!==undefined?cfg.pct[c]:'';
+    var v=cfg.metaAnual[c]!==undefined?_metaMoedaExibir(cfg.metaAnual[c]):'';
     return '<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--surface);border:1px solid '+(sel?'var(--R)':'var(--border)')+';border-radius:6px">'
       +'<input type="checkbox" class="meta-cons-chk" data-cons="'+eh(c)+'" '+(sel?'checked':'')+' onchange="metasToggleConsultor(this)">'
       +'<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text-dim);font-weight:700" title="'+eh(c)+'">'+eh(c)+'</span>'
       +'<div style="position:relative;flex-shrink:0">'
-      +'<input type="number" class="meta-cons-pct-inp" data-cons="'+eh(c)+'" value="'+v+'" placeholder="0" '+(sel?'':'disabled')+' '
-      +'oninput="metasAtualizarSomaPctConsultores()" '
-      +'style="width:56px;padding:5px 18px 5px 6px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px">'
-      +'<span style="position:absolute;right:5px;top:50%;transform:translateY(-50%);font-size:9px;color:var(--text-muted);pointer-events:none">%</span>'
+      +'<span style="position:absolute;left:5px;top:50%;transform:translateY(-50%);font-size:9px;color:var(--text-muted);pointer-events:none">R$</span>'
+      +'<input type="text" inputmode="decimal" class="meta-cons-anual-inp" data-cons="'+eh(c)+'" value="'+v+'" placeholder="0,00" '+(sel?'':'disabled')+' '
+      +'onfocus="metaMoedaFocarEditar(this)" onblur="metaMoedaFormatarExibir(this)" onchange="metasAoVivoAtualizarMetaAnualConsultor(this)" '
+      +'style="width:100px;padding:5px 6px 5px 20px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px">'
       +'</div>'
       +'</div>';
   }).join('');
-  metasAtualizarSomaPctConsultores();
 }
 
 function metasToggleConsultor(chk){
-  var pctInp=document.querySelector('.meta-cons-pct-inp[data-cons="'+CSS.escape(chk.dataset.cons)+'"]');
-  if(pctInp) pctInp.disabled=!chk.checked;
-  metasAtualizarSomaPctConsultores();
-}
-
-function metasAtualizarSomaPctConsultores(){
-  var soma=0;
-  document.querySelectorAll('.meta-cons-chk').forEach(function(chk){
-    if(!chk.checked)return;
-    var inp=document.querySelector('.meta-cons-pct-inp[data-cons="'+CSS.escape(chk.dataset.cons)+'"]');
-    soma+=inp?(parseFloat(inp.value)||0):0;
-  });
-  var elSoma=document.getElementById('meta-cons-pct-soma');
-  if(!elSoma)return;
-  var ok=Math.round(soma)===100;
-  elSoma.textContent='Soma: '+soma.toFixed(0)+'%'+(ok?' ✅':' ⚠️ deve somar 100% entre os selecionados');
-  elSoma.style.color=ok?'#66bb6a':'#ffa726';
+  var anualInp=document.querySelector('.meta-cons-anual-inp[data-cons="'+CSS.escape(chk.dataset.cons)+'"]');
+  if(anualInp) anualInp.disabled=!chk.checked;
 }
 
 function metasAba(aba){
@@ -12040,19 +12011,15 @@ function metasAoVivoAtualizarRealizadoEventoConsultor(el){
   metasRenderizarAba(_metasAbaAtual);
 }
 
-// % do consultor sobre a meta de um mês específico — igual em espírito às
-// funções acima (guarda na config em memória e re-renderiza pra recalcular
-// a meta em R$ do mês na hora, já que agora ela depende do % informado
-// aqui). Campo em branco remove o override e volta a usar o % anual fixo.
-function metasAoVivoAtualizarPctMesConsultor(el){
+// Ao sair do campo de meta anual (R$) de um consultor, atualiza o valor em
+// memória e re-renderiza a aba na hora — a meta de cada mês do consultor
+// (e os cards de Meta Ano/Realizado/%) dependem diretamente desse valor.
+function metasAoVivoAtualizarMetaAnualConsultor(el){
   var ano=metasAnoAtual();
   _metasGarantirAno(ano);
   var cfg=_metasDados[ano].consultores;
-  var cons=el.dataset.cons, mm=el.dataset.mes;
-  var v=el.value===''?null:(parseFloat(el.value)||0);
-  cfg.pctMes[cons]=cfg.pctMes[cons]||{};
-  if(v===null) delete cfg.pctMes[cons][mm];
-  else cfg.pctMes[cons][mm]=v;
+  var cons=el.dataset.cons;
+  cfg.metaAnual[cons]=_metaMoedaParaNumero(el.value);
   metasRenderizarAba(_metasAbaAtual);
 }
 
@@ -12176,15 +12143,15 @@ function _metasMontarTabelaConsultores(ano,d,ganhosTodos){
     :'<div class="dash-vazio" style="margin-bottom:16px">Preencha a Meta Geral do ano na primeira aba pra ver o resumo aqui.</div>';
 
   if(!sel.length){
-    return topCard+'<div class="dash-vazio">Selecione ao menos um consultor abaixo e defina o % de participação de cada um.</div>';
+    return topCard+'<div class="dash-vazio">Selecione ao menos um consultor abaixo e defina a meta anual (R$) de cada um.</div>';
   }
 
-  var somaPct=_metaSomaPctConsultores(cfg);
-  var somaOk=Math.round(somaPct)===100;
-  var aviso=somaOk?'':'<div style="font-size:10px;color:#ffa726;font-weight:800;margin-bottom:10px">⚠️ % dos consultores selecionados não soma 100%</div>';
+  var somaMetaAnual=sel.reduce(function(t,c){return t+((cfg.metaAnual&&cfg.metaAnual[c])||0);},0);
+  var aviso='<div style="font-size:10px;color:var(--text-dim);font-weight:700;margin-bottom:10px">Soma das metas anuais dos consultores selecionados: '+fmt(somaMetaAnual)+(d.geral.total?' ('+Math.round(somaMetaAnual/d.geral.total*100)+'% da Meta Geral — não precisa fechar em 100%)':'')+'</div>';
 
   var cardsHtml=sel.map(function(c){
-    var pctAnual=cfg.pct[c]||0;
+    var pctAnual=_metaConsultorPctAnual(cfg,d.geral,c);
+    var metaAnualC=(cfg.metaAnual&&cfg.metaAnual[c])||0;
     var metaC=0, realC=0;
 
     var linhasMes='';
@@ -12198,17 +12165,12 @@ function _metasMontarTabelaConsultores(ano,d,ganhosTodos){
       realC+=realMesC;
       var manualC=_metaConsultorRealizadoManualMes(cfg,c,mesAno);
       var isManualC=manualC!==null;
-      var pctMesAtualC=(cfg.pctMes&&cfg.pctMes[c]&&cfg.pctMes[c][mm]!==undefined&&cfg.pctMes[c][mm]!==null)?cfg.pctMes[c][mm]:'';
+      var pctMesGeralC=(d.geral.pctMes&&d.geral.pctMes[mm])||0;
       var pctAtgMesC=metaMesC>0?Math.round(realMesC/metaMesC*100):0;
       var corMesC=pctAtgMesC>=100?'#66bb6a':pctAtgMesC>=70?'#ffa726':'#ef5350';
       linhasMes+='<tr style="border-bottom:1px solid var(--border-strong)">'
         +'<td style="padding:4px 8px;color:#90caf9;font-weight:700;font-size:10px">'+MESES_NOMES[m-1]+'</td>'
-        +'<td style="padding:3px 6px"><div style="position:relative;display:inline-block">'
-        +'<input type="number" class="meta-cons-mes-pct-inp" data-cons="'+eh(c)+'" data-mes="'+mm+'" value="'+pctMesAtualC+'" placeholder="'+pctAnual+'" '
-        +'onchange="metasAoVivoAtualizarPctMesConsultor(this)" '
-        +'style="width:60px;padding:3px 16px 3px 5px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:10px">'
-        +'<span style="position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:9px;color:var(--text-muted);pointer-events:none">%</span>'
-        +'</div></td>'
+        +'<td style="text-align:right;color:var(--text-muted);font-size:10px">'+pctMesGeralC+'%</td>'
         +'<td style="text-align:right;color:var(--text-muted);font-size:10px">'+fmt(metaMesC)+'</td>'
         +'<td style="text-align:right;color:'+corMesC+';font-weight:700;font-size:10px">'+fmt(realMesC)+(isManualC?' <span title="valor manual" style="font-size:9px;color:#ffa726">✏️</span>':'')+'</td>'
         +'<td style="text-align:center"><span style="padding:1px 6px;border-radius:8px;font-weight:800;font-size:9px;background:'+corMesC+'22;color:'+corMesC+'">'+pctAtgMesC+'%</span></td>'
@@ -12227,7 +12189,7 @@ function _metasMontarTabelaConsultores(ano,d,ganhosTodos){
 
     return '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px">'
       +'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px">'
-      +'<div style="font-size:13px;font-weight:900;color:var(--text)">'+eh(c)+' <span style="font-size:10px;font-weight:700;color:var(--text-muted)">('+pctAnual+'% da Meta Geral)</span></div>'
+      +'<div style="font-size:13px;font-weight:900;color:var(--text)">'+eh(c)+' <span style="font-size:10px;font-weight:700;color:var(--text-muted)">(meta anual: '+fmt(metaAnualC)+(pctAnual?' — '+pctAnual+'% da Meta Geral':'')+')</span></div>'
       +'<div style="display:flex;gap:14px;align-items:center">'
       +'<div style="text-align:right"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">Meta Ano</div><div style="font-size:13px;font-weight:800;color:var(--text)">'+fmt(metaC)+'</div></div>'
       +'<div style="text-align:right"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">Realizado</div><div style="font-size:13px;font-weight:800;color:'+corC+'">'+fmt(realC)+'</div></div>'
@@ -12236,7 +12198,7 @@ function _metasMontarTabelaConsultores(ano,d,ganhosTodos){
       +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
       +'<thead><tr style="border-bottom:2px solid var(--R)">'
       +'<th style="text-align:left;padding:4px 8px;color:var(--R);font-size:9px;text-transform:uppercase">Mês</th>'
-      +'<th style="text-align:left;padding:4px 8px;color:var(--text-muted);font-size:9px">% Mensal</th>'
+      +'<th style="text-align:right;padding:4px 8px;color:var(--text-muted);font-size:9px">% Peso (Meta Geral)</th>'
       +'<th style="text-align:right;padding:4px 8px;color:var(--text-muted);font-size:9px">Meta</th>'
       +'<th style="text-align:right;padding:4px 8px;color:var(--text-muted);font-size:9px">Realizado</th>'
       +'<th style="text-align:center;padding:4px 8px;color:var(--text-muted);font-size:9px">%</th>'
@@ -12252,12 +12214,11 @@ function _metasMontarTabelaConsultores(ano,d,ganhosTodos){
 // Igual em espírito a _metasMontarTabelaConsultores(), mas o Realizado é
 // contado pela DATA DO EVENTO (f-dia), não pela data de Venda Ganha — mesma
 // base usada na aba Meta de Eventos. A meta mensal de cada consultor usa a
-// meta mensal da Meta DE EVENTOS (não a Meta Geral) x o mesmo % mensal do
-// consultor configurado na aba Consultores (não há um % separado pra
-// eventos — reaproveita o mesmo, já que é o % de participação da pessoa nas
-// vendas da empresa). O realizado manual aqui é um campo independente
-// (realizadoManualEventos), pra não misturar com o histórico lançado na
-// aba Consultores.
+// MESMA meta anual (R$) configurada na aba Consultores × o % de peso mensal
+// da aba Meta Geral (mesma curva sazonal da empresa em ambas as telas — não
+// há uma meta/curva separada pra eventos). O realizado manual aqui é um
+// campo independente (realizadoManualEventos), pra não misturar com o
+// histórico lançado na aba Consultores.
 function _metasMontarTabelaConsultoresEventos(ano,d,ganhosTodos){
   var cfg=d.consultores;
   var sel=cfg.selecionados||[];
@@ -12281,32 +12242,33 @@ function _metasMontarTabelaConsultoresEventos(ano,d,ganhosTodos){
     :'<div class="dash-vazio" style="margin-bottom:16px">Preencha a Meta de Eventos do ano na aba "Meta de Eventos" pra ver o resumo aqui.</div>';
 
   if(!sel.length){
-    return topCard+'<div class="dash-vazio">Selecione ao menos um consultor na aba Consultores e defina o % de participação de cada um.</div>';
+    return topCard+'<div class="dash-vazio">Selecione ao menos um consultor na aba Consultores e defina a meta anual (R$) de cada um.</div>';
   }
 
-  var aviso='<div style="font-size:10px;color:var(--text-dim);font-weight:700;margin-bottom:10px">O % mensal de cada consultor é o mesmo configurado na aba Consultores — ajuste por lá.</div>';
+  var aviso='<div style="font-size:10px;color:var(--text-dim);font-weight:700;margin-bottom:10px">A meta anual e o % de peso mensal usados aqui são os mesmos configurados nas abas Consultores e Meta Geral — ajuste por lá.</div>';
 
   var cardsHtml=sel.map(function(c){
-    var pctAnual=cfg.pct[c]||0;
+    var pctAnual=_metaConsultorPctAnual(cfg,d.geral,c);
+    var metaAnualC=(cfg.metaAnual&&cfg.metaAnual[c])||0;
     var metaC=0, realC=0;
 
     var linhasMes='';
     for(var m=1;m<=12;m++){
       var mm=(m<10?'0':'')+m;
       var mesAno=ano+'-'+mm;
-      var metaMesC=_metaValorConsultorMes(cfg,d.eventos,c,mm);
+      var metaMesC=_metaValorConsultorMes(cfg,d.geral,c,mm);
       metaC+=metaMesC;
       var autoValorC=_metaMesEventoAuto(ganhosTodos,mesAno,c).reduce(function(t,o){return t+dashValOrc(o);},0);
       var realMesC=_metaValorConsultorRealizadoEventoMes(cfg,c,mesAno,autoValorC);
       realC+=realMesC;
       var manualC=_metaConsultorRealizadoManualEventoMes(cfg,c,mesAno);
       var isManualC=manualC!==null;
-      var pctMesC=_metaConsultorPctMes(cfg,c,mm);
+      var pctMesGeralC=(d.geral.pctMes&&d.geral.pctMes[mm])||0;
       var pctAtgMesC=metaMesC>0?Math.round(realMesC/metaMesC*100):0;
       var corMesC=pctAtgMesC>=100?'#66bb6a':pctAtgMesC>=70?'#ffa726':'#ef5350';
       linhasMes+='<tr style="border-bottom:1px solid var(--border-strong)">'
         +'<td style="padding:4px 8px;color:#90caf9;font-weight:700;font-size:10px">'+MESES_NOMES[m-1]+'</td>'
-        +'<td style="text-align:right;color:var(--text-muted);font-size:10px">'+pctMesC+'%</td>'
+        +'<td style="text-align:right;color:var(--text-muted);font-size:10px">'+pctMesGeralC+'%</td>'
         +'<td style="text-align:right;color:var(--text-muted);font-size:10px">'+fmt(metaMesC)+'</td>'
         +'<td style="text-align:right;color:'+corMesC+';font-weight:700;font-size:10px">'+fmt(realMesC)+(isManualC?' <span title="valor manual" style="font-size:9px;color:#ffa726">✏️</span>':'')+'</td>'
         +'<td style="text-align:center"><span style="padding:1px 6px;border-radius:8px;font-weight:800;font-size:9px;background:'+corMesC+'22;color:'+corMesC+'">'+pctAtgMesC+'%</span></td>'
@@ -12325,7 +12287,7 @@ function _metasMontarTabelaConsultoresEventos(ano,d,ganhosTodos){
 
     return '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px">'
       +'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px">'
-      +'<div style="font-size:13px;font-weight:900;color:var(--text)">'+eh(c)+' <span style="font-size:10px;font-weight:700;color:var(--text-muted)">('+pctAnual+'% da Meta Geral)</span></div>'
+      +'<div style="font-size:13px;font-weight:900;color:var(--text)">'+eh(c)+' <span style="font-size:10px;font-weight:700;color:var(--text-muted)">(meta anual: '+fmt(metaAnualC)+(pctAnual?' — '+pctAnual+'% da Meta Geral':'')+')</span></div>'
       +'<div style="display:flex;gap:14px;align-items:center">'
       +'<div style="text-align:right"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">Meta Ano (Eventos)</div><div style="font-size:13px;font-weight:800;color:var(--text)">'+fmt(metaC)+'</div></div>'
       +'<div style="text-align:right"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">Realizado</div><div style="font-size:13px;font-weight:800;color:'+corC+'">'+fmt(realC)+'</div></div>'
@@ -12334,7 +12296,7 @@ function _metasMontarTabelaConsultoresEventos(ano,d,ganhosTodos){
       +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
       +'<thead><tr style="border-bottom:2px solid var(--R)">'
       +'<th style="text-align:left;padding:4px 8px;color:var(--R);font-size:9px;text-transform:uppercase">Mês</th>'
-      +'<th style="text-align:right;padding:4px 8px;color:var(--text-muted);font-size:9px">% Mensal</th>'
+      +'<th style="text-align:right;padding:4px 8px;color:var(--text-muted);font-size:9px">% Peso (Meta Geral)</th>'
       +'<th style="text-align:right;padding:4px 8px;color:var(--text-muted);font-size:9px">Meta</th>'
       +'<th style="text-align:right;padding:4px 8px;color:var(--text-muted);font-size:9px">Realizado (Eventos)</th>'
       +'<th style="text-align:center;padding:4px 8px;color:var(--text-muted);font-size:9px">%</th>'
