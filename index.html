@@ -1754,7 +1754,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <p class="sub" id="metas-sub" style="margin:0">Configure e acompanhe as metas</p>
       </div>
       <div style="display:flex;gap:10px;align-items:center">
-        <span id="metas-save-status" style="font-size:10px;font-weight:700"></span>
+        <span id="metas-save-status" class="metas-save-status-txt" style="font-size:10px;font-weight:700"></span>
         <button class="btn btn-r btn-sm" onclick="metasRenderizar()">🔄 Atualizar</button>
         <button class="btn btn-o btn-sm" onclick="document.getElementById('metas-ov').classList.remove('open');abrirHome()">✕</button>
       </div>
@@ -1781,6 +1781,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
             </div>
           </div>
           <button onclick="metasSalvar()" style="padding:8px 16px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer;white-space:nowrap">💾 Salvar Metas</button>
+          <span class="metas-save-status-txt" style="font-size:10px;font-weight:700;white-space:nowrap"></span>
         </div>
         <p style="font-size:9px;color:var(--text-dim);margin:0 0 8px">Distribua os 100% da meta anual entre os 12 meses (participação percentual). O realizado de cada mês é automático — soma das vendas que viraram "Venda Ganha" naquele mês — e você pode digitar um valor manual pra somar ao automático de um mês específico (ex: vendas antigas, fora do sistema).</p>
         <div id="meta-geral-pct-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(85px,1fr));gap:6px"></div>
@@ -1797,6 +1798,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <div id="metas-cons-inputs"></div>
         <div id="meta-cons-pct-soma" style="font-size:10px;font-weight:800;margin-top:6px"></div>
         <button onclick="metasSalvar()" style="margin-top:8px;padding:7px 16px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Metas</button>
+        <span class="metas-save-status-txt" style="font-size:10px;font-weight:700;margin-left:8px"></span>
       </div>
     </div>
 
@@ -1812,6 +1814,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <div id="meta-ev-pct-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(85px,1fr));gap:6px"></div>
         <div id="meta-ev-pct-soma" style="font-size:10px;font-weight:800;margin-top:6px"></div>
         <button onclick="metasSalvar()" style="margin-top:8px;padding:7px 16px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Metas</button>
+        <span class="metas-save-status-txt" style="font-size:10px;font-weight:700;margin-left:8px"></span>
       </div>
       <div id="metas-ev-resultado"></div>
     </div>
@@ -11532,12 +11535,19 @@ function _metasVazio(){
   };
 }
 
+// Atualiza TODOS os indicadores de status (não só o do cabeçalho) — a aba
+// Consultores pode ficar bem comprida (vários cards, cada um com seu botão
+// Salvar), então o aviso "✅ Salvo" precisa aparecer perto de QUALQUER botão
+// clicado, não só no topo da tela (que fica fora da área visível ao rolar).
 function _metasStatus(msg,cor){
-  var el=document.getElementById('metas-save-status');
-  if(!el)return;
-  el.textContent=msg||'';
-  el.style.color=cor||'var(--text-muted)';
-  if(msg) setTimeout(function(){ if(el.textContent===msg) el.textContent=''; },3000);
+  var els=document.querySelectorAll('.metas-save-status-txt');
+  els.forEach(function(el){
+    el.textContent=msg||'';
+    el.style.color=cor||'var(--text-muted)';
+  });
+  if(msg) setTimeout(function(){
+    els.forEach(function(el){ if(el.textContent===msg) el.textContent=''; });
+  },3000);
 }
 
 async function metasCarregar(){
@@ -11650,14 +11660,19 @@ async function metasSalvar(){
   d.consultores.pctMes=pctMesCons;
   d.consultores.realizadoManual=realizadoManualCons;
 
+  var msgTxt='✅ Salvo', msgCor='#66bb6a';
   try{
     await fbDb.collection('config').doc('metas').set({anos:_metasDados});
-    _metasStatus('✅ Salvo','#66bb6a');
   }catch(e){
     console.warn('metasSalvar:',e);
-    _metasStatus('❌ Erro ao salvar','#ef5350');
+    msgTxt='❌ Erro ao salvar'; msgCor='#ef5350';
   }
+  // Re-renderiza ANTES de mostrar o status: os botões "Salvar Metas" das
+  // tabelas (Meta Geral/Eventos, cada consultor) ficam dentro das divs de
+  // resultado, que são reconstruídas aqui — se o status fosse setado antes,
+  // seria apagado na hora pelo re-render, sem o usuário nem ver a mensagem.
   metasRenderizarAba(_metasAbaAtual);
+  _metasStatus(msgTxt,msgCor);
 }
 
 function metasAnoAtual(){
@@ -11765,29 +11780,26 @@ function _metaSomaPctConsultores(consultoresCfg){
   return sel.reduce(function(t,c){return t+(parseFloat(pct[c])||0);},0);
 }
 
-// % mensal PRÓPRIO de um consultor — cada consultor fatia a própria meta
-// anual (total geral x % dele) com o ritmo mensal que quiser, independente
-// do formato mensal da Meta Geral da empresa. Um mês com 0% (ou nunca
-// preenchido) simplesmente não gera meta naquele mês — cobre naturalmente
-// quem entrou no meio do ano, sem precisar de um controle à parte.
+// % do consultor sobre a meta de um MÊS específico (não o % anual fixo) —
+// se não houver um valor salvo pra esse mês, cai no % anual fixo do
+// consultor (mesma % pra todos os meses, comportamento padrão sem precisar
+// mexer em nada). O consultor só precisa ajustar os meses que forem
+// diferentes — por exemplo colocar 0% num mês em que ainda não trabalhava.
 function _metaConsultorPctMes(consultoresCfg,nome,mm){
   var pctMesCons=(consultoresCfg&&consultoresCfg.pctMes&&consultoresCfg.pctMes[nome]);
-  return (pctMesCons&&pctMesCons[mm])||0;
+  if(pctMesCons && pctMesCons[mm]!==undefined && pctMesCons[mm]!==null) return parseFloat(pctMesCons[mm])||0;
+  return (consultoresCfg&&consultoresCfg.pct&&consultoresCfg.pct[nome])||0;
 }
 
-// Soma dos % mensais próprios de um consultor (deve fechar em 100).
-function _metaConsultorSomaPctMes(consultoresCfg,nome){
-  var pctMesCons=(consultoresCfg&&consultoresCfg.pctMes&&consultoresCfg.pctMes[nome])||{};
-  return Object.keys(pctMesCons).reduce(function(t,k){return t+(parseFloat(pctMesCons[k])||0);},0);
-}
-
-// Meta mensal (R$) de um consultor: fatia anual dele (total geral x % dele)
-// x % mensal PRÓPRIO daquele mês.
-function _metaValorConsultorMes(consultoresCfg,totalGeral,nome,mm){
-  var pctAnual=(consultoresCfg&&consultoresCfg.pct&&consultoresCfg.pct[nome])||0;
-  var metaAnualC=(totalGeral||0)*(pctAnual/100);
+// Meta mensal (R$) de um consultor: a meta MENSAL DA META GERAL (já fatiada
+// pelos % mensais da empresa, aba Meta Geral) × o % do consultor sobre
+// aquele mês. Importante: a base é sempre o valor mensal já calculado da
+// Meta Geral — nunca o total anual sozinho — pra não inflar a meta do
+// consultor além da meta da empresa pro período.
+function _metaValorConsultorMes(consultoresCfg,geralCfg,nome,mm){
+  var metaMesGeral=_metaValorMes(geralCfg,mm);
   var pctMesC=_metaConsultorPctMes(consultoresCfg,nome,mm);
-  return metaAnualC*(pctMesC/100);
+  return metaMesGeral*(pctMesC/100);
 }
 
 // Realizado manual de um consultor num mês (YYYY-MM), ou null se não preenchido.
@@ -11974,17 +11986,20 @@ function metasAoVivoAtualizarRealizadoConsultor(el){
   metasRenderizarAba(_metasAbaAtual);
 }
 
-// Atualiza só o indicador de soma do % mensal de UM consultor, sem
-// re-renderizar a tabela inteira (evita perder o foco enquanto digita).
-function metasAtualizarSomaPctMesConsultor(el){
-  var cons=el.dataset.cons;
-  var soma=0;
-  document.querySelectorAll('.meta-cons-mes-pct-inp[data-cons="'+CSS.escape(cons)+'"]').forEach(function(e){ soma+=parseFloat(e.value)||0; });
-  var elSoma=document.querySelector('.meta-cons-mes-soma[data-cons="'+CSS.escape(cons)+'"]');
-  if(!elSoma)return;
-  var ok=Math.round(soma)===100;
-  elSoma.textContent='Soma % mensal deste consultor: '+soma.toFixed(0)+'%'+(ok?' ✅':' ⚠️ deve somar 100%');
-  elSoma.style.color=ok?'#66bb6a':'#ffa726';
+// % do consultor sobre a meta de um mês específico — igual em espírito às
+// funções acima (guarda na config em memória e re-renderiza pra recalcular
+// a meta em R$ do mês na hora, já que agora ela depende do % informado
+// aqui). Campo em branco remove o override e volta a usar o % anual fixo.
+function metasAoVivoAtualizarPctMesConsultor(el){
+  var ano=metasAnoAtual();
+  _metasGarantirAno(ano);
+  var cfg=_metasDados[ano].consultores;
+  var cons=el.dataset.cons, mm=el.dataset.mes;
+  var v=el.value===''?null:(parseFloat(el.value)||0);
+  cfg.pctMes[cons]=cfg.pctMes[cons]||{};
+  if(v===null) delete cfg.pctMes[cons][mm];
+  else cfg.pctMes[cons][mm]=v;
+  metasRenderizarAba(_metasAbaAtual);
 }
 
 function metasRenderizarAba(aba){
@@ -12070,7 +12085,7 @@ function _metasMontarTabelaMensal(tipo,cfg,ano,ganhosTodos,titulo){
     +'<th style="text-align:center;padding:6px 8px;color:var(--text-muted);font-size:10px">%</th>'
     +'<th style="text-align:left;padding:6px 8px;color:var(--text-muted);font-size:10px">Realizado Manual (soma ao automático)</th>'
     +'</tr></thead><tbody>'+linhas+'</tbody></table></div>'
-    +'<div style="margin-top:8px"><button onclick="metasSalvar()" style="padding:7px 16px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Metas</button></div>'
+    +'<div style="margin-top:8px"><button onclick="metasSalvar()" style="padding:7px 16px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Metas</button> <span class="metas-save-status-txt" style="font-size:10px;font-weight:700"></span></div>'
     +'</div>'
     :'<div class="dash-vazio">Preencha a meta total do ano acima e clique em Salvar.</div>');
 }
@@ -12109,33 +12124,30 @@ function _metasMontarTabelaConsultores(ano,d,ganhosTodos){
   var somaPct=_metaSomaPctConsultores(cfg);
   var somaOk=Math.round(somaPct)===100;
   var aviso=somaOk?'':'<div style="font-size:10px;color:#ffa726;font-weight:800;margin-bottom:10px">⚠️ % dos consultores selecionados não soma 100%</div>';
-  var totalGeral=d.geral.total||0;
 
   var cardsHtml=sel.map(function(c){
     var pctAnual=cfg.pct[c]||0;
-    var somaPctMesC=_metaConsultorSomaPctMes(cfg,c);
-    var somaPctMesOk=Math.round(somaPctMesC)===100;
     var metaC=0, realC=0;
 
     var linhasMes='';
     for(var m=1;m<=12;m++){
       var mm=(m<10?'0':'')+m;
       var mesAno=ano+'-'+mm;
-      var metaMesC=_metaValorConsultorMes(cfg,totalGeral,c,mm);
+      var metaMesC=_metaValorConsultorMes(cfg,d.geral,c,mm);
       metaC+=metaMesC;
       var autoValorC=_metaMesGanhoAuto(ganhosTodos,mesAno,c).reduce(function(t,o){return t+dashValOrc(o);},0);
       var realMesC=_metaValorConsultorRealizadoMes(cfg,c,mesAno,autoValorC);
       realC+=realMesC;
       var manualC=_metaConsultorRealizadoManualMes(cfg,c,mesAno);
       var isManualC=manualC!==null;
-      var pctMesAtualC=(cfg.pctMes&&cfg.pctMes[c]&&cfg.pctMes[c][mm]!==undefined)?cfg.pctMes[c][mm]:'';
+      var pctMesAtualC=(cfg.pctMes&&cfg.pctMes[c]&&cfg.pctMes[c][mm]!==undefined&&cfg.pctMes[c][mm]!==null)?cfg.pctMes[c][mm]:'';
       var pctAtgMesC=metaMesC>0?Math.round(realMesC/metaMesC*100):0;
       var corMesC=pctAtgMesC>=100?'#66bb6a':pctAtgMesC>=70?'#ffa726':'#ef5350';
       linhasMes+='<tr style="border-bottom:1px solid var(--border-strong)">'
         +'<td style="padding:4px 8px;color:#90caf9;font-weight:700;font-size:10px">'+MESES_NOMES[m-1]+'</td>'
         +'<td style="padding:3px 6px"><div style="position:relative;display:inline-block">'
-        +'<input type="number" class="meta-cons-mes-pct-inp" data-cons="'+eh(c)+'" data-mes="'+mm+'" value="'+pctMesAtualC+'" placeholder="0" '
-        +'oninput="metasAtualizarSomaPctMesConsultor(this)" '
+        +'<input type="number" class="meta-cons-mes-pct-inp" data-cons="'+eh(c)+'" data-mes="'+mm+'" value="'+pctMesAtualC+'" placeholder="'+pctAnual+'" '
+        +'onchange="metasAoVivoAtualizarPctMesConsultor(this)" '
         +'style="width:60px;padding:3px 16px 3px 5px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:10px">'
         +'<span style="position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:9px;color:var(--text-muted);pointer-events:none">%</span>'
         +'</div></td>'
@@ -12163,7 +12175,6 @@ function _metasMontarTabelaConsultores(ano,d,ganhosTodos){
       +'<div style="text-align:right"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">Realizado</div><div style="font-size:13px;font-weight:800;color:'+corC+'">'+fmt(realC)+'</div></div>'
       +'<div style="text-align:center"><span style="padding:2px 8px;border-radius:10px;font-weight:900;font-size:11px;background:'+corC+'22;color:'+corC+';border:1px solid '+corC+'">'+pctC+'%</span></div>'
       +'</div></div>'
-      +'<div class="meta-cons-mes-soma" data-cons="'+eh(c)+'" style="font-size:9px;font-weight:700;margin-bottom:6px;color:'+(somaPctMesOk?'#66bb6a':'#ffa726')+'">Soma % mensal deste consultor: '+somaPctMesC.toFixed(0)+'%'+(somaPctMesOk?' ✅':' ⚠️ deve somar 100%')+'</div>'
       +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
       +'<thead><tr style="border-bottom:2px solid var(--R)">'
       +'<th style="text-align:left;padding:4px 8px;color:var(--R);font-size:9px;text-transform:uppercase">Mês</th>'
@@ -12173,7 +12184,7 @@ function _metasMontarTabelaConsultores(ano,d,ganhosTodos){
       +'<th style="text-align:center;padding:4px 8px;color:var(--text-muted);font-size:9px">%</th>'
       +'<th style="text-align:left;padding:4px 8px;color:var(--text-muted);font-size:9px">Realizado Manual</th>'
       +'</tr></thead><tbody>'+linhasMes+'</tbody></table></div>'
-      +'<div style="margin-top:8px"><button onclick="metasSalvar()" style="padding:6px 14px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer;font-size:11px">💾 Salvar Metas</button></div>'
+      +'<div style="margin-top:8px"><button onclick="metasSalvar()" style="padding:6px 14px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer;font-size:11px">💾 Salvar Metas</button> <span class="metas-save-status-txt" style="font-size:10px;font-weight:700"></span></div>'
       +'</div>';
   }).join('');
 
