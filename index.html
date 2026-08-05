@@ -1893,7 +1893,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
           <option>Jefferson</option><option>Wagner Wolff</option>
         </select>
       </div>
-      <div><button class="btn btn-r btn-sm" onclick="dashRenderizar()">📊 Aplicar</button></div>
+      <div><button class="btn btn-r btn-sm" onclick="dashAtualizar(true)" title="Rebusca os orçamentos do Drive antes de filtrar, pra nunca mostrar dados desatualizados (ex.: uma venda marcada Ganha há pouco)">📊 Aplicar</button></div>
     </div>
 
     <div id="dash-corpo"><div class="dash-loading">⏳ Carregando orçamentos do Drive...</div></div>
@@ -7713,6 +7713,26 @@ var FUNIL_CAMPOS_VAZIOS = [
   {id:'email',    label:'E-mail'},
   {id:'followup', label:'Próximo Follow-up'}
 ];
+// Data de fechamento (venda GANHA ou PERDIDA) de um orçamento — a negociação
+// foi encerrada, não importa o resultado. Usada em TRÊS lugares (filtro
+// avançado do Funil, Dashboard Comercial e Relatórios) — centralizada aqui
+// pra evitar que cada tela reimplemente a mesma busca de forma diferente e
+// fique inconsistente (ex.: uma versão só contar "ganha" e esquecer "perdida",
+// como acontecia antes nos filtros de Data de Fechamento do Dashboard e dos
+// Relatórios, causando pesquisas por período que pareciam "sumir" com dados).
+// Sempre pega a ocorrência MAIS RECENTE de ganha/perdida no histórico (relevante
+// quando um orçamento é reaberto e fechado de novo).
+function _dataFechamentoOrc(o){
+  var hist=(o&&o.dados&&o.dados.comercialHist)||[];
+  for(var i=hist.length-1;i>=0;i--){
+    if(hist[i].status==='ganha'||hist[i].status==='perdida'){
+      if(hist[i].dataISO) return hist[i].dataISO;
+      if(hist[i].data){var p=hist[i].data.split(/[/,\s]+/);if(p.length>=3)return p[2]+'-'+p[1]+'-'+p[0];}
+      return '';
+    }
+  }
+  return '';
+}
 // Filtros por período — datas que temos de forma confiável (ISO) no nosso modelo.
 // "Data de Criação" só é confiável para leads (criadoEmISO); orçamentos não guardam
 // data de criação separada da data de última atualização, então ficam sem valor
@@ -7733,9 +7753,7 @@ var FUNIL_FILTROS_DATA = [
   }},
   {id:'fechamento', label:'Data de Fechamento', getData:function(item, isLead){
     if(isLead) return '';
-    var hist = (item.dados&&item.dados.comercialHist)||[];
-    for(var i=hist.length-1;i>=0;i--){ if(hist[i].status==='ganha'||hist[i].status==='perdida') return hist[i].dataISO||''; }
-    return '';
+    return _dataFechamentoOrc(item);
   }},
   {id:'previsaoFechamento', label:'Data de Previsão de Fechamento (Evento)', getData:function(item, isLead){
     return isLead ? '' : ((item.form&&item.form['f-dia'])||'');
@@ -9944,15 +9962,27 @@ async function abrirRelatorios(){
   if(elPD)elPD.value=hoje;
   if(elPA)elPA.value=p90.toISOString().split('T')[0];
 
+  await relCarregarDados();
+}
+
+// Busca (ou rebusca) os orçamentos do Drive pra alimentar os Relatórios.
+// forcar=true ignora o cache de sessão e rebusca tudo do backend — usado em
+// relGerar() pra garantir que "Gerar" NUNCA mostre dados desatualizados (ex.:
+// uma venda marcada Ganha há pouco não aparecendo no filtro de Data de
+// Fechamento porque _relDados ainda era o snapshot de quando os Relatórios
+// foram abertos, antes da mudança).
+async function relCarregarDados(forcar){
   document.getElementById('rel-sub').textContent='Carregando orçamentos do Drive...';
-  _relDados=[];
+  if(!forcar) _relDados=[];
   try{
     var r=await fetch(SCRIPT_URL+'?action=list&q=');
     var d=await r.json();
     if(!d.ok)throw new Error(d.erro);
     var lista=d.lista||[];
     document.getElementById('rel-sub').textContent='Carregando '+lista.length+' orçamentos...';
-    var dados=await fetchComLimite(lista,5);
+    var dados=await fetchProgressivo(lista,15,function(parciais,total){
+      document.getElementById('rel-sub').textContent='⏳ '+parciais.length+' / '+total+' orçamentos...';
+    },forcar);
     _relDados=dados.filter(Boolean);
     document.getElementById('rel-sub').textContent='📦 '+_relDados.length+' orçamentos carregados — selecione uma aba e clique em Gerar';
   }catch(e){
@@ -9961,16 +9991,7 @@ async function abrirRelatorios(){
 }
 
 function relGetDt(o,campo){
-  if(campo==='fechamento'){
-    var _h=(o.dados&&o.dados.comercialHist)||[];
-    for(var _i=_h.length-1;_i>=0;_i--){
-      if(_h[_i].status==='ganha'){
-        if(_h[_i].dataISO) return _h[_i].dataISO;
-        if(_h[_i].data){var _p=_h[_i].data.split(/[/,\s]+/);if(_p.length>=3)return _p[2]+'-'+_p[1]+'-'+_p[0];}
-      }
-    }
-    return '';
-  }
+  if(campo==='fechamento') return _dataFechamentoOrc(o);
   return o.form&&o.form[campo||'f-data']||'';
 }
 function relFiltrarPorData(de,ate,campo){
@@ -9988,8 +10009,14 @@ function relKpi(el,cards){
   }).join('');
 }
 
-function relGerar(aba){
-  if(!_relDados.length){alert('Aguarde o carregamento dos dados ou reabra os Relatórios.');return;}
+// Sempre rebusca os orçamentos do Drive (forcar=true) antes de gerar
+// qualquer relatório — evita mostrar dados desatualizados quando os
+// Relatórios ficaram abertos e algo mudou nesse meio tempo (ex.: uma venda
+// marcada Ganha não aparecendo no filtro de Data de Fechamento porque
+// _relDados ainda era o snapshot de quando a tela foi aberta).
+async function relGerar(aba){
+  await relCarregarDados(true);
+  if(!_relDados.length){alert('Nenhum orçamento encontrado no Drive.');return;}
   if(aba==='periodo')relGerarPeriodo();
   else if(aba==='consultor')relGerarConsultor();
   else if(aba==='perda')relGerarPerda();
@@ -10860,15 +10887,8 @@ function dashFiltrar(){
   return _dashDados.filter(function(o){
     var dt='';
     if(tipoDt==='f-dia') dt=o.form&&o.form['f-dia']||'';
-    else if(tipoDt==='fechamento'){
-      var _h=(o.dados&&o.dados.comercialHist)||[];
-      for(var _i=_h.length-1;_i>=0;_i--){
-        if(_h[_i].status==='ganha'){
-          if(_h[_i].dataISO){dt=_h[_i].dataISO;break;}
-          if(_h[_i].data){var _p=_h[_i].data.split(/[/,\s]+/);if(_p.length>=3){dt=_p[2]+'-'+_p[1]+'-'+_p[0];break;}}
-        }
-      }
-    } else dt=o.form&&o.form['f-data']||'';
+    else if(tipoDt==='fechamento') dt=_dataFechamentoOrc(o);
+    else dt=o.form&&o.form['f-data']||'';
     if(de||ate){if(!dt) return false;if(de&&dt<de) return false;if(ate&&dt>ate) return false;}
     if(cons && (o.form && o.form['f-cons']) !== cons) return false;
     if(funil){
