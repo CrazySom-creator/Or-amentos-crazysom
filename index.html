@@ -1793,13 +1793,13 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 
     <!-- ABA: Consultores -->
     <div class="rel-pane" id="mpane-consultor">
-      <div id="metas-cons-resultado"></div>
-      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:12px;margin-top:14px">
-        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;display:block;margin-bottom:8px">Selecione quem participa da meta deste ano. Ao marcar, o card do consultor aparece no topo desta aba, com o campo de meta ANUAL em R$ (não precisa somar 100% da Meta Geral — dimensione por potencial, região ou segmento), a coluna de meses ativos e o detalhamento mês a mês (incluindo realizado manual). Essa mesma meta anual também é usada na aba "Consultor x Eventos".</label>
-        <div id="metas-cons-inputs"></div>
-        <button onclick="metasSalvar()" style="margin-top:8px;padding:7px 16px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Metas</button>
-        <span class="metas-save-status-txt" style="font-size:10px;font-weight:700;margin-left:8px"></span>
+      <p style="font-size:9px;color:var(--text-dim);margin:0 0 12px">Adicione quem participa da meta deste ano. Ao adicionar, o card do consultor aparece abaixo, com o campo de meta ANUAL em R$ (não precisa somar 100% da Meta Geral — dimensione por potencial, região ou segmento), a coluna de meses ativos e o detalhamento mês a mês (incluindo realizado manual). Essa mesma meta anual também é usada na aba "Consultor x Eventos".</p>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800">Adicionar consultor:</label>
+        <select id="metas-cons-add-select" style="padding:6px 8px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;max-width:220px"></select>
+        <button onclick="metasAdicionarConsultor()" style="padding:6px 12px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer;font-size:11px">➕ Adicionar</button>
       </div>
+      <div id="metas-cons-resultado"></div>
     </div>
 
     <!-- ABA: Meta de Eventos -->
@@ -11652,15 +11652,13 @@ async function metasSalvar(){
   // uso do sistema). A meta de cada mês é a meta anual do consultor x o %
   // de peso mensal já configurado na aba Meta Geral (mesma curva sazonal da
   // empresa, aplicada sobre o valor absoluto de cada consultor).
-  var selecionados=[];
+  // A seleção (d.consultores.selecionados) já é mantida em memória ao vivo
+  // por metasAdicionarConsultor()/metasRemoverConsultor() — não precisa mais
+  // ser reconstruída aqui a partir de checkboxes (não existem mais). Só a
+  // meta anual em R$ de cada card visível é lida do DOM.
   var metaAnualCons={};
-  document.querySelectorAll('.meta-cons-chk').forEach(function(chk){
-    var c=chk.dataset.cons;
-    if(chk.checked){
-      selecionados.push(c);
-      var inp=document.querySelector('.meta-cons-anual-inp[data-cons="'+CSS.escape(c)+'"]');
-      metaAnualCons[c]=inp?_metaMoedaParaNumero(inp.value):0;
-    }
+  document.querySelectorAll('.meta-cons-anual-inp').forEach(function(inp){
+    metaAnualCons[inp.dataset.cons]=_metaMoedaParaNumero(inp.value);
   });
   var realizadoManualCons={};
   document.querySelectorAll('.meta-cons-mes-real-inp').forEach(function(el){
@@ -11685,7 +11683,6 @@ async function metasSalvar(){
     realizadoManualEventosCons[c]=realizadoManualEventosCons[c]||{};
     if(v!==null) realizadoManualEventosCons[c][ym]=v;
   });
-  d.consultores.selecionados=selecionados;
   d.consultores.metaAnual=metaAnualCons;
   d.consultores.mesesAtivos=mesesAtivosCons;
   d.consultores.realizadoManual=realizadoManualCons;
@@ -11921,36 +11918,47 @@ function metasAtualizarSomaPct(containerId,somaId,classeInput){
   elSoma.style.color=ok?'#66bb6a':'#ffa726';
 }
 
-function metasRenderizarConsInputs(){
-  var el=document.getElementById('metas-cons-inputs');
+// Preenche o <select> de "Adicionar consultor" só com quem AINDA NÃO está
+// na meta deste ano (evita duplicar). Substituiu a antiga grade de
+// checkboxes — a lista de participantes agora cresce/encolhe via
+// metasAdicionarConsultor()/metasRemoverConsultor() (botão no card).
+function metasRenderizarConsAddSelect(){
+  var el=document.getElementById('metas-cons-add-select');
   if(!el)return;
   var ano=metasAnoAtual();
   _metasGarantirAno(ano);
   var cfg=_metasDados[ano].consultores;
-  var lista=_metasNomes.length?_metasNomes:cfg.selecionados;
-  el.style.display='grid';
-  el.style.gridTemplateColumns='repeat(auto-fill,minmax(200px,1fr))';
-  el.style.gap='8px';
-  el.innerHTML=lista.map(function(c){
-    var sel=cfg.selecionados.indexOf(c)>=0;
-    return '<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--surface);border:1px solid '+(sel?'var(--R)':'var(--border)')+';border-radius:6px">'
-      +'<input type="checkbox" class="meta-cons-chk" data-cons="'+eh(c)+'" '+(sel?'checked':'')+' onchange="metasToggleConsultor(this)">'
-      +'<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text-dim);font-weight:700" title="'+eh(c)+'">'+eh(c)+'</span>'
-      +'</div>';
-  }).join('');
+  var disponiveis=(_metasNomes.length?_metasNomes:[]).filter(function(c){ return cfg.selecionados.indexOf(c)<0; });
+  if(!disponiveis.length){
+    el.innerHTML='<option value="">Todos já adicionados</option>';
+    el.disabled=true;
+    return;
+  }
+  el.disabled=false;
+  el.innerHTML=disponiveis.map(function(c){ return '<option value="'+eh(c)+'">'+eh(c)+'</option>'; }).join('');
 }
 
-// Marca/desmarca o consultor na hora (não só ao salvar) e re-renderiza —
-// assim o card dele (com o campo de meta anual editável) aparece
-// imediatamente ao marcar, sem precisar salvar antes pra poder editar a meta.
-function metasToggleConsultor(chk){
+// Adiciona o consultor escolhido no <select> à meta deste ano e re-renderiza
+// na hora — o card dele aparece já com o campo de meta anual pra preencher.
+function metasAdicionarConsultor(){
+  var el=document.getElementById('metas-cons-add-select');
+  if(!el||!el.value)return;
   var ano=metasAnoAtual();
   _metasGarantirAno(ano);
   var cfg=_metasDados[ano].consultores;
-  var cons=chk.dataset.cons;
-  var idx=cfg.selecionados.indexOf(cons);
-  if(chk.checked && idx<0) cfg.selecionados.push(cons);
-  else if(!chk.checked && idx>=0) cfg.selecionados.splice(idx,1);
+  if(cfg.selecionados.indexOf(el.value)<0) cfg.selecionados.push(el.value);
+  metasRenderizarAba(_metasAbaAtual);
+}
+
+// Remove o consultor da meta deste ano (botão "✕" no card) e re-renderiza —
+// o card some e o nome volta a aparecer no <select> de adicionar.
+function metasRemoverConsultor(nome){
+  if(!confirm('Remover '+nome+' da meta deste ano?'))return;
+  var ano=metasAnoAtual();
+  _metasGarantirAno(ano);
+  var cfg=_metasDados[ano].consultores;
+  var idx=cfg.selecionados.indexOf(nome);
+  if(idx>=0) cfg.selecionados.splice(idx,1);
   metasRenderizarAba(_metasAbaAtual);
 }
 
@@ -12074,7 +12082,7 @@ function metasRenderizarAba(aba){
   }
 
   if(aba==='consultor'){
-    metasRenderizarConsInputs();
+    metasRenderizarConsAddSelect();
     document.getElementById('metas-cons-resultado').innerHTML=_metasMontarTabelaConsultores(ano,d,ganhosTodos);
   }
 
@@ -12182,7 +12190,7 @@ function _metasMontarTabelaConsultores(ano,d,ganhosTodos){
     :'<div class="dash-vazio" style="margin-bottom:16px">Preencha a Meta Geral do ano na primeira aba pra ver o resumo aqui.</div>';
 
   if(!sel.length){
-    return topCard+'<div class="dash-vazio">Selecione ao menos um consultor abaixo e defina a meta anual (R$) de cada um.</div>';
+    return topCard+'<div class="dash-vazio">Use o campo "Adicionar consultor" acima e defina a meta anual (R$) de cada um.</div>';
   }
 
   var somaMetaAnual=sel.reduce(function(t,c){return t+((cfg.metaAnual&&cfg.metaAnual[c])||0);},0);
@@ -12245,6 +12253,7 @@ function _metasMontarTabelaConsultores(ano,d,ganhosTodos){
       +'<div style="text-align:right"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">Meta Ano</div><div style="font-size:13px;font-weight:800;color:var(--text)">'+fmt(metaC)+'</div></div>'
       +'<div style="text-align:right"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">Realizado</div><div style="font-size:13px;font-weight:800;color:'+corC+'">'+fmt(realC)+'</div></div>'
       +'<div style="text-align:center"><span style="padding:2px 8px;border-radius:10px;font-weight:900;font-size:11px;background:'+corC+'22;color:'+corC+';border:1px solid '+corC+'">'+pctC+'%</span></div>'
+      +'<button onclick="metasRemoverConsultor(this.dataset.cons)" data-cons="'+eh(c)+'" title="Remover consultor da meta deste ano" style="padding:4px 8px;background:transparent;color:var(--text-dim);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px">✕</button>'
       +'</div></div>'
       +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
       +'<thead><tr style="border-bottom:2px solid var(--R)">'
@@ -12294,7 +12303,7 @@ function _metasMontarTabelaConsultoresEventos(ano,d,ganhosTodos){
     :'<div class="dash-vazio" style="margin-bottom:16px">Preencha a Meta de Eventos do ano na aba "Meta de Eventos" pra ver o resumo aqui.</div>';
 
   if(!sel.length){
-    return topCard+'<div class="dash-vazio">Selecione ao menos um consultor na aba Consultores e defina a meta anual (R$) de cada um.</div>';
+    return topCard+'<div class="dash-vazio">Adicione consultores na aba Consultores (campo "Adicionar consultor") e defina a meta anual (R$) de cada um.</div>';
   }
 
   var aviso='<div style="font-size:10px;color:var(--text-dim);font-weight:700;margin-bottom:10px">A meta anual, os meses ativos e o % de peso mensal usados aqui são os mesmos configurados nas abas Consultores e Meta Geral — ajuste por lá.</div>';
