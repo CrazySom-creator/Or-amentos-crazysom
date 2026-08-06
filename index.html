@@ -803,6 +803,12 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <div class="home-card-desc">Acompanhamento de metas por consultor</div>
       </div>
 
+      <div class="home-card orange" id="home-btn-resultados" onclick="abrirResultados();fecharHome()">
+        <div class="home-card-ico">🏆</div>
+        <div class="home-card-title">Resultados Mensais</div>
+        <div class="home-card-desc">Visão executiva de metas e atingimento — pronta pra reunião com a diretoria</div>
+      </div>
+
       <div class="home-card blue" id="home-btn-fin" onclick="abrirDashFin();fecharHome()">
         <div class="home-card-ico">💰</div>
         <div class="home-card-title">Financeiro</div>
@@ -1829,6 +1835,46 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     <div class="rel-pane" id="mpane-ticket">
       <div id="metas-ticket-resultado"></div>
     </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  MODAL RESULTADOS MENSAIS — visão executiva construída em cima dos    -->
+<!--  mesmos dados do módulo Metas, pensada pra reunião mensal com a      -->
+<!--  diretoria: KPIs do mês, evolução do ano, ranking de consultores,    -->
+<!--  comparativo Meta Geral x Meta de Eventos, ticket médio e insights   -->
+<!--  automáticos. Exporta em PDF (mesmo padrão html2pdf.js usado em      -->
+<!--  Relatórios/Dashboard Gerencial).                                    -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="resultados-ov">
+  <div class="modal-box dash-modal" style="max-width:1000px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div>
+        <h2 style="margin-bottom:2px">🏆 Resultados Mensais</h2>
+        <p class="sub" id="resultados-sub" style="margin:0">Carregando dados...</p>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-r btn-sm" onclick="resultadosAtualizar()" title="Rebusca os dados do Drive e do Firestore antes de recalcular — sempre com números atuais">🔄 Atualizar</button>
+        <button class="btn btn-o btn-sm" onclick="resultadosExportarPDF()" title="Gera um PDF pronto pra enviar ou apresentar na reunião">📄 Exportar PDF</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('resultados-ov').classList.remove('open');abrirHome()">✕</button>
+      </div>
+    </div>
+
+    <div class="dash-filtros">
+      <div><label>Ano</label>
+        <select id="resultados-ano" onchange="resultadosRenderizar()"></select>
+      </div>
+      <div><label>Mês</label>
+        <select id="resultados-mes" onchange="resultadosRenderizar()">
+          <option value="01">Janeiro</option><option value="02">Fevereiro</option><option value="03">Março</option>
+          <option value="04">Abril</option><option value="05">Maio</option><option value="06">Junho</option>
+          <option value="07">Julho</option><option value="08">Agosto</option><option value="09">Setembro</option>
+          <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="resultados-corpo"><div class="dash-loading">⏳ Carregando dados...</div></div>
   </div>
 </div>
 
@@ -5460,6 +5506,7 @@ function _renderizarHome(){
   _homeShow('home-btn-aprov', true);
   _homeShow('home-btn-elab', dashTemAcesso('dash-elab'));
   _homeShow('home-btn-metas', dashTemAcesso('dash-metas'));
+  _homeShow('home-btn-resultados', dashTemAcesso('dash-resultados'));
   _homeShow('home-btn-fin', dashTemAcesso('dash-fin'));
   _homeShow('home-btn-os', dashTemAcesso('mod-os'));
   _homeShow('home-btn-rel', true);
@@ -11907,6 +11954,167 @@ function _metaResumoAno(cfg,ano,tipo,ganhosTodos){
   return {total:total,realizado:realizado,pct:pct,faltam:faltam};
 }
 
+// ══════════════════════════════════════════════════════════
+//  RESULTADOS MENSAIS — helpers puros de agregação pra visão executiva
+//  (reunião mensal com a diretoria). NENHUM cálculo novo de meta/realizado
+//  aqui — só leitura/agregação em cima dos mesmos helpers do módulo Metas
+//  acima, garantindo que os números batem com as abas Meta Geral/
+//  Consultores/Eventos/Ticket Médio.
+// ══════════════════════════════════════════════════════════
+
+// KPIs de um mês específico (meta, realizado, %, faltam) + variação em
+// relação ao mês anterior. Quando o mês anterior a Janeiro é Dezembro do
+// ano passado, geralCfgAnoAnterior precisa ser passado (config Meta Geral
+// daquele ano) — se não existir (ano ainda não configurado no sistema), a
+// comparação fica vazia (realizadoAnterior/variacaoPct = null) em vez de quebrar.
+function _resKpisMes(geralCfg, ano, mm, ganhosTodos, geralCfgAnoAnterior){
+  var mesAno=ano+'-'+mm;
+  var autoValor=_metaMesGanhoAuto(ganhosTodos,mesAno).reduce(function(t,o){return t+dashValOrc(o);},0);
+  var meta=_metaValorMes(geralCfg,mm);
+  var realizado=_metaRealizadoMes(geralCfg,mesAno,autoValor);
+  var pct=meta>0?Math.round(realizado/meta*100):0;
+  var faltam=meta>realizado?meta-realizado:0;
+
+  var mesNum=parseInt(mm,10);
+  var ehJaneiro=mesNum===1;
+  var mmAnt=ehJaneiro?'12':((mesNum-1<10?'0':'')+(mesNum-1));
+  var anoAnt=ehJaneiro?ano-1:ano;
+  var cfgAnt=ehJaneiro?geralCfgAnoAnterior:geralCfg;
+  var realizadoAnterior=null, variacaoPct=null;
+  if(cfgAnt){
+    var mesAnoAnt=anoAnt+'-'+mmAnt;
+    var autoAnt=_metaMesGanhoAuto(ganhosTodos,mesAnoAnt).reduce(function(t,o){return t+dashValOrc(o);},0);
+    realizadoAnterior=_metaRealizadoMes(cfgAnt,mesAnoAnt,autoAnt);
+    variacaoPct=realizadoAnterior>0?Math.round((realizado-realizadoAnterior)/realizadoAnterior*100):(realizado>0?100:0);
+  }
+  return {meta:meta,realizado:realizado,pct:pct,faltam:faltam,realizadoAnterior:realizadoAnterior,variacaoPct:variacaoPct};
+}
+
+// Evolução do ano inteiro (Jan..Dez): meta e realizado mês a mês, o
+// acumulado até o mês atual e uma projeção de fechamento anual — se o ritmo
+// de atingimento dos meses já passados (realizado÷meta acumulados até
+// mesAtual) se mantiver pelo resto do ano, em quanto % da meta anual o ano
+// deve fechar. Projeção conservadora: não tenta prever sazonalidade futura,
+// só extrapola o ritmo médio já observado.
+function _resEvolucaoAno(geralCfg, ano, ganhosTodos, mesAtual){
+  var meses=[];
+  var totalMetaAteAgora=0, totalRealizadoAteAgora=0;
+  for(var m=1;m<=12;m++){
+    var mm=(m<10?'0':'')+m;
+    var mesAno=ano+'-'+mm;
+    var autoValor=_metaMesGanhoAuto(ganhosTodos,mesAno).reduce(function(t,o){return t+dashValOrc(o);},0);
+    var meta=_metaValorMes(geralCfg,mm);
+    var realizado=_metaRealizadoMes(geralCfg,mesAno,autoValor);
+    var pct=meta>0?Math.round(realizado/meta*100):0;
+    meses.push({mm:mm,nome:MESES_NOMES[m-1],meta:meta,realizado:realizado,pct:pct,passado:m<=mesAtual});
+    if(m<=mesAtual){ totalMetaAteAgora+=meta; totalRealizadoAteAgora+=realizado; }
+  }
+  var totalAnual=(geralCfg&&geralCfg.total)||0;
+  var ritmoPct=totalMetaAteAgora>0?totalRealizadoAteAgora/totalMetaAteAgora:0;
+  var projecaoAnual=Math.round(ritmoPct*totalAnual);
+  return {
+    meses:meses,
+    totalAnual:totalAnual,
+    totalMetaAteAgora:totalMetaAteAgora,
+    totalRealizadoAteAgora:totalRealizadoAteAgora,
+    pctAteAgora:totalMetaAteAgora>0?Math.round(totalRealizadoAteAgora/totalMetaAteAgora*100):0,
+    projecaoAnual:projecaoAnual,
+    projecaoPct:totalAnual>0?Math.round(projecaoAnual/totalAnual*100):0
+  };
+}
+
+// Ranking dos consultores participantes da meta deste ano, ordenado por %
+// de atingimento no MÊS selecionado (maior primeiro; empate desempata pelo
+// valor realizado) — usa a mesma meta mensal por consultor (meta anual × %
+// de peso da Meta Geral) e o mesmo realizado (auto + manual) já usados na
+// aba Consultores do módulo Metas, então os números sempre batem entre as
+// duas telas.
+function _resRankingConsultores(consultoresCfg, geralCfg, ano, mm, ganhosTodos){
+  var mesAno=ano+'-'+mm;
+  var sel=(consultoresCfg&&consultoresCfg.selecionados)||[];
+  var lista=sel.map(function(nome){
+    var meta=_metaValorConsultorMes(consultoresCfg,geralCfg,nome,mm);
+    var autoValor=_metaMesGanhoAuto(ganhosTodos,mesAno,nome).reduce(function(t,o){return t+dashValOrc(o);},0);
+    var realizado=_metaValorConsultorRealizadoMes(consultoresCfg,nome,mesAno,autoValor);
+    var pct=meta>0?Math.round(realizado/meta*100):(realizado>0?100:0);
+    return {nome:nome,meta:meta,realizado:realizado,pct:pct};
+  });
+  lista.sort(function(a,b){ return b.pct-a.pct || b.realizado-a.realizado; });
+  return lista;
+}
+
+// Compara, no mesmo mês, a meta batida por DATA DE VENDA (Meta Geral) com a
+// meta batida por DATA DE EXECUÇÃO DO EVENTO (Meta de Eventos) — ajuda a
+// diretoria a enxergar o descompasso natural entre "vendemos" e "entregamos":
+// um mês pode vender bem mas ter poucos eventos acontecendo nele (backlog
+// pra frente) e vice-versa (mês cheio de eventos já vendidos antes).
+function _resComparativoGeralEventos(geralCfg, eventosCfg, ano, mm, ganhosTodos){
+  function calc(cfg,fnAuto){
+    var mesAno=ano+'-'+mm;
+    var autoValor=fnAuto(ganhosTodos,mesAno).reduce(function(t,o){return t+dashValOrc(o);},0);
+    var meta=_metaValorMes(cfg,mm);
+    var realizado=_metaRealizadoMes(cfg,mesAno,autoValor);
+    var pct=meta>0?Math.round(realizado/meta*100):0;
+    return {meta:meta,realizado:realizado,pct:pct};
+  }
+  return { geral:calc(geralCfg,_metaMesGanhoAuto), eventos:calc(eventosCfg,_metaMesEventoAuto) };
+}
+
+// Resumo de ticket médio do ano (YTD) — mesma base de cálculo usada na aba
+// Ticket Médio do módulo Metas (_metasMontarTabelaTicket), mas retornando
+// dados puros (sem HTML), ordenados por ticket médio (maior primeiro) e só
+// com consultores que tiveram ao menos 1 venda ganha no ano.
+function _resTicketMedioResumo(ano, ganhosTodos, nomes){
+  var ganhosAno=ganhosTodos.filter(function(o){ var dg=_metaDataGanha(o); return dg&&dg.substring(0,4)===String(ano); });
+  var totalGeral=ganhosAno.reduce(function(t,o){return t+dashValOrc(o);},0);
+  var ticketGeral=ganhosAno.length>0?Math.round(totalGeral/ganhosAno.length):0;
+  var porConsultor=(nomes||[]).map(function(c){
+    var gC=ganhosAno.filter(function(o){return (o.form&&o.form['f-cons'])===c;});
+    var totalC=gC.reduce(function(t,o){return t+dashValOrc(o);},0);
+    var tickC=gC.length>0?Math.round(totalC/gC.length):0;
+    return {nome:c,qtd:gC.length,total:totalC,ticket:tickC};
+  }).filter(function(x){return x.qtd>0;});
+  porConsultor.sort(function(a,b){return b.ticket-a.ticket;});
+  return {qtd:ganhosAno.length,total:totalGeral,ticket:ticketGeral,porConsultor:porConsultor};
+}
+
+// Gera frases prontas (texto simples, sem HTML) resumindo os pontos mais
+// importantes pra ler/discutir na reunião — não é IA, é leitura direta dos
+// números já calculados acima, com limiares fixos e conservadores (>=15
+// pontos percentuais de diferença Geral x Eventos, <70% pra "atenção").
+function _resInsights(kpisMes, evolucao, ranking, comparativo, ticket, mesNome){
+  var ins=[];
+  if(kpisMes.meta>0){
+    ins.push('A meta de '+mesNome+' está '+kpisMes.pct+'% atingida ('+fmt(kpisMes.realizado)+' de '+fmt(kpisMes.meta)+')'+(kpisMes.faltam>0?' — faltam '+fmt(kpisMes.faltam)+'.':' — meta batida! 🎉'));
+  }
+  if(kpisMes.variacaoPct!==null){
+    ins.push('Faturamento de '+mesNome+' '+(kpisMes.variacaoPct>0?'cresceu '+kpisMes.variacaoPct+'%':(kpisMes.variacaoPct<0?'caiu '+Math.abs(kpisMes.variacaoPct)+'%':'ficou estável'))+' em relação ao mês anterior.');
+  }
+  if(evolucao && evolucao.totalAnual>0){
+    ins.push('No ritmo atual, a meta anual deve fechar em torno de '+evolucao.projecaoPct+'% ('+fmt(evolucao.projecaoAnual)+' de '+fmt(evolucao.totalAnual)+').');
+  }
+  if(ranking && ranking.length){
+    var destaque=ranking[0];
+    if(destaque.meta>0) ins.push(destaque.nome+' foi o destaque do mês, com '+destaque.pct+'% da meta batida.');
+    var atras=ranking.filter(function(r){return r.meta>0&&r.pct<70;});
+    if(atras.length){
+      ins.push((atras.length===1?atras[0].nome+' está':atras.length+' consultores estão')+' abaixo de 70% da meta do mês: '+atras.map(function(r){return r.nome+' ('+r.pct+'%)';}).join(', ')+'.');
+    }
+  }
+  if(comparativo && comparativo.geral.meta>0 && comparativo.eventos.meta>0){
+    var diffGE=comparativo.geral.pct-comparativo.eventos.pct;
+    if(Math.abs(diffGE)>=15){
+      ins.push(diffGE>0
+        ?'Vendas ('+comparativo.geral.pct+'%) estão à frente da execução de eventos ('+comparativo.eventos.pct+'%) neste mês — sinal de backlog de eventos pra entregar nos próximos meses.'
+        :'A execução de eventos ('+comparativo.eventos.pct+'%) está à frente das vendas do mês ('+comparativo.geral.pct+'%) — atenção ao ritmo de novas vendas.');
+    }
+  }
+  if(ticket && ticket.qtd>0){
+    ins.push('Ticket médio do ano: '+fmt(ticket.ticket)+' (base: '+ticket.qtd+' vendas ganhas).');
+  }
+  return ins;
+}
+
 // ── Renderização ──
 
 function metasRenderizarPctGrid(containerId, somaId, cfg, classeInput){
@@ -12431,6 +12639,225 @@ function _metasMontarTabelaTicket(ano,ganhosTodos){
 }
 
 // ════════════════════════════════════════════════════════
+//  RESULTADOS MENSAIS — tela executiva (Home > Resultados Mensais),
+//  construída em cima dos dados/helpers do módulo Metas acima. Sempre
+//  rebusca os dados do Drive (dashAtualizar(true)) e do Firestore
+//  (metasCarregar()) ao abrir e ao clicar "Atualizar" — é uma tela usada
+//  pra reportar números pra diretoria, então prioriza estar sempre correta
+//  em vez de reaproveitar cache de sessão (mesmo raciocínio da correção do
+//  botão "Aplicar" do Dashboard Comercial).
+// ════════════════════════════════════════════════════════
+
+async function abrirResultados(){
+  document.getElementById('resultados-ov').classList.add('open');
+  document.getElementById('resultados-sub').textContent='Carregando dados...';
+  await metasCarregar();
+  await metasCarregarConsultoresNomes();
+  await dashAtualizar(true);
+  document.getElementById('resultados-sub').textContent=_dashDados.length+' orçamentos carregados';
+  var hoje=new Date();
+  var anoAtual=hoje.getFullYear();
+  var elAno=document.getElementById('resultados-ano');
+  elAno.innerHTML=[anoAtual-1,anoAtual,anoAtual+1].map(function(a){return '<option value="'+a+'"'+(a===anoAtual?' selected':'')+'>'+a+'</option>';}).join('');
+  document.getElementById('resultados-mes').value=(hoje.getMonth()+1<10?'0':'')+(hoje.getMonth()+1);
+  resultadosRenderizar();
+}
+
+async function resultadosAtualizar(){
+  document.getElementById('resultados-sub').textContent='🔄 Atualizando...';
+  await metasCarregar();
+  await metasCarregarConsultoresNomes();
+  await dashAtualizar(true);
+  document.getElementById('resultados-sub').textContent=_dashDados.length+' orçamentos carregados';
+  resultadosRenderizar();
+}
+
+function resultadosRenderizar(){
+  var ano=parseInt(document.getElementById('resultados-ano').value,10)||new Date().getFullYear();
+  var mm=document.getElementById('resultados-mes').value||'01';
+  document.getElementById('resultados-corpo').innerHTML=_resultadosMontarHTML(ano,mm);
+}
+
+// Monta o HTML completo do dashboard (usado tanto no render da tela quanto,
+// dentro de um wrapper de impressão, na exportação em PDF) — recebe ano/mês
+// já resolvidos pra poder ser chamada pelos dois sem depender de ler os
+// <select> de novo.
+function _resultadosMontarHTML(ano,mm){
+  _metasGarantirAno(ano);
+  var d=_metasDados[ano];
+  var ganhosTodos=_dashDados.filter(function(o){return (o.dados&&o.dados.comercialStatus)==='ganha';});
+  var mesNum=parseInt(mm,10);
+  var mesNome=MESES_NOMES[mesNum-1];
+
+  var geralCfgAnoAnterior=(mesNum===1 && _metasDados[ano-1])?_metasDados[ano-1].geral:null;
+  var kpis=_resKpisMes(d.geral,ano,mm,ganhosTodos,geralCfgAnoAnterior);
+  var evolucao=_resEvolucaoAno(d.geral,ano,ganhosTodos,mesNum);
+  var ranking=_resRankingConsultores(d.consultores,d.geral,ano,mm,ganhosTodos);
+  var comparativo=_resComparativoGeralEventos(d.geral,d.eventos,ano,mm,ganhosTodos);
+  var ticket=_resTicketMedioResumo(ano,ganhosTodos,_metasNomes);
+  var insights=_resInsights(kpis,evolucao,ranking,comparativo,ticket,mesNome+'/'+ano);
+
+  // ── KPIs do mês ──
+  var corKpi=kpis.pct>=100?'#66bb6a':kpis.pct>=70?'#ffa726':'#ef5350';
+  var kpisHtml='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px">'
+    +'<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:4px">Meta de '+mesNome+'</div><div style="font-size:20px;font-weight:900;color:var(--text)">'+fmt(kpis.meta)+'</div></div>'
+    +'<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:4px">Realizado</div><div style="font-size:20px;font-weight:900;color:'+corKpi+'">'+fmt(kpis.realizado)+'</div>'+(kpis.variacaoPct!==null?'<div style="font-size:10px;font-weight:700;color:'+(kpis.variacaoPct>=0?'#66bb6a':'#ef5350')+'">'+(kpis.variacaoPct>=0?'▲ +':'▼ ')+kpis.variacaoPct+'% vs mês anterior</div>':'')+'</div>'
+    +'<div style="background:var(--surface-2);border:1px solid '+corKpi+';border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:4px">Atingimento</div><div style="font-size:20px;font-weight:900;color:'+corKpi+'">'+kpis.pct+'%</div></div>'
+    +'<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:4px">'+(kpis.faltam>0?'Faltam pra Meta':'Superávit')+'</div><div style="font-size:20px;font-weight:900;color:var(--text)">'+fmt(kpis.faltam>0?kpis.faltam:(kpis.realizado-kpis.meta))+'</div></div>'
+    +'</div>';
+
+  // ── Evolução do ano ──
+  var maxVal=Math.max.apply(null,evolucao.meses.map(function(x){return Math.max(x.meta,x.realizado);}).concat([1]));
+  var barrasHtml=evolucao.meses.map(function(x){
+    var corBarra=!x.passado?'var(--border-strong)':(x.pct>=100?'#66bb6a':x.pct>=70?'#ffa726':'#ef5350');
+    var alturaMeta=Math.round(x.meta/maxVal*100);
+    var alturaReal=Math.round(x.realizado/maxVal*100);
+    var destaque=x.mm===mm;
+    return '<div style="flex:1;min-width:26px;text-align:center'+(destaque?';background:rgba(127,127,127,.15);border-radius:6px':'')+'">'
+      +'<div style="height:90px;display:flex;align-items:flex-end;justify-content:center;gap:2px;padding:0 2px">'
+      +'<div title="Meta: '+fmt(x.meta)+'" style="width:40%;height:'+alturaMeta+'%;background:var(--border-strong);border-radius:2px 2px 0 0"></div>'
+      +'<div title="Realizado: '+fmt(x.realizado)+'" style="width:40%;height:'+alturaReal+'%;background:'+corBarra+';border-radius:2px 2px 0 0"></div>'
+      +'</div>'
+      +'<div style="font-size:9px;color:'+(destaque?'var(--text)':'var(--text-muted)')+';font-weight:'+(destaque?'900':'700')+';margin-top:3px">'+x.nome+'</div>'
+      +'<div style="font-size:8px;color:'+corBarra+';font-weight:800">'+(x.meta>0?x.pct+'%':'—')+'</div>'
+      +'</div>';
+  }).join('');
+  var corProj=evolucao.projecaoPct>=100?'#66bb6a':evolucao.projecaoPct>=70?'#ffa726':'#ef5350';
+  var evolucaoHtml='<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px">'
+    +'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">'
+    +'<div style="font-size:11px;font-weight:800;color:var(--text-dim)">📈 Evolução do Ano — '+ano+' <span style="font-weight:400;color:var(--text-muted)">(barra clara = meta, colorida = realizado)</span></div>'
+    +'<div style="font-size:11px;font-weight:800;color:var(--text-dim)">Acumulado até '+mesNome+': <span style="color:var(--text)">'+fmt(evolucao.totalRealizadoAteAgora)+'</span> de <span style="color:var(--text)">'+fmt(evolucao.totalMetaAteAgora)+'</span> (<span style="color:'+(evolucao.pctAteAgora>=100?'#66bb6a':evolucao.pctAteAgora>=70?'#ffa726':'#ef5350')+'">'+evolucao.pctAteAgora+'%</span>)</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:4px;align-items:flex-end">'+barrasHtml+'</div>'
+    +'<div style="margin-top:12px;font-size:11px;font-weight:700;color:var(--text-dim)">🎯 Projeção de fechamento anual no ritmo atual: <span style="color:'+corProj+';font-weight:900">'+evolucao.projecaoPct+'%</span> ('+fmt(evolucao.projecaoAnual)+' de '+fmt(evolucao.totalAnual)+')</div>'
+    +'</div>';
+
+  // ── Ranking de consultores ──
+  var medalhas=['🥇','🥈','🥉'];
+  var rankingHtml='<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px">'
+    +'<div style="font-size:11px;font-weight:800;color:var(--text-dim);margin-bottom:10px">👤 Ranking de Consultores — '+mesNome+'/'+ano+'</div>'
+    +(ranking.length?'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
+      +'<thead><tr style="border-bottom:2px solid var(--R)">'
+      +'<th style="text-align:left;padding:6px 8px;color:var(--R);font-size:10px;text-transform:uppercase">Consultor</th>'
+      +'<th style="text-align:right;padding:6px 8px;color:var(--text-muted);font-size:10px">Meta</th>'
+      +'<th style="text-align:right;padding:6px 8px;color:var(--text-muted);font-size:10px">Realizado</th>'
+      +'<th style="text-align:center;padding:6px 8px;color:var(--text-muted);font-size:10px">%</th>'
+      +'</tr></thead><tbody>'
+      +ranking.map(function(r,i){
+        var corR=r.pct>=100?'#66bb6a':r.pct>=70?'#ffa726':'#ef5350';
+        return '<tr style="border-bottom:1px solid var(--border-strong)">'
+          +'<td style="padding:7px 8px;color:var(--text-dim);font-weight:700">'+(medalhas[i]||'')+' '+eh(r.nome)+'</td>'
+          +'<td style="text-align:right;color:var(--text-muted)">'+fmt(r.meta)+'</td>'
+          +'<td style="text-align:right;color:'+corR+';font-weight:800">'+fmt(r.realizado)+'</td>'
+          +'<td style="text-align:center"><span style="padding:2px 8px;border-radius:10px;font-weight:900;font-size:10px;background:'+corR+'22;color:'+corR+'">'+r.pct+'%</span></td>'
+          +'</tr>';
+      }).join('')
+      +'</tbody></table></div>'
+      :'<div class="dash-vazio">Nenhum consultor participando da meta deste ano ainda (configure na aba Consultores do módulo Metas).</div>')
+    +'</div>';
+
+  // ── Comparativo Meta Geral (venda) x Meta de Eventos (execução) ──
+  var comparativoHtml='<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px">'
+    +'<div style="font-size:11px;font-weight:800;color:var(--text-dim);margin-bottom:10px">⚖️ Vendas x Execução — '+mesNome+'/'+ano+'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">'
+    +_resBlocoComparativo('Meta Geral (data da venda)',comparativo.geral)
+    +_resBlocoComparativo('Meta de Eventos (data de execução)',comparativo.eventos)
+    +'</div>'
+    +'</div>';
+
+  // ── Ticket médio (YTD) ──
+  var ticketHtml='<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px">'
+    +'<div style="font-size:11px;font-weight:800;color:var(--text-dim);margin-bottom:10px">🎫 Ticket Médio — '+ano+' (acumulado do ano)</div>'
+    +'<div style="margin-bottom:10px"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800">Ticket Médio Geral</div><div style="font-size:22px;font-weight:900;color:var(--text)">'+fmt(ticket.ticket)+'</div><div style="font-size:10px;color:var(--text-dim)">base: '+ticket.qtd+' vendas ganhas</div></div>'
+    +(ticket.porConsultor.length?'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
+      +'<thead><tr style="border-bottom:2px solid var(--R)">'
+      +'<th style="text-align:left;padding:6px 8px;color:var(--R);font-size:10px;text-transform:uppercase">Consultor</th>'
+      +'<th style="text-align:center;padding:6px 8px;color:var(--text-muted);font-size:10px">Qtd</th>'
+      +'<th style="text-align:right;padding:6px 8px;color:var(--text-muted);font-size:10px">Ticket Médio</th>'
+      +'</tr></thead><tbody>'
+      +ticket.porConsultor.map(function(c){
+        return '<tr style="border-bottom:1px solid var(--border-strong)">'
+          +'<td style="padding:7px 8px;color:var(--text-dim);font-weight:700">'+eh(c.nome)+'</td>'
+          +'<td style="text-align:center;color:var(--text-muted)">'+c.qtd+'</td>'
+          +'<td style="text-align:right;color:#ffa726;font-weight:800">'+fmt(c.ticket)+'</td>'
+          +'</tr>';
+      }).join('')
+      +'</tbody></table></div>':'')
+    +'</div>';
+
+  // ── Insights automáticos ──
+  var insightsHtml='<div style="background:var(--surface-2);border:1px solid #2e7d32;border-radius:8px;padding:14px;margin-bottom:8px">'
+    +'<div style="font-size:11px;font-weight:800;color:var(--text-dim);margin-bottom:10px">💡 Destaques pra Reunião</div>'
+    +(insights.length?'<ul style="margin:0;padding-left:18px;font-size:12px;color:var(--text);line-height:1.7">'+insights.map(function(i){return '<li>'+eh(i)+'</li>';}).join('')+'</ul>'
+      :'<div class="dash-vazio">Configure a Meta Geral do ano no módulo Metas pra ver os destaques aqui.</div>')
+    +'</div>';
+
+  return kpisHtml+evolucaoHtml+rankingHtml+comparativoHtml+ticketHtml+insightsHtml;
+}
+
+// Card comparativo usado por _resultadosMontarHTML() — um bloco (Meta Geral
+// OU Meta de Eventos) com valor realizado, meta, barra de progresso e %.
+function _resBlocoComparativo(titulo,dados){
+  var cor=dados.pct>=100?'#66bb6a':dados.pct>=70?'#ffa726':'#ef5350';
+  return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 12px">'
+    +'<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:6px">'+titulo+'</div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px"><span style="font-size:16px;font-weight:900;color:var(--text)">'+fmt(dados.realizado)+'</span><span style="font-size:11px;color:var(--text-muted)"> de '+fmt(dados.meta)+'</span></div>'
+    +'<div style="background:var(--surface-2);border-radius:4px;overflow:hidden;height:8px"><div style="width:'+Math.min(dados.pct,100)+'%;height:100%;background:'+cor+'"></div></div>'
+    +'<div style="font-size:11px;font-weight:800;color:'+cor+';margin-top:4px">'+dados.pct+'%</div>'
+    +'</div>';
+}
+
+// Exporta a mesma visão do dashboard em PDF — abre uma janela nova (mesmo
+// padrão html2pdf.js já usado em Relatórios/Dashboard Gerencial) com o HTML
+// gerado por _resultadosMontarHTML(), mas com as variáveis CSS (var(--x))
+// redefinidas pra um tema claro fixo, já que a janela nova não herda o
+// <style> do app principal.
+async function resultadosExportarPDF(){
+  var ano=parseInt(document.getElementById('resultados-ano').value,10)||new Date().getFullYear();
+  var mm=document.getElementById('resultados-mes').value||'01';
+  var mesNome=MESES_NOMES[parseInt(mm,10)-1];
+  var corpo=_resultadosMontarHTML(ano,mm);
+  var hoje=new Date().toLocaleString('pt-BR');
+  var nomeArq='CrazySom_ResultadosMensais_'+mesNome+ano;
+  var w=window.open('','_blank','width=1000,height=800');
+  if(!w){alert('Pop-up bloqueado! Libere pop-ups pra este site e tente de novo.');return;}
+  w.document.open();
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+nomeArq+'</title>'
+    +'<style>'
+    +':root{--surface:#ffffff;--surface-2:#f6f6f6;--border:#ddd;--border-strong:#ccc;--text:#111;--text-dim:#333;--text-muted:#777;--R:#d63447}'
+    +'@page{size:A4 portrait;margin:10mm}'
+    +'*{box-sizing:border-box;margin:0;padding:0;font-family:"Segoe UI",Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'body{background:#fff;color:#111;padding:0}'
+    +'.hdr{background:#d63447;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-radius:6px}'
+    +'.hdr h1{font-size:15px;font-weight:900}'
+    +'.hdr span{font-size:10px;opacity:.85}'
+    +'table{width:100%;border-collapse:collapse}'
+    +'.dash-vazio{color:var(--text-dim);font-size:11px;text-align:center;padding:12px}'
+    +'#st{position:fixed;top:0;left:0;right:0;background:#d63447;color:#fff;text-align:center;padding:10px;font-size:13px;font-weight:bold;z-index:9999}'
+    +'@media print{#st{display:none}}'
+    +'</style>'
+    +'<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>'
+    +'</head><body>'
+    +'<div id="st">Gerando PDF...</div>'
+    +'<div id="pw">'
+    +'<div class="hdr"><h1>🏆 CRAZY SOM — RESULTADOS MENSAIS: '+mesNome.toUpperCase()+'/'+ano+'</h1><span>Gerado em: '+hoje+'</span></div>'
+    +corpo
+    +'<div style="margin-top:14px;font-size:9px;color:#aaa;text-align:center;border-top:1px solid #ddd;padding-top:6px">Crazy Som Audiovisuais – Sistema de Orçamentos – CNPJ: 10.909.827/0001-76</div>'
+    +'</div>'
+    +'<script>'
+    +'window.onload=function(){setTimeout(function(){'
+    +'var opt={margin:5,filename:"'+nomeArq+'.pdf",image:{type:"jpeg",quality:1},'
+    +'html2canvas:{scale:2,useCORS:true,logging:false,backgroundColor:"#ffffff"},'
+    +'jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},pagebreak:{mode:["css","legacy"]}};'
+    +'html2pdf().set(opt).from(document.getElementById("pw")).save().then(function(){'
+    +'document.getElementById("st").style.background="#2e7d32";'
+    +'document.getElementById("st").textContent="PDF salvo! Pode fechar esta janela.";'
+    +'});},600);};'
+    +'<\/script></body></html>');
+  w.document.close();
+}
+
+// ════════════════════════════════════════════════════════
 //  GERENCIAR USUÁRIOS — cargo (editável pelo Admin, mesmo padrão de
 //  Tipos de Evento / Categorias de Produto: documento público em
 //  config/cargos, lido por todo mundo, editado só pelo Admin, com
@@ -12588,6 +13015,7 @@ var DASH_MODULOS = [
   {id:'dash-elab',  label:'📋 Dashboard Elaboração'},
   {id:'dash-com',   label:'📈 Dashboard Comercial'},
   {id:'dash-metas', label:'🎯 Metas'},
+  {id:'dash-resultados', label:'🏆 Resultados Mensais (Diretoria)'},
   {id:'dash-fin',   label:'💰 Dashboard Financeiro'},
   {id:'rel',        label:'📄 Relatórios'},
   {id:'mod-os',     label:'📋 Módulo Ordens de Serviço'},
