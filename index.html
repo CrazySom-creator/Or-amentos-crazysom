@@ -224,13 +224,13 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .com-hist-item:last-child{border-bottom:none;}
 .com-motivo{width:100%;padding:7px 9px;border:1px solid #c62828;border-radius:4px;font-size:11px;background:#1a0000;color:#fff;margin-bottom:8px;display:none;}
 .com-motivo-label{color:#ff7070;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px;display:none;}
-.diff-box{background:#1a1200;border:1px solid #ff9800;border-radius:5px;padding:8px 11px;margin-top:6px;font-size:10px;}
-.diff-box .diff-title{color:#ff9800;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;font-size:10px;}
-.diff-item{padding:2px 0;border-bottom:1px solid #2a2000;color:var(--text-dim);line-height:1.6;}
+.diff-box{background:var(--surface-2);border:1px solid var(--R);border-radius:5px;padding:8px 11px;margin-top:6px;font-size:10px;}
+.diff-box .diff-title{color:var(--R);font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;font-size:10px;}
+.diff-item{padding:2px 0;border-bottom:1px solid var(--border);color:var(--R);line-height:1.6;}
 .diff-item:last-child{border-bottom:none;}
-.diff-item .diff-campo{color:#ff9800;font-weight:700;}
-.diff-item .diff-de{color:#ef9a9a;text-decoration:line-through;}
-.diff-item .diff-para{color:#a5d6a7;font-weight:700;}
+.diff-item .diff-campo{color:var(--R);font-weight:700;}
+.diff-item .diff-de{color:var(--R);opacity:.75;text-decoration:line-through;}
+.diff-item .diff-para{color:var(--R);font-weight:700;}
 .com-status-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:800;margin-left:6px;}
 .adm-row{display:flex;align-items:center;gap:6px;padding:10px 12px;background:var(--surface-2);border-radius:6px;margin-bottom:8px;flex-wrap:wrap;}
 .adm-info{min-width:110px;}
@@ -7287,14 +7287,15 @@ function renderDiffNoHistorico(diffs,idx){
   var n=diffs.length;
   var itens='';
   diffs.forEach(function(d){
-    // Campos sem "lado bom" definido (texto: Cliente, Tipo de Evento, datas, Forma
-    // de Pagamento) ficam em cor neutra — antes eles caíam em verde por padrão,
-    // dando a entender uma melhora mesmo quando o campo só foi apagado/trocado.
-    var temDestaque=d.destaque==='aumento'||d.destaque==='reducao';
-    var corDe=temDestaque?'#ef9a9a':'var(--text-muted)';
-    var corPara=temDestaque?(d.destaque==='reducao'?'#ef9a9a':'#a5d6a7'):'var(--text)';
+    // Toda alteração fica em vermelho (var(--R)) sobre fundo cinza claro do
+    // tema (var(--surface-2), ver .diff-box no <style>) — antes a cor variava
+    // por campo (verde pra "aumento", cinza neutro pra texto sem direção
+    // clara), o que diluía o sinal visual de "isso aqui foi alterado". O
+    // valor anterior ("de") fica riscado e um pouco mais apagado (opacity),
+    // o novo ("para") em vermelho cheio e negrito, pra distinguir antes/depois
+    // sem precisar de outra cor.
     var bold=d.bold?'font-weight:900;font-size:11px':'';
-    itens+='<div class="diff-item" style="'+bold+'"><span class="diff-campo">'+d.campo+':</span> <span style="color:'+corDe+'">'+d.de+'</span> &rarr; <span style="color:'+corPara+';font-weight:700">'+d.para+'</span></div>';
+    itens+='<div class="diff-item" style="'+bold+'"><span class="diff-campo">'+d.campo+':</span> <span style="color:var(--R);opacity:.75;text-decoration:line-through">'+d.de+'</span> &rarr; <span style="color:var(--R);font-weight:800">'+d.para+'</span></div>';
   });
   return '<div class="diff-box">'
     +'<div class="diff-title" style="cursor:pointer;display:flex;justify-content:space-between" onclick="diffToggle(\''+id+'\')" title="Clique para ver as alteracoes">'
