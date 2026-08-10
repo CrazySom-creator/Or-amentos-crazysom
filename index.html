@@ -7129,13 +7129,25 @@ function tirarSnapshot(){
   }
   var vl=parseFloat(form['val-liq'])||0;
   var total=vl>0?vl:(modoSimpOS?vdsiOS:vdciOS);
-  // Capturar itens de cada seção
+  // Capturar itens de cada seção — inclui TODOS os campos que entram no
+  // cálculo de rowTot() (qty*val*diaria, e pra painéis/palco também as
+  // dimensões), não só qty/val. Faltando algum desses campos aqui, uma
+  // alteração nele (ex: mudar a diária de um item, ou o tamanho de um
+  // painel/palco) muda o total da seção mas fica invisível no histórico —
+  // era exatamente esse o bug: o total mudava sem nenhuma linha
+  // explicando o motivo.
   var itens={};
   ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
     var rows=[];
     state[s].ambientes.forEach(function(a){
       (state[s].rows[a.id]||[]).forEach(function(r){
-        rows.push({id:r.id,name:r.name,qty:r.qty,val:r.val});
+        rows.push({
+          id:r.id,name:r.name,qty:r.qty,val:r.val,diaria:r.diaria,
+          painel:!!r.painel,palco:!!r.palco,
+          larg:r.larg,alt:r.alt,prof:r.prof,
+          carp:r.carp,carpT:r.carpT,
+          elObj:r.elObj?{v:r.elObj.v}:null
+        });
       });
     });
     itens[s]=rows;
@@ -7228,12 +7240,41 @@ function compararSnapshots(ant,atual){
       var found=acharCorrespondente(r,itAnt);
       if(!found)diffs.push({campo:'Adicionado em '+SEC_NOMES[s],de:'—',para:r.qty+'x '+r.name,destaque:'aumento'});
     });
-    // Qtd ou valor alterado
+    // Qtd, valor unit., diária ou dimensão (painel/palco) alterados — e o
+    // TOTAL DO ITEM antes/depois, pra fechar a conta: cada linha individual
+    // mostra só o campo que mudou, mas o valor final do item (qty × val ×
+    // diária, ou a fórmula de painel/palco) depende de vários campos juntos.
+    // Sem essa linha de total, dava pra ver "Qtd: 2 → 1" mas não bater o
+    // olho e confirmar se aquilo sozinho explica a mudança no Total da
+    // seção — principalmente quando MAIS de um campo do mesmo item mudava
+    // junto (ex: qty E diária), caso em que as linhas separadas de cada
+    // campo não deixavam claro o efeito combinado.
     itAtual.forEach(function(r){
       var ant2=acharCorrespondente(r,itAnt);
       if(ant2){
-        if(ant2.qty!==r.qty)diffs.push({campo:'Qtd '+r.name,de:String(ant2.qty),para:String(r.qty),destaque:(parseFloat(r.qty)||0)>(parseFloat(ant2.qty)||0)?'aumento':'reducao'});
-        if(Math.abs((ant2.val||0)-(r.val||0))>0.01)diffs.push({campo:'Valor unit. '+r.name,de:fmt(ant2.val||0),para:fmt(r.val||0),destaque:(r.val||0)>(ant2.val||0)?'aumento':'reducao'});
+        var mudouAlgo=false;
+        if(ant2.qty!==r.qty){diffs.push({campo:'Qtd '+r.name,de:String(ant2.qty),para:String(r.qty),destaque:(parseFloat(r.qty)||0)>(parseFloat(ant2.qty)||0)?'aumento':'reducao'});mudouAlgo=true;}
+        if(Math.abs((ant2.val||0)-(r.val||0))>0.01){diffs.push({campo:'Valor unit. '+r.name,de:fmt(ant2.val||0),para:fmt(r.val||0),destaque:(r.val||0)>(ant2.val||0)?'aumento':'reducao'});mudouAlgo=true;}
+        var diariaAnt=parseFloat(ant2.diaria)||1,diariaNova=parseFloat(r.diaria)||1;
+        if(diariaAnt!==diariaNova){diffs.push({campo:'Diária(s) '+r.name,de:String(diariaAnt),para:String(diariaNova),destaque:diariaNova>diariaAnt?'aumento':'reducao'});mudouAlgo=true;}
+        if(r.painel&&(  (ant2.larg||0)!==(r.larg||0) || (ant2.alt||0)!==(r.alt||0)  )){
+          diffs.push({campo:'Dimensão '+r.name,de:(ant2.larg||0)+'m x '+(ant2.alt||0)+'m',para:(r.larg||0)+'m x '+(r.alt||0)+'m'});
+          mudouAlgo=true;
+        }
+        if(r.palco&&(  (ant2.larg||0)!==(r.larg||0) || (ant2.prof||0)!==(r.prof||0)  )){
+          diffs.push({campo:'Dimensão '+r.name,de:(ant2.larg||0)+'m x '+(ant2.prof||0)+'m',para:(r.larg||0)+'m x '+(r.prof||0)+'m'});
+          mudouAlgo=true;
+        }
+        // Total do item (qty×val×diária, ou fórmula de painel/palco) antes
+        // e depois — só aparece quando ALGUM campo acima mudou, e só quando
+        // o total realmente muda (evita ruído em edições que se cancelam,
+        // ex: dobrar qty e cortar val pela metade).
+        if(mudouAlgo){
+          var totAnt=rowTot(ant2),totNovo=rowTot(r);
+          if(Math.abs(totAnt-totNovo)>0.01){
+            diffs.push({campo:'Total do item '+r.name,de:fmt(totAnt),para:fmt(totNovo),destaque:totNovo>totAnt?'aumento':'reducao',bold:true});
+          }
+        }
       }
     });
   });
