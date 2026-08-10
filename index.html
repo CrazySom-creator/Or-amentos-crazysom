@@ -11713,47 +11713,26 @@ async function metasSalvar(){
     else d.eventos.realizadoManual[ym]=v;
   });
 
-  // Consultores: seleção + meta anual EM R$ de cada um (dimensionada por
-  // potencial/região/segmento — não precisa mais somar 100% do total da
-  // empresa) + realizado manual por consultor/mês (histórico anterior ao
-  // uso do sistema). A meta de cada mês é a meta anual do consultor x o %
-  // de peso mensal já configurado na aba Meta Geral (mesma curva sazonal da
-  // empresa, aplicada sobre o valor absoluto de cada consultor).
-  // A seleção (d.consultores.selecionados) já é mantida em memória ao vivo
-  // por metasAdicionarConsultor()/metasRemoverConsultor() — não precisa mais
-  // ser reconstruída aqui a partir de checkboxes (não existem mais). Só a
-  // meta anual em R$ de cada card visível é lida do DOM.
-  var metaAnualCons={};
-  document.querySelectorAll('.meta-cons-anual-inp').forEach(function(inp){
-    metaAnualCons[inp.dataset.cons]=_metaMoedaParaNumero(inp.value);
-  });
-  var realizadoManualCons={};
-  document.querySelectorAll('.meta-cons-mes-real-inp').forEach(function(el){
-    var c=el.dataset.cons, ym=el.dataset.ym; var v=el.value===''?null:(parseFloat(el.value)||0);
-    realizadoManualCons[c]=realizadoManualCons[c]||{};
-    if(v!==null) realizadoManualCons[c][ym]=v;
-  });
-  // Meses ativos por consultor (checkbox na tabela mensal, ao lado do % de
-  // peso) — desmarcado zera a meta daquele mês (consultor não participou).
-  var mesesAtivosCons={};
-  document.querySelectorAll('.meta-cons-mes-ativo-chk').forEach(function(el){
-    var c=el.dataset.cons, mm=el.dataset.mes;
-    mesesAtivosCons[c]=mesesAtivosCons[c]||{};
-    mesesAtivosCons[c][mm]=el.checked;
-  });
-  // Realizado manual por consultor na base "Consultor x Eventos" (data do
-  // evento) — campo próprio (realizadoManualEventos), coletado igual ao
-  // acima, mas de uma classe de input separada.
-  var realizadoManualEventosCons={};
-  document.querySelectorAll('.meta-cons-mes-real-evento-inp').forEach(function(el){
-    var c=el.dataset.cons, ym=el.dataset.ym; var v=el.value===''?null:(parseFloat(el.value)||0);
-    realizadoManualEventosCons[c]=realizadoManualEventosCons[c]||{};
-    if(v!==null) realizadoManualEventosCons[c][ym]=v;
-  });
-  d.consultores.metaAnual=metaAnualCons;
-  d.consultores.mesesAtivos=mesesAtivosCons;
-  d.consultores.realizadoManual=realizadoManualCons;
-  d.consultores.realizadoManualEventos=realizadoManualEventosCons;
+  // Consultores: seleção, meta anual (R$), meses ativos e realizado manual
+  // (venda E eventos) de cada consultor JÁ estão sempre corretos em
+  // _metasDados/d.consultores em memória — cada campo tem seu próprio
+  // handler "ao vivo" (metasAoVivoAtualizarMetaAnualConsultor/
+  // MesAtivoConsultor/RealizadoConsultor/RealizadoEventoConsultor,
+  // metasAdicionarConsultor/metasRemoverConsultor pra seleção), disparado a
+  // cada mudança do usuário, não importa em qual aba ele está.
+  //
+  // IMPORTANTE: NÃO reconstruir esses campos aqui varrendo o DOM (como era
+  // antes, via document.querySelectorAll('.meta-cons-anual-inp' etc.)). As
+  // abas do módulo Metas só têm seu HTML preenchido no DOM quando o usuário
+  // clica nelas ao menos uma vez na sessão (metasRenderizarAba() é chamada
+  // por aba, não todas de uma vez). Um usuário que abre Metas e vai direto
+  // pra aba "Consultor x Eventos" sem antes visitar a aba "Consultores",
+  // por exemplo, não tem nenhum elemento .meta-cons-anual-inp no DOM — a
+  // varredura antiga encontrava 0 elementos e SOBRESCREVIA
+  // d.consultores.metaAnual (e mesesAtivos/realizadoManual) com um objeto
+  // vazio ao salvar, apagando a meta anual e o histórico manual de TODOS os
+  // consultores. Como os handlers "ao vivo" já mantêm d.consultores correto
+  // o tempo todo (em qualquer aba), basta confiar nele e só persistir.
 
   var msgTxt='✅ Salvo', msgCor='#66bb6a';
   try{
