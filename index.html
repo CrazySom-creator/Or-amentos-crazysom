@@ -6622,6 +6622,12 @@ function _gaMontarDescricao(){
   if(gv('f-cons')) linhas.push('Consultor: '+gv('f-cons'));
   linhas.push('');
   linhas.push('OS Nº: '+(gv('f-num')||'—'));
+  // Observações da OS (campo "SOMENTE PARA MONTAGEM" — informações internas
+  // pro time de montagem: particularidades do local, contato no evento,
+  // cuidados especiais, sequência de montagem) — vai junto na descrição do
+  // evento da Agenda, já que é lido justamente pela equipe de montagem no
+  // dia, e a Agenda costuma ser a primeira coisa que eles conferem no celular.
+  if(gv('f-obs-os')) linhas.push('Observações da OS: '+gv('f-obs-os'));
   var SECS_GA=['som','video','luz','estrutura','servico'];
   SECS_GA.forEach(function(s){
     var todasRows=[];
@@ -6820,6 +6826,10 @@ function _gaMontarDescricaoDe(form, state){
   if(form['f-cons']) linhas.push('Consultor: '+form['f-cons']);
   linhas.push('');
   linhas.push('OS Nº: '+(form['f-num']||'—'));
+  // Observações da OS — mesma lógica de _gaMontarDescricao() acima (ver
+  // comentário lá): entra na descrição do evento pra chegar até o time de
+  // montagem mesmo quando o envio é "headless" (automação de Venda Ganha).
+  if(form['f-obs-os']) linhas.push('Observações da OS: '+form['f-obs-os']);
   var SECS_GA=['som','video','luz','estrutura','servico'];
   var st=state||{};
   SECS_GA.forEach(function(s){
