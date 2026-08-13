@@ -104,6 +104,8 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .btn-danger:hover{background:#a30000;}
 .toolbar-orc{display:flex;gap:8px;margin-top:9px;justify-content:flex-end;align-items:center;flex-wrap:wrap;}
 .toolbar-orc .btn{font-weight:700;letter-spacing:.2px;padding:7px 14px;}
+.btn-bloqueado-aprov{opacity:.45;cursor:not-allowed;position:relative;}
+.btn-bloqueado-aprov::after{content:'🔒';margin-left:4px;font-size:10px;}
 .toolbar-sep{width:1px;align-self:stretch;background:#3a3a3a;margin:0 2px;min-height:22px;}
 /* Botão flutuante de voltar — acompanha a rolagem da tela */
 .btn-voltar-float{position:fixed;left:16px;bottom:16px;z-index:99999;width:46px;height:46px;border-radius:50%;background:var(--R);color:#fff;border:none;font-size:19px;display:none;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.5);transition:transform .15s ease,filter .15s ease;}
@@ -302,6 +304,8 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .pbar{background:var(--surface-2);border-radius:7px;padding:9px 14px;width:100%;max-width:210mm;display:flex;gap:9px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:10;}
 .pbar span{color:var(--text-dim);font-size:12px;font-weight:600;flex:1;}
 .pdf-page{background:var(--surface);width:210mm;padding:14mm 14mm 18mm;position:relative;box-shadow:0 4px 24px rgba(0,0,0,.5);font-family:'Segoe UI',Arial,sans-serif;}
+.pdf-carimbo-rascunho{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:500;overflow:hidden;}
+.pdf-carimbo-rascunho span{transform:rotate(-32deg);font-size:52px;font-weight:900;letter-spacing:2px;color:#c0001a;opacity:.28;border:6px solid #c0001a;padding:10px 34px;white-space:nowrap;text-transform:uppercase;font-family:Arial,sans-serif;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
 .ph{display:flex;align-items:flex-start;padding-bottom:9px;border-bottom:2px solid var(--border);margin-bottom:11px;}
 .ph-i{flex:1;}
 .ph-i p{font-size:11px;color:var(--text-dim);line-height:1.8;margin-top:2px;}
@@ -2581,10 +2585,10 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     <button class="btn btn-o" onclick="limpar()" title="Começar um orçamento novo em branco">📄 Novo</button>
     <button class="btn btn-o" id="btn-clonar" onclick="clonarOrcamento()" title="Clonar este orçamento para um novo">📋 Clonar</button>
     <button class="btn btn-o" onclick="abrirTipo()" title="Gerar PDF do orçamento">📄 PDF</button>
-    <button class="btn btn-o" onclick="downloadPDF()" title="Baixar o PDF gerado">⬇️ Download</button>
-    <button class="btn btn-o" onclick="abrirPreviewContrato()" title="Pré-visualizar e editar dados antes de gerar o contrato em PDF">📝 Contrato</button>
-    <button class="btn btn-o" onclick="gerarOS()" title="Gerar Ordem de Serviço">📋 OS</button>
-    <button class="btn btn-b" onclick="googleAgendaEnviarOS()" title="Enviar Montagem/Evento/Desmontagem para o Google Agenda da empresa">📅 Agenda</button>
+    <button class="btn btn-o" id="btn-download" onclick="downloadPDF()" title="Baixar o PDF gerado">⬇️ Download</button>
+    <button class="btn btn-o" id="btn-contrato" onclick="abrirPreviewContrato()" title="Pré-visualizar e editar dados antes de gerar o contrato em PDF">📝 Contrato</button>
+    <button class="btn btn-o" id="btn-os" onclick="gerarOS()" title="Gerar Ordem de Serviço">📋 OS</button>
+    <button class="btn btn-b" id="btn-agenda" onclick="googleAgendaEnviarOS()" title="Enviar Montagem/Evento/Desmontagem para o Google Agenda da empresa">📅 Agenda</button>
     <button class="btn btn-o" onclick="googleAgendaEnviarPreReserva()" title="Criar/atualizar uma pré-reserva manual (PRÉ-RESERVA: Cliente) no Google Agenda, cobrindo a data do evento — use para negociações avançadas antes de fechar a venda">📌 Pré-Agenda</button>
     <button class="btn btn-g" onclick="salvar()" title="Salvar uma cópia local (.json) no seu computador">💾 Salvar Local</button>
     <label class="btn btn-o" style="cursor:pointer" title="Carregar um orçamento salvo localmente (.json)">📂 Carregar Local<input type="file" accept=".json" style="display:none" onchange="carregar(this)"></label>
@@ -3377,7 +3381,39 @@ async function logout(forcado){
   renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
 }
 
+// ── Trava de aprovação: download, contrato, OS e agenda só funcionam depois
+// que o orçamento estiver com aprovStatus==='aprovado'. Enquanto isso, os
+// botões ficam visualmente desabilitados (mas continuam clicáveis pra
+// mostrar a mensagem — impedir o clique via pointer-events some com o
+// tooltip nativo do title, que é útil aqui) e, se clicados, mostram o aviso
+// e abortam a ação sem executar nada. ──
+var BOTOES_TRAVADOS_APROVACAO=['btn-download','btn-contrato','btn-os','btn-agenda'];
+function _bloqueadoSemAprovacao(){
+  if(aprovStatus!=='aprovado'){
+    var si=SI[aprovStatus]||SI.rascunho;
+    alert('⚠️ Orçamento aguardando aprovação.\n\nEsta ação só fica disponível depois que o orçamento for aprovado.\n\nStatus atual: '+si.label.replace(/^[^\s]+\s/,''));
+    return true;
+  }
+  return false;
+}
+function atualizarBotoesBloqueioAprovacao(){
+  var travado=aprovStatus!=='aprovado';
+  BOTOES_TRAVADOS_APROVACAO.forEach(function(id){
+    var el=document.getElementById(id);
+    if(!el)return;
+    if(travado){
+      el.classList.add('btn-bloqueado-aprov');
+      if(!el.dataset.tituloOriginal) el.dataset.tituloOriginal=el.getAttribute('title')||'';
+      el.title='🔒 Aguardando aprovação — '+el.dataset.tituloOriginal;
+    }else{
+      el.classList.remove('btn-bloqueado-aprov');
+      if(el.dataset.tituloOriginal) el.title=el.dataset.tituloOriginal;
+    }
+  });
+}
+
 function renderStatusOrc(){
+  atualizarBotoesBloqueioAprovacao();
   var sb=document.getElementById('status-orc-bar');
   var sa=document.getElementById('status-orc-acoes');
   var sh=document.getElementById('status-orc-hist');
@@ -6094,14 +6130,22 @@ function buildPDF(tipo){
 
   var foot='<div class="pfooter"><span>Crazy Som – CNPJ: 10.909.827/0001-76</span><span>Pág. 1</span></div>';
 
-  return '<div id="pdf-wrap"><div class="pdf-page">'+hdr(true)+blocos+corpo+res+pgto+foot+'</div></div>';
+  // Enquanto o orçamento não estiver aprovado, o PDF sai com um carimbo
+  // diagonal de "RASCUNHO – AGUARDANDO APROVAÇÃO" — visível na pré-visualização,
+  // na impressão e em qualquer PDF gerado a partir dela, para deixar claro que
+  // este documento ainda não pode ser enviado ao cliente.
+  var carimbo=(aprovStatus!=='aprovado')?'<div class="pdf-carimbo-rascunho"><span>Rascunho – Aguardando Aprovação</span></div>':'';
+
+  return '<div id="pdf-wrap"><div class="pdf-page">'+carimbo+hdr(true)+blocos+corpo+res+pgto+foot+'</div></div>';
 }
 
 function getCSSImpressao(){
   return '@page{size:A4 portrait;margin:8mm 10mm 8mm 10mm}'
     +'*{box-sizing:border-box;margin:0;padding:0;font-family:\'Segoe UI\',Arial,sans-serif;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}'
     +'body{background:#fff}'
-    +'.pdf-page{background:#fff;width:100%;font-family:\'Segoe UI\',Arial,sans-serif}'
+    +'.pdf-page{background:#fff;width:100%;font-family:\'Segoe UI\',Arial,sans-serif;position:relative}'
+    +'.pdf-carimbo-rascunho{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:500;overflow:hidden}'
+    +'.pdf-carimbo-rascunho span{transform:rotate(-32deg);font-size:52px;font-weight:900;letter-spacing:2px;color:#c0001a;opacity:.28;border:6px solid #c0001a;padding:10px 34px;white-space:nowrap;text-transform:uppercase;font-family:Arial,sans-serif;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
     +'table{border-collapse:collapse;width:100%}'
     +'thead{display:table-header-group}'
     +'.ph{display:flex;align-items:flex-start;padding-bottom:9px;border-bottom:2px solid #ddd;margin-bottom:11px}'
@@ -6163,6 +6207,7 @@ function abrirPDF(modo){
 }
 
 function downloadPDF(){
+  if(_bloqueadoSemAprovacao())return;
   var num=gv('f-num')||'orcamento';
   var cli=(gv('f-cliente')||'cliente').replace(/[^a-zA-Z0-9À-ÿ\s]/g,'').trim();
   var nomeArq=num+' - '+cli;
@@ -6210,6 +6255,7 @@ function downloadPDF(){
 }
 
 function gerarOS(){
+  if(_bloqueadoSemAprovacao())return;
   // ── Validação de campos obrigatórios para emissão da OS ──
   var camposFaltandoOS = [];
   if(!gv('f-cliente'))    camposFaltandoOS.push('Nome do cliente');
@@ -7066,6 +7112,7 @@ async function googleAgendaEnviarPreReserva(){
 }
 
 async function googleAgendaEnviarOS(){
+  if(_bloqueadoSemAprovacao())return;
   var faltando=[];
   if(!gv('f-cliente')) faltando.push('Nome do cliente');
   if(!gv('f-dm')&&!gv('f-dia')&&!gv('f-dd')) faltando.push('Ao menos uma data (Montagem, Evento ou Desmontagem)');
@@ -17483,6 +17530,7 @@ var _pcDados = null;
 function pcSetPgto(txt){ var el=document.getElementById('pc-pgto'); if(el) el.value=txt; }
 
 function abrirPreviewContrato(){
+  if(_bloqueadoSemAprovacao())return;
   // Validações básicas primeiro
   var _elLiq = document.getElementById('val-liq');
   var _elLiqSI = document.getElementById('val-liq-si');
@@ -17585,6 +17633,7 @@ function confirmarGerarContrato(){
 }
 
 function gerarContrato(){
+  if(_bloqueadoSemAprovacao())return;
   // ── Coletar valor real (value, placeholder ou cálculo) ──
   var _elLiq   = document.getElementById('val-liq');
   var _elLiqSI = document.getElementById('val-liq-si');
