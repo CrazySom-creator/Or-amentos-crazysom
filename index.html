@@ -918,6 +918,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">&nbsp;</label>
         <span id="funil-home-followup-alerta" onclick="fkAbrirAtrasados('followup')" style="display:none;padding:7px 14px;background:#c62828;color:#fff;border-radius:14px;font-size:11px;font-weight:800;cursor:pointer" title="Clique para ver todos os follow-ups atrasados"></span>
         <span id="funil-home-tarefas-alerta" onclick="fkAbrirAtrasados('tarefas')" style="display:none;padding:7px 14px;background:#e65100;color:#fff;border-radius:14px;font-size:11px;font-weight:800;cursor:pointer" title="Clique para ver todas as tarefas atrasadas"></span>
+        <span id="funil-home-esfriando-alerta" onclick="fkAbrirAtrasados('esfriando')" style="display:none;padding:7px 14px;background:#0277bd;color:#fff;border-radius:14px;font-size:11px;font-weight:800;cursor:pointer" title="Clique para ver as propostas esfriando (sem avanço de etapa há vários dias)"></span>
       </div>
     </div>
 
@@ -2515,6 +2516,14 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     <textarea id="f-pgto" style="background:var(--surface);color:var(--text-dim);border-color:var(--border);margin-top:4px" oninput="marcarAlterado()">50% na contratação;
 50% até 03 dias antes da montagem.</textarea>
   </div>
+  <div style="margin:8px 0 0">
+    <label style="color:var(--text-muted)">Tipo de Condição de Pagamento</label>
+    <select id="f-pgto-tipo" style="background:var(--surface);color:var(--text-dim);border-color:var(--border);margin-top:4px;width:100%;padding:6px 9px;border-radius:4px;font-size:12px" onchange="marcarAlterado();renderCreditoPanel();renderMontagemGate();" title="Controla quando a Liberação de Montagem fica pendente: condição padrão exige a Entrada paga; pagamento após o evento nunca fica pendente por pagamento; qualquer outra condição exige Análise de Crédito aprovada.">
+      <option value="padrao">Padrão — 50% entrada + 50% até 3 dias antes do evento</option>
+      <option value="posterior">Pagamento integral após a data do evento</option>
+      <option value="outra">Outra condição — requer Análise de Crédito</option>
+    </select>
+  </div>
   <div class="grand">
     <div><span id="grand-label">TOTAL FINAL (c/ impostos)</span><div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:1px" id="desc-label"></div></div>
     <b id="r-total">R$ 0,00</b>
@@ -2565,6 +2574,37 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     <div class="com-hist" id="com-hist" style="display:none">
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);font-weight:700;margin-bottom:6px">📋 Histórico Comercial</div>
       <div id="com-hist-list"></div>
+    </div>
+  </div>
+
+  <div class="com-panel" id="contrato-panel" style="display:none">
+    <h4>📝 Status do Contrato</h4>
+    <div id="contrato-status-atual" style="margin-bottom:10px"></div>
+    <div id="contrato-btns" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+    <div class="com-hist" id="contrato-hist" style="display:none">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);font-weight:700;margin-bottom:6px">📋 Histórico do Contrato</div>
+      <div id="contrato-hist-list"></div>
+    </div>
+  </div>
+
+  <div class="com-panel" id="credito-panel" style="display:none">
+    <h4>💳 Análise de Crédito</h4>
+    <div id="credito-status-atual" style="margin-bottom:10px"></div>
+    <div id="credito-btns" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+    <div class="com-hist" id="credito-hist" style="display:none">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);font-weight:700;margin-bottom:6px">📋 Histórico de Análise de Crédito</div>
+      <div id="credito-hist-list"></div>
+    </div>
+  </div>
+
+  <div class="com-panel" id="montagem-panel" style="display:none">
+    <h4>🔧 Liberação de Montagem</h4>
+    <div id="montagem-status-atual" style="margin-bottom:10px"></div>
+    <div id="montagem-requisitos" style="margin-bottom:10px"></div>
+    <div id="montagem-manual-box" style="margin-bottom:8px"></div>
+    <div class="com-hist" id="montagem-hist" style="display:none">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);font-weight:700;margin-bottom:6px">📋 Histórico de Liberação Manual</div>
+      <div id="montagem-hist-list"></div>
     </div>
   </div>
 
@@ -2639,6 +2679,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <label style="display:none">&nbsp;</label>
       <span id="funil-followup-alerta" onclick="fkAbrirAtrasados('followup')" style="display:none;padding:6px 12px;background:#c62828;color:#fff;border-radius:14px;font-size:10px;font-weight:800;cursor:pointer" title="Clique para ver todos os follow-ups atrasados"></span>
       <span id="funil-tarefas-alerta" onclick="fkAbrirAtrasados('tarefas')" style="display:none;padding:6px 12px;background:#e65100;color:#fff;border-radius:14px;font-size:10px;font-weight:800;cursor:pointer" title="Clique para ver todas as tarefas atrasadas"></span>
+      <span id="funil-esfriando-alerta" onclick="fkAbrirAtrasados('esfriando')" style="display:none;padding:6px 12px;background:#0277bd;color:#fff;border-radius:14px;font-size:10px;font-weight:800;cursor:pointer" title="Clique para ver as propostas esfriando (sem avanço de etapa há vários dias)"></span>
     </div>
   </div>
 
@@ -2963,6 +3004,42 @@ var aprovStatus='rascunho';
 var aprovHist=[];
 var comercialStatus='';
 var comercialHist=[];
+// ── Status do Contrato — rastreia se o contrato já voltou assinado do
+// cliente (pedido do usuário: "problema com o retorno do contrato
+// assinado"). Três estados: '' (não enviado), 'enviado' (aguardando o
+// cliente devolver assinado), 'assinado' (devolvido e confirmado). Fica
+// pendente de cobrança automática enquanto 'enviado' — ver
+// verificarCobrancasContrato()/CONTRATO_COBRANCA_DIAS. ──
+var contratoStatus='';
+var contratoHist=[];
+var CONTRATO_SI={
+  '':{label:'⚪ Contrato ainda não enviado',bg:'var(--surface-3)',tx:'var(--text-dim)'},
+  enviado:{label:'📤 Enviado — aguardando devolução assinada',bg:'#fff3e0',tx:'#e65100'},
+  assinado:{label:'✅ Assinado e devolvido',bg:'#e8f5e9',tx:'#1b5e20'}
+};
+// ── Análise de Crédito — pedido do usuário: quando a condição de pagamento
+// não é a padrão da empresa (50% entrada + 50% até 3 dias antes do evento)
+// nem "pagamento integral após a data do evento", é preciso solicitar
+// análise de crédito ao Financeiro (ex.: Giovana Borges, Assistente
+// Comercial) antes de liberar a montagem — ver f-pgto-tipo, _pgtoTipo(),
+// renderCreditoPanel() e montagemPagamentoConfirmado() mais abaixo. ──
+var creditoStatus=''; // '' | 'solicitado' | 'aprovado' | 'reprovado'
+var creditoHist=[];
+var CREDITO_SI={
+  '':{label:'⚪ Análise de crédito não solicitada',bg:'var(--surface-3)',tx:'var(--text-dim)'},
+  solicitado:{label:'📤 Aguardando análise (Financeiro / Gerência / Diretoria)',bg:'#fff3e0',tx:'#e65100'},
+  aprovado:{label:'✅ Condição de pagamento aprovada',bg:'#e8f5e9',tx:'#1b5e20'},
+  reprovado:{label:'❌ Condição de pagamento reprovada',bg:'#ffebee',tx:'#c62828'}
+};
+// ── Gate de Liberação de Montagem — pedido do usuário: "problemas com
+// conciliação de pagamento com a liberação da montagem". Antes disso, a
+// equipe técnica podia ser acionada (OS/Agenda) mesmo sem confirmação de
+// pagamento ou contrato assinado. montagemLiberacaoManual permite que
+// Gerente/Diretor/Admin libere mesmo sem os 3 requisitos, com justificativa
+// obrigatória registrada em montagemLiberacaoManualHist — ver
+// montagemLiberada()/montagemLiberarManual() mais abaixo. ──
+var montagemLiberacaoManual=false;
+var montagemLiberacaoManualHist=[];
 // Toggle manual do consultor/admin pra marcar os equipamentos deste orçamento
 // como "Reservados" (laranja) na sinaleira de estoque, antes da venda ser
 // fechada — ver PERM_MODULOS/'estoque' pra quem pode usar este toggle.
@@ -3320,7 +3397,7 @@ async function doLogin(){
     var el=document.getElementById(btnId);
     if(el) el.style.display=dashTemAcesso(dashMap[btnId])?'':'none';
   });
-  renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
   // Mostrar funil ANTES de aplicar permissões
   var nivelTemFunil=['adm','gerente','diretor','consultor','assistente'].includes(u.nivel)||dashTemAcesso('funil-card');
   if(nivelTemFunil){funilMostrarCard();setTimeout(function(){funilCarregarDados();},800);}
@@ -3368,7 +3445,7 @@ async function logout(forcado){
     }catch(e4){}
   }
   try{await fbAuth.signOut();}catch(e7){}
-  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();driveIdAtual=null;driveNumAtual=null;
+  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();driveIdAtual=null;driveNumAtual=null;
   _atualizarBtnClonar();
   fecharHome();
   // Resetar funil
@@ -3379,7 +3456,7 @@ async function logout(forcado){
   document.getElementById('user-badge').style.display='none';
   document.getElementById('l-user').value='';document.getElementById('l-pass').value='';
   document.getElementById('l-err').textContent='';
-  renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
 }
 
 // ── Trava de aprovação: download, contrato, OS e agenda só funcionam depois
@@ -3470,7 +3547,7 @@ async function aprovAcao(novo){
   if(novo==='analise'){snapshotAnterior=tirarSnapshot();}
   if(novo==='aprovado'){snapshotAprovado=tirarSnapshot();}
   aprovHist.push({ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),obs:obs,diffs:diffs});
-  aprovStatus=novo;renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+  aprovStatus=novo;renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
   if(novo==='analise'){
     driveStatus('⏳ Salvando automaticamente...','');
     try{
@@ -3510,7 +3587,7 @@ async function aprovAcaoInline(novo){
   if(novo==='aprovado'){snapshotAprovado=tirarSnapshot();}
   aprovHist.push({ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),obs:obs,diffs:diffs});
   aprovStatus=novo;document.getElementById('aprov-inline-obs').value='';
-  renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
   if(novo==='analise'){
     driveStatus('⏳ Salvando automaticamente...','');
     try{
@@ -3538,7 +3615,7 @@ async function enviarNegociacao(){
   aprovStatus='gerencial';
   document.getElementById('negociacao-obs').value='';
   document.getElementById('negociacao-box').style.display='none';
-  renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
   if(driveIdAtual){
     driveStatus('⏳ Enviando solicitação ao gerente...','');
     try{await salvarNoDrive({mostrarStatus:true});}catch(e){alert('⚠️ Erro ao salvar: '+e.message);}
@@ -3876,7 +3953,7 @@ async function aprovAcaoLista(idx,novo,ev){
     var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:orc.driveId,numero:orc.form['f-num']||'SN',cliente:orc.form['f-cliente']||'SemCliente',data:orc.form['f-data']||new Date().toISOString().split('T')[0],dados:novoDados})});
     var d=await r.json();if(!d.ok)throw new Error(d.erro||'Erro ao salvar');
     if(typeof _driveCache!=='undefined') delete _driveCache[orc.driveId];
-    if(driveIdAtual===orc.driveId){aprovStatus=novo;aprovHist=novoHist;renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();}
+    if(driveIdAtual===orc.driveId){aprovStatus=novo;aprovHist=novoHist;renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();}
     carregarListaAprov(abaAprovAtual);
   }catch(e){alert('⚠️ Erro: '+e.message);}
 }
@@ -4393,7 +4470,7 @@ function calc(){
       subGeral.innerHTML=shtml;subGeral.style.display='block';
     }else{subGeral.style.display='none';}
   }
-  renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
   _preencherValLiqCalculado();
 }
 
@@ -4577,6 +4654,12 @@ function getDadosCompletos(){
     aprovHist:aprovHist,
     comercialStatus:comercialStatus,
     comercialHist:comercialHist,
+    contratoStatus:contratoStatus,
+    contratoHist:contratoHist,
+    creditoStatus:creditoStatus,
+    creditoHist:creditoHist,
+    montagemLiberacaoManual:montagemLiberacaoManual,
+    montagemLiberacaoManualHist:montagemLiberacaoManualHist,
     equipReservadoManual:equipReservadoManual,
     atividades:atividades,
     followupData:followupData,
@@ -4655,7 +4738,7 @@ async function _salvarNoDriveInterno(opts){
         return null;
       }
       aprovStatus='rascunho';aprovHist=[];
-      comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';
+      comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';
       snapshotAnterior=null;snapshotAprovado=null;
       if(typeof _limparCamposComercialDOM==='function') _limparCamposComercialDOM();
       if(typeof renderStatusOrc==='function') renderStatusOrc();
@@ -5281,7 +5364,7 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     _versaoAtual=dados._versao||null;
     if(dados.state){SECS.forEach(function(s){if(dados.state[s]){state[s].ambientes=dados.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=dados.state[s].ambAtiva||'default';state[s].rows=dados.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
     if(dados.form)setForm(dados.form);
-    aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcAtualGoogleAgenda=Object.assign({},dados.googleAgenda||{});orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
+    aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();contratoStatus=dados.contratoStatus||'';contratoHist=(dados.contratoHist||[]).slice();creditoStatus=dados.creditoStatus||'';creditoHist=(dados.creditoHist||[]).slice();montagemLiberacaoManual=!!dados.montagemLiberacaoManual;montagemLiberacaoManualHist=(dados.montagemLiberacaoManualHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcAtualGoogleAgenda=Object.assign({},dados.googleAgenda||{});orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
     descDiscriminarPDF=(dados.descDiscriminarPDF!==undefined)?!!dados.descDiscriminarPDF:true;
     var _chkDescDiscr=document.getElementById('chk-desc-discriminar');if(_chkDescDiscr)_chkDescDiscr.checked=descDiscriminarPDF;
     _limparCamposComercialDOM(); // limpar campos DOM ao carregar novo orçamento
@@ -5289,7 +5372,7 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     _naoSalvo=false;
     // Resetar cache de diárias automáticas para forçar aplicação correta ao carregar
     _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
-    buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+    buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
     setTimeout(function(){selImpVenda(finImposto||'cimp');_preencherValLiqCalculado();},50);
     setTimeout(aplicarPermissoes, 150);
     if(dados.form&&dados.form['f-doc'])clienteHistoricoBuscar(_clienteSoDigitos(dados.form['f-doc']),dados.form['f-doc']);
@@ -5376,7 +5459,7 @@ async function driveDeletar(id,nome){
   }
 }
 
-var FORM_IDS=['f-num','f-data','f-val','f-cons','f-fonte','f-cliente','f-doc','f-email','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-nome-evento','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dm-fim','f-dd','f-hd','f-dd-fim','f-pub','f-obs','f-obs-os','f-pgto','f-svinc','desc-pct','desc-rs','arred-rs','val-liq','val-liq-si','f-bv'];
+var FORM_IDS=['f-num','f-data','f-val','f-cons','f-fonte','f-cliente','f-doc','f-email','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-nome-evento','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dm-fim','f-dd','f-hd','f-dd-fim','f-pub','f-obs','f-obs-os','f-pgto','f-pgto-tipo','f-svinc','desc-pct','desc-rs','arred-rs','val-liq','val-liq-si','f-bv'];
 function getForm(){var o={};FORM_IDS.forEach(function(id){var e=document.getElementById(id);if(e)o[id]=e.value;});if((!o['f-bv']||o['f-bv']==='0')&&_bvStorage>0)o['f-bv']=String(_bvStorage);return o;}
 function setForm(f){Object.keys(f).forEach(function(id){var e=document.getElementById(id);if(e)e.value=f[id];});sv('orc-disp',f['f-num']||'—');}
 function salvar(){var blob=new Blob([JSON.stringify({form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,snapshotAprovado:snapshotAprovado,finParcelas:finParcelas,finObs:finObs},null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(gv('f-num')||'orc')+' - '+(gv('f-cliente')||'cliente')+'.json';a.click();URL.revokeObjectURL(a.href);}
@@ -5406,7 +5489,7 @@ function carregar(input){
       });
     });
   }catch(e){}
-  calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();alert('✅ Carregado!');
+  calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();alert('✅ Carregado!');
     }catch(err){alert('⚠️ Arquivo inválido: '+err.message);}
     finally{setTimeout(function(){_carregandoOrc=false;},400);}
   };
@@ -5433,6 +5516,7 @@ async function limpar(){
   var vlsi=document.getElementById('val-liq-si');if(vlsi)vlsi.value='';
   _bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value=''; _clienteHistLista=[];var histEl=document.getElementById('f-cliente-hist-status');if(histEl)histEl.innerHTML='';
   document.getElementById('f-pgto').value='50% na contratação;\n50% até 03 dias antes da montagem.';
+  var pgtoTipoReset=document.getElementById('f-pgto-tipo');if(pgtoTipoReset)pgtoTipoReset.value='padrao';
   ['cep-st','doc-st','cep-ev-st'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent='';});
   document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
   var _valD=new Date();_valD.setDate(_valD.getDate()+7);
@@ -5441,13 +5525,13 @@ async function limpar(){
   driveIdAtual=null;driveNumAtual=null;
   _naoSalvo=false;
   aprovStatus='rascunho';aprovHist=[];
-  comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';
+  comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';
   _limparCamposComercialDOM();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
   snapshotAprovado=null;
   finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();
-  buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+  buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
   _atualizarBtnClonar();
   // Gerar número automático para o novo orçamento
   if(usuarioAtual) setTimeout(gerarNumeroAuto, 300);
@@ -5526,7 +5610,7 @@ async function clonarOrcamento(){
 
   // ── Zerar aprovações, funil e financeiro
   aprovStatus='rascunho';aprovHist=[];
-  comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';
+  comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';
   _limparCamposComercialDOM();
   snapshotAnterior=null;
   snapshotAprovado=null;
@@ -5536,7 +5620,7 @@ async function clonarOrcamento(){
   // ── Manter forma de pagamento padrão se não havia (campo f-pgto já copiado do form original)
   // ── Renderizar tudo
   buildTabs();setDS();setDSFim();calcDiariasAuto();calc();
-  renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
   setTimeout(function(){selImpVenda('cimp');_preencherValLiqCalculado();},50);
   setTimeout(aplicarPermissoes,150);
 
@@ -5875,16 +5959,17 @@ async function _resetarEstadoOrcamento(){
   var vlsi=document.getElementById('val-liq-si');if(vlsi)vlsi.value='';
   _bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value=''; _clienteHistLista=[];var histEl=document.getElementById('f-cliente-hist-status');if(histEl)histEl.innerHTML='';
   document.getElementById('f-pgto').value='50% na contratação;\n50% até 03 dias antes da montagem.';
+  var pgtoTipoReset=document.getElementById('f-pgto-tipo');if(pgtoTipoReset)pgtoTipoReset.value='padrao';
   sv('orc-disp','—');
   driveIdAtual=null;driveNumAtual=null;_naoSalvo=false;_versaoAtual=null;
   aprovStatus='rascunho';aprovHist=[];
-  comercialStatus='';comercialHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';
+  comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';
   _limparCamposComercialDOM();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
   snapshotAprovado=null;
   finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();
-  buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+  buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
   _atualizarBtnClonar();
 }
 
@@ -6361,6 +6446,10 @@ function downloadPDF(){
 
 function gerarOS(){
   if(_bloqueadoSemAprovacao())return;
+  // A partir daqui a Liberação de Montagem NÃO bloqueia mais a emissão da
+  // OS (pedido do usuário) — quando pendente, uma tarja é inserida no topo
+  // do documento (ver _montagemTarjaTexto() logo abaixo) em vez de travar
+  // a ação inteira.
   // ── Validação de campos obrigatórios para emissão da OS ──
   var camposFaltandoOS = [];
   if(!gv('f-cliente'))    camposFaltandoOS.push('Nome do cliente');
@@ -6423,9 +6512,11 @@ function gerarOS(){
     });
   }
   var extras=Array(15).fill('<tr><td colspan="3" style="height:23px;border-bottom:1px solid var(--border)">&nbsp;</td></tr>').join('');
-  var osHTML='<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><style>*{box-sizing:border-box;margin:0;padding:0;font-family:Calibri,Arial,sans-serif}body{background:#eee;padding:18px}.bar{background:#111;padding:9px 14px;border-radius:5px;display:flex;gap:9px;align-items:center;margin-bottom:14px}.bar span{color:#aaa;font-size:12px;flex:1}.bar button{padding:7px 15px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700}.br{background:#c0001a;color:#fff}.bd{background:#444;color:#fff}.page{background:#fff;width:210mm;margin:0 auto;padding:13mm 13mm 17mm;box-shadow:0 4px 18px rgba(0,0,0,.2)}.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:9px;border-bottom:3px solid #c0001a;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.hdr h1{font-size:21px;font-weight:900;color:#c0001a}.hr{text-align:right}.hr .os{font-size:17px;font-weight:900}.hr .osn{font-size:14px;font-weight:bold;color:#c0001a}.hr .osd{font-size:11px;color:#888}.info{background:#f7f7f7;border:1px solid #ddd;border-radius:3px;padding:7px 11px;margin-bottom:11px}.info table{width:100%;border-collapse:collapse}.info td{padding:2px 5px;font-size:11px;vertical-align:top}.info .lbl{font-weight:bold;color:#555;width:125px;white-space:nowrap}table.eq{width:100%;border-collapse:collapse;margin-bottom:3px}table.eq th{background:#111;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.qtd{width:46px;padding:3px 7px;border:1px solid #e0e0e0;font-weight:bold;text-align:center;font-size:12px;vertical-align:top}.item{padding:3px 7px;border:1px solid #e0e0e0;font-size:11px}.chk{width:30px;padding:3px 7px;border:1px solid #e0e0e0;text-align:center;font-size:13px}.xt{font-size:12px;font-weight:bold;color:#c0001a;border-bottom:2px solid #c0001a;padding-bottom:3px;margin:16px 0 4px;text-transform:uppercase}.obs-os{background:#fff8e1;border:2px solid #ff6f00;border-radius:5px;padding:9px 13px;margin:12px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.obs-os .obs-os-title{font-size:10px;font-weight:900;color:#ff6f00;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;display:flex;align-items:center;gap:5px}.obs-os .obs-os-body{font-size:11px;color:#3e2000;white-space:pre-wrap;line-height:1.6}.xh{font-size:11px;color:#888;margin-bottom:5px}table.ext{width:100%;border-collapse:collapse}table.ext th{background:#555;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.assin{display:flex;gap:18px;margin-top:26px}.assin-box{flex:1;text-align:center}.aline{border-top:1px solid #444;padding-top:4px;font-size:11px;color:#555;margin-top:30px}.foot{margin-top:14px;border-top:1px solid #ddd;padding-top:5px;font-size:11px;color:#aaa;text-align:center}@media print{body{background:#fff;padding:0}.bar{display:none}.page{box-shadow:none;margin:0;padding:11mm 11mm 14mm;width:100%}}</style></head><body>'
+  var osHTML='<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><style>*{box-sizing:border-box;margin:0;padding:0;font-family:Calibri,Arial,sans-serif}body{background:#eee;padding:18px}.bar{background:#111;padding:9px 14px;border-radius:5px;display:flex;gap:9px;align-items:center;margin-bottom:14px}.bar span{color:#aaa;font-size:12px;flex:1}.bar button{padding:7px 15px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700}.br{background:#c0001a;color:#fff}.bd{background:#444;color:#fff}.page{background:#fff;width:210mm;margin:0 auto;padding:13mm 13mm 17mm;box-shadow:0 4px 18px rgba(0,0,0,.2)}.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:9px;border-bottom:3px solid #c0001a;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.hdr h1{font-size:21px;font-weight:900;color:#c0001a}.hr{text-align:right}.hr .os{font-size:17px;font-weight:900}.hr .osn{font-size:14px;font-weight:bold;color:#c0001a}.hr .osd{font-size:11px;color:#888}.info{background:#f7f7f7;border:1px solid #ddd;border-radius:3px;padding:7px 11px;margin-bottom:11px}.info table{width:100%;border-collapse:collapse}.info td{padding:2px 5px;font-size:11px;vertical-align:top}.info .lbl{font-weight:bold;color:#555;width:125px;white-space:nowrap}table.eq{width:100%;border-collapse:collapse;margin-bottom:3px}table.eq th{background:#111;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.qtd{width:46px;padding:3px 7px;border:1px solid #e0e0e0;font-weight:bold;text-align:center;font-size:12px;vertical-align:top}.item{padding:3px 7px;border:1px solid #e0e0e0;font-size:11px}.chk{width:30px;padding:3px 7px;border:1px solid #e0e0e0;text-align:center;font-size:13px}.xt{font-size:12px;font-weight:bold;color:#c0001a;border-bottom:2px solid #c0001a;padding-bottom:3px;margin:16px 0 4px;text-transform:uppercase}.obs-os{background:#fff8e1;border:2px solid #ff6f00;border-radius:5px;padding:9px 13px;margin:12px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.obs-os .obs-os-title{font-size:10px;font-weight:900;color:#ff6f00;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;display:flex;align-items:center;gap:5px}.obs-os .obs-os-body{font-size:11px;color:#3e2000;white-space:pre-wrap;line-height:1.6}.xh{font-size:11px;color:#888;margin-bottom:5px}table.ext{width:100%;border-collapse:collapse}table.ext th{background:#555;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.assin{display:flex;gap:18px;margin-top:26px}.assin-box{flex:1;text-align:center}.aline{border-top:1px solid #444;padding-top:4px;font-size:11px;color:#555;margin-top:30px}.foot{margin-top:14px;border-top:1px solid #ddd;padding-top:5px;font-size:11px;color:#aaa;text-align:center}.tarja-montagem-pendente{background:#ff6f00;color:#fff;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:.5px;text-align:center;padding:8px 12px;border-radius:4px;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{body{background:#fff;padding:0}.bar{display:none}.page{box-shadow:none;margin:0;padding:11mm 11mm 14mm;width:100%}.tarja-montagem-pendente{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>'
     +'<div class="bar"><span>📋 OS – Crazy Som</span><button class="br" onclick="window.print()">🖨️ Imprimir</button><button class="bd" onclick="window.close()">✕</button></div>'
-    +'<div class="page"><div class="hdr"><div><h1>CRAZY SOM</h1><p style="font-size:11px;color:var(--text-muted);margin-top:2px">Audiovisual e Estrutura | (51) 3428-5053 | CNPJ: 10.909.827/0001-76</p></div><div class="hr"><div class="os">ORDEM DE SERVIÇO</div><div class="osn">'+(gv('f-num')||'—')+'</div><div class="osd">Emissão: '+dataorc+'</div></div></div>'
+    +'<div class="page">'
+    +(_montagemTarjaTexto()?'<div class="tarja-montagem-pendente">⚠️ LIBERAÇÃO DE MONTAGEM PENDENTE — '+eh(_montagemTarjaTexto())+'</div>':'')
+    +'<div class="hdr"><div><h1>CRAZY SOM</h1><p style="font-size:11px;color:var(--text-muted);margin-top:2px">Audiovisual e Estrutura | (51) 3428-5053 | CNPJ: 10.909.827/0001-76</p></div><div class="hr"><div class="os">ORDEM DE SERVIÇO</div><div class="osn">'+(gv('f-num')||'—')+'</div><div class="osd">Emissão: '+dataorc+'</div></div></div>'
     +'<div class="info"><table>'
     +(gv('f-nome-evento')?'<tr><td class="lbl">Evento:</td><td colspan="3" style="font-size:13px;font-weight:900;color:#c0001a">'+eh(gv('f-nome-evento'))+'</td></tr>':'')
     +'<tr><td class="lbl">Cliente:</td><td><b>'+(gv('f-cliente')||'—')+'</b></td><td class="lbl">Consultor:</td><td>'+(gv('f-cons')||'—')+'</td></tr>'
@@ -6849,6 +6940,13 @@ function _gaEventosDisponiveis(){
     if(ddFim&&ddFim!==gv('f-dd')){ evD.fim=ddFim+'T23:59:00'; } else { evD.duracaoHoras=2; }
     eventos.push(evD);
   }
+  // Liberação de Montagem pendente: não bloqueia mais o envio (pedido do
+  // usuário) — em vez disso, prefixa o título de cada evento com uma tarja
+  // visível direto na grade do Google Agenda, sem precisar abrir o evento.
+  var tarja=_montagemTarjaTexto();
+  if(tarja){
+    eventos.forEach(function(ev){ ev.summary='⚠️ LIBERAÇÃO PENDENTE — '+ev.summary; });
+  }
   return eventos;
 }
 
@@ -6912,11 +7010,70 @@ async function _gaEnviarListaEventos(eventosDisp, descricao, enderecoEvento, ids
   return {novosIds:novosIds, erros:erros};
 }
 
+// Twins parametrizados de _pgtoTipo()/montagemRequisitos()/montagemLiberada()/
+// _montagemTarjaTexto(), lendo de `form`/`dadosCompletos` (getDadosCompletos()-
+// like) em vez das variáveis globais do editor — necessário porque a
+// automação de Venda Ganha pode rodar sobre um orçamento diferente do que
+// está aberto na tela (ver _gaEventosDisponiveisDe() logo abaixo).
+function _pgtoTipoDe(form){
+  return (form&&form['f-pgto-tipo'])||'padrao';
+}
+function _pgtoEntradaConfirmadaDe(dadosCompletos){
+  var lista=(dadosCompletos&&dadosCompletos.finParcelas)||[];
+  if(!lista.length) return false;
+  var entrada=null;
+  for(var i=0;i<lista.length;i++){
+    if(lista[i] && /entrada/i.test(lista[i].desc||'')){ entrada=lista[i]; break; }
+  }
+  if(!entrada){
+    var comData=lista.filter(function(p){return p&&p.data;}).slice().sort(function(a,b){
+      return (a.data||'')<(b.data||'')?-1:((a.data||'')>(b.data||'')?1:0);
+    });
+    entrada=comData[0]||lista[0];
+  }
+  return !!(entrada && entrada.status==='pago');
+}
+function _montagemLabelPagamentoDe(form){
+  var tipo=_pgtoTipoDe(form);
+  if(tipo==='posterior') return 'Pagamento integral após o evento (condição aprovada — não bloqueia)';
+  if(tipo==='outra') return 'Análise de Crédito aprovada (condição de pagamento fora do padrão)';
+  return 'Confirmação de pagamento da Entrada pelo Financeiro';
+}
+function _montagemRequisitosDe(form, dadosCompletos){
+  var tipo=_pgtoTipoDe(form);
+  var pagamentoConfirmado;
+  if(tipo==='posterior') pagamentoConfirmado=true;
+  else if(tipo==='outra') pagamentoConfirmado=(dadosCompletos&&dadosCompletos.creditoStatus)==='aprovado';
+  else pagamentoConfirmado=_pgtoEntradaConfirmadaDe(dadosCompletos);
+  return {
+    aprovado: !!(dadosCompletos&&dadosCompletos.aprovStatus==='aprovado'),
+    contratoAssinado: !!(dadosCompletos&&dadosCompletos.contratoStatus==='assinado'),
+    pagamentoConfirmado: pagamentoConfirmado
+  };
+}
+function _montagemLiberadaDe(form, dadosCompletos){
+  if(dadosCompletos&&dadosCompletos.montagemLiberacaoManual) return true;
+  var r=_montagemRequisitosDe(form, dadosCompletos);
+  return r.aprovado && r.contratoAssinado && r.pagamentoConfirmado;
+}
+function _montagemTarjaTextoDe(form, dadosCompletos){
+  if(_montagemLiberadaDe(form, dadosCompletos)) return '';
+  var r=_montagemRequisitosDe(form, dadosCompletos);
+  var faltando=[];
+  if(!r.aprovado) faltando.push('orçamento aprovado');
+  if(!r.contratoAssinado) faltando.push('contrato assinado e devolvido pelo cliente');
+  if(!r.pagamentoConfirmado) faltando.push(_montagemLabelPagamentoDe(form));
+  return 'Falta: '+faltando.join('; ')+'.';
+}
+
 // Twin parametrizado de _gaEventosDisponiveis(), lendo de um objeto `form`
 // (ex. vindo de getForm()/getDadosCompletos() ou do cache do Funil) em vez de
 // ler direto do DOM via gv(). Usado pela automação de Venda Ganha, que pode
 // operar sobre um orçamento que não é o que está aberto na tela.
-function _gaEventosDisponiveisDe(form){
+// `dadosCompletos` é opcional (getDadosCompletos()-like) — quando informado,
+// prefixa os títulos com a tarja de Liberação de Montagem Pendente, igual
+// _gaEventosDisponiveis() já faz com os globais ao vivo.
+function _gaEventosDisponiveisDe(form, dadosCompletos){
   var cfg=(typeof GOOGLE_AGENDA_CONFIG!=='undefined'&&GOOGLE_AGENDA_CONFIG)||{};
   var corMontagem=cfg.corMontagem||'5';
   var corEvento=cfg.corEvento||'11';
@@ -6941,6 +7098,12 @@ function _gaEventosDisponiveisDe(form){
     var ddFim=form['f-dd-fim'];
     if(ddFim&&ddFim!==form['f-dd']){ evD.fim=ddFim+'T23:59:00'; } else { evD.duracaoHoras=2; }
     eventos.push(evD);
+  }
+  if(dadosCompletos){
+    var tarjaDe=_montagemTarjaTextoDe(form, dadosCompletos);
+    if(tarjaDe){
+      eventos.forEach(function(ev){ ev.summary='⚠️ LIBERAÇÃO PENDENTE — '+ev.summary; });
+    }
   }
   return eventos;
 }
@@ -7121,6 +7284,15 @@ async function _gaAutoEnviarSeGanha(driveId, dadosCompletos){
     var form=dadosCompletos.form;
     if(!form['f-cliente']) return;
     if(!form['f-dm']&&!form['f-dia']&&!form['f-dd']) return;
+    // Gate de Liberação de Montagem: a automação de Venda Ganha NUNCA deve
+    // travar com uma janela de alerta bloqueante (ela roda em segundo plano)
+    // — e desde a v2 deste gate (pedido do usuário), também NÃO deixa de
+    // enviar quando pendente. Em vez disso, sempre envia e prefixa os
+    // títulos com uma tarja "⚠️ LIBERAÇÃO PENDENTE" (ver _gaEventosDisponiveisDe()
+    // acima), avisando a equipe por toast pra acompanhar a liberação.
+    // Usa os dados recém-salvos (dadosCompletos), não os globais em memória,
+    // já que este disparo pode acontecer logo após um save.
+    var _tarjaGanha=_montagemTarjaTextoDe(form, dadosCompletos);
     // Importante: carregar a config do Firestore ANTES de checar clientId/
     // calendarId — GOOGLE_AGENDA_CONFIG começa vazio em toda sessão nova e só
     // é populado por googleAgendaCarregarConfig(). Sem este await, a
@@ -7130,7 +7302,7 @@ async function _gaAutoEnviarSeGanha(driveId, dadosCompletos){
     if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
     var cfg=(typeof GOOGLE_AGENDA_CONFIG!=='undefined'&&GOOGLE_AGENDA_CONFIG)||{};
     if(!cfg.clientId||!cfg.calendarId) return;
-    var eventosDisp=_gaEventosDisponiveisDe(form);
+    var eventosDisp=_gaEventosDisponiveisDe(form,dadosCompletos);
     if(!eventosDisp.length) return;
     var cliente=form['f-cliente'];
     _gaEnviarEventosParaOrcamento(driveId,form,dadosCompletos,eventosDisp)
@@ -7138,7 +7310,8 @@ async function _gaAutoEnviarSeGanha(driveId, dadosCompletos){
         console.log('[Google Agenda] Envio automático (Venda Ganha) concluído para',driveId);
         var msg='📅 Enviado para o Google Agenda: '+cliente+' (Montagem/Evento/Desmontagem).';
         if(resultadoEnvio&&resultadoEnvio.preReservaRemovida) msg+=' A pré-reserva foi substituída pelos eventos definitivos.';
-        _toastMostrar(msg,'ok');
+        if(_tarjaGanha) msg+=' ⚠️ Enviado com LIBERAÇÃO DE MONTAGEM PENDENTE — '+_tarjaGanha;
+        _toastMostrar(msg,_tarjaGanha?'warn':'ok');
       })
       .catch(function(e){
         console.warn('[Google Agenda] Falha no envio automático (Venda Ganha):',e&&e.message);
@@ -7220,6 +7393,9 @@ async function googleAgendaEnviarPreReserva(){
 
 async function googleAgendaEnviarOS(){
   if(_bloqueadoSemAprovacao())return;
+  // A partir daqui a Liberação de Montagem NÃO bloqueia mais o envio à
+  // Agenda (pedido do usuário) — quando pendente, os títulos dos eventos
+  // já saem prefixados com a tarja (ver _gaEventosDisponiveis() acima).
   var faltando=[];
   if(!gv('f-cliente')) faltando.push('Nome do cliente');
   if(!gv('f-dm')&&!gv('f-dia')&&!gv('f-dd')) faltando.push('Ao menos uma data (Montagem, Evento ou Desmontagem)');
@@ -7268,7 +7444,10 @@ async function googleAgendaEnviarOS(){
     console.warn('googleAgendaEnviarOS erros:',erros);
     alert('⚠️ Alguns eventos não puderam ser enviados:\n\n• '+erros.join('\n• '));
   } else {
-    driveStatus('✅ '+eventosDisp.length+' evento(s) enviado(s) para o Google Agenda!','ok');
+    var _tarjaOS=_montagemTarjaTexto();
+    driveStatus(_tarjaOS
+      ? '⚠️ '+eventosDisp.length+' evento(s) enviado(s) com LIBERAÇÃO DE MONTAGEM PENDENTE — '+_tarjaOS
+      : '✅ '+eventosDisp.length+' evento(s) enviado(s) para o Google Agenda!', _tarjaOS?'err':'ok');
   }
 }
 
@@ -7670,7 +7849,7 @@ function salvarComercial(){
     _gaAutoEnviarSeGanha(driveIdAtual, getDadosCompletos());
   }
 
-  renderComercial();renderFinanceiroInline();
+  renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
 
   // Feedback visual no botão de registrar (sem alert bloqueante)
   var btnReg=document.querySelector('button[onclick="salvarComercial()"]');
@@ -7701,6 +7880,522 @@ function salvarComercial(){
 }
 
 // ════════════════════════════════════════════════════════
+//  STATUS DO CONTRATO — rastreia se o contrato voltou assinado
+//  do cliente. Pedido do usuário: "problema com o retorno do
+//  contrato assinado". Mesmo padrão visual/estrutural do painel
+//  Comercial (com-panel), mas com fluxo mais simples: apenas
+//  2 transições manuais (enviado -> assinado), sem motivo/perda.
+// ════════════════════════════════════════════════════════
+function renderContrato(){
+  var panel=document.getElementById('contrato-panel');
+  if(!panel)return;
+  // Mesma regra de visibilidade do painel Comercial
+  var visivel=aprovStatus==='aprovado'&&usuarioAtual&&['consultor','adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0;
+  panel.style.display=visivel?'block':'none';
+  if(!visivel)return;
+
+  var sa=document.getElementById('contrato-status-atual');
+  if(sa){
+    var si=CONTRATO_SI[contratoStatus]||CONTRATO_SI[''];
+    sa.innerHTML='<span style="display:inline-block;padding:4px 12px;border-radius:12px;background:'+si.bg+';color:'+si.tx+';font-size:11px;font-weight:800">'+si.label+'</span>';
+  }
+
+  var btnsBox=document.getElementById('contrato-btns');
+  if(btnsBox){
+    var htmlBtns='';
+    if(contratoStatus===''){
+      htmlBtns+='<button class="com-btn" style="background:#1565c0;color:#fff" onclick="contratoMarcarEnviado()">📤 Marcar Contrato Enviado</button>';
+    }else if(contratoStatus==='enviado'){
+      htmlBtns+='<button class="com-btn" style="background:#2e7d32;color:#fff" onclick="contratoConfirmarAssinado()">✅ Confirmar Assinatura Recebida</button>';
+    }else if(contratoStatus==='assinado'){
+      htmlBtns+='<button class="com-btn" style="background:var(--surface-3);color:var(--text)" onclick="contratoMarcarEnviado()">↩️ Registrar Novo Envio (2ª via)</button>';
+    }
+    btnsBox.innerHTML=htmlBtns;
+  }
+
+  var hist=document.getElementById('contrato-hist');
+  var histList=document.getElementById('contrato-hist-list');
+  if(hist&&histList){
+    if(contratoHist&&contratoHist.length){
+      hist.style.display='block';
+      histList.innerHTML=contratoHist.map(function(h){
+        var si2=CONTRATO_SI[h.status]||{label:h.status,bg:'var(--surface-3)',tx:'var(--text)'};
+        return '<div class="com-hist-item">'
+          +'<span style="flex-shrink:0;padding:2px 8px;border-radius:10px;background:'+si2.bg+';color:'+si2.tx+';font-size:9px;font-weight:800">'+si2.label+'</span>'
+          +'<div style="flex:1"><span style="color:var(--text-dim);font-weight:700">'+_nomeUsuario(h.usuario)+'</span>'
+          +'<br><span style="color:var(--text-dim)">'+h.data+'</span></div>'
+          +'</div>';
+      }).reverse().join('');
+    }else{
+      hist.style.display='none';
+    }
+  }
+}
+
+function _contratoRegistrarHist(status){
+  contratoHist.push({status:status,usuario:usuarioAtual?usuarioAtual.nome:'—',data:new Date().toLocaleString('pt-BR'),dataISO:new Date().toISOString().split('T')[0]});
+}
+
+function contratoMarcarEnviado(){
+  contratoStatus='enviado';
+  _contratoRegistrarHist('enviado');
+  renderContrato();
+  if(typeof marcarAlterado==='function') marcarAlterado();
+  if(typeof driveIdAtual!=='undefined' && driveIdAtual) salvarNoDrive({mostrarStatus:true});
+}
+
+function contratoConfirmarAssinado(){
+  contratoStatus='assinado';
+  _contratoRegistrarHist('assinado');
+  renderContrato();
+  if(typeof marcarAlterado==='function') marcarAlterado();
+  if(typeof driveIdAtual!=='undefined' && driveIdAtual) salvarNoDrive({mostrarStatus:true});
+}
+
+// Chamada automaticamente sempre que o PDF do contrato é de fato gerado
+// (gerarContrato() -> _buildContratoPDF() -> doc.save()) — evita depender
+// do consultor lembrar de marcar manualmente. Só marca "enviado" quando
+// ainda não havia nenhum status registrado: não sobrescreve um contrato já
+// assinado, nem reinicia o histórico a cada reimpressão/re-geração do PDF.
+function _contratoAutoMarcarEnviadoAposGerar(){
+  if(contratoStatus==='') contratoMarcarEnviado();
+}
+
+// ════════════════════════════════════════════════════════
+//  TIPO DE CONDIÇÃO DE PAGAMENTO / ANÁLISE DE CRÉDITO
+//
+//  Pedido do usuário: nosso prazo padrão é 50% de entrada na assinatura do
+//  contrato e 50% até 3 dias antes do evento. Quando a condição negociada é
+//  diferente disso (e não é simplesmente "pagamento integral após a data do
+//  evento", que já é uma exceção aceita), precisa ser solicitada Análise de
+//  Crédito ao Financeiro (ex.: Giovana Borges, Assistente Comercial) — e só
+//  depois de aprovado pelo Financeiro (com a permissão específica), Gerência
+//  ou Diretoria o processo "anda para a próxima etapa" (liberação de
+//  montagem). Ver f-pgto-tipo (select no formulário), montagemPagamentoConfirmado()
+//  e _bloqueadoSemLiberacaoMontagem() mais abaixo, que consomem creditoStatus.
+// ════════════════════════════════════════════════════════
+
+// 'padrao' (50% entrada + 50% até 3 dias antes do evento) | 'posterior'
+// (pagamento integral após a data do evento) | 'outra' (qualquer outra
+// condição — exige Análise de Crédito). Cai em 'padrao' quando o campo
+// ainda não existe (orçamentos salvos antes deste recurso).
+function _pgtoTipo(){
+  return gv('f-pgto-tipo')||'padrao';
+}
+
+// Quem pode aprovar/reprovar Análise de Crédito: Gerência/Diretoria/Admin
+// sempre podem; qualquer outro cargo só se tiver a permissão específica
+// "aprovar-credito" concedida em Admin > Permissões por Cargo (ex.: cargo
+// "Assistente Comercial", pra liberar a Giovana sem inventar um novo nível
+// de login). Ao contrário das demais permissões de campo do sistema (que
+// são "libera por padrão, restringe por exceção"), esta é "nega por
+// padrão, libera por exceção" — por isso não usa permTemAcesso() genérico.
+function _creditoPodeAprovar(){
+  if(!usuarioAtual) return false;
+  if(['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0) return true;
+  var cargo=typeof _cargoEfetivo==='function'?_cargoEfetivo(usuarioAtual):(usuarioAtual.cargo||'');
+  return !!(cargo && _permissoes[cargo] && _permissoes[cargo]['aprovar-credito']===true);
+}
+
+function renderCreditoPanel(){
+  var panel=document.getElementById('credito-panel');
+  if(!panel)return;
+  var tipo=_pgtoTipo();
+  // Só aparece quando a condição de pagamento é "outra" (não-padrão) — nos
+  // outros tipos não há análise de crédito a ser feita.
+  var visivel=aprovStatus==='aprovado'&&tipo==='outra'&&usuarioAtual&&['consultor','adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0;
+  panel.style.display=visivel?'block':'none';
+  if(!visivel)return;
+
+  var sa=document.getElementById('credito-status-atual');
+  if(sa){
+    var si=CREDITO_SI[creditoStatus]||CREDITO_SI[''];
+    sa.innerHTML='<span style="display:inline-block;padding:4px 12px;border-radius:12px;background:'+si.bg+';color:'+si.tx+';font-size:11px;font-weight:800">'+si.label+'</span>';
+  }
+
+  var btnsBox=document.getElementById('credito-btns');
+  if(btnsBox){
+    var htmlBtns='';
+    if(creditoStatus===''||creditoStatus==='reprovado'){
+      htmlBtns+='<button class="com-btn" style="background:#1565c0;color:#fff" onclick="creditoSolicitarAnalise()">📤 Solicitar Análise de Crédito</button>';
+    }
+    if(creditoStatus==='solicitado'){
+      if(_creditoPodeAprovar()){
+        htmlBtns+='<button class="com-btn" style="background:#2e7d32;color:#fff" onclick="creditoAprovar()">✅ Aprovar Condição de Pagamento</button>';
+        htmlBtns+='<button class="com-btn" style="background:#c62828;color:#fff" onclick="creditoReprovar()">❌ Reprovar</button>';
+      }else{
+        htmlBtns+='<span style="font-size:11px;color:var(--text-dim)">⏳ Aguardando aprovação do Financeiro, Gerência ou Diretoria.</span>';
+      }
+    }
+    btnsBox.innerHTML=htmlBtns;
+  }
+
+  var hist=document.getElementById('credito-hist');
+  var histList=document.getElementById('credito-hist-list');
+  if(hist&&histList){
+    if(creditoHist&&creditoHist.length){
+      hist.style.display='block';
+      histList.innerHTML=creditoHist.map(function(h){
+        var si2=CREDITO_SI[h.status]||{label:h.status,bg:'var(--surface-3)',tx:'var(--text)'};
+        return '<div class="com-hist-item">'
+          +'<span style="flex-shrink:0;padding:2px 8px;border-radius:10px;background:'+si2.bg+';color:'+si2.tx+';font-size:9px;font-weight:800">'+si2.label+'</span>'
+          +'<div style="flex:1"><span style="color:var(--text-dim);font-weight:700">'+_nomeUsuario(h.usuario)+'</span>'
+          +(h.obs?'<br><span style="color:var(--text-dim)">'+h.obs+'</span>':'')
+          +'<br><span style="color:var(--text-dim)">'+h.data+'</span></div>'
+          +'</div>';
+      }).reverse().join('');
+    }else{
+      hist.style.display='none';
+    }
+  }
+}
+
+function _creditoRegistrarHist(status,obs){
+  creditoHist.push({status:status,usuario:usuarioAtual?usuarioAtual.nome:'—',obs:obs||'',data:new Date().toLocaleString('pt-BR'),dataISO:new Date().toISOString().split('T')[0]});
+}
+
+function creditoSolicitarAnalise(){
+  creditoStatus='solicitado';
+  _creditoRegistrarHist('solicitado');
+  renderCreditoPanel();
+  if(typeof renderMontagemGate==='function') renderMontagemGate();
+  if(typeof marcarAlterado==='function') marcarAlterado();
+  if(typeof driveIdAtual!=='undefined' && driveIdAtual) salvarNoDrive({mostrarStatus:true});
+}
+
+function creditoAprovar(){
+  if(!_creditoPodeAprovar()){
+    alert('🔒 Você não tem permissão para aprovar Análise de Crédito.\n\nSomente Financeiro (com permissão específica), Gerência ou Diretoria podem aprovar.');
+    return;
+  }
+  var obs=prompt('Observação (opcional):','')||'';
+  creditoStatus='aprovado';
+  _creditoRegistrarHist('aprovado',obs);
+  renderCreditoPanel();
+  if(typeof renderMontagemGate==='function') renderMontagemGate();
+  if(typeof marcarAlterado==='function') marcarAlterado();
+  if(typeof driveIdAtual!=='undefined' && driveIdAtual) salvarNoDrive({mostrarStatus:true});
+}
+
+function creditoReprovar(){
+  if(!_creditoPodeAprovar()){
+    alert('🔒 Você não tem permissão para reprovar Análise de Crédito.\n\nSomente Financeiro (com permissão específica), Gerência ou Diretoria podem reprovar.');
+    return;
+  }
+  var motivo=prompt('Motivo da reprovação (obrigatório):','');
+  if(!motivo){alert('Informe o motivo da reprovação.');return;}
+  creditoStatus='reprovado';
+  _creditoRegistrarHist('reprovado',motivo);
+  renderCreditoPanel();
+  if(typeof renderMontagemGate==='function') renderMontagemGate();
+  if(typeof marcarAlterado==='function') marcarAlterado();
+  if(typeof driveIdAtual!=='undefined' && driveIdAtual) salvarNoDrive({mostrarStatus:true});
+}
+
+// ── Cobrança automática recorrente enquanto o contrato está 'enviado' ──────
+// Pedido do usuário: "problema com... o retorno do contrato assinado" — sem
+// isso, a cobrança do cliente dependia só da memória do consultor. Enquanto
+// contratoStatus==='enviado', o sistema cria automaticamente uma Tarefa de
+// cobrança a cada CONTRATO_COBRANCA_DIAS dias — reavaliado sempre que o
+// Funil (tela cheia ou card da Home) recarrega os dados dos orçamentos — até
+// o contrato ser marcado como 'assinado', quando a cobrança para sozinha
+// (nenhuma tarefa nova é criada; a última pendente pode ser concluída
+// manualmente, mas isso não é obrigatório).
+var CONTRATO_COBRANCA_DIAS = 3;
+
+// Quantos dias já se passaram desde uma data ISO (yyyy-mm-dd). Infinity se a
+// data for vazia/ inválida — trata "nunca cobrado ainda" como "cobre agora".
+function _contratoDiasDesde(dataISO){
+  if(!dataISO) return Infinity;
+  var d=new Date(dataISO+'T00:00:00');
+  if(isNaN(d.getTime())) return Infinity;
+  var hoje=new Date();hoje.setHours(0,0,0,0);
+  return Math.floor((hoje-d)/(1000*60*60*24));
+}
+
+// Data de referência pra contar os dias até a próxima cobrança: prioriza a
+// cobrança automática mais recente já criada (pendente ou concluída) pra
+// este orçamento; se nunca cobrou, usa a data em que o contrato foi marcado
+// 'enviado' pela última vez (contratoHist).
+function _contratoUltimaReferencia(driveId, contratoHist, tarefas){
+  var ultimaData=null;
+  (tarefas||[]).forEach(function(t){
+    if(t.vinculoTipo==='orcamento' && t.vinculoId===driveId && t.autoContrato==='cobranca'){
+      if(!ultimaData || t.data>ultimaData) ultimaData=t.data;
+    }
+  });
+  if(ultimaData) return ultimaData;
+  var ultimoEnviado=null;
+  (contratoHist||[]).forEach(function(h){
+    if(h.status==='enviado' && (!ultimoEnviado || h.dataISO>ultimoEnviado)) ultimoEnviado=h.dataISO;
+  });
+  return ultimoEnviado;
+}
+
+function _contratoTemCobrancaPendente(driveId, tarefas){
+  return (tarefas||[]).some(function(t){
+    return t.vinculoTipo==='orcamento' && t.vinculoId===driveId && t.autoContrato==='cobranca' && t.status!=='concluida';
+  });
+}
+
+async function _contratoCriarCobranca(orc){
+  if(typeof TAREFAS==='undefined' || !fbDb) return;
+  var driveId=orc.driveId;
+  var f=orc.form||(orc.dados&&orc.dados.form)||{};
+  if(_contratoTemCobrancaPendente(driveId, TAREFAS)) return;
+  var obj={
+    id:'trf_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    tipo:'Follow-up',
+    data:new Date().toISOString().split('T')[0],
+    hora:'',
+    obs:'🤖 Cobrança automática: o contrato foi enviado ao cliente e ainda não voltou assinado. Entre em contato pra agilizar a devolução.',
+    consultor:f['f-cons']||'',
+    vinculoTipo:'orcamento',
+    vinculoId:driveId,
+    vinculoLabel:(f['f-cliente']||'—')+' · '+(f['f-num']||'—'),
+    autoContrato:'cobranca',
+    status:'pendente',
+    criadoEm:new Date().toLocaleString('pt-BR'),
+    criadoPor:'Sistema (automação)',
+    concluidoEm:'',
+    concluidoPor:''
+  };
+  try{
+    TAREFAS.push(obj);
+    await _tarefaSalvarFirestore(obj);
+    _tarefasAtualizarTelasAbertas('orcamento', driveId);
+  }catch(e){
+    console.warn('_contratoCriarCobranca:', e);
+  }
+}
+
+// Varre uma lista de orçamentos carregados (por padrão _funilCache, que já
+// traz .dados com contratoStatus/contratoHist — ver getDadosCompletos()) e
+// cria uma cobrança pendente pra cada um com contrato 'enviado' há tempo
+// demais e sem cobrança pendente ainda. Chamado sempre que o Funil (tela
+// cheia ou card da Home) termina de recarregar os dados.
+async function verificarCobrancasContrato(lista){
+  lista = lista || _funilCache || [];
+  var pendentes = lista.filter(function(orc){
+    return orc && orc.dados && orc.dados.contratoStatus==='enviado';
+  });
+  for(var i=0;i<pendentes.length;i++){
+    var orc=pendentes[i];
+    var ref=_contratoUltimaReferencia(orc.driveId, orc.dados.contratoHist, TAREFAS);
+    var dias=_contratoDiasDesde(ref);
+    if(dias>=CONTRATO_COBRANCA_DIAS && !_contratoTemCobrancaPendente(orc.driveId, TAREFAS)){
+      await _contratoCriarCobranca(orc);
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  GATE DE LIBERAÇÃO DE MONTAGEM
+//  Pedido do usuário: "problemas com conciliação de pagamento com a
+//  liberação da montagem" — a área técnica podia ser acionada (Ordem de
+//  Serviço / Google Agenda) mesmo sem confirmação de que o cliente pagou
+//  e/ou devolveu o contrato assinado. Mantém os mesmos 3 requisitos
+//  (aprovado + contrato assinado + pagamento confirmado), com um override
+//  manual pra Gerente/Diretor/Admin em casos excepcionais (justificativa
+//  obrigatória) — só que agora o requisito de PAGAMENTO depende do tipo de
+//  condição negociada (ver _pgtoTipo()):
+//    • 'padrao'    (50% entrada + 50% até 3 dias antes do evento): exige a
+//                  parcela de Entrada confirmada como paga pelo Financeiro.
+//    • 'posterior' (pagamento integral após a data do evento, aprovado):
+//                  nunca fica pendente por pagamento.
+//    • 'outra'     (qualquer outra condição): exige Análise de Crédito
+//                  aprovada (ver creditoStatus/creditoAprovar()).
+//  E desde a v2 deste gate (pedido do usuário), OS e Google Agenda deixam
+//  de BLOQUEAR — em vez disso mostram uma tarja "LIBERAÇÃO DE MONTAGEM
+//  PENDENTE" (ver _montagemTarjaTexto() mais abaixo). _bloqueadoSemLiberacaoMontagem()
+//  continua existindo (usado por testes/ferramentas), mas não é mais
+//  chamada por gerarOS()/googleAgendaEnviarOS().
+// ════════════════════════════════════════════════════════
+
+// Localiza a parcela de "Entrada" pelo texto da descrição (case-insensitive).
+// finParcelas não tem um flag estrutural de "é a entrada" — na ausência de
+// uma parcela com "entrada" no texto (dados antigos, nomenclatura livre),
+// cai para a parcela com a data mais antiga como aproximação razoável.
+function _pgtoParcelaEntrada(){
+  var lista=finParcelas||[];
+  if(!lista.length) return null;
+  for(var i=0;i<lista.length;i++){
+    if(lista[i] && /entrada/i.test(lista[i].desc||'')) return lista[i];
+  }
+  var comData=lista.filter(function(p){return p&&p.data;}).slice().sort(function(a,b){
+    return (a.data||'')<(b.data||'')?-1:((a.data||'')>(b.data||'')?1:0);
+  });
+  return comData[0]||lista[0];
+}
+
+function _pgtoEntradaConfirmada(){
+  var entrada=_pgtoParcelaEntrada();
+  return !!(entrada && entrada.status==='pago');
+}
+
+// Texto do requisito de pagamento, que muda conforme o tipo de condição —
+// usado tanto no checklist do painel quanto na tarja/alerta.
+function _montagemLabelPagamento(){
+  var tipo=_pgtoTipo();
+  if(tipo==='posterior') return 'Pagamento integral após o evento (condição aprovada — não bloqueia)';
+  if(tipo==='outra') return 'Análise de Crédito aprovada (condição de pagamento fora do padrão)';
+  return 'Confirmação de pagamento da Entrada pelo Financeiro';
+}
+
+function montagemPagamentoConfirmado(){
+  var tipo=_pgtoTipo();
+  if(tipo==='posterior') return true;
+  if(tipo==='outra') return creditoStatus==='aprovado';
+  return _pgtoEntradaConfirmada();
+}
+
+function montagemRequisitos(){
+  return {
+    aprovado: aprovStatus==='aprovado',
+    contratoAssinado: contratoStatus==='assinado',
+    pagamentoConfirmado: montagemPagamentoConfirmado()
+  };
+}
+
+function montagemLiberada(){
+  if(montagemLiberacaoManual) return true;
+  var r=montagemRequisitos();
+  return r.aprovado && r.contratoAssinado && r.pagamentoConfirmado;
+}
+
+// Guard histórico (pré-tarja) — mantido para uso em testes/ferramentas, mas
+// não é mais chamado por gerarOS()/googleAgendaEnviarOS(), que agora usam
+// uma tarja não-bloqueante (ver _montagemTarjaTexto()).
+function _bloqueadoSemLiberacaoMontagem(){
+  if(montagemLiberada()) return false;
+  var r=montagemRequisitos();
+  var faltando=[];
+  if(!r.aprovado) faltando.push('orçamento aprovado');
+  if(!r.contratoAssinado) faltando.push('contrato assinado e devolvido pelo cliente');
+  if(!r.pagamentoConfirmado) faltando.push(_montagemLabelPagamento());
+  alert('🔒 MONTAGEM AINDA NÃO LIBERADA\n\nEsta ação (Ordem de Serviço / Google Agenda) só fica disponível quando TODOS os requisitos abaixo forem atendidos:\n\n• '+faltando.join('\n• ')+'\n\nSe for realmente necessário liberar mesmo assim (ex.: pagamento combinado por fora do sistema, urgência do cliente), um Gerente Comercial, Diretor ou Administrador pode fazer a liberação manual — botão "🔓 Liberar Montagem Manualmente" — com justificativa obrigatória.');
+  return true;
+}
+
+// Texto da tarja não-bloqueante mostrada no topo da OS e usada como prefixo
+// nos eventos do Google Agenda quando a montagem ainda não está liberada.
+// Retorna '' quando já está liberada (tarja não aparece nesse caso).
+function _montagemTarjaTexto(){
+  if(montagemLiberada()) return '';
+  var r=montagemRequisitos();
+  var faltando=[];
+  if(!r.aprovado) faltando.push('orçamento aprovado');
+  if(!r.contratoAssinado) faltando.push('contrato assinado e devolvido pelo cliente');
+  if(!r.pagamentoConfirmado) faltando.push(_montagemLabelPagamento());
+  return 'Falta: '+faltando.join('; ')+'.';
+}
+
+function montagemLiberarManual(){
+  if(!usuarioAtual || ['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)<0){
+    alert('⚠️ Apenas Gerente Comercial, Diretor ou Administrador podem liberar a montagem manualmente.');
+    return;
+  }
+  var justificativa=prompt('⚠️ LIBERAÇÃO MANUAL DA MONTAGEM\n\nIsso libera a Ordem de Serviço e o envio ao Google Agenda mesmo sem todos os requisitos (aprovação + contrato assinado + pagamento confirmado).\n\nDescreva o motivo (obrigatório):');
+  if(justificativa===null) return; // cancelou o prompt
+  justificativa=(justificativa||'').trim();
+  if(!justificativa){ alert('⚠️ A justificativa é obrigatória para liberar manualmente.'); return; }
+  montagemLiberacaoManual=true;
+  montagemLiberacaoManualHist.push({usuario:usuarioAtual.nome,justificativa:justificativa,acao:'liberado',data:new Date().toLocaleString('pt-BR'),dataISO:new Date().toISOString().split('T')[0]});
+  if(typeof renderMontagemGate==='function') renderMontagemGate();
+  if(typeof marcarAlterado==='function') marcarAlterado();
+  if(typeof driveIdAtual!=='undefined' && driveIdAtual) salvarNoDrive({mostrarStatus:true});
+}
+
+function montagemRevogarLiberacaoManual(){
+  if(!usuarioAtual || ['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)<0){
+    alert('⚠️ Apenas Gerente Comercial, Diretor ou Administrador podem revogar a liberação manual.');
+    return;
+  }
+  montagemLiberacaoManual=false;
+  montagemLiberacaoManualHist.push({usuario:usuarioAtual.nome,justificativa:'',acao:'revogado',data:new Date().toLocaleString('pt-BR'),dataISO:new Date().toISOString().split('T')[0]});
+  if(typeof renderMontagemGate==='function') renderMontagemGate();
+  if(typeof marcarAlterado==='function') marcarAlterado();
+  if(typeof driveIdAtual!=='undefined' && driveIdAtual) salvarNoDrive({mostrarStatus:true});
+}
+
+// UI do gate de Montagem — mesmo padrão visual do painel Comercial/Contrato
+// (com-panel), mostrando os 3 requisitos com check/X e, pra quem tem
+// permissão (adm/gerente/diretor), o botão de liberação/revogação manual.
+function renderMontagemGate(){
+  var panel=document.getElementById('montagem-panel');
+  if(!panel)return;
+  var visivel=aprovStatus==='aprovado'&&usuarioAtual&&['consultor','adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0;
+  panel.style.display=visivel?'block':'none';
+  if(!visivel)return;
+
+  var liberada=montagemLiberada();
+  var r=montagemRequisitos();
+  var podeGerenciar=usuarioAtual&&['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0;
+
+  var sa=document.getElementById('montagem-status-atual');
+  if(sa){
+    if(montagemLiberacaoManual){
+      sa.innerHTML='<span style="display:inline-block;padding:4px 12px;border-radius:12px;background:#fff3e0;color:#e65100;font-size:11px;font-weight:800">🔓 Liberada manualmente (override)</span>';
+    }else if(liberada){
+      sa.innerHTML='<span style="display:inline-block;padding:4px 12px;border-radius:12px;background:#e8f5e9;color:#1b5e20;font-size:11px;font-weight:800">✅ Montagem liberada</span>';
+    }else{
+      // Desde a v2 deste gate (pedido do usuário), isso não bloqueia mais a
+      // OS/Agenda — só avisa. Deixamos isso explícito aqui pra não parecer
+      // que a ação vai travar quando o consultor for emitir a OS.
+      sa.innerHTML='<span style="display:inline-block;padding:4px 12px;border-radius:12px;background:var(--surface-3);color:var(--text-dim);font-size:11px;font-weight:800">🟠 Liberação de Montagem Pendente</span>'
+        +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">A OS e o Google Agenda já podem ser emitidos/enviados normalmente — vão sair com uma tarja de aviso até este item ficar liberado.</div>';
+    }
+  }
+
+  var req=document.getElementById('montagem-requisitos');
+  if(req){
+    function linha(ok,label){
+      return '<div style="display:flex;align-items:center;gap:6px;font-size:11px;padding:3px 0;color:'+(ok?'var(--text)':'var(--text-dim)')+'">'
+        +'<span style="flex-shrink:0">'+(ok?'✅':'⬜')+'</span><span>'+label+'</span></div>';
+    }
+    req.innerHTML=linha(r.aprovado,'Orçamento aprovado')
+      +linha(r.contratoAssinado,'Contrato assinado e devolvido pelo cliente')
+      +linha(r.pagamentoConfirmado,_montagemLabelPagamento());
+  }
+
+  var manualBox=document.getElementById('montagem-manual-box');
+  if(manualBox){
+    if(montagemLiberacaoManual){
+      manualBox.innerHTML=podeGerenciar
+        ? '<button class="com-btn" style="background:var(--surface-3);color:var(--text)" onclick="montagemRevogarLiberacaoManual()">🔒 Revogar Liberação Manual</button>'
+        : '';
+    }else if(!liberada){
+      manualBox.innerHTML=podeGerenciar
+        ? '<button class="com-btn" style="background:#e65100;color:#fff" onclick="montagemLiberarManual()">🔓 Liberar Montagem Manualmente</button>'
+        : '<span style="font-size:11px;color:var(--text-muted)">Fale com um Gerente, Diretor ou Administrador pra liberar manualmente, se necessário.</span>';
+    }else{
+      manualBox.innerHTML='';
+    }
+  }
+
+  var hist=document.getElementById('montagem-hist');
+  var histList=document.getElementById('montagem-hist-list');
+  if(hist&&histList){
+    if(montagemLiberacaoManualHist&&montagemLiberacaoManualHist.length){
+      hist.style.display='block';
+      histList.innerHTML=montagemLiberacaoManualHist.map(function(h){
+        var acaoLabel=h.acao==='liberado'?'🔓 Liberação manual':'🔒 Revogação';
+        var acaoBg=h.acao==='liberado'?'#fff3e0':'var(--surface-3)';
+        var acaoTx=h.acao==='liberado'?'#e65100':'var(--text)';
+        return '<div class="com-hist-item">'
+          +'<span style="flex-shrink:0;padding:2px 8px;border-radius:10px;background:'+acaoBg+';color:'+acaoTx+';font-size:9px;font-weight:800">'+acaoLabel+'</span>'
+          +'<div style="flex:1"><span style="color:var(--text-dim);font-weight:700">'+_nomeUsuario(h.usuario)+'</span>'
+          +(h.justificativa?'<br><span style="color:var(--text-muted);font-style:italic">"'+h.justificativa+'"</span>':'')
+          +'<br><span style="color:var(--text-dim)">'+h.data+'</span></div>'
+          +'</div>';
+      }).reverse().join('');
+    }else{
+      hist.style.display='none';
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════
 //  FUNIL DE VENDAS — CARD FIXO PERMANENTE
 // ════════════════════════════════════════════════════════
 var _funilCache = [];
@@ -7709,7 +8404,7 @@ var _funilCarregando = false;
 // Guarda os follow-ups/tarefas atrasados do último render do kanban (card
 // fixo OU overlay da Home, o que tiver renderizado por último) — alimenta o
 // modal aberto pelos badges "⏰ follow-up(s) atrasado(s)" / "📋 tarefa(s) atrasada(s)".
-var _fkAtrasadosCache = { followup:{orc:[],lead:[]}, tarefas:[] };
+var _fkAtrasadosCache = { followup:{orc:[],lead:[]}, tarefas:[], esfriando:[] };
 
 var FUNIL_SI = {
   enviada:   {label:'📤 Proposta Enviada', bg:'#1565c0', tx:'#fff'},
@@ -8415,6 +9110,12 @@ async function funilCarregarDados(forcar){
     }, forcar);
     _funilCache = todos.filter(Boolean).filter(function(o){ return o.st === 'aprovado'; });
     _funilCarregado = true;
+    if(typeof verificarCobrancasContrato==='function') verificarCobrancasContrato(_funilCache).then(function(){
+      if(typeof atualizarBadgeTarefas==='function') atualizarBadgeTarefas();
+    });
+    if(typeof verificarCadenciaFollowup==='function') verificarCadenciaFollowup(_funilCache).then(function(){
+      if(typeof atualizarBadgeTarefas==='function') atualizarBadgeTarefas();
+    });
     funilFiltrarLista();
     if(stEl) stEl.textContent = _funilCache.length + ' orçamento(s) aprovado(s)';
   }catch(e){
@@ -8518,6 +9219,23 @@ function funilRenderKanban(kanbanId, filtroConsElId, statusElId, alertaElId){
     }
   }
 
+  // Propostas "esfriando" (Task #172): orçamentos em "enviada"/"negociacao"
+  // sem avançar de etapa há FUNIL_ESFRIANDO_DIAS dias ou mais — badge irmão
+  // dos outros dois, mesmo padrão de id derivado por convenção.
+  var esfriandoElId = alertaElId ? alertaElId.replace('followup-alerta','esfriando-alerta') : null;
+  var esfriandoEl = esfriandoElId ? document.getElementById(esfriandoElId) : null;
+  if(esfriandoEl){
+    var esfriandoOrc = _fkPropostasEsfriando(baseOrc, hoje);
+    _fkAtrasadosCache.esfriando = esfriandoOrc;
+    if(esfriandoOrc.length > 0){
+      esfriandoEl.style.display = 'inline-block';
+      esfriandoEl.textContent = '🥶 ' + esfriandoOrc.length + ' proposta(s) esfriando';
+    } else {
+      esfriandoEl.style.display = 'none';
+      esfriandoEl.textContent = '';
+    }
+  }
+
   var totalGeral = baseOrc.length + baseLeads.length;
   var valorGeral = baseOrc.reduce(function(t,o){ return t+dashValOrc(o); }, 0)
     + baseLeads.reduce(function(t,l){ return t+(parseFloat(l.valorEstimado)||0); }, 0);
@@ -8568,17 +9286,40 @@ function funilRenderKanban(kanbanId, filtroConsElId, statusElId, alertaElId){
 }
 
 // ── Modal "Atrasados" — aberto pelos badges clicáveis do funil ──────────
-// tipo: 'followup' (leads+orçamentos com follow-up vencido) ou 'tarefas'
-// (tarefas vencidas vinculadas a itens do funil). Usa o que foi calculado no
-// último funilRenderKanban() — respeita os mesmos filtros de consultor/
-// permissão já aplicados ao quadro.
+// tipo: 'followup' (leads+orçamentos com follow-up vencido), 'tarefas'
+// (tarefas vencidas vinculadas a itens do funil) ou 'esfriando' (propostas
+// enviada/negociação sem avançar de etapa há FUNIL_ESFRIANDO_DIAS dias ou
+// mais — Task #172). Usa o que foi calculado no último funilRenderKanban()
+// — respeita os mesmos filtros de consultor/permissão já aplicados ao quadro.
 function fkAbrirAtrasados(tipo){
   var titulo = document.getElementById('fk-atrasados-titulo');
   var sub = document.getElementById('fk-atrasados-sub');
   var box = document.getElementById('fk-atrasados-lista');
   if(!box) return;
 
-  if(tipo === 'tarefas'){
+  if(tipo === 'esfriando'){
+    var esfriando = _fkAtrasadosCache.esfriando || [];
+    var hojeEsfr = new Date().toISOString().split('T')[0];
+    if(titulo) titulo.textContent = '🥶 Propostas Esfriando';
+    if(sub) sub.textContent = esfriando.length+' proposta'+(esfriando.length!==1?'s':'')+' sem avançar de etapa há '+FUNIL_ESFRIANDO_DIAS+'+ dias — clique pra abrir';
+    var itensEsfr = esfriando.map(function(o){
+      var f=o.form||{};
+      var histCom=(o.dados&&o.dados.comercialHist)||[];
+      var resumo=_fkResumoAcompanhamento(o.dados&&o.dados.criadoEmISO, histCom, (o.dados&&o.dados.atividades)||[], hojeEsfr);
+      var cs=(o.dados&&o.dados.comercialStatus)||'';
+      return {id:o.driveId, titulo:f['f-cliente']||'—', sub:(f['f-num']||'—')+(f['f-cons']?' · '+f['f-cons']:'')+' · '+(FUNIL_SI[cs]?FUNIL_SI[cs].label:cs), dias:resumo.diasEtapa||0};
+    }).sort(function(a,b){ return b.dias-a.dias; });
+    box.innerHTML = itensEsfr.length
+      ? itensEsfr.map(function(x){
+          return '<div onclick="fkAtrasadosAbrirVinculo(\'orcamento\',\''+x.id+'\')" style="padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px" onmouseover="this.style.background=\'var(--surface)\'" onmouseout="this.style.background=\'\'">'
+            +'<div><div style="font-weight:700;color:var(--text);font-size:12px">'+eh(x.titulo)+'</div>'
+            +'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">'+eh(x.sub)+'</div>'
+            +'</div>'
+            +'<span style="white-space:nowrap;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:800;background:#0277bd;color:#fff">🥶 '+x.dias+' dias</span>'
+            +'</div>';
+        }).join('')
+      : '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:12px">✅ Nenhuma proposta esfriando.</div>';
+  } else if(tipo === 'tarefas'){
     var tarefas = _fkAtrasadosCache.tarefas || [];
     if(titulo) titulo.textContent = '📋 Tarefas Atrasadas';
     if(sub) sub.textContent = tarefas.length+' tarefa'+(tarefas.length!==1?'s':'')+' vencida'+(tarefas.length!==1?'s':'')+' — clique pra abrir';
@@ -8675,6 +9416,26 @@ function _fkResumoAcompanhamento(criadoISO, histEtapa, ativ, hojeISO){
   };
 }
 
+// ── Alerta de proposta esfriando (Task #172) ────────────────────────────
+// Pedido do usuário: precisava enxergar, sem precisar abrir cada card, quais
+// propostas estão paradas há tempo demais — motivo de perda de clientes.
+// Um orçamento em "enviada"/"negociacao" (as duas únicas etapas com
+// automação de follow-up — ver FUNIL_AUTO_TAREFA) conta como "esfriando"
+// quando fica FUNIL_ESFRIANDO_DIAS dias ou mais sem avançar de etapa —
+// alinhado com o 2º passo da cadência (2/5/10 dias, Task #171).
+var FUNIL_ESFRIANDO_DIAS = 5;
+
+function _fkPropostasEsfriando(baseOrc, hoje){
+  hoje = hoje || new Date().toISOString().split('T')[0];
+  return (baseOrc||[]).filter(function(o){
+    var cs = (o.dados && o.dados.comercialStatus) || '';
+    if(!FUNIL_AUTO_TAREFA[cs]) return false; // só etapas com automação (enviada/negociacao)
+    var histCom = (o.dados && o.dados.comercialHist) || [];
+    var resumo = _fkResumoAcompanhamento(o.dados&&o.dados.criadoEmISO, histCom, (o.dados&&o.dados.atividades)||[], hoje);
+    return resumo.diasEtapa!==null && resumo.diasEtapa>=FUNIL_ESFRIANDO_DIAS;
+  });
+}
+
 function _fkCardHtml(o, hoje){
   var f = o.form || {};
   var val = dashValOrc(o);
@@ -8704,6 +9465,13 @@ function _fkCardHtml(o, hoje){
   var infoTitle = 'Criado · '+((cs==='ganha'||cs==='perdida')?'Data de fechamento':'Dias na etapa')+' · Última interação'+(resumo.criadoEstimado?' ("~" = data de criação estimada pelo histórico, orçamento cadastrado antes deste recurso)':'');
   var infoHtml = infoPartes.length ? '<div class="fk-card-info" title="'+infoTitle+'">'+infoPartes.join(' · ')+'</div>' : '';
 
+  // Badge "🥶 Esfriando" — mesma regra de _fkPropostasEsfriando(), aplicada
+  // individualmente ao card pra dar visibilidade sem precisar abrir o modal.
+  var esfriando = FUNIL_AUTO_TAREFA[cs] && resumo.diasEtapa!==null && resumo.diasEtapa>=FUNIL_ESFRIANDO_DIAS;
+  var esfriandoBadge = esfriando
+    ? '<span class="fk-fu-badge fk-fu-atrasado" style="background:#0277bd" title="Sem avançar de etapa há '+resumo.diasEtapa+' dias">🥶 Esfriando</span>'
+    : '';
+
   return '<div class="fk-card" draggable="true" ondragstart="_fkDragStart(event,\''+driveId+'\',\'orc\')" ondragend="_fkDragEnd(event)" onclick="fkAbrirDetalhe(\''+driveId+'\')">'
     + '<div class="fk-card-cli">'+eh(f['f-cliente']||'—')+'</div>'
     + '<div class="fk-card-meta"><span>'+eh(f['f-num']||'—')+'</span>'
@@ -8712,7 +9480,7 @@ function _fkCardHtml(o, hoje){
     + (dataEv ? '<div class="fk-card-evento">📆 '+dataEv+'</div>' : '')
     + infoHtml
     + ultObs
-    + '<div class="fk-card-foot"><span class="fk-card-val">'+fmt(val)+'</span>'+fuBadge+'</div>'
+    + '<div class="fk-card-foot"><span class="fk-card-val">'+fmt(val)+'</span>'+fuBadge+esfriandoBadge+'</div>'
     + '</div>';
 }
 
@@ -8885,33 +9653,53 @@ async function _funilPatchOrcamento(driveId, mutatorFn){
 // a MESMA etapa que disparou, uma tarefa automática ainda pendente
 // (assim reabrir/negociar de novo a mesma etapa não empilha tarefas).
 // ═══════════════════════════════════════════════════════
+// ── Follow-up: cadência recorrente (Task #171) ──────────────────────────
+// Pedido do usuário: "tempo de folowup depois que a proposta é enviada" era
+// uma das causas de perda de clientes. Antes, a automação criava só 1
+// lembrete por etapa e parava por aí (se o consultor concluísse ou
+// ignorasse, não vinha mais nada). Agora é uma cadência de 3 lembretes —
+// 2, 5 e 10 dias — que avança sozinha sempre que o Funil recarrega
+// (verificarCadenciaFollowup()): se o lembrete atual já foi concluído (ou
+// não existe mais nenhum pendente) e o card ainda não avançou de etapa, o
+// sistema cria automaticamente o PRÓXIMO passo da sequência, até esgotar.
+var FUNIL_CADENCIA_DIAS = [2, 5, 10];
 var FUNIL_AUTO_TAREFA = {
-  enviada:    { diasPrazo:2, msg:'Fazer follow-up da proposta enviada.' },
-  negociacao: { diasPrazo:1, msg:'Dar continuidade à negociação em andamento.' }
+  enviada:    { msg:'Fazer follow-up da proposta enviada.' },
+  negociacao: { msg:'Dar continuidade à negociação em andamento.' }
 };
 
-async function _fkAutoCriarTarefaEtapa(driveId, novaEtapa){
-  var cfg = FUNIL_AUTO_TAREFA[novaEtapa];
+// Cria o lembrete automático do "passo" indicado (0=1º, 1=2º, 2=3º...) da
+// cadência, com prazo em FUNIL_CADENCIA_DIAS[passo] dias a partir de hoje.
+// Compartilhada entre o gatilho de mudança de etapa (passo 0, sempre) e o
+// avanço automático da cadência (verificarCadenciaFollowup, passos seguintes).
+async function _fkCriarPassoCadencia(driveId, etapa, passo){
+  var cfg = FUNIL_AUTO_TAREFA[etapa];
   if(!cfg || typeof TAREFAS==='undefined' || !fbDb) return;
+  if(passo<0 || passo>=FUNIL_CADENCIA_DIAS.length) return;
   var jaExiste = (TAREFAS||[]).some(function(t){
-    return t.vinculoTipo==='orcamento' && t.vinculoId===driveId && t.autoEtapa===novaEtapa && t.status!=='concluida';
+    return t.vinculoTipo==='orcamento' && t.vinculoId===driveId && t.autoEtapa===etapa && t.status!=='concluida';
   });
   if(jaExiste) return;
-  var orc = _funilCache.find(function(o){ return o.driveId===driveId; });
+  var orc = (_funilCache||[]).find(function(o){ return o.driveId===driveId; });
   var f = (orc&&orc.form) || {};
   var dataPrazo = new Date();
-  dataPrazo.setDate(dataPrazo.getDate() + cfg.diasPrazo);
+  dataPrazo.setDate(dataPrazo.getDate() + FUNIL_CADENCIA_DIAS[passo]);
+  var etapaLabel = FUNIL_SI[etapa]?FUNIL_SI[etapa].label:etapa;
+  var obsMsg = passo===0
+    ? '🤖 Follow-up 1/'+FUNIL_CADENCIA_DIAS.length+' — tarefa criada automaticamente ao entrar em "'+etapaLabel+'": '+cfg.msg
+    : '🤖 Follow-up '+(passo+1)+'/'+FUNIL_CADENCIA_DIAS.length+' (esfriando — sem avanço na etapa "'+etapaLabel+'" há vários dias): '+cfg.msg;
   var obj = {
     id: 'trf_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
     tipo: 'Follow-up',
     data: dataPrazo.toISOString().split('T')[0],
     hora: '',
-    obs: '🤖 Tarefa criada automaticamente ao entrar em "'+(FUNIL_SI[novaEtapa]?FUNIL_SI[novaEtapa].label:novaEtapa)+'": '+cfg.msg,
+    obs: obsMsg,
     consultor: f['f-cons'] || (usuarioAtual?usuarioAtual.nome:''),
     vinculoTipo: 'orcamento',
     vinculoId: driveId,
     vinculoLabel: (f['f-cliente']||'—')+' · '+(f['f-num']||'—'),
-    autoEtapa: novaEtapa,
+    autoEtapa: etapa,
+    autoEtapaPasso: passo,
     status: 'pendente',
     criadoEm: new Date().toLocaleString('pt-BR'),
     criadoPor: 'Sistema (automação)',
@@ -8923,7 +9711,50 @@ async function _fkAutoCriarTarefaEtapa(driveId, novaEtapa){
     await _tarefaSalvarFirestore(obj);
     _tarefasAtualizarTelasAbertas('orcamento', driveId);
   }catch(e){
-    console.warn('_fkAutoCriarTarefaEtapa:', e);
+    console.warn('_fkCriarPassoCadencia:', e);
+  }
+}
+
+// Entrypoint original (mudança de etapa via drag no kanban) — sempre cria o
+// 1º passo da cadência.
+async function _fkAutoCriarTarefaEtapa(driveId, novaEtapa){
+  await _fkCriarPassoCadencia(driveId, novaEtapa, 0);
+}
+
+// Maior passo da cadência já criado pra este orçamento+etapa (-1 = nenhum
+// lembrete criado ainda). Usado pra saber qual é o PRÓXIMO passo.
+function _fkPassoCadenciaAtual(driveId, etapa, tarefas){
+  var maior=-1;
+  (tarefas||[]).forEach(function(t){
+    if(t.vinculoTipo==='orcamento' && t.vinculoId===driveId && t.autoEtapa===etapa){
+      var p=(typeof t.autoEtapaPasso==='number')?t.autoEtapaPasso:0;
+      if(p>maior) maior=p;
+    }
+  });
+  return maior;
+}
+
+// Varre os orçamentos carregados no Funil e avança a cadência de follow-up
+// de quem está "enviada"/"negociacao" sem nenhum lembrete pendente (ou
+// seja: o último foi concluído, ou nunca existiu) — cria o próximo passo,
+// até a sequência (2/5/10 dias) se esgotar. Chamado sempre que o Funil
+// (tela cheia ou card da Home) termina de recarregar os dados — mesmo
+// padrão de verificarCobrancasContrato().
+async function verificarCadenciaFollowup(lista){
+  lista = lista || _funilCache || [];
+  for(var i=0;i<lista.length;i++){
+    var orc=lista[i];
+    if(!orc||!orc.driveId) continue;
+    var cs=(orc.dados&&orc.dados.comercialStatus)||'';
+    if(!FUNIL_AUTO_TAREFA[cs]) continue;
+    var temPendente=(TAREFAS||[]).some(function(t){
+      return t.vinculoTipo==='orcamento' && t.vinculoId===orc.driveId && t.autoEtapa===cs && t.status!=='concluida';
+    });
+    if(temPendente) continue;
+    var passoAtual=_fkPassoCadenciaAtual(orc.driveId, cs, TAREFAS);
+    var proximoPasso=passoAtual+1;
+    if(proximoPasso>=FUNIL_CADENCIA_DIAS.length) continue; // sequência esgotada
+    await _fkCriarPassoCadencia(orc.driveId, cs, proximoPasso);
   }
 }
 
@@ -9783,6 +10614,12 @@ async function funilHomeCarregarDados(){
     });
     _funilCache = todos.filter(Boolean).filter(function(o){ return o.st === 'aprovado'; });
     _funilCarregado = true;
+    if(typeof verificarCobrancasContrato==='function') verificarCobrancasContrato(_funilCache).then(function(){
+      if(typeof atualizarBadgeTarefas==='function') atualizarBadgeTarefas();
+    });
+    if(typeof verificarCadenciaFollowup==='function') verificarCadenciaFollowup(_funilCache).then(function(){
+      if(typeof atualizarBadgeTarefas==='function') atualizarBadgeTarefas();
+    });
     // Sincronizar com funil principal
     funilFiltrarLista();
     funilHomeFiltrarLista();
@@ -9933,6 +10770,7 @@ function finToggleStatus(i){
   }
   finRenderParcelas();
   finAtualizarResumo();
+  if(typeof renderMontagemGate==='function') renderMontagemGate();
 }
 
 function finToggleInline(i){
@@ -9953,12 +10791,14 @@ function finToggleInline(i){
   renderFinanceiroInline();
   finAtualizarResumo();
   finRenderParcelas();
+  if(typeof renderMontagemGate==='function') renderMontagemGate();
 }
 
 function finRemoveParcela(i){
   finParcelas.splice(i,1);
   finRenderParcelas();
   finAtualizarResumo();
+  if(typeof renderMontagemGate==='function') renderMontagemGate();
 }
 
 function finAddParcela(){
@@ -13317,6 +14157,8 @@ async function permSalvar(){
     var vMax=parseFloat(maxDescEl.value);
     _permissoes[cargo].descontoMaxPct=isNaN(vMax)?100:Math.max(0,Math.min(100,vMax));
   }
+  var credEl=document.getElementById('perm-aprovar-credito');
+  if(credEl) _permissoes[cargo]['aprovar-credito']=credEl.checked;
   try{ localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes)); }catch(e){}
   var btn=document.querySelector('#admpane-permissoes button[onclick="permSalvar()"]');
   if(btn){btn.textContent='⏳ Salvando...';btn.disabled=true;}
@@ -13511,6 +14353,12 @@ function permRenderizar(){
     +'<label style="font-size:10px;color:#ffa726;text-transform:uppercase;font-weight:800;display:block;margin-bottom:5px">🔒 Desconto Máximo Permitido (%)</label>'
     +'<input type="number" id="perm-desc-max" min="0" max="100" step="0.5" value="'+maxDesc+'" style="width:120px;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:4px;color:var(--text);font-size:12px">'
     +'<span style="font-size:10px;color:var(--text-muted);margin-left:8px">Limite de desconto (%) que esse cargo pode aplicar no orçamento (campos Desconto % / Desconto R$). 100 = sem limite.</span>'
+    +'</div>'
+    +'<div style="background:#0d1f0d;border:1px solid #2e7d32;border-radius:6px;padding:10px 12px;margin-bottom:10px">'
+    +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#66bb6a;font-weight:800;text-transform:uppercase">'
+    +'<input type="checkbox" id="perm-aprovar-credito"'+(perm['aprovar-credito']===true?' checked':'')+' style="width:14px;height:14px;cursor:pointer"> 💳 Pode Aprovar Análise de Crédito'
+    +'</label>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px;margin-left:22px">Permite aprovar/reprovar condições de pagamento fora do padrão (50% entrada + 50% até 3 dias antes do evento), liberando o processo para a próxima etapa. Diferente dos demais campos acima, esta permissão vem DESMARCADA por padrão — precisa ser concedida explicitamente. Gerência, Diretoria e Administradores já podem aprovar sempre, independente desta caixa.</div>'
     +'</div>';
   PERM_MODULOS.forEach(function(mod){
     html+='<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:8px">'
@@ -17360,7 +18208,7 @@ movimentacoesCarregarStorage();
 estoqueCompromissosCarregarStorage();
 categoriasProdutoCarregar();
 enderecosProdutoCarregar();
-calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderFinanceiroInline();
+calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
 // Auto-save a cada 3 minutos se houver alterações não salvas e orçamento já tiver ID no Drive
 setInterval(function(){
   if(_naoSalvo && driveIdAtual && usuarioAtual){
@@ -18048,6 +18896,7 @@ function gerarContrato(){
     }
     var nomeArq='Contrato_'+numOrc+'_'+(cli||'cliente').replace(/[^a-zA-Z0-9\s]/g,'').trim().replace(/\s+/g,'_')+'.pdf';
     doc.save(nomeArq);
+    if(typeof _contratoAutoMarcarEnviadoAposGerar==='function') _contratoAutoMarcarEnviadoAposGerar();
   }
   _iniciarGeracao();
 }
