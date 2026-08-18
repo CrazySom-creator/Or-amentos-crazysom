@@ -2469,9 +2469,10 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div>
         <div class="drow"><label>Desconto %</label><input type="number" id="desc-pct" value="0" min="0" max="100" step="0.5" oninput="syncDesc('pct');marcarAlterado()"><span style="color:var(--text-muted);font-size:10px">= <span id="r-dv" style="color:#ff6060">R$ 0,00</span></span></div>
         <div class="drow"><label>Desconto R$</label><input type="number" id="desc-rs" value="0" min="0" step="1" oninput="syncDesc('rs');marcarAlterado()"></div>
+        <div class="drow"><label>Arredondamento (R$)</label><input type="number" id="arred-rs" value="0" min="-50" max="50" step="0.01" oninput="clampArredondamento();marcarAlterado();calc()" title="Ajusta o valor final para cima ou para baixo, até R$ 50,00, pra fechar num número redondo. Não conta como desconto (não entra no limite de desconto do cargo) e não aparece como linha separada no PDF — só o total final já sai ajustado."></div>
         <div class="drow" style="align-items:center">
           <label for="chk-desc-discriminar" style="cursor:pointer">Discriminar desconto no PDF</label>
-          <input type="checkbox" id="chk-desc-discriminar" checked style="width:auto" onchange="descDiscriminarPDF=this.checked;marcarAlterado()" title="Desmarque quando o desconto for só um arredondamento e não precisar aparecer no PDF enviado ao cliente — o PDF mostra apenas o total já com desconto embutido, sem a linha 'Desconto'.">
+          <input type="checkbox" id="chk-desc-discriminar" checked style="width:auto" onchange="descDiscriminarPDF=this.checked;marcarAlterado()" title="Desmarque quando não quiser mostrar a linha 'Desconto' no PDF enviado ao cliente — o PDF mostra apenas o total já com desconto embutido. Para só arredondar o total (sem desconto de verdade), use o campo Arredondamento acima, que nunca aparece como linha no PDF.">
         </div>
       </div>
       <div class="tg2" style="gap:8px;margin:0">
@@ -4216,6 +4217,44 @@ function descontoMaxPermitido(){
   return isNaN(v)?100:v;
 }
 
+// ── Arredondamento: ajuste manual do valor final, até R$ 50,00 pra cada
+// lado, pra fechar um número redondo (ex.: R$ 4.987,32 → R$ 5.000,00).
+// Diferente do Desconto: não entra no limite de desconto do cargo
+// (descontoMaxPermitido()) e não aparece como linha separada no PDF — só
+// ajusta silenciosamente o total final, exatamente como o consultor já
+// fazia "por fora" usando o campo Desconto + desmarcando "Discriminar
+// desconto no PDF" (workaround que este campo dedicado substitui).
+var ARREDOND_MAX = 50;
+function clampArredondamento(){
+  var el=document.getElementById('arred-rs');
+  if(!el) return;
+  var v=parseFloat(el.value);
+  if(isNaN(v)) return; // deixa o usuário terminar de digitar (ex.: só "-" por enquanto)
+  if(v>ARREDOND_MAX) el.value=ARREDOND_MAX;
+  else if(v<-ARREDOND_MAX) el.value=-ARREDOND_MAX;
+}
+function arredondValor(){
+  var v=parseFloat(gv('arred-rs'))||0;
+  if(v>ARREDOND_MAX) v=ARREDOND_MAX;
+  else if(v<-ARREDOND_MAX) v=-ARREDOND_MAX;
+  return v;
+}
+function arredondValorDe(form){
+  var v=parseFloat((form&&form['arred-rs'])||0)||0;
+  if(v>ARREDOND_MAX) v=ARREDOND_MAX;
+  else if(v<-ARREDOND_MAX) v=-ARREDOND_MAX;
+  return v;
+}
+// Aplica o arredondamento a um par {vdsi,vdci} já calculado (pós-desconto),
+// preservando a mesma relação vdci=vdsi*(1+IMP) usada em todo o resto do
+// sistema. modoSimp decide qual dos dois é "a base" que o arredondamento
+// ajusta diretamente (o outro é derivado, igual ao desconto já faz).
+function aplicarArredondamento(vdsi,vdci,modoSimp,arr){
+  if(!arr) return {vdsi:vdsi,vdci:vdci};
+  if(modoSimp){ var vdsi2=safe(vdsi+arr); return {vdsi:vdsi2,vdci:safe(vdsi2*(1+IMP))}; }
+  var vdci2=safe(vdci+arr); return {vdsi:safe(vdci2/(1+IMP)),vdci:vdci2};
+}
+
 function syncDesc(from){
   // desc-pct: sempre % sobre BRUTO (base comercial interna)
   // desc-rs:  no modo c/imp = desconto sobre cImp; no modo s/imp = desconto sobre bruto
@@ -4292,6 +4331,14 @@ function calc(){
     vdci=safe(vdsi*(1+IMP));
     dv_display=modoSimp?dv_bruto:safe(cImp-vdci);
   }
+  // Arredondamento: ajuste final de até ±R$50, aplicado DEPOIS do desconto
+  // (dv_display fica intocado — o "Desconto:" mostrado continua sendo só o
+  // desconto de verdade, o arredondamento não some no meio dele).
+  (function(){
+    var arr=arredondValor();
+    var ajustado=aplicarArredondamento(vdsi,vdci,modoSimp,arr);
+    vdsi=ajustado.vdsi;vdci=ajustado.vdci;
+  })();
   // BV entra na margem como um custo (igual a um item de Custos Extra) — o
   // valor extra cobrado do cliente (diluído nas categorias acima) é
   // compensado aqui, então o lucro em R$ não muda, mas o percentual de
@@ -5329,7 +5376,7 @@ async function driveDeletar(id,nome){
   }
 }
 
-var FORM_IDS=['f-num','f-data','f-val','f-cons','f-fonte','f-cliente','f-doc','f-email','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-nome-evento','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dm-fim','f-dd','f-hd','f-dd-fim','f-pub','f-obs','f-obs-os','f-pgto','f-svinc','desc-pct','desc-rs','val-liq','val-liq-si','f-bv'];
+var FORM_IDS=['f-num','f-data','f-val','f-cons','f-fonte','f-cliente','f-doc','f-email','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-nome-evento','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dm-fim','f-dd','f-hd','f-dd-fim','f-pub','f-obs','f-obs-os','f-pgto','f-svinc','desc-pct','desc-rs','arred-rs','val-liq','val-liq-si','f-bv'];
 function getForm(){var o={};FORM_IDS.forEach(function(id){var e=document.getElementById(id);if(e)o[id]=e.value;});if((!o['f-bv']||o['f-bv']==='0')&&_bvStorage>0)o['f-bv']=String(_bvStorage);return o;}
 function setForm(f){Object.keys(f).forEach(function(id){var e=document.getElementById(id);if(e)e.value=f[id];});sv('orc-disp',f['f-num']||'—');}
 function salvar(){var blob=new Blob([JSON.stringify({form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,snapshotAprovado:snapshotAprovado,finParcelas:finParcelas,finObs:finObs},null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(gv('f-num')||'orc')+' - '+(gv('f-cliente')||'cliente')+'.json';a.click();URL.revokeObjectURL(a.href);}
@@ -5380,9 +5427,9 @@ async function limpar(){
   desativarModoLeitura();
   if(_idLimpar&&!_modoLeitura) await lockLiberar(_idLimpar);
   SECS.forEach(function(s){state[s]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{default:[]}};});
-  FORM_IDS.filter(function(id){return ['desc-pct','desc-rs','val-liq','f-pgto','f-svinc'].indexOf(id)<0;}).forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+  FORM_IDS.filter(function(id){return ['desc-pct','desc-rs','arred-rs','val-liq','f-pgto','f-svinc'].indexOf(id)<0;}).forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('f-cons').value='';
-  document.getElementById('desc-pct').value=0;document.getElementById('desc-rs').value=0;document.getElementById('val-liq').value='';
+  document.getElementById('desc-pct').value=0;document.getElementById('desc-rs').value=0;var arredLimpar=document.getElementById('arred-rs');if(arredLimpar)arredLimpar.value=0;document.getElementById('val-liq').value='';
   var vlsi=document.getElementById('val-liq-si');if(vlsi)vlsi.value='';
   _bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value=''; _clienteHistLista=[];var histEl=document.getElementById('f-cliente-hist-status');if(histEl)histEl.innerHTML='';
   document.getElementById('f-pgto').value='50% na contratação;\n50% até 03 dias antes da montagem.';
@@ -5436,7 +5483,7 @@ async function clonarOrcamento(){
 
   // ── Campos que serão ZERADOS no clone (não copiados)
   var CAMPOS_ZERAR=['f-num','f-data','f-val',
-    'desc-pct','desc-rs','val-liq','val-liq-si','f-bv'];
+    'desc-pct','desc-rs','arred-rs','val-liq','val-liq-si','f-bv'];
 
   // ── Liberar lock do orçamento atual se houver
   var _idAnterior=driveIdAtual;
@@ -5469,9 +5516,10 @@ async function clonarOrcamento(){
   setForm(formAtual);
   sv('orc-disp','—');
 
-  // ── Desconto: zerar
+  // ── Desconto e Arredondamento: zerar
   var dpct=document.getElementById('desc-pct');if(dpct)dpct.value=0;
   var drs=document.getElementById('desc-rs');if(drs)drs.value=0;
+  var arredClone=document.getElementById('arred-rs');if(arredClone)arredClone.value=0;
   var vl=document.getElementById('val-liq');if(vl)vl.value='';
   var vlsi=document.getElementById('val-liq-si');if(vlsi)vlsi.value='';
   _bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value=''; _clienteHistLista=[];var histEl=document.getElementById('f-cliente-hist-status');if(histEl)histEl.innerHTML='';
@@ -5819,9 +5867,10 @@ async function _resetarEstadoOrcamento(){
   desativarModoLeitura();
   // Limpar estado sem confirmação adicional
   SECS.forEach(function(s){state[s]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{default:[]}};});
-  FORM_IDS.filter(function(id){return ['desc-pct','desc-rs','val-liq','f-pgto','f-svinc'].indexOf(id)<0;}).forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+  FORM_IDS.filter(function(id){return ['desc-pct','desc-rs','arred-rs','val-liq','f-pgto','f-svinc'].indexOf(id)<0;}).forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('f-cons').value='';
   document.getElementById('desc-pct').value=0;document.getElementById('desc-rs').value=0;
+  var arredReset=document.getElementById('arred-rs');if(arredReset)arredReset.value=0;
   document.getElementById('val-liq').value='';
   var vlsi=document.getElementById('val-liq-si');if(vlsi)vlsi.value='';
   _bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value=''; _clienteHistLista=[];var histEl=document.getElementById('f-cliente-hist-status');if(histEl)histEl.innerHTML='';
@@ -5931,6 +5980,8 @@ function _preencherValLiqCalculado(){
       var dv_pvl=bruto*(dpct/100);
       vdsi=bruto-dv_pvl;vdci=vdsi*(1+IMP);
     }
+    var ajustadoPVL=aplicarArredondamento(vdsi,vdci,modoSimpPVL,arredondValor());
+    vdsi=ajustadoPVL.vdsi;vdci=ajustadoPVL.vdci;
     var elci=document.getElementById('val-liq'),elsi=document.getElementById('val-liq-si');
     if(elci) elci.value=vdci>0?Math.round(vdci).toString():'0';
     if(elsi) elsi.value=vdsi>0?Math.round(vdsi).toString():'0';
@@ -5980,8 +6031,11 @@ function buildPDF(tipo){
   }
   // descFrac: proporcao do desconto sobre o bruto (para aplicar por item no PDF)
   var descFrac=bruto>0?(bruto-vdsiPdf)/bruto:0;
-  // totalFinal
-  var totalFinal=modoSimpPDF?(vlsi>0?vlsi:vdsiPdf):(vl>0?vl:vdciPdf);
+  // totalFinal: prefere val-liq/val-liq-si (já com Arredondamento embutido,
+  // gravado pelo calc()); no fallback (campo ainda vazio) recalcula na
+  // hora, incluindo o Arredondamento aqui também pra não ficar defasado.
+  var fallbackArredPdf=aplicarArredondamento(vdsiPdf,vdciPdf,modoSimpPDF,arredondValor());
+  var totalFinal=modoSimpPDF?(vlsi>0?vlsi:fallbackArredPdf.vdsi):(vl>0?vl:fallbackArredPdf.vdci);
   var incLines=getSvinc().split('\n').map(function(l){return l.trim();}).filter(Boolean);
   var endCli=[gv('f-end'),gv('f-endnum'),gv('f-bairro'),gv('f-cidade')].filter(Boolean).join(', ');
   var endEv=[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
@@ -6158,7 +6212,13 @@ function buildPDF(tipo){
   // a linha "Desconto" e mostra só o total já líquido (ex.: quando o desconto é
   // só um arredondamento que não precisa aparecer pro cliente).
   var semDescPDF=modoSimpPDF?bruto:cImp;
-  var difDesc=semDescPDF-totalFinal;
+  // totalFinal já inclui o Arredondamento (vem de val-liq/val-liq-si, que o
+  // calc() já grava com o ajuste embutido). Pra linha "Desconto" mostrar SÓ
+  // o desconto de verdade — e não confundir o cliente com o arredondamento,
+  // que é pra ficar invisível no PDF — subtrai o arredondamento de volta
+  // antes de calcular a diferença.
+  var arredPdf=arredondValor();
+  var difDesc=semDescPDF-(totalFinal-arredPdf);
   if(difDesc>0.01&&descDiscriminarPDF){
     res+='<tr class="trow"><td style="text-align:right">Valor Total</td><td class="r">'+fmt(semDescPDF)+'</td></tr>';
     res+='<tr class="drow2"><td style="text-align:right">Desconto</td><td class="r">– '+fmt(difDesc)+'</td></tr>';
@@ -7231,6 +7291,8 @@ function tirarSnapshot(){
     var dv_os=bruto*(dpct/100);
     vdsiOS=bruto-dv_os;vdciOS=vdsiOS*(1+IMP);
   }
+  var arredOS=aplicarArredondamento(vdsiOS,vdciOS,modoSimpOS,arredondValorDe(form));
+  vdsiOS=arredOS.vdsi;vdciOS=arredOS.vdci;
   var vl=parseFloat(form['val-liq'])||0;
   var total=vl>0?vl:(modoSimpOS?vdsiOS:vdciOS);
   // Capturar itens de cada seção — inclui TODOS os campos que entram no
@@ -7265,6 +7327,7 @@ function tirarSnapshot(){
     publico:form['f-pub']||'',
     descPct:form['desc-pct']||'0',
     descRs:form['desc-rs']||'0',
+    arredRs:form['arred-rs']||'0',
     valLiq:form['val-liq']||'',
     pgto:form['f-pgto']||'',
     totalBruto:bruto,
@@ -7280,13 +7343,13 @@ function compararSnapshots(ant,atual){
   var LABELS={
     cliente:'Cliente',local:'Local',tipo:'Tipo de Evento',dia:'Data do Evento',
     diasFim:'Data Fim',publico:'Público Estimado',descPct:'Desconto %',
-    descRs:'Desconto R$',valLiq:'Valor Líquido',pgto:'Forma de Pagamento'
+    descRs:'Desconto R$',arredRs:'Arredondamento (R$)',valLiq:'Valor Líquido',pgto:'Forma de Pagamento'
   };
   var SEC_NOMES={som:'Sonorização',video:'Vídeo',luz:'Iluminação',estrutura:'Estrutura',servico:'Serviço',logistica:'Logística'};
   // Campos numéricos, onde "aumento/redução" faz sentido para colorir o antes/depois.
   // Os demais (Cliente, Local, Tipo, datas, Forma de Pagamento) são texto — não tem
   // "lado bom" claro, então ficam com destaque neutro em vez de cair em verde por padrão.
-  var CAMPOS_NUMERICOS=['descPct','descRs','valLiq'];
+  var CAMPOS_NUMERICOS=['descPct','descRs','arredRs','valLiq'];
   // Comparar campos do form
   Object.keys(LABELS).forEach(function(k){
     var a=String(ant[k]||'').trim();
@@ -9783,6 +9846,8 @@ function finGetTotal(){
     var dv_bruto=bruto*(dpct/100);
     vdsi=bruto-dv_bruto;vdci=vdsi*(1+IMP);
   }
+  var ajustadoFin=aplicarArredondamento(vdsi,vdci,modoSimp,arredondValor());
+  vdsi=ajustadoFin.vdsi;vdci=ajustadoFin.vdci;
   if(modoSimp) return vlSimp>0?vlSimp:vdsi;
   else         return vlCimp>0?vlCimp:vdci;
 }
@@ -11128,6 +11193,8 @@ function dashValOrc(o){
     var dv_f=bruto*(dpct/100);
     vdsiF=bruto-dv_f;vdciF=vdsiF*(1+IMP);
   }
+  var ajustadoF=aplicarArredondamento(vdsiF,vdciF,modoSimpF,arredondValorDe(form));
+  vdsiF=ajustadoF.vdsi;vdciF=ajustadoF.vdci;
   if(modoSimpF) return vdsiF;
   return vdciF;
 }
@@ -13147,6 +13214,7 @@ var PERM_MODULOS = [
   {id:'financeiro', label:'💰 Financeiro', campos:[
     {id:'desc-pct',  label:'Desconto %'},
     {id:'desc-rs',   label:'Desconto R$'},
+    {id:'arred-rs',  label:'Arredondamento (R$)'},
     {id:'val-liq',      label:'Valor Líquido (c/ Imposto)'},
     {id:'val-liq-si',   label:'Valor Líquido (s/ Imposto)'},
     {id:'f-bv',      label:'BV (Bonificação)'},
@@ -13326,7 +13394,7 @@ function aplicarPermissoes(){
     'f-nome-evento','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev',
     'f-dia','f-dia-fim','f-hi','f-hf','f-dm','f-hm','f-dm-fim','f-dd','f-hd','f-dd-fim','f-pub',
     'f-obs','f-obs-os','f-pgto','f-svinc',
-    'desc-pct','desc-rs','val-liq','f-bv'
+    'desc-pct','desc-rs','arred-rs','val-liq','f-bv'
   ];
   camposForm.forEach(function(id){
     var el=document.getElementById(id);
@@ -13396,8 +13464,8 @@ function aplicarPermissoes(){
     el.style.cursor=okFin?'':'not-allowed';
   });
 
-  // ── Desconto/BV (financeiro do orçamento) ────────────────────────────────
-  ['desc-pct','desc-rs','val-liq','f-bv'].forEach(function(id){
+  // ── Desconto/Arredondamento/BV (financeiro do orçamento) ─────────────────
+  ['desc-pct','desc-rs','arred-rs','val-liq','f-bv'].forEach(function(id){
     var el=document.getElementById(id);
     if(!el) return;
     var ok=tudo||permTemAcesso(id);
