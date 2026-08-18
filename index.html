@@ -4210,7 +4210,7 @@ function descontoMaxPermitido(){
   if(!usuarioAtual) return 100;
   var nivel=usuarioAtual.nivel||'';
   if(['adm','gerente','diretor'].includes(nivel)) return 100;
-  var cargo=usuarioAtual.cargo||'';
+  var cargo=_cargoEfetivo(usuarioAtual);
   if(!cargo||!_permissoes[cargo]||_permissoes[cargo].descontoMaxPct===undefined) return 100;
   var v=Number(_permissoes[cargo].descontoMaxPct);
   return isNaN(v)?100:v;
@@ -13281,11 +13281,31 @@ async function dashAcessoSalvar(){
   }
 }
 
+// ── Cargo "efetivo" para checagem de permissões ────────────────────────────
+// admNovo() sempre cria a conta com cargo:'' — o Cargo só fica preenchido se
+// um Admin abrir Admin > Usuários depois e escolher manualmente no dropdown.
+// Até isso acontecer, usuarioAtual.cargo fica vazio, mas a PRÓPRIA tela de
+// Admin > Usuários já mostra "Consultor" (ou o nível equivalente) no lugar
+// do cargo em branco, como fallback de exibição (NIVEIS[nivel]) — o que dá
+// a falsa impressão de que o cargo está definido. Sem este mesmo fallback
+// aqui, um usuário nessa situação passava batido por QUALQUER restrição
+// configurada em Admin > Permissões por Cargo: cargo vazio sempre caía no
+// "sem cargo = tudo liberado", mesmo com o Admin vendo "Consultor" na tela,
+// configurando e salvando restrições para esse cargo, e esperando que
+// valessem. Corrigido: se o cargo não foi explicitamente escolhido, cai
+// para o nome do Nível (ex.: "Consultor" pro nível 'consultor') — o mesmo
+// texto usado no fallback de exibição, então o que o Admin vê e o que é
+// realmente aplicado ficam consistentes.
+function _cargoEfetivo(u){
+  if(!u) return '';
+  return u.cargo || NIVEIS[u.nivel] || u.nivel || '';
+}
+
 function permTemAcesso(campo){
   if(!usuarioAtual) return false;
-  var cargo=usuarioAtual.cargo||'';
   var nivel=usuarioAtual.nivel||'';
   if(['adm','gerente','diretor'].includes(nivel)) return true;
+  var cargo=_cargoEfetivo(usuarioAtual);
   if(!cargo||!_permissoes[cargo]) return true;
   var perm=_permissoes[cargo];
   if(perm[campo]===undefined) return true;
@@ -13388,9 +13408,9 @@ function aplicarPermissoes(){
 
 function dashTemAcesso(dashId){
   if(!usuarioAtual) return false;
-  var cargo=usuarioAtual.cargo||'';
   var nivel=usuarioAtual.nivel||'';
   if(['adm','gerente','diretor'].includes(nivel)) return true;
+  var cargo=_cargoEfetivo(usuarioAtual);
   if(!cargo||!_dashAcessos[cargo]) return true;
   var ac=_dashAcessos[cargo];
   if(ac[dashId]===undefined) return true;
