@@ -5355,15 +5355,44 @@ async function driveCarregar(id,nome){
   }
 }
 
+// Contador de "geração" — protege contra corrida quando duas chamadas a
+// _driveCarregarDados() ficam em voo ao mesmo tempo (ex.: usuário clica pra
+// abrir um orçamento, e antes da requisição terminar clica em outro —
+// nada na tela impede o segundo clique enquanto o primeiro carrega). Sem
+// isso, a resposta que chegasse por último (não necessariamente a do
+// último clique) vencia e podia aplicar os dados de UM orçamento em cima
+// da tela que já mostrava OUTRO — exatamente o tipo de "mistura" relatado.
+var _driveCarregarSeq=0;
 async function _driveCarregarDados(id,nome,somenteLeitura){
+  var _seqDesta=++_driveCarregarSeq;
   driveStatus('⏳ Carregando...','');_carregandoOrc=true;
   try{
     var r=await fetch(SCRIPT_URL+'?action=load&id='+id);var d=await r.json();if(!d.ok)throw new Error(d.erro);
+    // Se uma chamada MAIS RECENTE a _driveCarregarDados() foi disparada
+    // enquanto esta requisição estava em andamento, esta resposta já está
+    // obsoleta — descarta em silêncio (a chamada mais recente vai aplicar
+    // os dados corretos quando sua própria resposta chegar).
+    if(_seqDesta!==_driveCarregarSeq) return;
     var dados=d.dados;
     // Salvar versão carregada
     _versaoAtual=dados._versao||null;
-    if(dados.state){SECS.forEach(function(s){if(dados.state[s]){state[s].ambientes=dados.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=dados.state[s].ambAtiva||'default';state[s].rows=dados.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
-    if(dados.form)setForm(dados.form);
+    // CORREÇÃO (bug de "mistura de orçamentos"): antes, cada seção (som/
+    // vídeo/luz/estrutura/serviço/logística/extra) só era resetada quando
+    // dados.state[s] existia. Um orçamento salvo ANTES de uma seção existir
+    // (ex.: "extra" — Custos Extra) não tem essa chave — e como o código
+    // não tinha um "else" pra zerar, a seção ficava com os itens do
+    // orçamento aberto ANTERIORMENTE na tela (equipamentos/custos de um
+    // orçamento diferente aparecendo em outro). Agora cada seção é sempre
+    // resetada primeiro (like limpar()/clonarOrcamento() já fazem) e só
+    // depois preenchida com o que realmente existe em dados.state.
+    SECS.forEach(function(s){
+      var ds=(dados.state&&dados.state[s])||null;
+      state[s].ambientes=(ds&&ds.ambientes)||[{id:'default',nome:'Geral'}];
+      state[s].ambAtiva=(ds&&ds.ambAtiva)||'default';
+      state[s].rows=(ds&&ds.rows)||{default:[]};
+      if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];
+    });
+    if(dados.form)setForm(dados.form);else setForm({});
     aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();contratoStatus=dados.contratoStatus||'';contratoHist=(dados.contratoHist||[]).slice();creditoStatus=dados.creditoStatus||'';creditoHist=(dados.creditoHist||[]).slice();montagemLiberacaoManual=!!dados.montagemLiberacaoManual;montagemLiberacaoManualHist=(dados.montagemLiberacaoManualHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcAtualGoogleAgenda=Object.assign({},dados.googleAgenda||{});orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
     descDiscriminarPDF=(dados.descDiscriminarPDF!==undefined)?!!dados.descDiscriminarPDF:true;
     var _chkDescDiscr=document.getElementById('chk-desc-discriminar');if(_chkDescDiscr)_chkDescDiscr.checked=descDiscriminarPDF;
@@ -5384,7 +5413,7 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     // abaixo do Nº do Orçamento.
     window.scrollTo({top:0,left:0,behavior:'auto'});
     // ativarModoLeitura chamado pelo caller com o lock correto
-  }catch(e){driveStatus('Erro: '+e.message,'err');}
+  }catch(e){if(_seqDesta===_driveCarregarSeq)driveStatus('Erro: '+e.message,'err');}
   finally{setTimeout(function(){_carregandoOrc=false;},400);}
 }
 var PODE_EXCLUIR=['gerente','diretor']; // adm genérico NÃO pode — só Fabiano pelo ID
@@ -5461,7 +5490,16 @@ async function driveDeletar(id,nome){
 
 var FORM_IDS=['f-num','f-data','f-val','f-cons','f-fonte','f-cliente','f-doc','f-email','f-tel','f-cep','f-end','f-endnum','f-bairro','f-cidade','f-nome-evento','f-local','f-tipo','f-resp','f-cep-ev','f-end-ev','f-num-ev','f-bairro-ev','f-cid-ev','f-dia','f-sem','f-dia-fim','f-sem-fim','f-hi','f-hf','f-dm','f-hm','f-dm-fim','f-dd','f-hd','f-dd-fim','f-pub','f-obs','f-obs-os','f-pgto','f-pgto-tipo','f-svinc','desc-pct','desc-rs','arred-rs','val-liq','val-liq-si','f-bv'];
 function getForm(){var o={};FORM_IDS.forEach(function(id){var e=document.getElementById(id);if(e)o[id]=e.value;});if((!o['f-bv']||o['f-bv']==='0')&&_bvStorage>0)o['f-bv']=String(_bvStorage);return o;}
-function setForm(f){Object.keys(f).forEach(function(id){var e=document.getElementById(id);if(e)e.value=f[id];});sv('orc-disp',f['f-num']||'—');}
+// CORREÇÃO (bug de "mistura de orçamentos"): antes, setForm() só tocava nos
+// campos presentes no objeto `f` (Object.keys(f)). Orçamentos salvos ANTES
+// de um campo novo existir em FORM_IDS (ex.: f-svinc, arred-rs, f-pgto-tipo)
+// não têm essa chave no JSON salvo — então, ao abrir um orçamento assim
+// logo depois de outro que tinha aquele campo preenchido, o valor antigo
+// ficava esquecido na tela, "vazando" de um orçamento pro outro. Agora
+// setForm() sempre varre TODO o FORM_IDS (a lista canônica de campos),
+// preenchendo com '' qualquer campo ausente em `f` — mesma garantia que
+// getForm() já dava (sempre lê todo FORM_IDS), agora simétrica na escrita.
+function setForm(f){f=f||{};FORM_IDS.forEach(function(id){var e=document.getElementById(id);if(e)e.value=(f[id]!==undefined&&f[id]!==null)?f[id]:'';});sv('orc-disp',f['f-num']||'—');}
 function salvar(){var blob=new Blob([JSON.stringify({form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,snapshotAprovado:snapshotAprovado,finParcelas:finParcelas,finObs:finObs},null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(gv('f-num')||'orc')+' - '+(gv('f-cliente')||'cliente')+'.json';a.click();URL.revokeObjectURL(a.href);}
 function carregar(input){
   var file=input.files[0];if(!file)return;
@@ -5470,9 +5508,18 @@ function carregar(input){
     try{
       _carregandoOrc=true;
       var data=JSON.parse(e.target.result);
-      if(data.state){SECS.forEach(function(s){if(data.state[s]){state[s].ambientes=data.state[s].ambientes||[{id:'default',nome:'Geral'}];state[s].ambAtiva=data.state[s].ambAtiva||'default';state[s].rows=data.state[s].rows||{default:[]};if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];}});}
-      if(data.form)setForm(data.form);
-      aprovStatus=data.aprovStatus||'rascunho';aprovHist=data.aprovHist||[];comercialStatus=data.comercialStatus||'';comercialHist=data.comercialHist||[];snapshotAnterior=data.snapshotAnterior||null;snapshotAprovado=data.snapshotAprovado||null;finParcelas=data.finParcelas||[];finObs=data.finObs||'';finImposto=data.finImposto||'cimp';finNumVenda=data.finNumVenda||'';
+      // Mesma correção aplicada em _driveCarregarDados(): reset incondicional
+      // por seção, pra um JSON antigo (sem a chave "extra", por ex.) não
+      // deixar equipamentos/custos do orçamento anterior na tela.
+      SECS.forEach(function(s){
+        var ds=(data.state&&data.state[s])||null;
+        state[s].ambientes=(ds&&ds.ambientes)||[{id:'default',nome:'Geral'}];
+        state[s].ambAtiva=(ds&&ds.ambAtiva)||'default';
+        state[s].rows=(ds&&ds.rows)||{default:[]};
+        if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];
+      });
+      setForm(data.form||{});
+      aprovStatus=data.aprovStatus||'rascunho';aprovHist=data.aprovHist||[];comercialStatus=data.comercialStatus||'';comercialHist=data.comercialHist||[];contratoStatus=data.contratoStatus||'';contratoHist=data.contratoHist||[];creditoStatus=data.creditoStatus||'';creditoHist=data.creditoHist||[];montagemLiberacaoManual=!!data.montagemLiberacaoManual;montagemLiberacaoManualHist=data.montagemLiberacaoManualHist||[];equipReservadoManual=!!data.equipReservadoManual;atividades=data.atividades||[];followupData=data.followupData||'';orcAtualGoogleAgenda=Object.assign({},data.googleAgenda||{});orcCriadoEmISO=data.criadoEmISO||'';snapshotAnterior=data.snapshotAnterior||null;snapshotAprovado=data.snapshotAprovado||null;finParcelas=data.finParcelas||[];finObs=data.finObs||'';finImposto=data.finImposto||'cimp';finNumVenda=data.finNumVenda||'';
       descDiscriminarPDF=(data.descDiscriminarPDF!==undefined)?!!data.descDiscriminarPDF:true;
       var _chkDescDiscrLocal=document.getElementById('chk-desc-discriminar');if(_chkDescDiscrLocal)_chkDescDiscrLocal.checked=descDiscriminarPDF;
       _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
@@ -14708,9 +14755,17 @@ function clienteHistoricoBuscar(docDig,docFormatado){
   var elBtn=document.getElementById('f-cliente-hist-status');
   if(!elBtn)return;
   if(docDig.length!==11&&docDig.length!==14){elBtn.innerHTML='';_clienteHistLista=[];return;}
+  // Guarda o orçamento/documento vigentes no momento da busca — se o usuário
+  // trocar de orçamento (abrir outro) ou editar o CPF/CNPJ de novo enquanto
+  // esta consulta assíncrona ainda está em andamento, o resultado que chegar
+  // depois não é mais válido pro que está na tela agora. Sem essa checagem,
+  // uma resposta atrasada podia aplicar o histórico de UM cliente na tela de
+  // OUTRO orçamento já aberto (condição de corrida).
+  var _idNoMomento=driveIdAtual;
   _clienteHistTimer=setTimeout(async function(){
     try{
       var snap=await fbDb.collection('orcamentos').where('form.f-doc','==',docFormatado).get();
+      if(driveIdAtual!==_idNoMomento||_clienteSoDigitos(gv('f-doc'))!==docDig){return;}
       var lista=[];
       var nomeAtualNorm=_normNome(gv('f-cliente'));
       snap.forEach(function(doc){
