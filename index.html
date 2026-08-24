@@ -235,9 +235,9 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .com-hist-item:last-child{border-bottom:none;}
 .com-motivo{width:100%;padding:7px 9px;border:1px solid #c62828;border-radius:4px;font-size:11px;background:#1a0000;color:#fff;margin-bottom:8px;display:none;}
 .com-motivo-label{color:#ff7070;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px;display:none;}
-.diff-box{background:var(--surface-2);border:1px solid var(--R);border-radius:5px;padding:8px 11px;margin-top:6px;font-size:10px;}
-.diff-box .diff-title{color:var(--R);font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;font-size:10px;}
-.diff-item{padding:2px 0;border-bottom:1px solid var(--border);color:var(--R);line-height:1.6;}
+.diff-box{background:var(--surface-2);border:1px solid var(--R);border-radius:5px;padding:10px 12px;margin-top:6px;font-size:11.5px;}
+.diff-box .diff-title{color:var(--R);font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;font-size:10px;}
+.diff-item{padding:4px 0;border-bottom:1px solid var(--border);color:var(--R);line-height:1.7;}
 .diff-item:last-child{border-bottom:none;}
 .diff-item .diff-campo{color:var(--R);font-weight:700;}
 .diff-item .diff-de{color:var(--R);opacity:.75;text-decoration:line-through;}
@@ -7588,24 +7588,66 @@ function compararSnapshots(ant,atual){
   var LABELS={
     cliente:'Cliente',local:'Local',tipo:'Tipo de Evento',dia:'Data do Evento',
     diasFim:'Data Fim',publico:'Público Estimado',descPct:'Desconto %',
-    descRs:'Desconto R$',arredRs:'Arredondamento (R$)',valLiq:'Valor Líquido',pgto:'Forma de Pagamento'
+    descRs:'Desconto R$',arredRs:'Arredondamento (R$)',pgto:'Forma de Pagamento'
   };
+  // OBS: "Valor Líquido" (campo do formulário) saiu daqui de propósito — ele é,
+  // na prática, o mesmo número de "Valor Total do Orçamento" (abaixo, sempre
+  // mostrado), só que vindo do campo bruto do form em vez do total calculado.
+  // Mostrar os dois juntos duplicava a informação e era uma das coisas que
+  // deixava o diff confuso (pedido do usuário).
   var SEC_NOMES={som:'Sonorização',video:'Vídeo',luz:'Iluminação',estrutura:'Estrutura',servico:'Serviço',logistica:'Logística'};
   // Campos numéricos, onde "aumento/redução" faz sentido para colorir o antes/depois.
   // Os demais (Cliente, Local, Tipo, datas, Forma de Pagamento) são texto — não tem
   // "lado bom" claro, então ficam com destaque neutro em vez de cair em verde por padrão.
-  var CAMPOS_NUMERICOS=['descPct','descRs','arredRs','valLiq'];
+  var CAMPOS_NUMERICOS=['descPct','descRs','arredRs'];
+  // Campos que são valor monetário — mostrados formatados (R$ x.xxx,xx) igual
+  // às demais linhas do diff (Total Vídeo, TOTAL FINAL etc.), que já usam
+  // fmt(). Antes esses campos apareciam como número cru sem formatação
+  // (ex.: "15890 → 11577"), bem diferente visualmente das linhas vizinhas já
+  // formatadas — pedido do usuário: "difícil de entender o que foi alterado".
+  var CAMPOS_MOEDA=['descRs','arredRs'];
   // Comparar campos do form
   Object.keys(LABELS).forEach(function(k){
     var a=String(ant[k]||'').trim();
     var b=String(atual[k]||'').trim();
     if(a===b)return;
-    var item={campo:LABELS[k],de:a||'(vazio)',para:b||'(vazio)'};
+    var deExibir=a||'(vazio)', paraExibir=b||'(vazio)';
+    if(CAMPOS_MOEDA.indexOf(k)>=0){
+      // Campo vazio nesses 3 (ex.: orçamento salvo antes do Arredondamento
+      // existir) equivale a R$ 0,00 — mais claro que misturar "(vazio)" com
+      // valores em R$ na mesma linha.
+      deExibir=fmt(parseFloat(a.replace(',','.'))||0);
+      paraExibir=fmt(parseFloat(b.replace(',','.'))||0);
+    } else if(k==='descPct'){
+      if(a) deExibir=(parseFloat(a.replace(',','.'))||0)+'%';
+      if(b) paraExibir=(parseFloat(b.replace(',','.'))||0)+'%';
+    }
+    var item={campo:LABELS[k],de:deExibir,para:paraExibir};
     if(CAMPOS_NUMERICOS.indexOf(k)>=0){
       var na=parseFloat(a.replace(',','.'))||0,nb=parseFloat(b.replace(',','.'))||0;
       if(na!==nb) item.destaque=nb>na?'aumento':'reducao';
     }
     diffs.push(item);
+  });
+  // Valor Total do Orçamento — pedido do usuário: sempre mostrar o valor da
+  // aprovação anterior junto com o atual, mesmo nas versões em que o total
+  // não mudou (ex.: só o Local foi corrigido). Isso dá contexto imediato de
+  // "quanto era antes" sem precisar abrir a versão anterior à parte. Fica
+  // sempre em primeiro na lista.
+  // Quando o total muda de fato, conta como alteração de verdade (entra no
+  // contador do topo "N alteração(ões)" e fica em vermelho); quando não
+  // muda, é só contexto (marcado com contexto:true) — não conta no total de
+  // alterações e aparece em tom neutro no render, pra não parecer que algo
+  // mudou quando não mudou.
+  var totalAnt=ant.totalFinal||0, totalAtual=atual.totalFinal||0;
+  var totalMudou=Math.abs(totalAnt-totalAtual)>0.01;
+  diffs.unshift({
+    campo:'Valor Total do Orçamento',
+    de:fmt(totalAnt),
+    para:fmt(totalAtual),
+    destaque: totalMudou ? (totalAtual>totalAnt?'aumento':'reducao') : undefined,
+    bold:true,
+    contexto: !totalMudou
   });
   // Comparar totais por seção
   ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
@@ -7618,16 +7660,6 @@ function compararSnapshots(ant,atual){
       destaque:b>a?'aumento':'reducao'
     });
   });
-  // Comparar total final
-  if(Math.abs(ant.totalFinal-atual.totalFinal)>0.01){
-    diffs.push({
-      campo:'TOTAL FINAL',
-      de:fmt(ant.totalFinal),
-      para:fmt(atual.totalFinal),
-      destaque:atual.totalFinal>ant.totalFinal?'aumento':'reducao',
-      bold:true
-    });
-  }
   // Comparar itens por seção
   // Identificação por id (confiável mesmo com nomes duplicados, ex: dois
   // painéis LED do mesmo modelo em tamanhos diferentes). Cai para nome
@@ -7642,15 +7674,17 @@ function compararSnapshots(ant,atual){
   ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
     var itAnt=(ant.itens&&ant.itens[s])||[];
     var itAtual=(atual.itens&&atual.itens[s])||[];
-    // Itens removidos
+    // Itens removidos — mostra qty+nome E o valor (R$) que saiu do
+    // orçamento, sempre antes/depois (pedido do usuário: itens excluídos
+    // sempre com valor visível, não só o nome).
     itAnt.forEach(function(r){
       var found=acharCorrespondente(r,itAtual);
-      if(!found)diffs.push({campo:'Removido de '+SEC_NOMES[s],de:r.qty+'x '+r.name,para:'—',destaque:'reducao'});
+      if(!found)diffs.push({campo:'Removido de '+SEC_NOMES[s],de:r.qty+'x '+r.name+' — '+fmt(rowTot(r)),para:'— (R$ 0,00)',destaque:'reducao'});
     });
-    // Itens adicionados
+    // Itens adicionados — mesma lógica, com o valor do item novo.
     itAtual.forEach(function(r){
       var found=acharCorrespondente(r,itAnt);
-      if(!found)diffs.push({campo:'Adicionado em '+SEC_NOMES[s],de:'—',para:r.qty+'x '+r.name,destaque:'aumento'});
+      if(!found)diffs.push({campo:'Adicionado em '+SEC_NOMES[s],de:'— (R$ 0,00)',para:r.qty+'x '+r.name+' — '+fmt(rowTot(r)),destaque:'aumento'});
     });
     // Qtd, valor unit., diária ou dimensão (painel/palco) alterados — e o
     // TOTAL DO ITEM antes/depois, pra fechar a conta: cada linha individual
@@ -7678,14 +7712,15 @@ function compararSnapshots(ant,atual){
           mudouAlgo=true;
         }
         // Total do item (qty×val×diária, ou fórmula de painel/palco) antes
-        // e depois — só aparece quando ALGUM campo acima mudou, e só quando
-        // o total realmente muda (evita ruído em edições que se cancelam,
-        // ex: dobrar qty e cortar val pela metade).
+        // e depois — aparece sempre que ALGUM campo acima mudou (pedido do
+        // usuário: itens alterados sempre com valor antes/depois, mesmo nos
+        // casos raros em que dois campos se cancelam e o total do item não
+        // muda — aí a linha aparece sem destaque de cor, só como confirmação
+        // de que o total ficou igual).
         if(mudouAlgo){
           var totAnt=rowTot(ant2),totNovo=rowTot(r);
-          if(Math.abs(totAnt-totNovo)>0.01){
-            diffs.push({campo:'Total do item '+r.name,de:fmt(totAnt),para:fmt(totNovo),destaque:totNovo>totAnt?'aumento':'reducao',bold:true});
-          }
+          var totItemMudou=Math.abs(totAnt-totNovo)>0.01;
+          diffs.push({campo:'Total do item '+r.name,de:fmt(totAnt),para:fmt(totNovo),destaque:totItemMudou?(totNovo>totAnt?'aumento':'reducao'):undefined,bold:true});
         }
       }
     });
@@ -7696,17 +7731,30 @@ function compararSnapshots(ant,atual){
 function renderDiffNoHistorico(diffs,idx){
   if(!diffs||!diffs.length)return'';
   var id='diff-box-'+(idx||0);
-  var n=diffs.length;
+  // Itens marcados "contexto" (ex.: Valor Total que não mudou nesta versão)
+  // não contam como alteração de verdade — só são exibidos como referência.
+  var n=diffs.filter(function(d){return !d.contexto;}).length;
+  if(n===0)return''; // só contexto, nenhuma alteração real -> nem mostra a caixa
   var itens='';
   diffs.forEach(function(d){
-    // Toda alteração fica em vermelho (var(--R)) sobre fundo cinza claro do
-    // tema (var(--surface-2), ver .diff-box no <style>) — antes a cor variava
-    // por campo (verde pra "aumento", cinza neutro pra texto sem direção
-    // clara), o que diluía o sinal visual de "isso aqui foi alterado". O
-    // valor anterior ("de") fica riscado e um pouco mais apagado (opacity),
-    // o novo ("para") em vermelho cheio e negrito, pra distinguir antes/depois
-    // sem precisar de outra cor.
     var bold=d.bold?'font-weight:900;font-size:11px':'';
+    if(d.contexto){
+      // Linha de contexto (Valor Total sem mudança nesta versão): tom neutro
+      // e separador tracejado, pra deixar claro que é só referência ("de
+      // quanto era o orçamento") e não uma alteração — evita o usuário
+      // pensar que o valor mudou quando na verdade só serve de contexto.
+      itens+='<div class="diff-item diff-contexto" style="'+bold+';color:var(--text-dim);border-bottom-style:dashed">'
+        +'<span class="diff-campo" style="color:var(--text-dim)">'+d.campo+' (referência):</span> '
+        +'<span style="opacity:.85">'+d.de+'</span> &rarr; <span style="font-weight:700">'+d.para+'</span></div>';
+      return;
+    }
+    // Toda alteração de verdade fica em vermelho (var(--R)) sobre fundo cinza
+    // claro do tema (var(--surface-2), ver .diff-box no <style>) — antes a
+    // cor variava por campo (verde pra "aumento", cinza neutro pra texto sem
+    // direção clara), o que diluía o sinal visual de "isso aqui foi
+    // alterado". O valor anterior ("de") fica riscado e um pouco mais
+    // apagado (opacity), o novo ("para") em vermelho cheio e negrito, pra
+    // distinguir antes/depois sem precisar de outra cor.
     itens+='<div class="diff-item" style="'+bold+'"><span class="diff-campo">'+d.campo+':</span> <span style="color:var(--R);opacity:.75;text-decoration:line-through">'+d.de+'</span> &rarr; <span style="color:var(--R);font-weight:800">'+d.para+'</span></div>';
   });
   return '<div class="diff-box">'
