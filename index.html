@@ -7951,11 +7951,11 @@ function renderContrato(){
   if(btnsBox){
     var htmlBtns='';
     if(contratoStatus===''){
-      htmlBtns+='<button class="com-btn" style="background:#1565c0;color:#fff" onclick="contratoMarcarEnviado()">📤 Marcar Contrato Enviado</button>';
+      htmlBtns+='<button class="com-btn contrato-btn" style="background:#1565c0;color:#fff" onclick="contratoMarcarEnviado()">📤 Marcar Contrato Enviado</button>';
     }else if(contratoStatus==='enviado'){
-      htmlBtns+='<button class="com-btn" style="background:#2e7d32;color:#fff" onclick="contratoConfirmarAssinado()">✅ Confirmar Assinatura Recebida</button>';
+      htmlBtns+='<button class="com-btn contrato-btn" style="background:#2e7d32;color:#fff" onclick="contratoConfirmarAssinado()">✅ Confirmar Assinatura Recebida</button>';
     }else if(contratoStatus==='assinado'){
-      htmlBtns+='<button class="com-btn" style="background:var(--surface-3);color:var(--text)" onclick="contratoMarcarEnviado()">↩️ Registrar Novo Envio (2ª via)</button>';
+      htmlBtns+='<button class="com-btn contrato-btn" style="background:var(--surface-3);color:var(--text)" onclick="contratoMarcarEnviado()">↩️ Registrar Novo Envio (2ª via)</button>';
     }
     btnsBox.innerHTML=htmlBtns;
   }
@@ -7983,7 +7983,30 @@ function _contratoRegistrarHist(status){
   contratoHist.push({status:status,usuario:usuarioAtual?usuarioAtual.nome:'—',data:new Date().toLocaleString('pt-BR'),dataISO:new Date().toISOString().split('T')[0]});
 }
 
-function contratoMarcarEnviado(){
+// Quem pode marcar/alterar o Status do Contrato (Enviado/Assinado) manualmente
+// pelos botões do painel: Gerência/Diretoria/Admin sempre podem; qualquer
+// outro cargo só se tiver a permissão específica "contrato-status" concedida
+// em Admin > Permissões por Cargo. Mesmo padrão "nega por padrão, libera por
+// exceção" já usado em _creditoPodeAprovar() — o botão antes usava a classe
+// com-btn genérica, então acabava preso à permissão "Definir Etapa do Funil"
+// (com-status) do módulo Comercial, sem opção de liberar isso separadamente
+// pra quem cuida só do acompanhamento de contratos.
+function _contratoPodeMarcar(){
+  if(!usuarioAtual) return false;
+  if(['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0) return true;
+  var cargo=typeof _cargoEfetivo==='function'?_cargoEfetivo(usuarioAtual):(usuarioAtual.cargo||'');
+  return !!(cargo && _permissoes[cargo] && _permissoes[cargo]['contrato-status']===true);
+}
+
+// auto=true pula a checagem de permissão — usado só pela auto-marcação ao
+// gerar o PDF do contrato (_contratoAutoMarcarEnviadoAposGerar), que é uma
+// ação do sistema, não um clique do usuário, e por isso não deve ficar presa
+// à permissão de quem gerou o PDF.
+function contratoMarcarEnviado(auto){
+  if(!auto && !_contratoPodeMarcar()){
+    alert('⚠️ Você não tem permissão para marcar o status do Contrato.\n\nPeça a um Gerente, Diretor ou Administrador para liberar isso em Admin > Permissões por Cargo.');
+    return;
+  }
   contratoStatus='enviado';
   _contratoRegistrarHist('enviado');
   renderContrato();
@@ -7992,6 +8015,10 @@ function contratoMarcarEnviado(){
 }
 
 function contratoConfirmarAssinado(){
+  if(!_contratoPodeMarcar()){
+    alert('⚠️ Você não tem permissão para confirmar a assinatura do Contrato.\n\nPeça a um Gerente, Diretor ou Administrador para liberar isso em Admin > Permissões por Cargo.');
+    return;
+  }
   contratoStatus='assinado';
   _contratoRegistrarHist('assinado');
   renderContrato();
@@ -8004,8 +8031,9 @@ function contratoConfirmarAssinado(){
 // do consultor lembrar de marcar manualmente. Só marca "enviado" quando
 // ainda não havia nenhum status registrado: não sobrescreve um contrato já
 // assinado, nem reinicia o histórico a cada reimpressão/re-geração do PDF.
+// Passa auto=true pra não ficar bloqueada pela permissão de quem gerou o PDF.
 function _contratoAutoMarcarEnviadoAposGerar(){
-  if(contratoStatus==='') contratoMarcarEnviado();
+  if(contratoStatus==='') contratoMarcarEnviado(true);
 }
 
 // ════════════════════════════════════════════════════════
@@ -10800,7 +10828,28 @@ function finFormatarDataPrompt(isoDate){
   return isoDate;
 }
 
+// Quem pode marcar/desmarcar uma parcela como paga (clique no status
+// "⏳ Pendente"/"✅ Pago" da tabela do Financeiro): Gerência/Diretoria/Admin
+// sempre podem; qualquer outro cargo só se tiver a permissão específica
+// "fin-marcar-pago" concedida em Admin > Permissões por Cargo. Antes essa
+// ação não tinha NENHUMA checagem de permissão — qualquer pessoa com acesso
+// ao orçamento conseguia confirmar pagamento, mesmo sem ser do Financeiro.
+// Mesmo padrão "nega por padrão, libera por exceção" de _creditoPodeAprovar()
+// e _contratoPodeMarcar(). Deliberadamente separada de "finParcelas" (que
+// controla adicionar/remover/editar a estrutura das parcelas), pra dar pra
+// autorizar alguém só a confirmar pagamento sem deixar mexer no parcelamento.
+function _finPodeMarcarPago(){
+  if(!usuarioAtual) return false;
+  if(['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0) return true;
+  var cargo=typeof _cargoEfetivo==='function'?_cargoEfetivo(usuarioAtual):(usuarioAtual.cargo||'');
+  return !!(cargo && _permissoes[cargo] && _permissoes[cargo]['fin-marcar-pago']===true);
+}
+
 function finToggleStatus(i){
+  if(!_finPodeMarcarPago()){
+    alert('⚠️ Você não tem permissão para marcar parcelas como pagas.\n\nPeça a um Gerente, Diretor ou Administrador para liberar isso em Admin > Permissões por Cargo.');
+    return;
+  }
   var p=finParcelas[i];
   if(p.status!=='pago'){
     var hoje=new Date().toISOString().split('T')[0];
@@ -10821,6 +10870,10 @@ function finToggleStatus(i){
 }
 
 function finToggleInline(i){
+  if(!_finPodeMarcarPago()){
+    alert('⚠️ Você não tem permissão para marcar parcelas como pagas.\n\nPeça a um Gerente, Diretor ou Administrador para liberar isso em Admin > Permissões por Cargo.');
+    return;
+  }
   var p=finParcelas[i];
   if(p.status!=='pago'){
     var hoje=new Date().toISOString().split('T')[0];
@@ -14206,6 +14259,10 @@ async function permSalvar(){
   }
   var credEl=document.getElementById('perm-aprovar-credito');
   if(credEl) _permissoes[cargo]['aprovar-credito']=credEl.checked;
+  var contratoEl=document.getElementById('perm-contrato-status');
+  if(contratoEl) _permissoes[cargo]['contrato-status']=contratoEl.checked;
+  var finPagoEl=document.getElementById('perm-fin-marcar-pago');
+  if(finPagoEl) _permissoes[cargo]['fin-marcar-pago']=finPagoEl.checked;
   try{ localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes)); }catch(e){}
   var btn=document.querySelector('#admpane-permissoes button[onclick="permSalvar()"]');
   if(btn){btn.textContent='⏳ Salvando...';btn.disabled=true;}
@@ -14328,10 +14385,13 @@ function aplicarPermissoes(){
   });
 
   // ── Painel comercial ──────────────────────────────────────────────────────
+  // (.contrato-btn é tratado à parte logo abaixo — tem permissão própria,
+  // dedicada, em vez de ficar preso à permissão "Definir Etapa do Funil")
   var okComStatus=tudo||permTemAcesso('com-status');
   var okComObs=tudo||permTemAcesso('com-obs');
   var okComMotivo=tudo||permTemAcesso('com-motivo');
   document.querySelectorAll('.com-btn').forEach(function(el){
+    if(el.classList.contains('contrato-btn')) return;
     el.disabled=!okComStatus;
     el.style.opacity=okComStatus?'':'0.4';
     el.style.cursor=okComStatus?'':'not-allowed';
@@ -14345,12 +14405,33 @@ function aplicarPermissoes(){
   var btnReg=document.querySelector('button[onclick="salvarComercial()"]');
   if(btnReg){btnReg.disabled=!okComStatus;btnReg.style.opacity=okComStatus?'':'0.4';}
 
+  // ── Status do Contrato — permissão dedicada "contrato-status" (nega por
+  // padrão, como Análise de Crédito). A checagem real acontece dentro de
+  // contratoMarcarEnviado()/contratoConfirmarAssinado(); isto aqui é só o
+  // feedback visual do botão. ─────────────────────────────────────────────
+  var okContrato=typeof _contratoPodeMarcar==='function'?_contratoPodeMarcar():tudo;
+  document.querySelectorAll('.contrato-btn').forEach(function(el){
+    el.disabled=!okContrato;
+    el.style.opacity=okContrato?'':'0.4';
+    el.style.cursor=okContrato?'':'not-allowed';
+    el.title=okContrato?'':'⛔ Sem permissão — peça a um Gerente/Diretor/Admin pra liberar em Admin > Permissões por Cargo';
+  });
+
   // ── Parcelas financeiras ──────────────────────────────────────────────────
+  // "finToggle" (marcar parcela como paga) tem permissão própria, dedicada
+  // ("fin-marcar-pago"), separada de "finParcelas" (adicionar/remover/editar
+  // a estrutura do parcelamento) — ver _finPodeMarcarPago().
   var okFin=tudo||permTemAcesso('finParcelas');
-  document.querySelectorAll('.fin-add-btn, .fin-parc-row button, [onclick*="finToggle"], [onclick*="finRemove"]').forEach(function(el){
+  document.querySelectorAll('.fin-add-btn, .fin-parc-row button, [onclick*="finRemove"]').forEach(function(el){
     el.disabled=!okFin;
     el.style.opacity=okFin?'':'0.4';
     el.style.cursor=okFin?'':'not-allowed';
+  });
+  var okFinPago=typeof _finPodeMarcarPago==='function'?_finPodeMarcarPago():tudo;
+  document.querySelectorAll('[onclick*="finToggle"]').forEach(function(el){
+    el.style.opacity=okFinPago?'':'0.4';
+    el.style.cursor=okFinPago?'pointer':'not-allowed';
+    el.title=okFinPago?'Clique para alternar':'⛔ Sem permissão — peça a um Gerente/Diretor/Admin pra liberar em Admin > Permissões por Cargo';
   });
 
   // ── Desconto/Arredondamento/BV (financeiro do orçamento) ─────────────────
@@ -14406,6 +14487,18 @@ function permRenderizar(){
     +'<input type="checkbox" id="perm-aprovar-credito"'+(perm['aprovar-credito']===true?' checked':'')+' style="width:14px;height:14px;cursor:pointer"> 💳 Pode Aprovar Análise de Crédito'
     +'</label>'
     +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px;margin-left:22px">Permite aprovar/reprovar condições de pagamento fora do padrão (50% entrada + 50% até 3 dias antes do evento), liberando o processo para a próxima etapa. Diferente dos demais campos acima, esta permissão vem DESMARCADA por padrão — precisa ser concedida explicitamente. Gerência, Diretoria e Administradores já podem aprovar sempre, independente desta caixa.</div>'
+    +'</div>'
+    +'<div style="background:#0d1620;border:1px solid #1565c0;border-radius:6px;padding:10px 12px;margin-bottom:10px">'
+    +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#64b5f6;font-weight:800;text-transform:uppercase">'
+    +'<input type="checkbox" id="perm-contrato-status"'+(perm['contrato-status']===true?' checked':'')+' style="width:14px;height:14px;cursor:pointer"> 📄 Pode Marcar Status do Contrato'
+    +'</label>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px;margin-left:22px">Permite usar os botões "Marcar Contrato Enviado" e "Confirmar Assinatura Recebida" no painel Status do Contrato. Vem DESMARCADA por padrão — precisa ser concedida explicitamente. Gerência, Diretoria e Administradores já podem marcar sempre, independente desta caixa.</div>'
+    +'</div>'
+    +'<div style="background:#1a1508;border:1px solid #f9a825;border-radius:6px;padding:10px 12px;margin-bottom:10px">'
+    +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#ffca28;font-weight:800;text-transform:uppercase">'
+    +'<input type="checkbox" id="perm-fin-marcar-pago"'+(perm['fin-marcar-pago']===true?' checked':'')+' style="width:14px;height:14px;cursor:pointer"> 💰 Pode Marcar Parcela como Paga'
+    +'</label>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px;margin-left:22px">Permite confirmar/desfazer o pagamento de uma parcela no Acompanhamento Financeiro. Separada da permissão "Parcelas do Financeiro" (que controla adicionar/remover/editar o parcelamento) — dá pra liberar só a confirmação de pagamento sem deixar mexer na estrutura das parcelas. Vem DESMARCADA por padrão. Gerência, Diretoria e Administradores já podem marcar sempre.</div>'
     +'</div>';
   PERM_MODULOS.forEach(function(mod){
     html+='<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:8px">'
