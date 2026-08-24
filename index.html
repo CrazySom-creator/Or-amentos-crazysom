@@ -8767,7 +8767,15 @@ var FUNIL_CAMPOS_VAZIOS = [
   {id:'evento',   label:'Data do Evento'},
   {id:'telefone', label:'Telefone'},
   {id:'email',    label:'E-mail'},
-  {id:'followup', label:'Próximo Follow-up'}
+  {id:'followup', label:'Próximo Follow-up'},
+  // Pedido do usuário: consultores estão deixando de preencher a etapa do
+  // funil (comercialStatus) depois de criar o orçamento — este filtro pega
+  // exatamente os orçamentos que caem na coluna "⚠️ Sem Etapa" do quadro,
+  // pra dar pra isolar/cobrar quem não preencheu (combinável com o filtro
+  // de Consultor, pra ver só os pendentes de uma pessoa específica). Leads
+  // sempre têm uma etapa própria (default 'sem_contato'), então nunca contam
+  // como "vazios" aqui — ver _fkCampoVazio().
+  {id:'etapa',    label:'Etapa do Funil (Comercial)'}
 ];
 // Data de fechamento (venda GANHA ou PERDIDA) de um orçamento — a negociação
 // foi encerrada, não importa o resultado. Usada em TRÊS lugares (filtro
@@ -8899,6 +8907,11 @@ function _fkCampoVazio(item, isLead, campoId){
     case 'telefone': return isLead ? !item.telefone : !f['f-tel'];
     case 'email':    return isLead ? !item.email : !f['f-email'];
     case 'followup': return isLead ? !item.followupData : !d.followupData;
+    // Só orçamentos entram nessa checagem — leads sempre têm uma etapa
+    // própria (LEAD_COL_ORDEM, default 'sem_contato'), nunca ficam "sem
+    // etapa" no sentido que preocupa aqui (comercialStatus não preenchido
+    // pelo consultor depois de criar o orçamento).
+    case 'etapa':    return isLead ? false : !FUNIL_SI[d.comercialStatus||''];
     default: return false;
   }
 }
