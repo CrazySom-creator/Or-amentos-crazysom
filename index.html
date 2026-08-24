@@ -2280,6 +2280,12 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     </div>
 
     <div style="margin-top:4px">
+      <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;font-weight:700">🧾 Nº da Venda no Conta Azul</label>
+      <input id="fin-num-venda" placeholder="Ex: 12345" style="max-width:220px">
+      <div style="font-size:10px;color:var(--text-muted);margin-top:3px">Usado pelo Conta Azul para emitir a NF. Precisa estar preenchido para a Liberação de Montagem ficar completa.</div>
+    </div>
+
+    <div style="margin-top:12px">
       <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;font-weight:700">📝 Observações Financeiras</label>
       <textarea class="fin-obs-area" id="fin-obs" placeholder="Ex: Cliente solicitou NF após pagamento, combinar data de depósito..."></textarea>
     </div>
@@ -2625,6 +2631,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div class="fin-inline-card"><label>Pendente</label><span id="fi-pend">R$ 0,00</span></div>
     </div>
     <div id="fi-parc-list" class="fin-parc-list"></div>
+    <div id="fi-num-venda" style="font-size:11px;margin-top:8px"></div>
     <div style="margin-top:8px;display:flex;justify-content:flex-end">
       <button class="btn btn-b btn-sm" onclick="abrirFinanceiro()">✏️ Editar Financeiro</button>
     </div>
@@ -3044,7 +3051,7 @@ var CREDITO_SI={
 // conciliação de pagamento com a liberação da montagem". Antes disso, a
 // equipe técnica podia ser acionada (OS/Agenda) mesmo sem confirmação de
 // pagamento ou contrato assinado. montagemLiberacaoManual permite que
-// Gerente/Diretor/Admin libere mesmo sem os 3 requisitos, com justificativa
+// Gerente/Diretor/Admin libere mesmo sem os 4 requisitos, com justificativa
 // obrigatória registrada em montagemLiberacaoManualHist — ver
 // montagemLiberada()/montagemLiberarManual() mais abaixo. ──
 var montagemLiberacaoManual=false;
@@ -7101,16 +7108,18 @@ function _montagemRequisitosDe(form, dadosCompletos){
   if(tipo==='posterior') pagamentoConfirmado=true;
   else if(tipo==='outra') pagamentoConfirmado=(dadosCompletos&&dadosCompletos.creditoStatus)==='aprovado';
   else pagamentoConfirmado=_pgtoEntradaConfirmadaDe(dadosCompletos);
+  var numVenda=dadosCompletos&&dadosCompletos.finNumVenda;
   return {
     aprovado: !!(dadosCompletos&&dadosCompletos.aprovStatus==='aprovado'),
     contratoAssinado: !!(dadosCompletos&&dadosCompletos.contratoStatus==='assinado'),
-    pagamentoConfirmado: pagamentoConfirmado
+    pagamentoConfirmado: pagamentoConfirmado,
+    vendaContaAzul: !!(numVenda && String(numVenda).trim())
   };
 }
 function _montagemLiberadaDe(form, dadosCompletos){
   if(dadosCompletos&&dadosCompletos.montagemLiberacaoManual) return true;
   var r=_montagemRequisitosDe(form, dadosCompletos);
-  return r.aprovado && r.contratoAssinado && r.pagamentoConfirmado;
+  return r.aprovado && r.contratoAssinado && r.pagamentoConfirmado && r.vendaContaAzul;
 }
 function _montagemTarjaTextoDe(form, dadosCompletos){
   if(_montagemLiberadaDe(form, dadosCompletos)) return '';
@@ -7119,6 +7128,7 @@ function _montagemTarjaTextoDe(form, dadosCompletos){
   if(!r.aprovado) faltando.push('orçamento aprovado');
   if(!r.contratoAssinado) faltando.push('contrato assinado e devolvido pelo cliente');
   if(!r.pagamentoConfirmado) faltando.push(_montagemLabelPagamentoDe(form));
+  if(!r.vendaContaAzul) faltando.push(typeof _montagemLabelContaAzul==='function'?_montagemLabelContaAzul():'Nº da venda no Conta Azul informado');
   return 'Falta: '+faltando.join('; ')+'.';
 }
 
@@ -8333,18 +8343,26 @@ function montagemPagamentoConfirmado(){
   return _pgtoEntradaConfirmada();
 }
 
+// Label do requisito "Nº da Venda no Conta Azul" — a Crazy Som usa o Conta
+// Azul pra emitir a NF, então a OS só fica totalmente liberada com esse
+// número preenchido no Financeiro (ver campo #fin-num-venda / salvarFinanceiro()).
+function _montagemLabelContaAzul(){
+  return 'Nº da venda no Conta Azul informado (necessário para emissão da NF)';
+}
+
 function montagemRequisitos(){
   return {
     aprovado: aprovStatus==='aprovado',
     contratoAssinado: contratoStatus==='assinado',
-    pagamentoConfirmado: montagemPagamentoConfirmado()
+    pagamentoConfirmado: montagemPagamentoConfirmado(),
+    vendaContaAzul: !!(finNumVenda && String(finNumVenda).trim())
   };
 }
 
 function montagemLiberada(){
   if(montagemLiberacaoManual) return true;
   var r=montagemRequisitos();
-  return r.aprovado && r.contratoAssinado && r.pagamentoConfirmado;
+  return r.aprovado && r.contratoAssinado && r.pagamentoConfirmado && r.vendaContaAzul;
 }
 
 // Guard histórico (pré-tarja) — mantido para uso em testes/ferramentas, mas
@@ -8357,6 +8375,7 @@ function _bloqueadoSemLiberacaoMontagem(){
   if(!r.aprovado) faltando.push('orçamento aprovado');
   if(!r.contratoAssinado) faltando.push('contrato assinado e devolvido pelo cliente');
   if(!r.pagamentoConfirmado) faltando.push(_montagemLabelPagamento());
+  if(!r.vendaContaAzul) faltando.push(_montagemLabelContaAzul());
   alert('🔒 MONTAGEM AINDA NÃO LIBERADA\n\nEsta ação (Ordem de Serviço / Google Agenda) só fica disponível quando TODOS os requisitos abaixo forem atendidos:\n\n• '+faltando.join('\n• ')+'\n\nSe for realmente necessário liberar mesmo assim (ex.: pagamento combinado por fora do sistema, urgência do cliente), um Gerente Comercial, Diretor ou Administrador pode fazer a liberação manual — botão "🔓 Liberar Montagem Manualmente" — com justificativa obrigatória.');
   return true;
 }
@@ -8371,6 +8390,7 @@ function _montagemTarjaTexto(){
   if(!r.aprovado) faltando.push('orçamento aprovado');
   if(!r.contratoAssinado) faltando.push('contrato assinado e devolvido pelo cliente');
   if(!r.pagamentoConfirmado) faltando.push(_montagemLabelPagamento());
+  if(!r.vendaContaAzul) faltando.push(_montagemLabelContaAzul());
   return 'Falta: '+faltando.join('; ')+'.';
 }
 
@@ -8439,7 +8459,8 @@ function renderMontagemGate(){
     }
     req.innerHTML=linha(r.aprovado,'Orçamento aprovado')
       +linha(r.contratoAssinado,'Contrato assinado e devolvido pelo cliente')
-      +linha(r.pagamentoConfirmado,_montagemLabelPagamento());
+      +linha(r.pagamentoConfirmado,_montagemLabelPagamento())
+      +linha(r.vendaContaAzul,_montagemLabelContaAzul());
   }
 
   var manualBox=document.getElementById('montagem-manual-box');
@@ -10742,6 +10763,7 @@ function abrirFinanceiro(){
   var cli=gv('f-cliente')||'—';
   document.getElementById('fin-sub').textContent='Orçamento '+num+' — '+cli;
   document.getElementById('fin-obs').value=finObs||'';
+  document.getElementById('fin-num-venda').value=finNumVenda||'';
   finRenderParcelas();
   finAtualizarResumo();
   document.getElementById('fin-ov').classList.add('open');
@@ -10952,7 +10974,9 @@ function finPresetCustom(){
 
 function salvarFinanceiro(){
   finObs=document.getElementById('fin-obs').value||'';
+  finNumVenda=(document.getElementById('fin-num-venda').value||'').trim();
   renderFinanceiroInline();
+  if(typeof renderMontagemGate==='function') renderMontagemGate();
   var st=document.getElementById('fin-save-status');
   st.textContent='⏳ Salvando...';
   st.style.color='#ffa726';
@@ -10983,6 +11007,13 @@ function renderFinanceiroInline(){
   var elPend=document.getElementById('fi-pend');
   elPend.textContent=fmt(Math.max(0,pendente));
   elPend.className=pendente<=0?'verde':(pendente<total*0.5?'amarelo':'vermelho');
+
+  var elNumVenda=document.getElementById('fi-num-venda');
+  if(elNumVenda){
+    elNumVenda.innerHTML=(finNumVenda&&String(finNumVenda).trim())
+      ? '<span style="color:var(--text-dim)">🧾 Nº Venda Conta Azul: </span><b style="color:var(--text)">'+eh(finNumVenda)+'</b>'
+      : '<span style="color:#e65100;font-weight:700">⚠️ Nº da Venda no Conta Azul ainda não informado — necessário para a Liberação de Montagem</span>';
+  }
 
   var lista=document.getElementById('fi-parc-list');
   if(!finParcelas.length){
