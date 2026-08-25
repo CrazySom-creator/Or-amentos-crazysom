@@ -1889,6 +1889,22 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     </div>
 
     <div id="resultados-corpo"><div class="dash-loading">⏳ Carregando dados...</div></div>
+
+    <!-- Listagem clicável (drill-down) dos cards Realizado+Vendido / Vendas do
+         Mês — pedido do usuário: poder ver as vendas por trás do número e
+         exportar pra Excel. Fica FORA de #resultados-corpo de propósito (esse
+         div é substituído inteiro a cada resultadosRenderizar(), o que
+         fecharia o painel toda vez que o usuário trocasse mês/ano). -->
+    <div id="resultados-drill" style="display:none;margin-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface-2);border:1px solid var(--border);border-radius:6px 6px 0 0;padding:8px 10px">
+        <span id="resultados-drill-titulo" style="font-size:11px;color:var(--text);font-weight:700"></span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn btn-o btn-sm" onclick="_resultadosDrillExportarExcel()" title="Exporta esta listagem para Excel (.csv)">📊 Exportar Excel</button>
+          <button onclick="document.getElementById('resultados-drill').style.display='none'" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px">✕</button>
+        </div>
+      </div>
+      <div id="resultados-drill-corpo" style="border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px"></div>
+    </div>
   </div>
 </div>
 
@@ -13936,6 +13952,10 @@ function resultadosRenderizar(){
   var ano=parseInt(document.getElementById('resultados-ano').value,10)||new Date().getFullYear();
   var mm=document.getElementById('resultados-mes').value||'01';
   document.getElementById('resultados-corpo').innerHTML=_resultadosMontarHTML(ano,mm);
+  // Fecha a listagem aberta (se houver) — ela é referente ao mês/ano
+  // anterior, e reabrir automaticamente no novo mês seria confuso.
+  var drillEl=document.getElementById('resultados-drill');
+  if(drillEl) drillEl.style.display='none';
 }
 
 // Monta o HTML completo do dashboard (usado tanto no render da tela quanto,
@@ -13948,6 +13968,12 @@ function _resultadosMontarHTML(ano,mm){
   var ganhosTodos=_dashDados.filter(function(o){return (o.dados&&o.dados.comercialStatus)==='ganha';});
   var mesNum=parseInt(mm,10);
   var mesNome=MESES_NOMES[mesNum-1];
+
+  // Guarda o contexto (lista de orçamentos ganhos + ano/mês) pra
+  // _resultadosAbrirLista() poder montar a listagem clicável dos cards
+  // Realizado+Vendido / Vendas do Mês sem precisar recalcular tudo de novo.
+  // Não afeta a exportação em PDF (que só lê o HTML retornado abaixo).
+  window._resultadosCtx={ano:ano,mm:mm,ganhosTodos:ganhosTodos};
 
   // Visão PRINCIPAL do dashboard: eventos JÁ REALIZADOS + eventos JÁ
   // VENDIDOS que vão acontecer em meses futuros dentro do ano (data de
@@ -14024,7 +14050,8 @@ function _resultadosMontarHTML(ano,mm){
   var kpisHtml='<div style="font-size:11px;font-weight:800;color:var(--text-dim);margin:4px 0 8px">📊 Resumo do Mês — '+mesNome+'/'+ano+'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px">'
     +'<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:4px">Meta de Eventos — '+mesNome+'</div><div style="font-size:20px;font-weight:900;color:var(--text)">'+fmt(kpis.meta)+'</div></div>'
-    +'<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:4px">Realizado + Vendido</div><div style="font-size:20px;font-weight:900;color:'+corKpi+'">'+fmt(kpis.realizado)+'</div>'+(kpis.variacaoPct!==null?'<div style="font-size:10px;font-weight:700;color:'+(kpis.variacaoPct>=0?'#66bb6a':'#ef5350')+'">'+(kpis.variacaoPct>=0?'▲ +':'▼ ')+kpis.variacaoPct+'% vs mês anterior</div>':'')+'</div>'
+    +'<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px;cursor:pointer" onclick="_resultadosAbrirLista(\'evento\')" title="Clique para ver as vendas que compõem este valor">'
+    +'<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:4px">Realizado + Vendido <span style="opacity:.6">🔎</span></div><div style="font-size:20px;font-weight:900;color:'+corKpi+'">'+fmt(kpis.realizado)+'</div>'+(kpis.variacaoPct!==null?'<div style="font-size:10px;font-weight:700;color:'+(kpis.variacaoPct>=0?'#66bb6a':'#ef5350')+'">'+(kpis.variacaoPct>=0?'▲ +':'▼ ')+kpis.variacaoPct+'% vs mês anterior</div>':'')+'</div>'
     +'<div style="background:var(--surface-2);border:1px solid '+corKpi+';border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:4px">Atingimento</div><div style="font-size:20px;font-weight:900;color:'+corKpi+'">'+kpis.pct+'%</div></div>'
     +'<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:4px">'+(kpis.faltam>0?'Faltam pra Meta':'Superávit')+'</div><div style="font-size:20px;font-weight:900;color:var(--text)">'+fmt(kpis.faltam>0?kpis.faltam:(kpis.realizado-kpis.meta))+'</div></div>'
     +'</div>';
@@ -14033,8 +14060,8 @@ function _resultadosMontarHTML(ano,mm){
   var comparativoHtml='<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px">'
     +'<div style="font-size:11px;font-weight:800;color:var(--text-dim);margin-bottom:10px">⚖️ Eventos x Vendas do Mês <span style="font-weight:400;color:var(--text-muted)">(informativo — vendas são secundárias neste painel)</span></div>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">'
-    +_resBlocoComparativo('Eventos (realizados + vendidos)',comparativo.eventos)
-    +_resBlocoComparativo('Vendas do mês (data da venda)',comparativo.geral)
+    +_resBlocoComparativo('Eventos (realizados + vendidos)',comparativo.eventos,'evento')
+    +_resBlocoComparativo('Vendas do mês (data da venda)',comparativo.geral,'ganha')
     +'</div>'
     +'</div>';
 
@@ -14070,14 +14097,151 @@ function _resultadosMontarHTML(ano,mm){
 
 // Card comparativo usado por _resultadosMontarHTML() — um bloco (Meta Geral
 // OU Meta de Eventos) com valor realizado, meta, barra de progresso e %.
-function _resBlocoComparativo(titulo,dados){
+// "base" ('evento'|'ganha'), quando informado, torna o card clicável — abre
+// a listagem das vendas que compõem o valor (pedido do usuário).
+function _resBlocoComparativo(titulo,dados,base){
   var cor=dados.pct>=100?'#66bb6a':dados.pct>=70?'#ffa726':'#ef5350';
-  return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 12px">'
-    +'<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:6px">'+titulo+'</div>'
+  return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 12px'+(base?';cursor:pointer':'')+'"'+(base?' onclick="_resultadosAbrirLista(\''+base+'\')" title="Clique para ver as vendas que compõem este valor"':'')+'>'
+    +'<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:6px">'+titulo+(base?' <span style="opacity:.6">🔎</span>':'')+'</div>'
     +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px"><span style="font-size:16px;font-weight:900;color:var(--text)">'+fmt(dados.realizado)+'</span><span style="font-size:11px;color:var(--text-muted)"> de '+fmt(dados.meta)+'</span></div>'
     +'<div style="background:var(--surface-2);border-radius:4px;overflow:hidden;height:8px"><div style="width:'+Math.min(dados.pct,100)+'%;height:100%;background:'+cor+'"></div></div>'
     +'<div style="font-size:11px;font-weight:800;color:'+cor+';margin-top:4px">'+dados.pct+'%</div>'
     +'</div>';
+}
+
+// ── Listagem clicável (drill-down) por trás dos cards "Realizado + Vendido"
+// (base 'evento') e "Vendas do mês" / "Eventos (realizados + vendidos)"
+// (base 'evento' ou 'ganha') — pedido do usuário: poder ver quais vendas
+// compõem aquele número, e exportar a lista pra Excel. Usa o mesmo par de
+// filtros (_metaMesEventoAuto/_metaMesGanhoAuto) já usado internamente por
+// _resKpisMes()/_resComparativoGeralEventos() pra calcular esses totais —
+// garante que a lista bate exatamente com o valor mostrado no card.
+function _resultadosAbrirLista(base){
+  var ctx=window._resultadosCtx;
+  var panel=document.getElementById('resultados-drill');
+  var corpo=document.getElementById('resultados-drill-corpo');
+  var tit=document.getElementById('resultados-drill-titulo');
+  if(!ctx||!panel||!corpo||!tit)return;
+
+  var ano=ctx.ano, mm=ctx.mm, mesAno=ano+'-'+mm;
+  var mesNome=MESES_NOMES[parseInt(mm,10)-1];
+  var lista = base==='evento'
+    ? _metaMesEventoAuto(ctx.ganhosTodos, mesAno)
+    : _metaMesGanhoAuto(ctx.ganhosTodos, mesAno);
+  // Ordena pela data relevante (evento ou venda), mais antiga primeiro.
+  lista = lista.slice().sort(function(a,b){
+    var da = base==='evento' ? ((a.form&&a.form['f-dia'])||'9999') : (_metaDataGanha(a)||'9999');
+    var db = base==='evento' ? ((b.form&&b.form['f-dia'])||'9999') : (_metaDataGanha(b)||'9999');
+    return da<db?-1:da>db?1:0;
+  });
+
+  var tituloBase = base==='evento' ? 'Eventos Realizados + Vendidos' : 'Vendas do Mês (data da venda)';
+  var tituloCompleto = tituloBase+' — '+mesNome+'/'+ano+' ('+lista.length+')';
+  tit.textContent=tituloCompleto;
+
+  // Detecta se há um valor manual (lançado no módulo Metas, sem orçamento
+  // correspondente no sistema) somado ao total do card — se houver, avisa,
+  // já que ele não aparece como linha nesta listagem (não é um orçamento).
+  var cfg = base==='evento' ? (_metasDados[ano]&&_metasDados[ano].eventos) : (_metasDados[ano]&&_metasDados[ano].geral);
+  var manual = (cfg&&cfg.realizadoManual&&cfg.realizadoManual[mesAno]) || 0;
+
+  if(!lista.length && !manual){
+    corpo.innerHTML='<div class="dash-vazio" style="padding:16px">Nenhuma venda nesta categoria.</div>';
+    panel.style.display='block';
+    panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+    window._resultadosDrillAtual=null;
+    return;
+  }
+
+  var header='<div style="display:flex;align-items:center;gap:8px;background:var(--surface-2);border-bottom:2px solid var(--R);padding:5px 10px;font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">'
+    +'<span style="min-width:72px">'+(base==='evento'?'Data Evento':'Data Venda')+'</span>'
+    +'<span style="flex:1">Cliente</span>'
+    +'<span style="min-width:90px;text-align:center">Consultor</span>'
+    +'<span style="min-width:80px;text-align:right">Valor</span>'
+    +'</div>';
+
+  var rows=lista.map(function(o){
+    var f=o.form||{};
+    var val=dashValOrc(o);
+    var dataRef = base==='evento' ? (f['f-dia']||'') : (_metaDataGanha(o)||'');
+    return '<div style="padding:7px 10px;border-bottom:1px solid var(--border-strong);display:flex;align-items:center;gap:8px;background:var(--surface-3);cursor:pointer;transition:background .12s" '
+      +'onmouseover="this.style.background=\'var(--surface-2)\'" onmouseout="this.style.background=\'var(--surface-3)\'" '
+      +(o.driveId?'onclick="dashDrillAbrirOrc(\''+o.driveId+'\',\''+eh(f['f-cliente']||'')+'\')" title="Clique para abrir o orçamento"':'')+'>'
+      +'<div style="min-width:72px;color:var(--text-muted);font-size:9px;flex-shrink:0">'+(dataRef?fD(dataRef):'—')+'</div>'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:11px;color:var(--text);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+      +'<div style="font-size:9px;color:var(--text-muted);margin-top:1px">'+eh(f['f-num']||'')+(o.driveId?'<span style="color:var(--text-dim);margin-left:6px">↗ clique para abrir</span>':'')+'</div>'
+      +'</div>'
+      +'<div style="min-width:90px;text-align:center;font-size:9px;color:var(--text-muted);flex-shrink:0">'+eh(f['f-cons']||'—')+'</div>'
+      +'<div style="min-width:80px;text-align:right;font-size:10px;font-weight:800;color:var(--text);flex-shrink:0">'+fmt(val)+'</div>'
+      +'</div>';
+  }).join('');
+
+  var totalAuto=lista.reduce(function(t,o){return t+dashValOrc(o);},0);
+  var footer='<div style="padding:6px 10px;background:var(--surface-2);border-top:1px solid var(--border);display:flex;justify-content:space-between">'
+    +'<span style="font-size:10px;color:var(--text-dim)">'+lista.length+' venda(s) · mais antiga primeiro</span>'
+    +'<span style="font-size:10px;font-weight:800;color:var(--text)">'+fmt(totalAuto)+'</span>'
+    +'</div>'
+    +(manual?'<div style="padding:6px 10px;font-size:10px;color:var(--text-dim);border-top:1px dashed var(--border)">+ '+fmt(manual)+' de ajuste manual lançado no módulo Metas (histórico anterior ao sistema, sem orçamento vinculado — não aparece na lista acima, mas soma ao total do card).</div>':'');
+
+  corpo.innerHTML='<div style="max-height:400px;overflow-y:auto">'+header+rows+footer+'</div>';
+  panel.style.display='block';
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+
+  // Guarda a lista atual pra exportação em Excel (_resultadosDrillExportarExcel).
+  window._resultadosDrillAtual={
+    titulo:tituloCompleto,
+    base:base,
+    lista:lista,
+    manual:manual,
+    mesNome:mesNome,
+    ano:ano
+  };
+}
+
+// Exporta a listagem atualmente aberta no painel de drill-down (Realizado+
+// Vendido / Vendas do Mês) em CSV compatível com Excel — mesmo padrão de
+// relExportarExcel() (BOM UTF-8 + separador ";" + números com vírgula
+// decimal, pra abrir certo direto no Excel em pt-BR).
+function _resultadosDrillExportarExcel(){
+  var d=window._resultadosDrillAtual;
+  if(!d){alert('Abra uma listagem primeiro (clique em "Realizado + Vendido" ou "Vendas do Mês").');return;}
+  if(!d.lista.length){alert('Nenhuma venda para exportar.');return;}
+
+  function csvEscape(v){
+    if(v===null||v===undefined)return'';
+    var s=String(v);
+    if(s.indexOf(';')>=0||s.indexOf('"')>=0||s.indexOf('\n')>=0){s='"'+s.replace(/"/g,'""')+'"';}
+    return s;
+  }
+  var colData = d.base==='evento' ? 'Data Evento' : 'Data Venda';
+  var bom='\uFEFF';
+  var linhas=[d.titulo,'',[colData,'Nº Orçamento','Cliente','Consultor','Valor (R$)'].map(csvEscape).join(';')];
+  d.lista.forEach(function(o){
+    var f=o.form||{};
+    var dataRef = d.base==='evento' ? (f['f-dia']||'') : (_metaDataGanha(o)||'');
+    var val=dashValOrc(o);
+    linhas.push([
+      csvEscape(dataRef?fD(dataRef):''),
+      csvEscape(f['f-num']||''),
+      csvEscape(f['f-cliente']||''),
+      csvEscape(f['f-cons']||''),
+      val.toFixed(2).replace('.',',')
+    ].join(';'));
+  });
+  var totalAuto=d.lista.reduce(function(t,o){return t+dashValOrc(o);},0);
+  linhas.push(['','','','TOTAL', totalAuto.toFixed(2).replace('.',',')].join(';'));
+  if(d.manual){
+    linhas.push(['','','','+ Ajuste manual (Metas)', d.manual.toFixed(2).replace('.',',')].join(';'));
+    linhas.push(['','','','TOTAL GERAL', (totalAuto+d.manual).toFixed(2).replace('.',',')].join(';'));
+  }
+  var csv=bom+linhas.join('\r\n');
+  var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='CrazySom_Vendas_'+(d.base==='evento'?'Eventos_':'')+d.mesNome+d.ano+'.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 // Exporta a mesma visão do dashboard em PDF — abre uma janela nova (mesmo
