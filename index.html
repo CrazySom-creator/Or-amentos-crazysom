@@ -2034,12 +2034,12 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 </div>
 
 <div class="ov" id="log-os-ov" style="z-index:9200">
-  <div class="modal-box" style="max-width:560px">
+  <div class="modal-box" style="max-width:900px;width:95vw">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <h2 style="margin-bottom:2px" id="log-os-titulo">Orçamento</h2>
+      <h2 style="margin-bottom:2px" id="log-os-titulo">Ordem de Serviço</h2>
       <button class="btn btn-o btn-sm" onclick="document.getElementById('log-os-ov').classList.remove('open')">✕</button>
     </div>
-    <div id="log-os-corpo"></div>
+    <iframe id="log-os-iframe" style="width:100%;height:75vh;border:1px solid var(--border);border-radius:6px;background:#eee"></iframe>
     <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px">
       <button class="btn btn-o btn-sm" onclick="document.getElementById('log-os-ov').classList.remove('open')">Fechar</button>
       <button class="btn btn-r btn-sm" id="log-os-abrir-btn">📂 Abrir Orçamento Completo</button>
@@ -3397,6 +3397,8 @@ async function buscaCNPJ(){
 function setDS(){try{var d=new Date(gv('f-dia')+'T12:00:00');document.getElementById('f-sem').value=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d.getDay()]||'';}catch(e){}}
 function setDSFim(){try{var d=new Date(gv('f-dia-fim')+'T12:00:00');document.getElementById('f-sem-fim').value=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d.getDay()]||'';}catch(e){}}
 function getDiasEvento(){var ini=gv('f-dia'),fim=gv('f-dia-fim');if(!ini)return 1;var d1=new Date(ini+'T12:00:00'),d2=fim?new Date(fim+'T12:00:00'):d1;return Math.max(1,Math.round((d2-d1)/(1000*60*60*24))+1);}
+// Twin parametrizado de getDiasEvento() lendo de um objeto `form`.
+function _getDiasEventoDe(form){var ini=form['f-dia'],fim=form['f-dia-fim'];if(!ini)return 1;var d1=new Date(ini+'T12:00:00'),d2=fim?new Date(fim+'T12:00:00'):d1;return Math.max(1,Math.round((d2-d1)/(1000*60*60*24))+1);}
 function getDiariasEquip(){var d=getDiasEvento();return d===1?1:1+(d-1)*0.5;}
 
 // Formata "Início Montagem"/"Início Desmontagem" + hora, mostrando o intervalo
@@ -3411,6 +3413,19 @@ function fmtMontDesm(iniId,horaId,fimId){
   var fim=gv(fimId);
   if(fim&&fim!==ini) s+=' a '+fD(fim);
   var h=gv(horaId);
+  if(h) s+=' às '+h;
+  return s;
+}
+// Twin parametrizado de fmtMontDesm() lendo de um objeto `form` (em vez de
+// gv()/DOM) — usado pra montar a OS de um orçamento que não é o que está
+// aberto na tela (ex.: preview da OS a partir da Logística).
+function _fmtMontDesmDe(form,iniId,horaId,fimId){
+  var ini=form[iniId];
+  if(!ini) return '';
+  var s=fD(ini);
+  var fim=form[fimId];
+  if(fim&&fim!==ini) s+=' a '+fD(fim);
+  var h=form[horaId];
   if(h) s+=' às '+h;
   return s;
 }
@@ -6696,18 +6711,37 @@ function gerarOS(){
     return;
   }
 
-  var mStr=fmtMontDesm('f-dm','f-hm','f-dm-fim');
-  var dStr=fmtMontDesm('f-dd','f-hd','f-dd-fim');
-  var horEv=fD(gv('f-dia'));if(gv('f-sem'))horEv+=' ('+gv('f-sem')+')';
-  var dFim=gv('f-dia-fim');if(dFim&&dFim!==gv('f-dia')){horEv+=' a '+fD(dFim);if(gv('f-sem-fim'))horEv+=' ('+gv('f-sem-fim')+')';}
-  if(gv('f-hi'))horEv+=' – Início: '+gv('f-hi');if(gv('f-hf'))horEv+=' Fim: '+gv('f-hf');
-  var diasEvStr=getDiasEvento();if(diasEvStr>1)horEv+=' ('+diasEvStr+' dias)';
-  var endEv=[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
-  var incLines=getSvinc().split('\n').map(function(l){return l.trim();}).filter(Boolean);
-  var dataorc=gv('f-data')?fD(gv('f-data')):new Date().toLocaleDateString('pt-BR');
+  var osHTML=_montarOSHtml(getForm(), getDadosCompletos());
+  var w=window.open('','_blank');if(!w){alert('⚠️ Pop-up bloqueado!');return;}
+  w.document.open();w.document.write(osHTML);w.document.close();
+}
+
+// Monta o HTML completo da OS (Ordem de Serviço) para impressão — SEM
+// nenhuma informação financeira (é um documento técnico, pra equipe de
+// montagem/logística, não pro cliente). Extraído de gerarOS() e parametrizado
+// em `form`/`dadosCompletos` (em vez de ler gv()/state ao vivo) pra poder ser
+// reaproveitado também no popup de preview da Logística — pedido do usuário:
+// "quero que abra a OS em um popup exatamente igual a OS para impressão".
+// gerarOS() (botão 📋 OS na tela do orçamento) chama esta função com
+// getForm()/getDadosCompletos() do orçamento atualmente aberto; a Logística
+// chama com o form/dados de um item de _dashDados (que não precisa estar
+// aberto na tela).
+function _montarOSHtml(form, dadosCompletos){
+  form=form||{};
+  dadosCompletos=dadosCompletos||{};
+  var st=dadosCompletos.state||{};
+  var mStr=_fmtMontDesmDe(form,'f-dm','f-hm','f-dm-fim');
+  var dStr=_fmtMontDesmDe(form,'f-dd','f-hd','f-dd-fim');
+  var horEv=fD(form['f-dia']);if(form['f-sem'])horEv+=' ('+form['f-sem']+')';
+  var dFim=form['f-dia-fim'];if(dFim&&dFim!==form['f-dia']){horEv+=' a '+fD(dFim);if(form['f-sem-fim'])horEv+=' ('+form['f-sem-fim']+')';}
+  if(form['f-hi'])horEv+=' – Início: '+form['f-hi'];if(form['f-hf'])horEv+=' Fim: '+form['f-hf'];
+  var diasEvStr=_getDiasEventoDe(form);if(diasEvStr>1)horEv+=' ('+diasEvStr+' dias)';
+  var endEv=[form['f-end-ev'],form['f-num-ev'],form['f-bairro-ev'],form['f-cid-ev']].filter(Boolean).join(', ');
+  var incLines=(form['f-svinc']||'').split('\n').map(function(l){return l.trim();}).filter(Boolean);
+  var dataorc=form['f-data']?fD(form['f-data']):new Date().toLocaleDateString('pt-BR');
   var SECS_OS=['som','video','luz','estrutura','servico'];
   var todosAmb=[],ambIds3={};
-  SECS_OS.forEach(function(s){state[s].ambientes.forEach(function(a){if(!ambIds3[a.id]){ambIds3[a.id]=true;todosAmb.push({id:a.id,nome:a.nome});}});});
+  SECS_OS.forEach(function(s){((st[s]&&st[s].ambientes)||[]).forEach(function(a){if(!ambIds3[a.id]){ambIds3[a.id]=true;todosAmb.push({id:a.id,nome:a.nome});}});});
   function bRow(r){
     var isPal=r.palco||isPalco(r.name);var desc=r.name||'';
     if(r.painel){var pxW=Math.round(r.larg*getPx(r.name)),pxH=Math.round(r.alt*getPx(r.name));desc+=' – '+Number(r.larg).toFixed(2)+'×'+Number(r.alt).toFixed(2)+'m ['+pxW+'×'+pxH+'px]';}
@@ -6717,11 +6751,11 @@ function gerarOS(){
   var corpoOS='';var multiAmb=todosAmb.length>1||todosAmb.some(function(a){return a.id!=='default';});
   if(multiAmb){
     todosAmb.forEach(function(amb){
-      var temItens=SECS_OS.some(function(s){return (state[s].rows[amb.id]||[]).filter(function(r){return !isOcult(r.name);}).length>0;});
+      var temItens=SECS_OS.some(function(s){return ((st[s]&&st[s].rows&&st[s].rows[amb.id])||[]).filter(function(r){return !isOcult(r.name);}).length>0;});
       if(!temItens)return;
       corpoOS+='<tr><td colspan="3" style="background:var(--surface-3);color:var(--text);font-weight:bold;padding:5px 8px;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact">🏢 '+amb.nome+'</td></tr>';
       SECS_OS.forEach(function(s){
-        var rows2=(state[s].rows[amb.id]||[]).filter(function(r){return !isOcult(r.name);});
+        var rows2=((st[s]&&st[s].rows&&st[s].rows[amb.id])||[]).filter(function(r){return !isOcult(r.name);});
         var isLog=(s==='logistica');
         if(!rows2.length&&(!isLog||!incLines.length))return;
         corpoOS+='<tr><td colspan="3" style="background:var(--R);color:#fff;font-weight:bold;padding:3px 8px;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact">'+SEC_ICO[s]+' '+SEC_LBL[s].toUpperCase()+'</td></tr>';
@@ -6732,7 +6766,7 @@ function gerarOS(){
     });
   }else{
     SECS_OS.forEach(function(s){
-      var rows2=(state[s].rows['default']||[]).filter(function(r){return !isOcult(r.name);});
+      var rows2=((st[s]&&st[s].rows&&st[s].rows['default'])||[]).filter(function(r){return !isOcult(r.name);});
       var isLog=(s==='logistica');
       if(!rows2.length&&(!isLog||!incLines.length))return;
       corpoOS+='<tr><td colspan="3" style="background:var(--R);color:#fff;font-weight:bold;padding:4px 8px;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact">'+SEC_ICO[s]+' '+SEC_LBL[s].toUpperCase()+'</td></tr>';
@@ -6742,29 +6776,27 @@ function gerarOS(){
     });
   }
   var extras=Array(15).fill('<tr><td colspan="3" style="height:23px;border-bottom:1px solid var(--border)">&nbsp;</td></tr>').join('');
-  var osHTML='<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><style>*{box-sizing:border-box;margin:0;padding:0;font-family:Calibri,Arial,sans-serif}body{background:#eee;padding:18px}.bar{background:#111;padding:9px 14px;border-radius:5px;display:flex;gap:9px;align-items:center;margin-bottom:14px}.bar span{color:#aaa;font-size:12px;flex:1}.bar button{padding:7px 15px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700}.br{background:#c0001a;color:#fff}.bd{background:#444;color:#fff}.page{background:#fff;width:210mm;margin:0 auto;padding:13mm 13mm 17mm;box-shadow:0 4px 18px rgba(0,0,0,.2)}.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:9px;border-bottom:3px solid #c0001a;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.hdr h1{font-size:21px;font-weight:900;color:#c0001a}.hr{text-align:right}.hr .os{font-size:17px;font-weight:900}.hr .osn{font-size:14px;font-weight:bold;color:#c0001a}.hr .osd{font-size:11px;color:#888}.info{background:#f7f7f7;border:1px solid #ddd;border-radius:3px;padding:7px 11px;margin-bottom:11px}.info table{width:100%;border-collapse:collapse}.info td{padding:2px 5px;font-size:11px;vertical-align:top}.info .lbl{font-weight:bold;color:#555;width:125px;white-space:nowrap}table.eq{width:100%;border-collapse:collapse;margin-bottom:3px}table.eq th{background:#111;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.qtd{width:46px;padding:3px 7px;border:1px solid #e0e0e0;font-weight:bold;text-align:center;font-size:12px;vertical-align:top}.item{padding:3px 7px;border:1px solid #e0e0e0;font-size:11px}.chk{width:30px;padding:3px 7px;border:1px solid #e0e0e0;text-align:center;font-size:13px}.xt{font-size:12px;font-weight:bold;color:#c0001a;border-bottom:2px solid #c0001a;padding-bottom:3px;margin:16px 0 4px;text-transform:uppercase}.obs-os{background:#fff8e1;border:2px solid #ff6f00;border-radius:5px;padding:9px 13px;margin:12px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.obs-os .obs-os-title{font-size:10px;font-weight:900;color:#ff6f00;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;display:flex;align-items:center;gap:5px}.obs-os .obs-os-body{font-size:11px;color:#3e2000;white-space:pre-wrap;line-height:1.6}.xh{font-size:11px;color:#888;margin-bottom:5px}table.ext{width:100%;border-collapse:collapse}table.ext th{background:#555;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.assin{display:flex;gap:18px;margin-top:26px}.assin-box{flex:1;text-align:center}.aline{border-top:1px solid #444;padding-top:4px;font-size:11px;color:#555;margin-top:30px}.foot{margin-top:14px;border-top:1px solid #ddd;padding-top:5px;font-size:11px;color:#aaa;text-align:center}.tarja-montagem-pendente{background:#ff6f00;color:#fff;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:.5px;text-align:center;padding:8px 12px;border-radius:4px;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{body{background:#fff;padding:0}.bar{display:none}.page{box-shadow:none;margin:0;padding:11mm 11mm 14mm;width:100%}.tarja-montagem-pendente{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>'
+  return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><style>*{box-sizing:border-box;margin:0;padding:0;font-family:Calibri,Arial,sans-serif}body{background:#eee;padding:18px}.bar{background:#111;padding:9px 14px;border-radius:5px;display:flex;gap:9px;align-items:center;margin-bottom:14px}.bar span{color:#aaa;font-size:12px;flex:1}.bar button{padding:7px 15px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700}.br{background:#c0001a;color:#fff}.bd{background:#444;color:#fff}.page{background:#fff;width:210mm;margin:0 auto;padding:13mm 13mm 17mm;box-shadow:0 4px 18px rgba(0,0,0,.2)}.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:9px;border-bottom:3px solid #c0001a;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.hdr h1{font-size:21px;font-weight:900;color:#c0001a}.hr{text-align:right}.hr .os{font-size:17px;font-weight:900}.hr .osn{font-size:14px;font-weight:bold;color:#c0001a}.hr .osd{font-size:11px;color:#888}.info{background:#f7f7f7;border:1px solid #ddd;border-radius:3px;padding:7px 11px;margin-bottom:11px}.info table{width:100%;border-collapse:collapse}.info td{padding:2px 5px;font-size:11px;vertical-align:top}.info .lbl{font-weight:bold;color:#555;width:125px;white-space:nowrap}table.eq{width:100%;border-collapse:collapse;margin-bottom:3px}table.eq th{background:#111;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.qtd{width:46px;padding:3px 7px;border:1px solid #e0e0e0;font-weight:bold;text-align:center;font-size:12px;vertical-align:top}.item{padding:3px 7px;border:1px solid #e0e0e0;font-size:11px}.chk{width:30px;padding:3px 7px;border:1px solid #e0e0e0;text-align:center;font-size:13px}.xt{font-size:12px;font-weight:bold;color:#c0001a;border-bottom:2px solid #c0001a;padding-bottom:3px;margin:16px 0 4px;text-transform:uppercase}.obs-os{background:#fff8e1;border:2px solid #ff6f00;border-radius:5px;padding:9px 13px;margin:12px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.obs-os .obs-os-title{font-size:10px;font-weight:900;color:#ff6f00;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;display:flex;align-items:center;gap:5px}.obs-os .obs-os-body{font-size:11px;color:#3e2000;white-space:pre-wrap;line-height:1.6}.xh{font-size:11px;color:#888;margin-bottom:5px}table.ext{width:100%;border-collapse:collapse}table.ext th{background:#555;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.assin{display:flex;gap:18px;margin-top:26px}.assin-box{flex:1;text-align:center}.aline{border-top:1px solid #444;padding-top:4px;font-size:11px;color:#555;margin-top:30px}.foot{margin-top:14px;border-top:1px solid #ddd;padding-top:5px;font-size:11px;color:#aaa;text-align:center}.tarja-montagem-pendente{background:#ff6f00;color:#fff;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:.5px;text-align:center;padding:8px 12px;border-radius:4px;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{body{background:#fff;padding:0}.bar{display:none}.page{box-shadow:none;margin:0;padding:11mm 11mm 14mm;width:100%}.tarja-montagem-pendente{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>'
     +'<div class="bar"><span>📋 OS – Crazy Som</span><button class="br" onclick="window.print()">🖨️ Imprimir</button><button class="bd" onclick="window.close()">✕</button></div>'
     +'<div class="page">'
-    +(_montagemTarjaTexto()?'<div class="tarja-montagem-pendente">⚠️ LIBERAÇÃO DE MONTAGEM PENDENTE — '+eh(_montagemTarjaTexto())+'</div>':'')
-    +'<div class="hdr"><div><h1>CRAZY SOM</h1><p style="font-size:11px;color:var(--text-muted);margin-top:2px">Audiovisual e Estrutura | (51) 3428-5053 | CNPJ: 10.909.827/0001-76</p></div><div class="hr"><div class="os">ORDEM DE SERVIÇO</div><div class="osn">'+(gv('f-num')||'—')+'</div><div class="osd">Emissão: '+dataorc+'</div></div></div>'
+    +(_montagemTarjaTextoDe(form,dadosCompletos)?'<div class="tarja-montagem-pendente">⚠️ LIBERAÇÃO DE MONTAGEM PENDENTE — '+eh(_montagemTarjaTextoDe(form,dadosCompletos))+'</div>':'')
+    +'<div class="hdr"><div><h1>CRAZY SOM</h1><p style="font-size:11px;color:var(--text-muted);margin-top:2px">Audiovisual e Estrutura | (51) 3428-5053 | CNPJ: 10.909.827/0001-76</p></div><div class="hr"><div class="os">ORDEM DE SERVIÇO</div><div class="osn">'+(form['f-num']||'—')+'</div><div class="osd">Emissão: '+dataorc+'</div></div></div>'
     +'<div class="info"><table>'
-    +(gv('f-nome-evento')?'<tr><td class="lbl">Evento:</td><td colspan="3" style="font-size:13px;font-weight:900;color:#c0001a">'+eh(gv('f-nome-evento'))+'</td></tr>':'')
-    +'<tr><td class="lbl">Cliente:</td><td><b>'+(gv('f-cliente')||'—')+'</b></td><td class="lbl">Consultor:</td><td>'+(gv('f-cons')||'—')+'</td></tr>'
-    +'<tr><td class="lbl">Local:</td><td><b>'+(gv('f-local')||'—')+'</b></td><td class="lbl">Tipo:</td><td>'+(gv('f-tipo')||'—')+'</td></tr>'
+    +(form['f-nome-evento']?'<tr><td class="lbl">Evento:</td><td colspan="3" style="font-size:13px;font-weight:900;color:#c0001a">'+eh(form['f-nome-evento'])+'</td></tr>':'')
+    +'<tr><td class="lbl">Cliente:</td><td><b>'+(form['f-cliente']||'—')+'</b></td><td class="lbl">Consultor:</td><td>'+(form['f-cons']||'—')+'</td></tr>'
+    +'<tr><td class="lbl">Local:</td><td><b>'+(form['f-local']||'—')+'</b></td><td class="lbl">Tipo:</td><td>'+(form['f-tipo']||'—')+'</td></tr>'
     +(endEv?'<tr><td class="lbl">Endereço:</td><td colspan="3">'+endEv+'</td></tr>':'')
-    +'<tr><td class="lbl">Data/Hora:</td><td>'+(horEv||'—')+'</td><td class="lbl">Público:</td><td>'+(gv('f-pub')?parseInt(gv('f-pub')).toLocaleString('pt-BR')+' pessoas':'—')+'</td></tr>'
+    +'<tr><td class="lbl">Data/Hora:</td><td>'+(horEv||'—')+'</td><td class="lbl">Público:</td><td>'+(form['f-pub']?parseInt(form['f-pub']).toLocaleString('pt-BR')+' pessoas':'—')+'</td></tr>'
     +(mStr?'<tr><td class="lbl">Montagem:</td><td>'+mStr+'</td><td class="lbl">Desmontagem:</td><td>'+(dStr||'—')+'</td></tr>':'')
-    +(gv('f-resp')?'<tr><td class="lbl">Resp. no Local:</td><td colspan="3"><b>'+eh(gv('f-resp'))+'</b></td></tr>':'')
+    +(form['f-resp']?'<tr><td class="lbl">Resp. no Local:</td><td colspan="3"><b>'+eh(form['f-resp'])+'</b></td></tr>':'')
     +'</table></div>'
     +'<table class="eq"><thead><tr><th style="width:48px">QTD</th><th>EQUIPAMENTO / SERVIÇO</th><th style="width:30px;text-align:center">✓</th></tr></thead><tbody>'+corpoOS+'</tbody></table>'
     +'<div class="xt">📝 MATERIAIS EXTRAS</div><div class="xh">Cabos, adaptadores, consumíveis e demais itens:</div>'
     +'<table class="ext"><thead><tr><th style="width:48px">QTD</th><th>DESCRIÇÃO</th><th style="width:30px;text-align:center">✓</th></tr></thead><tbody>'+extras+'</tbody></table>'
-    +(gv('f-obs-os')?'<div class="obs-os">'+'<div class="obs-os-title">🔧 OBSERVAÇÕES PARA MONTAGEM</div>'+'<div class="obs-os-body">'+eh(gv('f-obs-os'))+'</div>'+'</div>':'')
+    +(form['f-obs-os']?'<div class="obs-os">'+'<div class="obs-os-title">🔧 OBSERVAÇÕES PARA MONTAGEM</div>'+'<div class="obs-os-body">'+eh(form['f-obs-os'])+'</div>'+'</div>':'')
     +'<div class="assin"><div class="assin-box"><div class="aline">Responsável Técnico</div></div><div class="assin-box"><div class="aline">Conferência</div></div><div class="assin-box"><div class="aline">Carregamento</div></div></div>'
     +'<div class="foot">Crazy Som – OSVALDO CRUZ, 36 - NITEROI - Canoas - RS | (51) 3428-5053 | CNPJ: 10.909.827/0001-76</div>'
     +'</div></body></html>';
-  var w=window.open('','_blank');if(!w){alert('⚠️ Pop-up bloqueado!');return;}
-  w.document.open();w.document.write(osHTML);w.document.close();
 }
 
 // ════════════════════════════════════════════════════════
@@ -15138,60 +15170,28 @@ function _logRenderizarMes(){
   document.getElementById('log-corpo').innerHTML=corpoHtml;
 }
 
-// Pedido do usuário: "quando clique no evento abra um popup com a OS para
-// visualizar sem sair da listagem para que após visualizar a OS continue
-// exatamente de onde parou" — abre um resumo do orçamento num modal por
-// CIMA do log-ov (que continua aberto/intacto por baixo, sem re-renderizar
-// nada), então fechar o popup devolve o usuário exatamente onde estava. Só
-// quem realmente precisa editar clica em "Abrir Orçamento Completo", que aí
-// sim sai da listagem (mesmo comportamento/confirmação do dashDrillAbrirOrc
-// já usado em Resultados Mensais/Conciliação).
+// Pedido do usuário: "quero que abra a OS em um popup exatamente igual a OS
+// para impressão e que quando feche retorne para a tela anterior sem
+// precisar carregar nada" — reaproveita _montarOSHtml() (a MESMA função que
+// gera a OS oficial pelo botão 📋 OS na tela do orçamento) e injeta o HTML
+// resultante via iframe.srcdoc dentro de um modal por CIMA do log-ov (que
+// continua aberto/intacto por baixo, sem re-renderizar nada) — fechar o
+// popup devolve o usuário exatamente onde estava, sem recarregar a lista.
+// Por ser a OS real, não tem NENHUMA informação financeira (pedido do
+// usuário: "retire as informações financeiras") — a OS nunca teve preços,
+// é um documento técnico pra equipe de montagem/logística.
 function logAbrirPreviewOS(driveId){
   var it=(window._logItens||[]).find(function(x){ return x.o.driveId===driveId; });
   if(!it){alert('Orçamento não encontrado na lista atual.');return;}
   var f=it.o.form||{};
-  document.getElementById('log-os-titulo').textContent=eh(f['f-cliente']||'Orçamento');
-  document.getElementById('log-os-corpo').innerHTML=_logMontarPreviewHTML(it);
+  document.getElementById('log-os-titulo').textContent=eh(f['f-cliente']||'Orçamento')+' — OS '+(f['f-num']||'');
+  document.getElementById('log-os-iframe').srcdoc=_montarOSHtml(it.o.form, it.o.dados);
   var btn=document.getElementById('log-os-abrir-btn');
   btn.onclick=function(){
     document.getElementById('log-os-ov').classList.remove('open');
     dashDrillAbrirOrc(driveId, f['f-cliente']||'');
   };
   document.getElementById('log-os-ov').classList.add('open');
-}
-
-function _logMontarPreviewHTML(it){
-  var o=it.o, f=o.form||{}, st=it.status||{label:'',cor:'var(--text-muted)'};
-  var endereco=[f['f-end-ev'],f['f-num-ev'],f['f-bairro-ev'],f['f-cid-ev']].filter(Boolean).join(', ');
-  var linha=function(label,val){
-    if(!val) return '';
-    return '<div style="margin-bottom:6px"><span style="font-size:9px;font-weight:800;color:var(--text-dim);text-transform:uppercase">'+label+'</span><div style="font-size:12px;color:var(--text)">'+val+'</div></div>';
-  };
-  var datas='';
-  if(f['f-dm']) datas+='<div style="font-size:11px;color:var(--text);margin-bottom:2px"><b>🔧 Montagem:</b> '+fD(f['f-dm'])+(f['f-hm']?' às '+f['f-hm']:'')+'</div>';
-  if(f['f-dia']) datas+='<div style="font-size:11px;color:var(--text);margin-bottom:2px"><b>🎪 Evento:</b> '+fD(f['f-dia'])+(f['f-dia-fim']&&f['f-dia-fim']!==f['f-dia']?' a '+fD(f['f-dia-fim']):'')+(f['f-hi']?' · '+f['f-hi']+(f['f-hf']?'–'+f['f-hf']:''):'')+'</div>';
-  if(f['f-dd']) datas+='<div style="font-size:11px;color:var(--text);margin-bottom:2px"><b>📦 Desmontagem:</b> '+fD(f['f-dd'])+(f['f-hd']?' às '+f['f-hd']:'')+'</div>';
-  var valor=0;
-  try{ valor=dashValOrc(o); }catch(e){}
-  return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">'
-    +'<span style="font-size:10px;font-weight:800;padding:3px 10px;border-radius:10px;background:'+st.cor+'22;color:'+st.cor+'">'+st.label+'</span>'
-    +'<span style="font-size:11px;color:var(--text-dim)">'+eh(f['f-num']||'')+'</span>'
-    +'</div>'
-    +datas
-    +'<div style="height:1px;background:var(--border);margin:10px 0"></div>'
-    +linha('Consultor',eh(f['f-cons']||''))
-    +linha('Tipo de Evento',eh(f['f-tipo']||''))
-    +linha('Local',eh(f['f-local']||''))
-    +linha('Endereço',eh(endereco))
-    +linha('Telefone',eh(f['f-tel']||''))
-    +linha('E-mail',eh(f['f-email']||''))
-    +linha('CPF/CNPJ',eh(f['f-doc']||''))
-    +linha('Forma de Pagamento',f['f-pgto']?eh(f['f-pgto']).split('\n').join('<br>'):'')
-    +linha('Observações',f['f-obs-os']?eh(f['f-obs-os']):(f['f-obs']?eh(f['f-obs']):''))
-    +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">'
-    +'<span style="font-size:11px;font-weight:700;color:var(--text-dim)">Valor Total</span>'
-    +'<span style="font-size:16px;font-weight:900;color:var(--text)">'+fmt(valor)+'</span>'
-    +'</div>';
 }
 
 // Pedido do usuário: "quando clicar no botão + na visualização abra um
