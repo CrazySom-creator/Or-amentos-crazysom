@@ -1985,6 +1985,8 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-r btn-sm" onclick="logAtualizar()" title="Rebusca os orçamentos do Drive antes de recalcular">🔄 Atualizar</button>
         <button class="btn btn-o btn-sm" onclick="logVerificarAoVivo()" title="Confere no Google Agenda de verdade se cada pré-reserva ainda existe lá — remove da lista as que foram apagadas na Agenda">🔎 Verificar Pré-reservas</button>
+        <button class="btn btn-o btn-sm" onclick="logExportarExcel()" title="Exporta a lista atualmente filtrada em CSV/Excel">📊 Excel</button>
+        <button class="btn btn-o btn-sm" onclick="logExportarPDF()" title="Exporta a lista atualmente filtrada em PDF">📄 PDF</button>
         <button class="btn btn-o btn-sm" onclick="document.getElementById('log-ov').classList.remove('open');abrirHome()">✕</button>
       </div>
     </div>
@@ -1994,6 +1996,14 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     <div class="dash-filtros">
       <div><label>Consultor</label>
         <select id="log-cons" onchange="logRenderizar()"><option value="">Todos</option></select>
+      </div>
+      <div><label>Fase</label>
+        <select id="log-filtro-fase" onchange="logRenderizar()">
+          <option value="">Todas</option>
+          <option value="montagem">🔧 Montagem</option>
+          <option value="evento">🎪 Evento</option>
+          <option value="desmontagem">📦 Desmontagem</option>
+        </select>
       </div>
       <div><label>Mostrar</label>
         <div style="display:flex;gap:12px;align-items:center;padding-top:6px;font-size:11px">
@@ -2017,9 +2027,33 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       </div>
     </div>
 
-    <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">🟢 Fechado (Venda Ganha) &nbsp; 🟡 Pré-reservado (só entra aqui quem já tem uma pré-reserva criada de verdade no Google Agenda via 📌 Pré-Agenda — estar em negociação sozinho não segura a data) &nbsp; · &nbsp; a barra cobre de Montagem a Desmontagem (ou só o dia do Evento, quando não há montagem/desmontagem configuradas)</div>
+    <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">🟢 Fechado &nbsp; 🟡 Pré-reservado (só entra aqui quem já tem uma pré-reserva criada de verdade no Google Agenda via 📌 Pré-Agenda — estar em negociação sozinho não segura a data) &nbsp; · &nbsp; cor da barra/chip = fase (<span style="color:#039BE5;font-weight:800">azul=Montagem</span>, <span style="color:#D50000;font-weight:800">vermelho=Evento</span>, <span style="color:#8E24AA;font-weight:800">roxo=Desmontagem</span>) — mesma separação por cor que usamos no Google Agenda &nbsp; · &nbsp; a barra cobre de Montagem a Desmontagem (ou só o dia do Evento, quando não há montagem/desmontagem configuradas)</div>
 
     <div id="log-corpo"><div class="dash-loading">⏳ Carregando dados...</div></div>
+  </div>
+</div>
+
+<div class="ov" id="log-os-ov" style="z-index:9200">
+  <div class="modal-box" style="max-width:560px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h2 style="margin-bottom:2px" id="log-os-titulo">Orçamento</h2>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('log-os-ov').classList.remove('open')">✕</button>
+    </div>
+    <div id="log-os-corpo"></div>
+    <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px">
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('log-os-ov').classList.remove('open')">Fechar</button>
+      <button class="btn btn-r btn-sm" id="log-os-abrir-btn">📂 Abrir Orçamento Completo</button>
+    </div>
+  </div>
+</div>
+
+<div class="ov" id="log-dia-pop-ov" style="z-index:9100">
+  <div class="modal-box" style="max-width:640px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h2 style="margin-bottom:2px" id="log-dia-pop-titulo">Eventos do dia</h2>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('log-dia-pop-ov').classList.remove('open')">✕</button>
+    </div>
+    <div id="log-dia-pop-corpo" style="max-height:70vh;overflow-y:auto"></div>
   </div>
 </div>
 
@@ -14886,6 +14920,14 @@ function _logFaseNoDia(o,diaISO){
 
 var LOG_FASE_LABEL={montagem:'🔧 Montagem',evento:'🎪 Evento',desmontagem:'📦 Desmontagem'};
 
+// Pedido do usuário: "separe como fazemos na agenda google com as mesmas
+// cores montagem, evento e desmontagem" — cor PRINCIPAL de cada card/chip
+// passa a ser pela FASE (não pelo status), espelhando a separação visual
+// que já fazemos no Google Agenda (Montagem/Evento/Desmontagem em cores
+// bem distintas). O status (Fechado/Pré-reservado) continua visível via
+// badge/emoji, só não é mais a cor de destaque principal.
+var LOG_FASE_COR={montagem:'#039BE5',evento:'#D50000',desmontagem:'#8E24AA'};
+
 function _logHorarioFase(o,fase){
   var f=(o&&o.form)||{};
   if(fase==='montagem') return f['f-hm']||'';
@@ -14962,15 +15004,18 @@ function _logTituloDia(iso){
   return DIAS_SEMANA_NOMES[dt.getDay()]+', '+fD(iso);
 }
 
-// ── Visão DIA: agenda vertical com um card detalhado por evento ativo
-// naquele dia, ordenado por fase (montagem→evento→desmontagem) e horário. ──
-function _logRenderizarDia(){
-  var tit=document.getElementById('log-titulo');
-  if(tit) tit.textContent=_logTituloDia(_logData);
-  var corpo=document.getElementById('log-corpo');
-  var diaISO=_logData;
-  var doDia=(window._logItens||[]).filter(function(it){ return diaISO>=it.range.inicio && diaISO<=it.range.fim; });
-
+// Itens ativos num dia específico, já filtrados pela Fase selecionada no
+// dropdown (se houver) e ordenados (montagem→evento→desmontagem, depois
+// horário) — usado pelas 3 visões (Dia/Semana/Mês) E pelo popup "+N mais",
+// pra manter o comportamento do filtro de Fase idêntico em todo o módulo.
+function _logItensDoDia(diaISO){
+  var elFase=document.getElementById('log-filtro-fase');
+  var fv=elFase?(elFase.value||''):'';
+  var doDia=(window._logItens||[]).filter(function(it){
+    if(diaISO<it.range.inicio || diaISO>it.range.fim) return false;
+    if(fv && _logFaseNoDia(it.o,diaISO)!==fv) return false;
+    return true;
+  });
   var ORDEM_FASE={montagem:0,evento:1,desmontagem:2};
   doDia.sort(function(a,b){
     var fa=_logFaseNoDia(a.o,diaISO), fb=_logFaseNoDia(b.o,diaISO);
@@ -14978,6 +15023,17 @@ function _logRenderizarDia(){
     var ha=_logHorarioFase(a.o,fa)||'99:99', hb=_logHorarioFase(b.o,fb)||'99:99';
     return ha<hb?-1:ha>hb?1:0;
   });
+  return doDia;
+}
+
+// ── Visão DIA: agenda vertical com um card detalhado por evento ativo
+// naquele dia, ordenado por fase (montagem→evento→desmontagem) e horário. ──
+function _logRenderizarDia(){
+  var tit=document.getElementById('log-titulo');
+  if(tit) tit.textContent=_logTituloDia(_logData);
+  var corpo=document.getElementById('log-corpo');
+  var diaISO=_logData;
+  var doDia=_logItensDoDia(diaISO);
 
   if(!doDia.length){
     corpo.innerHTML='<div class="dash-vazio" style="padding:20px">Nenhum evento fechado ou pré-reservado neste dia.</div>';
@@ -14989,15 +15045,16 @@ function _logRenderizarDia(){
 function _logCardDia(it,diaISO){
   var o=it.o, f=o.form||{}, st=it.status||{label:'',cor:'var(--text-muted)'};
   var fase=_logFaseNoDia(o,diaISO);
+  var corFase=LOG_FASE_COR[fase]||'var(--text-muted)';
   var hora=_logHorarioFase(o,fase);
   var endereco=[f['f-end-ev'],f['f-num-ev'],f['f-bairro-ev'],f['f-cid-ev']].filter(Boolean).join(', ');
-  return '<div style="padding:10px 12px;border:1px solid var(--border-strong);border-left:4px solid '+st.cor+';border-radius:6px;margin-bottom:8px;background:var(--surface-3);cursor:pointer" '
-    +(o.driveId?'onclick="dashDrillAbrirOrc(\''+o.driveId+'\',\''+eh(f['f-cliente']||'')+'\')" title="Clique para abrir o orçamento"':'')+'>'
+  return '<div style="padding:10px 12px;border:1px solid var(--border-strong);border-left:4px solid '+corFase+';border-radius:6px;margin-bottom:8px;background:var(--surface-3);cursor:pointer" '
+    +(o.driveId?'onclick="logAbrirPreviewOS(\''+o.driveId+'\')" title="Clique para ver o orçamento"':'')+'>'
     +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
     +'<div style="font-size:12px;font-weight:800;color:var(--text)">'+(hora?hora+' — ':'')+eh(f['f-cliente']||'—')+'</div>'
     +'<div style="display:flex;gap:6px;align-items:center">'
     +'<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:10px;background:'+st.cor+'22;color:'+st.cor+'">'+st.label+'</span>'
-    +'<span style="font-size:9px;font-weight:700;color:var(--text-dim)">'+LOG_FASE_LABEL[fase]+'</span>'
+    +'<span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:'+corFase+'22;color:'+corFase+'">'+LOG_FASE_LABEL[fase]+'</span>'
     +'</div></div>'
     +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">'+eh(f['f-tipo']||'')+(f['f-local']?' · '+eh(f['f-local']):'')+(endereco?' · '+eh(endereco):'')+'</div>'
     +'<div style="font-size:10px;color:var(--text-dim);margin-top:2px">'+eh(f['f-num']||'')+(f['f-cons']?' · Consultor: '+eh(f['f-cons']):'')+'</div>'
@@ -15015,16 +15072,18 @@ function _logRenderizarSemana(){
 
   var hoje=_logISO(new Date());
   var colunas=dias.map(function(diaISO){
-    var doDia=(window._logItens||[]).filter(function(it){ return diaISO>=it.range.inicio && diaISO<=it.range.fim; });
+    var doDia=_logItensDoDia(diaISO);
     var dt=new Date(diaISO+'T12:00:00');
     var headerTxt=DIAS_SEMANA_ABREV[dt.getDay()]+' '+dt.getDate();
     var ehHoje=diaISO===hoje;
     var chips=doDia.map(function(it){
       var f=it.o.form||{};
-      var st=it.status||{cor:'var(--text-muted)'};
-      return '<div style="font-size:9px;padding:3px 5px;border-radius:4px;background:'+st.cor+'22;color:'+st.cor+';margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" '
-        +(it.o.driveId?'onclick="dashDrillAbrirOrc(\''+it.o.driveId+'\',\''+eh(f['f-cliente']||'')+'\')"':'')
-        +' title="'+eh(f['f-cliente']||'')+'">'+eh(f['f-cliente']||'—')+'</div>';
+      var fase=_logFaseNoDia(it.o,diaISO);
+      var corFase=LOG_FASE_COR[fase]||'var(--text-muted)';
+      var dot=it.status&&it.status.label==='Fechado'?'🟢':'🟡';
+      return '<div style="font-size:9px;padding:3px 5px;border-radius:4px;background:'+corFase+'22;color:'+corFase+';margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" '
+        +(it.o.driveId?'onclick="logAbrirPreviewOS(\''+it.o.driveId+'\')"':'')
+        +' title="'+eh(f['f-cliente']||'')+' — '+LOG_FASE_LABEL[fase]+'">'+dot+' '+eh(f['f-cliente']||'—')+'</div>';
     }).join('');
     return '<div style="flex:1;min-width:0;border:1px solid var(--border);border-radius:6px;overflow:hidden'+(ehHoje?';border-color:var(--R)':'')+'">'
       +'<div style="background:var(--surface-2);padding:5px;text-align:center;font-size:10px;font-weight:800;color:'+(ehHoje?'var(--R)':'var(--text-dim)')+';cursor:pointer" onclick="logIrParaDia(\''+diaISO+'\')">'+headerTxt+'</div>'
@@ -15055,15 +15114,19 @@ function _logRenderizarMes(){
   semanas.forEach(function(semana){
     corpoHtml+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px">';
     semana.forEach(function(dia){
-      var doDia=(window._logItens||[]).filter(function(it){ return dia.iso>=it.range.inicio && dia.iso<=it.range.fim; });
+      var doDia=_logItensDoDia(dia.iso);
       var ehHoje=dia.iso===hoje;
       var numDia=parseInt(dia.iso.substring(8,10),10);
       var chipsHtml=doDia.slice(0,maxChips).map(function(it){
-        var st=it.status||{cor:'var(--text-muted)'};
         var f=it.o.form||{};
-        return '<div style="font-size:8px;padding:1px 3px;border-radius:3px;background:'+st.cor+'22;color:'+st.cor+';margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+eh(f['f-cliente']||'')+'">'+eh(f['f-cliente']||'—')+'</div>';
+        var fase=_logFaseNoDia(it.o,dia.iso);
+        var corFase=LOG_FASE_COR[fase]||'var(--text-muted)';
+        var dot=it.status&&it.status.label==='Fechado'?'🟢':'🟡';
+        return '<div style="font-size:8px;padding:1px 3px;border-radius:3px;background:'+corFase+'22;color:'+corFase+';margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" '
+          +(it.o.driveId?'onclick="logAbrirPreviewOS(\''+it.o.driveId+'\')"':'')
+          +' title="'+eh(f['f-cliente']||'')+' — '+LOG_FASE_LABEL[fase]+'">'+dot+' '+eh(f['f-cliente']||'—')+'</div>';
       }).join('');
-      var maisHtml=doDia.length>maxChips?('<div style="font-size:8px;color:var(--text-muted)">+'+(doDia.length-maxChips)+' mais</div>'):'';
+      var maisHtml=doDia.length>maxChips?('<div style="font-size:8px;color:var(--text-dim);cursor:pointer;text-decoration:underline" onclick="logAbrirDiaPopup(\''+dia.iso+'\')">+'+(doDia.length-maxChips)+' mais</div>'):'';
       corpoHtml+='<div style="border:1px solid var(--border);border-radius:4px;min-height:64px;padding:3px;opacity:'+(dia.noMes?'1':'.4')+(ehHoje?';border-color:var(--R)':'')+'">'
         +'<div style="font-size:9px;font-weight:800;color:'+(ehHoje?'var(--R)':'var(--text-dim)')+';text-align:right;cursor:pointer;margin-bottom:2px" onclick="logIrParaDia(\''+dia.iso+'\')">'+numDia+'</div>'
         +chipsHtml+maisHtml
@@ -15073,6 +15136,191 @@ function _logRenderizarMes(){
   });
 
   document.getElementById('log-corpo').innerHTML=corpoHtml;
+}
+
+// Pedido do usuário: "quando clique no evento abra um popup com a OS para
+// visualizar sem sair da listagem para que após visualizar a OS continue
+// exatamente de onde parou" — abre um resumo do orçamento num modal por
+// CIMA do log-ov (que continua aberto/intacto por baixo, sem re-renderizar
+// nada), então fechar o popup devolve o usuário exatamente onde estava. Só
+// quem realmente precisa editar clica em "Abrir Orçamento Completo", que aí
+// sim sai da listagem (mesmo comportamento/confirmação do dashDrillAbrirOrc
+// já usado em Resultados Mensais/Conciliação).
+function logAbrirPreviewOS(driveId){
+  var it=(window._logItens||[]).find(function(x){ return x.o.driveId===driveId; });
+  if(!it){alert('Orçamento não encontrado na lista atual.');return;}
+  var f=it.o.form||{};
+  document.getElementById('log-os-titulo').textContent=eh(f['f-cliente']||'Orçamento');
+  document.getElementById('log-os-corpo').innerHTML=_logMontarPreviewHTML(it);
+  var btn=document.getElementById('log-os-abrir-btn');
+  btn.onclick=function(){
+    document.getElementById('log-os-ov').classList.remove('open');
+    dashDrillAbrirOrc(driveId, f['f-cliente']||'');
+  };
+  document.getElementById('log-os-ov').classList.add('open');
+}
+
+function _logMontarPreviewHTML(it){
+  var o=it.o, f=o.form||{}, st=it.status||{label:'',cor:'var(--text-muted)'};
+  var endereco=[f['f-end-ev'],f['f-num-ev'],f['f-bairro-ev'],f['f-cid-ev']].filter(Boolean).join(', ');
+  var linha=function(label,val){
+    if(!val) return '';
+    return '<div style="margin-bottom:6px"><span style="font-size:9px;font-weight:800;color:var(--text-dim);text-transform:uppercase">'+label+'</span><div style="font-size:12px;color:var(--text)">'+val+'</div></div>';
+  };
+  var datas='';
+  if(f['f-dm']) datas+='<div style="font-size:11px;color:var(--text);margin-bottom:2px"><b>🔧 Montagem:</b> '+fD(f['f-dm'])+(f['f-hm']?' às '+f['f-hm']:'')+'</div>';
+  if(f['f-dia']) datas+='<div style="font-size:11px;color:var(--text);margin-bottom:2px"><b>🎪 Evento:</b> '+fD(f['f-dia'])+(f['f-dia-fim']&&f['f-dia-fim']!==f['f-dia']?' a '+fD(f['f-dia-fim']):'')+(f['f-hi']?' · '+f['f-hi']+(f['f-hf']?'–'+f['f-hf']:''):'')+'</div>';
+  if(f['f-dd']) datas+='<div style="font-size:11px;color:var(--text);margin-bottom:2px"><b>📦 Desmontagem:</b> '+fD(f['f-dd'])+(f['f-hd']?' às '+f['f-hd']:'')+'</div>';
+  var valor=0;
+  try{ valor=dashValOrc(o); }catch(e){}
+  return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">'
+    +'<span style="font-size:10px;font-weight:800;padding:3px 10px;border-radius:10px;background:'+st.cor+'22;color:'+st.cor+'">'+st.label+'</span>'
+    +'<span style="font-size:11px;color:var(--text-dim)">'+eh(f['f-num']||'')+'</span>'
+    +'</div>'
+    +datas
+    +'<div style="height:1px;background:var(--border);margin:10px 0"></div>'
+    +linha('Consultor',eh(f['f-cons']||''))
+    +linha('Tipo de Evento',eh(f['f-tipo']||''))
+    +linha('Local',eh(f['f-local']||''))
+    +linha('Endereço',eh(endereco))
+    +linha('Telefone',eh(f['f-tel']||''))
+    +linha('E-mail',eh(f['f-email']||''))
+    +linha('CPF/CNPJ',eh(f['f-doc']||''))
+    +linha('Forma de Pagamento',f['f-pgto']?eh(f['f-pgto']).split('\n').join('<br>'):'')
+    +linha('Observações',f['f-obs-os']?eh(f['f-obs-os']):(f['f-obs']?eh(f['f-obs']):''))
+    +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">'
+    +'<span style="font-size:11px;font-weight:700;color:var(--text-dim)">Valor Total</span>'
+    +'<span style="font-size:16px;font-weight:900;color:var(--text)">'+fmt(valor)+'</span>'
+    +'</div>';
+}
+
+// Pedido do usuário: "quando clicar no botão + na visualização abra um
+// popup com a lista completa de eventos para aquele dia" — reaproveita
+// _logCardDia (mesmo card da visão Dia) pra manter a aparência consistente.
+function logAbrirDiaPopup(iso){
+  var doDia=_logItensDoDia(iso);
+  document.getElementById('log-dia-pop-titulo').textContent=_logTituloDia(iso);
+  var corpo=document.getElementById('log-dia-pop-corpo');
+  if(!doDia.length){
+    corpo.innerHTML='<div class="dash-vazio" style="padding:20px">Nenhum evento neste dia.</div>';
+  } else {
+    corpo.innerHTML=doDia.map(function(it){ return _logCardDia(it,iso); }).join('');
+  }
+  document.getElementById('log-dia-pop-ov').classList.add('open');
+}
+
+// ── Exportação — reaproveita o mesmo padrão de CSV (BOM+;) já usado em
+// concExportarExcel()/relExportarExcel(), exportando a lista ATUALMENTE
+// filtrada (Fechado/Pré-reservado, Consultor e Fase), uma linha por
+// orçamento com as 3 datas de ocupação. ──
+function _logLinhasExport(){
+  var itens=window._logItens||[];
+  var elFase=document.getElementById('log-filtro-fase');
+  var fv=elFase?(elFase.value||''):'';
+  if(fv) itens=itens.filter(function(it){
+    return (it.o.form&&it.o.form['f-dm']&&fv==='montagem') ||
+           (it.o.form&&it.o.form['f-dia']&&fv==='evento') ||
+           (it.o.form&&it.o.form['f-dd']&&fv==='desmontagem');
+  });
+  return itens;
+}
+function logExportarExcel(){
+  var itens=_logLinhasExport();
+  if(!itens.length){alert('Nenhum evento para exportar (ajuste os filtros).');return;}
+  function csvEscape(v){
+    if(v===null||v===undefined)return'';
+    var s=String(v);
+    if(s.indexOf(';')>=0||s.indexOf('"')>=0||s.indexOf('\n')>=0){s='"'+s.replace(/"/g,'""')+'"';}
+    return s;
+  }
+  var bom='\uFEFF';
+  var linhas=[
+    'Logística de Eventos — Fechados e Pré-reservados','',
+    ['Nº','Cliente','Consultor','Status','Montagem','Evento','Desmontagem','Local','Valor'].map(csvEscape).join(';')
+  ];
+  itens.forEach(function(it){
+    var o=it.o, f=o.form||{}, st=it.status||{label:''};
+    var valor=0;
+    try{ valor=dashValOrc(o); }catch(e){}
+    linhas.push([
+      csvEscape(f['f-num']||''),
+      csvEscape(f['f-cliente']||''),
+      csvEscape(f['f-cons']||''),
+      csvEscape(st.label),
+      csvEscape(f['f-dm']?fD(f['f-dm'])+(f['f-hm']?' '+f['f-hm']:''):''),
+      csvEscape(f['f-dia']?fD(f['f-dia'])+(f['f-hi']?' '+f['f-hi']:''):''),
+      csvEscape(f['f-dd']?fD(f['f-dd'])+(f['f-hd']?' '+f['f-hd']:''):''),
+      csvEscape(f['f-local']||''),
+      csvEscape(fmt(valor))
+    ].join(';'));
+  });
+  var csv=bom+linhas.join('\r\n');
+  var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='CrazySom_Logistica_'+new Date().toISOString().split('T')[0]+'.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function logExportarPDF(){
+  var itens=_logLinhasExport();
+  if(!itens.length){alert('Nenhum evento para exportar (ajuste os filtros).');return;}
+  var hoje=new Date().toLocaleString('pt-BR');
+  var nomeArq='CrazySom_Logistica_'+new Date().toISOString().split('T')[0];
+  var linhasHtml=itens.map(function(it){
+    var f=it.o.form||{}, st=it.status||{label:''};
+    var valor=0;
+    try{ valor=dashValOrc(it.o); }catch(e){}
+    return '<tr>'
+      +'<td>'+eh(f['f-num']||'')+'</td>'
+      +'<td>'+eh(f['f-cliente']||'')+'</td>'
+      +'<td>'+eh(f['f-cons']||'')+'</td>'
+      +'<td>'+eh(st.label)+'</td>'
+      +'<td>'+(f['f-dm']?fD(f['f-dm']):'')+'</td>'
+      +'<td>'+(f['f-dia']?fD(f['f-dia']):'')+'</td>'
+      +'<td>'+(f['f-dd']?fD(f['f-dd']):'')+'</td>'
+      +'<td style="text-align:right">'+fmt(valor)+'</td>'
+      +'</tr>';
+  }).join('');
+  var w=window.open('','_blank','width=1000,height=800');
+  if(!w){alert('Pop-up bloqueado! Libere pop-ups pra este site e tente de novo.');return;}
+  w.document.open();
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+nomeArq+'</title>'
+    +'<style>'
+    +'@page{size:A4 landscape;margin:10mm}'
+    +'*{box-sizing:border-box;margin:0;padding:0;font-family:"Segoe UI",Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'body{background:#fff;color:#111;padding:0}'
+    +'.hdr{background:#d63447;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-radius:6px}'
+    +'.hdr h1{font-size:15px;font-weight:900}'
+    +'.hdr span{font-size:10px;opacity:.85}'
+    +'table{width:100%;border-collapse:collapse;font-size:10px}'
+    +'th{background:#f2f2f2;text-align:left;padding:6px;border-bottom:2px solid #ccc}'
+    +'td{padding:6px;border-bottom:1px solid #eee}'
+    +'#st{position:fixed;top:0;left:0;right:0;background:#d63447;color:#fff;text-align:center;padding:10px;font-size:13px;font-weight:bold;z-index:9999}'
+    +'@media print{#st{display:none}}'
+    +'</style>'
+    +'<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>'
+    +'</head><body>'
+    +'<div id="st">Gerando PDF...</div>'
+    +'<div id="pw">'
+    +'<div class="hdr"><h1>🚚 CRAZY SOM — LOGÍSTICA DE EVENTOS</h1><span>Gerado em: '+hoje+'</span></div>'
+    +'<table><thead><tr><th>Nº</th><th>Cliente</th><th>Consultor</th><th>Status</th><th>Montagem</th><th>Evento</th><th>Desmontagem</th><th>Valor</th></tr></thead><tbody>'
+    +linhasHtml
+    +'</tbody></table>'
+    +'<div style="margin-top:14px;font-size:9px;color:#aaa;text-align:center;border-top:1px solid #ddd;padding-top:6px">Crazy Som Audiovisuais – Sistema de Orçamentos – CNPJ: 10.909.827/0001-76</div>'
+    +'</div>'
+    +'<script>'
+    +'window.onload=function(){setTimeout(function(){'
+    +'var opt={margin:5,filename:"'+nomeArq+'.pdf",image:{type:"jpeg",quality:1},'
+    +'html2canvas:{scale:2,useCORS:true,logging:false,backgroundColor:"#ffffff"},'
+    +'jsPDF:{unit:"mm",format:"a4",orientation:"landscape"},pagebreak:{mode:["css","legacy"]}};'
+    +'html2pdf().set(opt).from(document.getElementById("pw")).save().then(function(){'
+    +'document.getElementById("st").style.background="#2e7d32";'
+    +'document.getElementById("st").textContent="PDF salvo! Pode fechar esta janela.";'
+    +'});},600);};'
+    +'<\/script></body></html>');
+  w.document.close();
 }
 
 // ════════════════════════════════════════════════════════
