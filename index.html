@@ -1271,10 +1271,16 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
   <div class="login-box">
     <h2>🎛️ Crazy Som</h2>
     <p>Sistema de Orçamentos – Acesso Restrito</p>
-    <div class="lf"><label>E-mail</label><input type="email" id="l-user" placeholder="seu.email@crazysom.com.br" autocomplete="username"></div>
-    <div class="lf"><label>Senha</label><input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password"></div>
-    <div class="lerr" id="l-err"></div>
-    <button class="lbtn" onclick="doLogin()">Entrar →</button>
+    <!-- Precisa ser um <form> de verdade (com submit) pra o Chrome (e outros
+         gerenciadores de senha) reconhecer isso como um login e oferecer
+         salvar a senha — um <div> com botão onclick não dispara o evento
+         "submit" que o navegador usa pra detectar isso. -->
+    <form id="login-form" autocomplete="on">
+      <div class="lf"><label>E-mail</label><input type="email" id="l-user" name="username" placeholder="seu.email@crazysom.com.br" autocomplete="username"></div>
+      <div class="lf"><label>Senha</label><input type="password" id="l-pass" name="password" placeholder="••••••••" autocomplete="current-password"></div>
+      <div class="lerr" id="l-err"></div>
+      <button class="lbtn" type="submit">Entrar →</button>
+    </form>
     <div style="text-align:center;margin-top:10px"><a href="#" onclick="doEsqueciSenha();return false" style="font-size:11px;color:var(--text-muted);text-decoration:underline">Esqueci minha senha</a></div>
   </div>
 </div>
@@ -3553,6 +3559,16 @@ async function doLogin(){
   }catch(e6){}
   sessionIniciarHeartbeat(); // Manter sessão ativa enquanto logado
   setTimeout(_atualizarBtnClonar, 200);
+  // Login confirmado (senha certa + perfil existe) — avisa explicitamente o
+  // gerenciador de senha do navegador via Credential Management API. O
+  // Chrome nem sempre oferece "Salvar senha?" sozinho num login todo via JS
+  // (sem um <form> submetido de verdade); isso força o prompt de forma
+  // confiável, sem depender só da heurística do navegador.
+  if(window.PasswordCredential && navigator.credentials && navigator.credentials.store){
+    try{
+      navigator.credentials.store(new PasswordCredential({id:email,password:pwd,name:u.nome})).catch(function(){});
+    }catch(eCred){}
+  }
   usuarioAtual=u;aprovStatus='rascunho';aprovHist=[];
   idleAtivar(); // Iniciar contador de logout automático por inatividade
   permCarregar();
@@ -19662,8 +19678,12 @@ setInterval(function(){
     }).catch(function(){});
   }
 }, 3*60*1000);
-document.getElementById('l-pass').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
-document.getElementById('l-user').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('l-pass').focus();});
+// login-form agora é um <form> de verdade: o Enter no campo de senha já
+// dispara o submit nativamente (não precisa mais de keydown pra isso), o que
+// também é o que faz o Chrome reconhecer a tentativa de login e oferecer
+// salvar a senha.
+document.getElementById('login-form').addEventListener('submit',function(e){e.preventDefault();doLogin();});
+document.getElementById('l-user').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();document.getElementById('l-pass').focus();}});
 // Fechar modais ao tocar no overlay (mobile UX)
 // Telas principais (acessadas a partir da Home) devem voltar para a Home ao
 // fechar — igual ao botão "✕"/"Fechar" de cada uma. Sub-modais (formulários,
