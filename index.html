@@ -828,6 +828,12 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <div class="home-card-desc">Confere se toda Venda Ganha (realizado + vendido) tem evento criado no Google Agenda</div>
       </div>
 
+      <div class="home-card orange" id="home-btn-log" onclick="abrirLogistica();fecharHome()">
+        <div class="home-card-ico">🚚</div>
+        <div class="home-card-title">Logística de Eventos</div>
+        <div class="home-card-desc">Eventos fechados e pré-reservados em visão Dia/Semana/Mês — montagem, evento e desmontagem</div>
+      </div>
+
       <div class="home-card blue" id="home-btn-fin" onclick="abrirDashFin();fecharHome()">
         <div class="home-card-ico">💰</div>
         <div class="home-card-title">Financeiro</div>
@@ -1959,6 +1965,58 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 
     <div id="conc-resumo"></div>
     <div id="conc-corpo"><div class="dash-loading">⏳ Carregando dados...</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  LOGÍSTICA DE EVENTOS — pedido do usuário: ver os eventos Fechados      -->
+<!--  (Venda Ganha) e Pré-reservados (proposta enviada/negociação/standby —  -->
+<!--  mesma semântica de "pré-reservado" já usada na Sinaleira de estoque)   -->
+<!--  numa agenda com visão Dia/Semana/Mês, pra facilitar a elaboração da    -->
+<!--  logística (montagem → evento → desmontagem).                          -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="log-ov">
+  <div class="modal-box dash-modal" style="max-width:1200px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div>
+        <h2 style="margin-bottom:2px">🚚 Logística de Eventos</h2>
+        <p class="sub" id="log-sub" style="margin:0">Carregando dados...</p>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-r btn-sm" onclick="logAtualizar()" title="Rebusca os orçamentos do Drive antes de recalcular">🔄 Atualizar</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('log-ov').classList.remove('open');abrirHome()">✕</button>
+      </div>
+    </div>
+
+    <div class="dash-filtros">
+      <div><label>Consultor</label>
+        <select id="log-cons" onchange="logRenderizar()"><option value="">Todos</option></select>
+      </div>
+      <div><label>Mostrar</label>
+        <div style="display:flex;gap:12px;align-items:center;padding-top:6px;font-size:11px">
+          <label style="display:flex;gap:5px;align-items:center;cursor:pointer;font-weight:600"><input type="checkbox" id="log-check-fechado" checked onchange="logRenderizar()"> 🟢 Fechados</label>
+          <label style="display:flex;gap:5px;align-items:center;cursor:pointer;font-weight:600"><input type="checkbox" id="log-check-pre" checked onchange="logRenderizar()"> 🟡 Pré-reservados</label>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin:10px 0">
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" id="log-btn-dia" onclick="logMudarView('dia')">Dia</button>
+        <button class="btn btn-sm" id="log-btn-semana" onclick="logMudarView('semana')">Semana</button>
+        <button class="btn btn-sm" id="log-btn-mes" onclick="logMudarView('mes')">Mês</button>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-o btn-sm" onclick="logNavegar(-1)" title="Período anterior">◀</button>
+        <button class="btn btn-o btn-sm" onclick="logHoje()">Hoje</button>
+        <button class="btn btn-o btn-sm" onclick="logNavegar(1)" title="Próximo período">▶</button>
+        <span id="log-titulo" style="font-size:12px;font-weight:800;color:var(--text);margin-left:6px"></span>
+      </div>
+    </div>
+
+    <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">🟢 Fechado (Venda Ganha) &nbsp; 🟡 Pré-reservado (proposta enviada / negociação / standby) &nbsp; · &nbsp; a barra cobre de Montagem a Desmontagem (ou só o dia do Evento, quando não há montagem/desmontagem configuradas)</div>
+
+    <div id="log-corpo"><div class="dash-loading">⏳ Carregando dados...</div></div>
   </div>
 </div>
 
@@ -5854,6 +5912,7 @@ function _renderizarHome(){
   _homeShow('home-btn-metas', dashTemAcesso('dash-metas'));
   _homeShow('home-btn-resultados', dashTemAcesso('dash-resultados'));
   _homeShow('home-btn-conc', dashTemAcesso('dash-conc'));
+  _homeShow('home-btn-log', tudo||dashTemAcesso('dash-log'));
   _homeShow('home-btn-fin', dashTemAcesso('dash-fin'));
   _homeShow('home-btn-os', dashTemAcesso('mod-os'));
   _homeShow('home-btn-rel', true);
@@ -14641,6 +14700,321 @@ function concExportarExcel(){
 }
 
 // ════════════════════════════════════════════════════════
+//  LOGÍSTICA DE EVENTOS — pedido do usuário: "criar um módulo de logística
+//  onde apareça os eventos fechados e os pré-reservados", com visão Dia/
+//  Semana/Mês pra facilitar a elaboração da logística. "Fechado" = Venda
+//  Ganha; "Pré-reservado" = proposta enviada/negociação/standby — MESMA
+//  semântica de "pré-reservado" (🟡) já usada na Sinaleira de estoque
+//  (ver _sinaleiraStatusOrc), reaproveitada aqui de propósito pra manter o
+//  vocabulário consistente em todo o sistema.
+//
+//  A barra/ocupação de cada evento no calendário vai de Montagem até
+//  Desmontagem (não só o dia do Evento) — é essa janela completa que importa
+//  pra logística (quando o caminhão sai, quando a equipe precisa estar lá,
+//  quando o equipamento volta), com fallback pro dia do Evento quando não
+//  há Montagem/Desmontagem configuradas no orçamento.
+// ════════════════════════════════════════════════════════
+
+var _logView='semana'; // 'dia' | 'semana' | 'mes'
+var _logData=''; // ISO YYYY-MM-DD — dia de referência do período mostrado
+
+async function abrirLogistica(){
+  document.getElementById('log-ov').classList.add('open');
+  document.getElementById('log-sub').textContent='Carregando dados...';
+  await metasCarregarConsultoresNomes();
+  await dashAtualizar(true);
+  document.getElementById('log-sub').textContent=_dashDados.length+' orçamentos carregados';
+
+  var elCons=document.getElementById('log-cons');
+  elCons.innerHTML='<option value="">Todos</option>'+_metasNomes.map(function(n){return '<option value="'+eh(n)+'">'+eh(n)+'</option>';}).join('');
+
+  if(!_logData) _logData=_logISO(new Date());
+  logRenderizar();
+}
+
+async function logAtualizar(){
+  document.getElementById('log-sub').textContent='🔄 Atualizando...';
+  await dashAtualizar(true);
+  document.getElementById('log-sub').textContent=_dashDados.length+' orçamentos carregados';
+  logRenderizar();
+}
+
+function logMudarView(v){
+  _logView=v;
+  logRenderizar();
+}
+
+function logNavegar(delta){
+  var dt=new Date(_logData+'T12:00:00');
+  if(_logView==='dia') dt.setDate(dt.getDate()+delta);
+  else if(_logView==='semana') dt.setDate(dt.getDate()+delta*7);
+  else dt.setMonth(dt.getMonth()+delta);
+  _logData=_logISO(dt);
+  logRenderizar();
+}
+
+function logHoje(){
+  _logData=_logISO(new Date());
+  logRenderizar();
+}
+
+// Clique no número do dia (visão Semana/Mês) pula direto pra visão Dia
+// daquela data — atalho natural pra ver o detalhe sem precisar navegar.
+function logIrParaDia(iso){
+  _logData=iso;
+  _logView='dia';
+  logRenderizar();
+}
+
+// ── Helpers puros de data (sem depender de DOM/estado global) ──
+function _logISO(dt){
+  var p=function(n){return (n<10?'0':'')+n;};
+  return dt.getFullYear()+'-'+p(dt.getMonth()+1)+'-'+p(dt.getDate());
+}
+function _logAddDias(iso,n){
+  var dt=new Date(iso+'T12:00:00');
+  dt.setDate(dt.getDate()+n);
+  return _logISO(dt);
+}
+// Domingo da semana em que a data cai (semana Dom-Sáb).
+function _logInicioSemana(iso){
+  var dt=new Date(iso+'T12:00:00');
+  dt.setDate(dt.getDate()-dt.getDay());
+  return _logISO(dt);
+}
+// Grade de dias pra visão Mês: sempre múltiplo de 7, começando no domingo
+// da semana do dia 1 e terminando no sábado da semana do último dia —
+// inclui dias do mês anterior/seguinte pra completar as semanas (mostrados
+// apagados via "noMes:false").
+function _logGridMes(anoMes){
+  var ano=parseInt(anoMes.substring(0,4),10), mes=parseInt(anoMes.substring(5,7),10);
+  var primeiro=new Date(ano,mes-1,1);
+  var ultimo=new Date(ano,mes,0);
+  var inicioGrid=new Date(primeiro); inicioGrid.setDate(inicioGrid.getDate()-inicioGrid.getDay());
+  var fimGrid=new Date(ultimo); fimGrid.setDate(fimGrid.getDate()+(6-fimGrid.getDay()));
+  var dias=[];
+  var cur=new Date(inicioGrid);
+  while(cur<=fimGrid){
+    dias.push({iso:_logISO(cur), noMes:cur.getMonth()===(mes-1)});
+    cur.setDate(cur.getDate()+1);
+  }
+  return dias;
+}
+
+// Janela de ocupação de um orçamento pra logística: de Montagem (f-dm) até
+// Desmontagem (f-dd-fim/f-dd), com fallback pro dia do Evento (f-dia/
+// f-dia-fim) quando Montagem/Desmontagem não estão preenchidas. Retorna
+// null quando não há NENHUMA data (não deveria acontecer com Venda Ganha/
+// pré-reservado, mas é tratado defensivamente).
+function _logRangeEvento(o){
+  var f=(o&&o.form)||{};
+  var inicio=f['f-dm']||f['f-dia']||'';
+  if(!inicio) return null;
+  var fim=f['f-dd-fim']||f['f-dd']||f['f-dia-fim']||f['f-dia']||inicio;
+  if(fim<inicio) fim=inicio; // segurança contra datas invertidas/inconsistentes
+  return {inicio:inicio, fim:fim};
+}
+
+// Em qual fase (montagem/evento/desmontagem) um orçamento está num dia
+// específico dentro da sua janela de ocupação — usado pra rotular o card na
+// visão Dia e ordenar (montagem antes de evento antes de desmontagem).
+function _logFaseNoDia(o,diaISO){
+  var f=(o&&o.form)||{};
+  if(f['f-dm']){
+    var dmFim=f['f-dm-fim']||f['f-dm'];
+    if(diaISO>=f['f-dm']&&diaISO<=dmFim) return 'montagem';
+  }
+  if(f['f-dia']){
+    var diaFim=f['f-dia-fim']||f['f-dia'];
+    if(diaISO>=f['f-dia']&&diaISO<=diaFim) return 'evento';
+  }
+  if(f['f-dd']){
+    var ddFim=f['f-dd-fim']||f['f-dd'];
+    if(diaISO>=f['f-dd']&&diaISO<=ddFim) return 'desmontagem';
+  }
+  return 'evento';
+}
+
+var LOG_FASE_LABEL={montagem:'🔧 Montagem',evento:'🎪 Evento',desmontagem:'📦 Desmontagem'};
+
+function _logHorarioFase(o,fase){
+  var f=(o&&o.form)||{};
+  if(fase==='montagem') return f['f-hm']||'';
+  if(fase==='desmontagem') return f['f-hd']||'';
+  return f['f-hi']||'';
+}
+
+// Fechado (Venda Ganha) x Pré-reservado (enviada/negociação/standby) — as
+// 2 únicas categorias que este módulo mostra (pedido do usuário).
+var LOG_SI={
+  ganha:      {label:'Fechado',       cor:'#66bb6a'},
+  enviada:    {label:'Pré-reservado', cor:'#ffa726'},
+  negociacao: {label:'Pré-reservado', cor:'#ffa726'},
+  standby:    {label:'Pré-reservado', cor:'#ffa726'}
+};
+function _logStatus(o){
+  var cs=(o&&o.dados&&o.dados.comercialStatus)||'';
+  return LOG_SI[cs]||null;
+}
+
+// Recalcula a lista filtrada (fechados/pré-reservados + consultor) e
+// repassa pra visão ativa (Dia/Semana/Mês). Chamada sempre que um filtro
+// muda, a visão muda, navega o período, ou os dados são atualizados.
+function logRenderizar(){
+  if(!_logData) _logData=_logISO(new Date());
+  var cons=document.getElementById('log-cons').value||'';
+  var mostrarFechado=document.getElementById('log-check-fechado').checked;
+  var mostrarPre=document.getElementById('log-check-pre').checked;
+
+  var itens=(_dashDados||[]).filter(function(o){
+    var cs=(o.dados&&o.dados.comercialStatus)||'';
+    if(cs==='ganha'){ if(!mostrarFechado) return false; }
+    else if(['enviada','negociacao','standby'].indexOf(cs)>=0){ if(!mostrarPre) return false; }
+    else return false; // qualquer outra etapa (rascunho, lead, perdida etc.) não entra na logística
+    if(cons && (o.form&&o.form['f-cons'])!==cons) return false;
+    return !!_logRangeEvento(o);
+  }).map(function(o){
+    return {o:o, range:_logRangeEvento(o), status:_logStatus(o)};
+  });
+
+  window._logItens=itens;
+
+  _logAtualizarToggleBtns();
+  if(_logView==='dia') _logRenderizarDia();
+  else if(_logView==='mes') _logRenderizarMes();
+  else _logRenderizarSemana();
+}
+
+function _logAtualizarToggleBtns(){
+  ['dia','semana','mes'].forEach(function(v){
+    var btn=document.getElementById('log-btn-'+v);
+    if(!btn) return;
+    btn.className='btn btn-sm '+(v===_logView?'btn-r':'btn-o');
+  });
+}
+
+var DIAS_SEMANA_NOMES=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+var DIAS_SEMANA_ABREV=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+function _logTituloDia(iso){
+  var dt=new Date(iso+'T12:00:00');
+  return DIAS_SEMANA_NOMES[dt.getDay()]+', '+fD(iso);
+}
+
+// ── Visão DIA: agenda vertical com um card detalhado por evento ativo
+// naquele dia, ordenado por fase (montagem→evento→desmontagem) e horário. ──
+function _logRenderizarDia(){
+  var tit=document.getElementById('log-titulo');
+  if(tit) tit.textContent=_logTituloDia(_logData);
+  var corpo=document.getElementById('log-corpo');
+  var diaISO=_logData;
+  var doDia=(window._logItens||[]).filter(function(it){ return diaISO>=it.range.inicio && diaISO<=it.range.fim; });
+
+  var ORDEM_FASE={montagem:0,evento:1,desmontagem:2};
+  doDia.sort(function(a,b){
+    var fa=_logFaseNoDia(a.o,diaISO), fb=_logFaseNoDia(b.o,diaISO);
+    if(ORDEM_FASE[fa]!==ORDEM_FASE[fb]) return ORDEM_FASE[fa]-ORDEM_FASE[fb];
+    var ha=_logHorarioFase(a.o,fa)||'99:99', hb=_logHorarioFase(b.o,fb)||'99:99';
+    return ha<hb?-1:ha>hb?1:0;
+  });
+
+  if(!doDia.length){
+    corpo.innerHTML='<div class="dash-vazio" style="padding:20px">Nenhum evento fechado ou pré-reservado neste dia.</div>';
+    return;
+  }
+  corpo.innerHTML=doDia.map(function(it){ return _logCardDia(it,diaISO); }).join('');
+}
+
+function _logCardDia(it,diaISO){
+  var o=it.o, f=o.form||{}, st=it.status||{label:'',cor:'var(--text-muted)'};
+  var fase=_logFaseNoDia(o,diaISO);
+  var hora=_logHorarioFase(o,fase);
+  var endereco=[f['f-end-ev'],f['f-num-ev'],f['f-bairro-ev'],f['f-cid-ev']].filter(Boolean).join(', ');
+  return '<div style="padding:10px 12px;border:1px solid var(--border-strong);border-left:4px solid '+st.cor+';border-radius:6px;margin-bottom:8px;background:var(--surface-3);cursor:pointer" '
+    +(o.driveId?'onclick="dashDrillAbrirOrc(\''+o.driveId+'\',\''+eh(f['f-cliente']||'')+'\')" title="Clique para abrir o orçamento"':'')+'>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
+    +'<div style="font-size:12px;font-weight:800;color:var(--text)">'+(hora?hora+' — ':'')+eh(f['f-cliente']||'—')+'</div>'
+    +'<div style="display:flex;gap:6px;align-items:center">'
+    +'<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:10px;background:'+st.cor+'22;color:'+st.cor+'">'+st.label+'</span>'
+    +'<span style="font-size:9px;font-weight:700;color:var(--text-dim)">'+LOG_FASE_LABEL[fase]+'</span>'
+    +'</div></div>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">'+eh(f['f-tipo']||'')+(f['f-local']?' · '+eh(f['f-local']):'')+(endereco?' · '+eh(endereco):'')+'</div>'
+    +'<div style="font-size:10px;color:var(--text-dim);margin-top:2px">'+eh(f['f-num']||'')+(f['f-cons']?' · Consultor: '+eh(f['f-cons']):'')+'</div>'
+    +'</div>';
+}
+
+// ── Visão SEMANA: 7 colunas (Dom-Sáb), cada uma com chips compactos dos
+// eventos ativos naquele dia — clique no chip abre o orçamento, clique no
+// cabeçalho do dia pula pra visão Dia. ──
+function _logRenderizarSemana(){
+  var domingo=_logInicioSemana(_logData);
+  var dias=[]; for(var i=0;i<7;i++) dias.push(_logAddDias(domingo,i));
+  var tit=document.getElementById('log-titulo');
+  if(tit) tit.textContent=fD(dias[0])+' a '+fD(dias[6]);
+
+  var hoje=_logISO(new Date());
+  var colunas=dias.map(function(diaISO){
+    var doDia=(window._logItens||[]).filter(function(it){ return diaISO>=it.range.inicio && diaISO<=it.range.fim; });
+    var dt=new Date(diaISO+'T12:00:00');
+    var headerTxt=DIAS_SEMANA_ABREV[dt.getDay()]+' '+dt.getDate();
+    var ehHoje=diaISO===hoje;
+    var chips=doDia.map(function(it){
+      var f=it.o.form||{};
+      var st=it.status||{cor:'var(--text-muted)'};
+      return '<div style="font-size:9px;padding:3px 5px;border-radius:4px;background:'+st.cor+'22;color:'+st.cor+';margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" '
+        +(it.o.driveId?'onclick="dashDrillAbrirOrc(\''+it.o.driveId+'\',\''+eh(f['f-cliente']||'')+'\')"':'')
+        +' title="'+eh(f['f-cliente']||'')+'">'+eh(f['f-cliente']||'—')+'</div>';
+    }).join('');
+    return '<div style="flex:1;min-width:0;border:1px solid var(--border);border-radius:6px;overflow:hidden'+(ehHoje?';border-color:var(--R)':'')+'">'
+      +'<div style="background:var(--surface-2);padding:5px;text-align:center;font-size:10px;font-weight:800;color:'+(ehHoje?'var(--R)':'var(--text-dim)')+';cursor:pointer" onclick="logIrParaDia(\''+diaISO+'\')">'+headerTxt+'</div>'
+      +'<div style="padding:5px;min-height:70px">'+(chips||'<div style="font-size:9px;color:var(--text-muted);text-align:center;padding-top:8px">—</div>')+'</div>'
+      +'</div>';
+  });
+  document.getElementById('log-corpo').innerHTML='<div style="display:flex;gap:5px;align-items:stretch">'+colunas.join('')+'</div>';
+}
+
+// ── Visão MÊS: grade padrão de calendário (semanas x 7 dias), cada célula
+// com até 3 chips + "+N mais" quando estoura — clique no número do dia pula
+// pra visão Dia. ──
+function _logRenderizarMes(){
+  var anoMes=_logData.substring(0,7);
+  var dt=new Date(_logData+'T12:00:00');
+  var tit=document.getElementById('log-titulo');
+  if(tit) tit.textContent=MESES_NOMES[dt.getMonth()]+'/'+dt.getFullYear();
+
+  var grid=_logGridMes(anoMes);
+  var hoje=_logISO(new Date());
+  var semanas=[];
+  for(var i=0;i<grid.length;i+=7) semanas.push(grid.slice(i,i+7));
+
+  var corpoHtml='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:4px;text-align:center">'
+    +DIAS_SEMANA_ABREV.map(function(d){return '<div>'+d+'</div>';}).join('')+'</div>';
+
+  var maxChips=3;
+  semanas.forEach(function(semana){
+    corpoHtml+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px">';
+    semana.forEach(function(dia){
+      var doDia=(window._logItens||[]).filter(function(it){ return dia.iso>=it.range.inicio && dia.iso<=it.range.fim; });
+      var ehHoje=dia.iso===hoje;
+      var numDia=parseInt(dia.iso.substring(8,10),10);
+      var chipsHtml=doDia.slice(0,maxChips).map(function(it){
+        var st=it.status||{cor:'var(--text-muted)'};
+        var f=it.o.form||{};
+        return '<div style="font-size:8px;padding:1px 3px;border-radius:3px;background:'+st.cor+'22;color:'+st.cor+';margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+eh(f['f-cliente']||'')+'">'+eh(f['f-cliente']||'—')+'</div>';
+      }).join('');
+      var maisHtml=doDia.length>maxChips?('<div style="font-size:8px;color:var(--text-muted)">+'+(doDia.length-maxChips)+' mais</div>'):'';
+      corpoHtml+='<div style="border:1px solid var(--border);border-radius:4px;min-height:64px;padding:3px;opacity:'+(dia.noMes?'1':'.4')+(ehHoje?';border-color:var(--R)':'')+'">'
+        +'<div style="font-size:9px;font-weight:800;color:'+(ehHoje?'var(--R)':'var(--text-dim)')+';text-align:right;cursor:pointer;margin-bottom:2px" onclick="logIrParaDia(\''+dia.iso+'\')">'+numDia+'</div>'
+        +chipsHtml+maisHtml
+        +'</div>';
+    });
+    corpoHtml+='</div>';
+  });
+
+  document.getElementById('log-corpo').innerHTML=corpoHtml;
+}
+
+// ════════════════════════════════════════════════════════
 //  GERENCIAR USUÁRIOS — cargo (editável pelo Admin, mesmo padrão de
 //  Tipos de Evento / Categorias de Produto: documento público em
 //  config/cargos, lido por todo mundo, editado só pelo Admin, com
@@ -14801,6 +15175,7 @@ var DASH_MODULOS = [
   {id:'dash-metas', label:'🎯 Metas'},
   {id:'dash-resultados', label:'🏆 Resultados Mensais (Diretoria)'},
   {id:'dash-conc', label:'🔄 Conciliação de Agenda (Diretoria)'},
+  {id:'dash-log', label:'🚚 Logística de Eventos'},
   {id:'dash-fin',   label:'💰 Dashboard Financeiro'},
   {id:'rel',        label:'📄 Relatórios'},
   {id:'mod-os',     label:'📋 Módulo Ordens de Serviço'},
