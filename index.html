@@ -1984,9 +1984,12 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       </div>
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-r btn-sm" onclick="logAtualizar()" title="Rebusca os orçamentos do Drive antes de recalcular">🔄 Atualizar</button>
+        <button class="btn btn-o btn-sm" onclick="logVerificarAoVivo()" title="Confere no Google Agenda de verdade se cada pré-reserva ainda existe lá — remove da lista as que foram apagadas na Agenda">🔎 Verificar Pré-reservas</button>
         <button class="btn btn-o btn-sm" onclick="document.getElementById('log-ov').classList.remove('open');abrirHome()">✕</button>
       </div>
     </div>
+
+    <p id="log-status" style="margin:0 0 6px;font-size:11px;color:var(--text-dim);min-height:15px"></p>
 
     <div class="dash-filtros">
       <div><label>Consultor</label>
@@ -2014,7 +2017,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       </div>
     </div>
 
-    <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">🟢 Fechado (Venda Ganha) &nbsp; 🟡 Pré-reservado (proposta enviada / negociação / standby) &nbsp; · &nbsp; a barra cobre de Montagem a Desmontagem (ou só o dia do Evento, quando não há montagem/desmontagem configuradas)</div>
+    <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">🟢 Fechado (Venda Ganha) &nbsp; 🟡 Pré-reservado (só entra aqui quem já tem uma pré-reserva criada de verdade no Google Agenda via 📌 Pré-Agenda — estar em negociação sozinho não segura a data) &nbsp; · &nbsp; a barra cobre de Montagem a Desmontagem (ou só o dia do Evento, quando não há montagem/desmontagem configuradas)</div>
 
     <div id="log-corpo"><div class="dash-loading">⏳ Carregando dados...</div></div>
   </div>
@@ -14766,6 +14769,52 @@ function logIrParaDia(iso){
   logRenderizar();
 }
 
+// Confere no Google Agenda DE VERDADE se cada pré-reserva ainda existe lá —
+// reaproveita _concChecarEventoAoVivo() (mesmo endpoint/token da Conciliação
+// de Agenda). Diferente da Conciliação (que só reporta o problema), aqui a
+// pré-reserva apagada na Agenda é REMOVIDA da lista na hora: se ela não
+// existe mais lá, ela não está segurando a data pra ninguém, então não faz
+// sentido continuar aparecendo na Logística.
+async function logVerificarAoVivo(){
+  var itens=window._logItens;
+  if(!itens||!itens.length){alert('Nenhum evento carregado pra verificar. Ajuste os filtros primeiro.');return;}
+  var checaveis=itens.filter(function(it){
+    return it.status && it.status.label==='Pré-reservado' && it.o.dados && it.o.dados.googleAgenda && it.o.dados.googleAgenda.preReservaEventId;
+  });
+  if(!checaveis.length){alert('Nenhuma pré-reserva pra verificar nesta lista (ajuste os filtros pra incluir Pré-reservados, se for o caso).');return;}
+
+  if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
+  if(!GOOGLE_AGENDA_CONFIG.calendarId){alert('⚠️ Google Agenda não está configurado ainda (Admin > Google Agenda).');return;}
+
+  var st=document.getElementById('log-status');
+  var token;
+  try{
+    if(st) st.textContent='⏳ Autorizando acesso ao Google Agenda...';
+    token=await googleAgendaObterToken();
+  }catch(e){
+    if(st) st.textContent='';
+    alert('⚠️ '+e.message);
+    return;
+  }
+
+  var removidos=0;
+  for(var i=0;i<checaveis.length;i++){
+    var it=checaveis[i];
+    if(st) st.textContent='⏳ Verificando '+(i+1)+'/'+checaveis.length+' pré-reserva(s) no Google Agenda...';
+    var eventId=it.o.dados.googleAgenda.preReservaEventId;
+    var resultado=await _concChecarEventoAoVivo(eventId, it.range.inicio, token);
+    if(resultado.motivo==='apagado'){
+      window._logItens=window._logItens.filter(function(x){return x!==it;});
+      removidos++;
+    }
+  }
+  if(st) st.textContent='✅ Verificação concluída — '+checaveis.length+' pré-reserva(s) conferida(s)'+(removidos>0?', '+removidos+' removida(s) da lista (apagada(s) na Agenda)':'')+'.';
+
+  if(_logView==='dia') _logRenderizarDia();
+  else if(_logView==='mes') _logRenderizarMes();
+  else _logRenderizarSemana();
+}
+
 // ── Helpers puros de data (sem depender de DOM/estado global) ──
 function _logISO(dt){
   var p=function(n){return (n<10?'0':'')+n;};
@@ -14869,7 +14918,19 @@ function logRenderizar(){
   var itens=(_dashDados||[]).filter(function(o){
     var cs=(o.dados&&o.dados.comercialStatus)||'';
     if(cs==='ganha'){ if(!mostrarFechado) return false; }
-    else if(['enviada','negociacao','standby'].indexOf(cs)>=0){ if(!mostrarPre) return false; }
+    else if(['enviada','negociacao','standby'].indexOf(cs)>=0){
+      if(!mostrarPre) return false;
+      // Pedido do usuário: "deve ser feito pré-reserva somente se tiver
+      // sido feito na agenda google" — estar em negociação/proposta enviada
+      // no funil, sozinho, NÃO segura a data pra ninguém; só conta como
+      // "pré-reservado" de verdade quem já tem uma pré-reserva criada no
+      // Google Agenda (botão 📌 Pré-Agenda), identificada pelo mesmo ID
+      // (preReservaEventId) que a integração já guarda. Sem isso, o evento
+      // simplesmente não aparece na Logística (não é uma etapa que a
+      // logística precisa reservar recurso ainda).
+      var temPreReserva=!!(o.dados&&o.dados.googleAgenda&&o.dados.googleAgenda.preReservaEventId);
+      if(!temPreReserva) return false;
+    }
     else return false; // qualquer outra etapa (rascunho, lead, perdida etc.) não entra na logística
     if(cons && (o.form&&o.form['f-cons'])!==cons) return false;
     return !!_logRangeEvento(o);
