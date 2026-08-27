@@ -17007,8 +17007,23 @@ var CATEGORIA_PRODUTO_LEGADO={som:'Som',video:'Vídeo',luz:'Luz',estrutura:'Estr
 // não têm seção correspondente no orçamento e ficam de fora da mescla.
 var SECAO_POR_CATEGORIA={};
 Object.keys(CATEGORIA_PRODUTO_LEGADO).forEach(function(k){ SECAO_POR_CATEGORIA[CATEGORIA_PRODUTO_LEGADO[k]]=k; });
+// Remove um possível prefixo de ícone (emoji) + espaço deixado por um bug
+// antigo do <select> de Categoria: as <option> eram geradas sem o atributo
+// value="", então o navegador usava o TEXTO INTEIRO da option como valor —
+// incluindo o emoji do ícone (ex.: salvava "📺 Vídeo" em vez de "Vídeo"). Uma
+// categoria assim nunca batia com nenhuma seção do orçamento (SECAO_POR_
+// CATEGORIA) nem com CATEGORIA_PRODUTO_LEGADO, e o produto ficava invisível
+// na lista de equipamentos. Corrigido o <select> pra sempre gravar o nome
+// puro (ver popularCategoriasProduto), e esta limpeza aqui garante que
+// produtos JÁ salvos com o valor corrompido continuem funcionando sem
+// precisar reabrir e resalvar um por um.
+function _limparPrefixoIconeCategoria(cat){
+  if(!cat) return cat;
+  return String(cat).replace(/^[^\p{L}\p{N}]+\s*/u,'');
+}
 function _categoriaProdutoNormalizada(cat){
   if(!cat) return '';
+  cat=_limparPrefixoIconeCategoria(cat);
   return CATEGORIA_PRODUTO_LEGADO[cat]||cat;
 }
 function _iconeCategoriaProduto(cat){
@@ -17023,7 +17038,7 @@ function popularCategoriasProduto(){
     var lista=CATEGORIAS_PRODUTO.slice();
     if(atual && lista.indexOf(atual)<0) lista.push(atual);
     sel.innerHTML='<option value="">Selecione...</option>'+lista.map(function(c){
-      return '<option'+(c===atual?' selected':'')+'>'+_iconeCategoriaProduto(c)+' '+eh(c)+'</option>';
+      return '<option value="'+eh(c)+'"'+(c===atual?' selected':'')+'>'+_iconeCategoriaProduto(c)+' '+eh(c)+'</option>';
     }).join('');
   });
 }
