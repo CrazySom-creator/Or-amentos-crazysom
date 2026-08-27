@@ -4304,6 +4304,35 @@ function renderAmbContent(s){
   },0);
 }
 
+// Lista de itens disponíveis pra seleção numa seção do orçamento (ex.:
+// "video"): mescla a tabela de preços fixa (PRECOS[s]) com os Produtos
+// cadastrados no Estoque cuja Categoria pertence a essa seção (via
+// SECAO_POR_CATEGORIA) — assim, um produto cadastrado em Estoque > Cadastro
+// de Produtos passa a aparecer automaticamente aqui, sem precisar duplicar o
+// cadastro na tabela de preços. Produtos já presentes em PRECOS[s] (mesmo
+// nome, comparado de forma "frouxa" via _normalizarNomeItem) não duplicam a
+// entrada. O resultado sempre volta em ordem alfabética (pt-BR), então
+// qualquer item novo — de qualquer uma das duas fontes — já nasce na posição
+// certa da lista, sem precisar reordenar nada manualmente.
+function _itensDisponiveisSecao(s){
+  var base=(PRECOS[s]||[]).slice();
+  var normFn=(typeof _normalizarNomeItem==='function')?_normalizarNomeItem:function(x){return String(x||'').toLowerCase();};
+  var nomesExistentes={};
+  base.forEach(function(it){ nomesExistentes[normFn(it.n)]=true; });
+  if(typeof PRODUTOS!=='undefined' && Array.isArray(PRODUTOS)){
+    PRODUTOS.forEach(function(p){
+      var catNorm=(typeof _categoriaProdutoNormalizada==='function')?_categoriaProdutoNormalizada(p.categoria):p.categoria;
+      if(SECAO_POR_CATEGORIA[catNorm]!==s) return;
+      var chave=normFn(p.nome);
+      if(!chave||nomesExistentes[chave]) return;
+      nomesExistentes[chave]=true;
+      base.push({n:p.nome,v:p.preco||0});
+    });
+  }
+  base.sort(function(a,b){ return a.n.localeCompare(b.n,'pt-BR',{sensitivity:'base'}); });
+  return base;
+}
+
 // Popula o dropdown "Selecione da tabela" com um indicador de disponibilidade
 // (🟢/⚠️) na frente de cada item que tenha um Produto do Estoque correspondente
 // (casado por nome). Itens sem produto correspondente aparecem sem indicador.
@@ -4311,7 +4340,7 @@ function _popularSelecaoComSinaleira(s,sel){
   if(!sel||!PRECOS[s]) return;
   var valorAtual=sel.value;
   sel.innerHTML='<option value="">— Selecione da tabela —</option>';
-  PRECOS[s].forEach(function(it){
+  _itensDisponiveisSecao(s).forEach(function(it){
     var vAj=precoComMarkup(it.v);
     var o=document.createElement('option');
     o.value=JSON.stringify({n:it.n,v:vAj});
@@ -16970,6 +16999,14 @@ var CATEGORIA_PRODUTO_ICONE={'Som':'🔊','Vídeo':'📺','Luz':'💡','Estrutur
 // categoria era gravada como chave interna minúscula (ex.: "som") em vez do
 // nome exibido (ex.: "Som").
 var CATEGORIA_PRODUTO_LEGADO={som:'Som',video:'Vídeo',luz:'Luz',estrutura:'Estrutura',servico:'Serviço',logistica:'Logística'};
+// Caminho inverso de CATEGORIA_PRODUTO_LEGADO: da Categoria exibida no
+// Cadastro de Produtos (ex.: "Vídeo") pra chave da seção do orçamento (ex.:
+// "video"). Usado por _itensDisponiveisSecao() pra trazer os produtos do
+// Estoque pro dropdown "Selecione da tabela" de cada seção. Categorias
+// criadas pelo Admin que não sejam uma das 6 padrão (ex.: "Climatização")
+// não têm seção correspondente no orçamento e ficam de fora da mescla.
+var SECAO_POR_CATEGORIA={};
+Object.keys(CATEGORIA_PRODUTO_LEGADO).forEach(function(k){ SECAO_POR_CATEGORIA[CATEGORIA_PRODUTO_LEGADO[k]]=k; });
 function _categoriaProdutoNormalizada(cat){
   if(!cat) return '';
   return CATEGORIA_PRODUTO_LEGADO[cat]||cat;
