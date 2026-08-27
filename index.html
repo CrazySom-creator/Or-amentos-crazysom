@@ -1316,6 +1316,8 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div class="rel-tab" onclick="admAba('tiposevento')">🎪 Tipos de Evento</div>
       <div class="rel-tab" onclick="admAba('tipostarefa')">📋 Tipos de Tarefa</div>
       <div class="rel-tab" onclick="admAba('categoriasproduto')">📂 Categorias de Produto</div>
+      <div class="rel-tab" onclick="admAba('gruposproduto')">🗂️ Grupos de Produto</div>
+      <div class="rel-tab" onclick="admAba('subgruposproduto')">🗃️ Subgrupos de Produto</div>
       <div class="rel-tab" onclick="admAba('enderecosproduto')">📍 Endereçamento</div>
       <div class="rel-tab" onclick="admAba('googleagenda')">🗓️ Google Agenda</div>
     </div>
@@ -1378,6 +1380,24 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <button class="btn btn-g btn-sm" onclick="categoriasProdutoAdicionar()">+ Adicionar</button>
       </div>
       <div id="categoriasproduto-lista" style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
+    </div>
+    <!-- ABA Grupos de Produto -->
+    <div class="rel-pane" id="admpane-gruposproduto">
+      <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Grupos disponíveis no Cadastro de Produtos do Estoque (classificação independente da Categoria, ex.: "Áudio Profissional", "Iluminação Cênica"). Adicione novos grupos conforme surgirem — a alteração vale pra todos os usuários assim que salva.</p>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <input id="gruposproduto-novo" type="text" placeholder="Ex: Áudio Profissional" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);color:var(--text);font-size:12px" onkeydown="if(event.key==='Enter'){event.preventDefault();gruposProdutoAdicionar();}">
+        <button class="btn btn-g btn-sm" onclick="gruposProdutoAdicionar()">+ Adicionar</button>
+      </div>
+      <div id="gruposproduto-lista" style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
+    </div>
+    <!-- ABA Subgrupos de Produto -->
+    <div class="rel-pane" id="admpane-subgruposproduto">
+      <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Subgrupos disponíveis no Cadastro de Produtos do Estoque (detalhamento dentro de um Grupo, ex.: "Caixas Ativas", "Mesas Digitais"). Adicione novos subgrupos conforme surgirem — a alteração vale pra todos os usuários assim que salva.</p>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <input id="subgruposproduto-novo" type="text" placeholder="Ex: Caixas Ativas" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);color:var(--text);font-size:12px" onkeydown="if(event.key==='Enter'){event.preventDefault();subgruposProdutoAdicionar();}">
+        <button class="btn btn-g btn-sm" onclick="subgruposProdutoAdicionar()">+ Adicionar</button>
+      </div>
+      <div id="subgruposproduto-lista" style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
     </div>
     <!-- ABA Endereçamento -->
     <div class="rel-pane" id="admpane-enderecosproduto">
@@ -1602,7 +1622,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       </div>
     </div>
     <div id="produtos-status" style="display:none;padding:9px 12px;border-radius:6px;font-size:11.5px;font-weight:700;margin:10px 0"></div>
-    <input id="produtos-busca" type="text" placeholder="🔍 Buscar por nome, marca, modelo ou categoria..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text);font-size:12px;margin:12px 0 10px" oninput="produtosRenderLista(this.value)">
+    <input id="produtos-busca" type="text" placeholder="🔍 Buscar por nome, marca, modelo, categoria, grupo ou subgrupo..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text);font-size:12px;margin:12px 0 10px" oninput="produtosRenderLista(this.value)">
     <div id="produtos-lista" style="max-height:440px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
   </div>
 </div>
@@ -1642,11 +1662,25 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         </select>
       </div>
     </div>
+    <div style="margin-bottom:10px"><label>Descrição</label><textarea id="pf-descricao" placeholder="Descrição geral do produto (o que é, pra que serve, principais diferenciais)"></textarea></div>
     <div class="g4">
       <div><label>Marca</label><input id="pf-marca" placeholder="Ex: JBL"></div>
       <div><label>Modelo</label><input id="pf-modelo" placeholder="Ex: PRX815"></div>
       <div><label>Potência</label><input id="pf-potencia" placeholder="Ex: 1500W"></div>
       <div><label>Voltagem</label><input id="pf-voltagem" placeholder="Ex: Bivolt 110/220V"></div>
+    </div>
+    <div class="g3">
+      <div><label>Grupo</label>
+        <select id="pf-grupo">
+          <option value="">Selecione...</option>
+        </select>
+      </div>
+      <div><label>Subgrupo</label>
+        <select id="pf-subgrupo">
+          <option value="">Selecione...</option>
+        </select>
+      </div>
+      <div><label>Preço</label><input id="pf-preco" type="number" min="0" step="0.01" placeholder="Ex: 350,00"></div>
     </div>
     <div class="g4">
       <div><label>Quantidade em Estoque</label><input id="pf-quantidade" type="number" min="0" step="1" placeholder="Ex: 4"></div>
@@ -3592,6 +3626,8 @@ async function doLogin(){
   movimentacoesCarregarStorage();
   estoqueCompromissosCarregarStorage();
   categoriasProdutoCarregar();
+  gruposProdutoCarregar();
+  subgruposProdutoCarregar();
   enderecosProdutoCarregar();
   carregarExcluidosDrive();
   // carregarSolExclusaoDrive() removida daqui: agora só roda quando o painel de Aprovações é aberto (evita varrer todos os orçamentos a cada login)
@@ -15769,7 +15805,7 @@ function dashTemAcesso(dashId){
 
 function admAba(aba){
   document.querySelectorAll('#adm-ov .rel-tab').forEach(function(t,i){
-    var abas=['usuarios','cargos','permissoes','dashboards','tiposevento','tipostarefa','categoriasproduto','enderecosproduto','googleagenda'];
+    var abas=['usuarios','cargos','permissoes','dashboards','tiposevento','tipostarefa','categoriasproduto','gruposproduto','subgruposproduto','enderecosproduto','googleagenda'];
     t.classList.toggle('active',abas[i]===aba);
   });
   document.querySelectorAll('#adm-ov .rel-pane').forEach(function(p){p.classList.remove('active');});
@@ -15781,6 +15817,8 @@ function admAba(aba){
   if(aba==='tiposevento') tiposEventoRenderAdmin();
   if(aba==='tipostarefa') tiposTarefaRenderAdmin();
   if(aba==='categoriasproduto') categoriasProdutoRenderAdmin();
+  if(aba==='gruposproduto') gruposProdutoRenderAdmin();
+  if(aba==='subgruposproduto') subgruposProdutoRenderAdmin();
   if(aba==='enderecosproduto') enderecosProdutoRenderAdmin();
   if(aba==='googleagenda') googleAgendaRenderAdmin();
 }
@@ -17083,6 +17121,156 @@ async function enderecosProdutoRemover(idx){
   if(ok) driveStatus('🗑️ Endereçamento removido','ok'); else driveStatus('⚠️ Removido localmente (Firestore indisponível)','err');
 }
 
+// ── Grupo de produto (classificação independente da Categoria, ex.:
+// "Áudio Profissional") — editável pelo Admin, mesmo padrão das categorias/
+// endereçamentos ──────────────────────────────────────────────────────
+var GRUPOS_PRODUTO_PADRAO=['Geral'];
+var GRUPOS_PRODUTO=GRUPOS_PRODUTO_PADRAO.slice();
+
+function popularGruposProduto(){
+  ['pf-grupo'].forEach(function(id){
+    var sel=document.getElementById(id);
+    if(!sel) return;
+    var atual=sel.value;
+    var lista=GRUPOS_PRODUTO.slice();
+    if(atual && lista.indexOf(atual)<0) lista.push(atual);
+    sel.innerHTML='<option value="">Selecione...</option>'+lista.map(function(g){
+      return '<option'+(g===atual?' selected':'')+'>'+eh(g)+'</option>';
+    }).join('');
+  });
+}
+
+async function gruposProdutoCarregar(){
+  try{
+    var snap=await fbDb.collection('config').doc('gruposProduto').get();
+    if(snap.exists && Array.isArray(snap.data().lista) && snap.data().lista.length) GRUPOS_PRODUTO=snap.data().lista.slice();
+    else GRUPOS_PRODUTO=GRUPOS_PRODUTO_PADRAO.slice();
+  }catch(e){
+    console.warn('gruposProdutoCarregar:',e);
+    GRUPOS_PRODUTO=GRUPOS_PRODUTO_PADRAO.slice();
+  }
+  popularGruposProduto();
+}
+
+async function _gruposProdutoSalvarFirestore(){
+  try{
+    await fbDb.collection('config').doc('gruposProduto').set({lista:GRUPOS_PRODUTO});
+    return true;
+  }catch(e){ console.warn('_gruposProdutoSalvarFirestore:',e); return false; }
+}
+
+function gruposProdutoRenderAdmin(){
+  var box=document.getElementById('gruposproduto-lista');
+  if(!box) return;
+  if(!GRUPOS_PRODUTO.length){box.innerHTML='<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:12px">Nenhum grupo cadastrado.</div>';return;}
+  box.innerHTML=GRUPOS_PRODUTO.map(function(g,i){
+    return '<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">'
+      +'<span style="color:var(--text);font-size:12px">🗂️ '+eh(g)+'</span>'
+      +'<button class="btn btn-sm" style="background:#c62828;color:#fff" onclick="gruposProdutoRemover('+i+')">🗑️ Remover</button>'
+      +'</div>';
+  }).join('');
+}
+
+async function gruposProdutoAdicionar(){
+  var inp=document.getElementById('gruposproduto-novo');
+  var val=(inp.value||'').trim();
+  if(!val){alert('⚠️ Informe o nome do novo grupo.');return;}
+  var jaExiste=GRUPOS_PRODUTO.some(function(g){return g.toLowerCase()===val.toLowerCase();});
+  if(jaExiste){alert('⚠️ Esse grupo já existe na lista.');return;}
+  GRUPOS_PRODUTO.push(val);
+  inp.value='';
+  var ok=await _gruposProdutoSalvarFirestore();
+  gruposProdutoRenderAdmin();
+  popularGruposProduto();
+  if(ok) driveStatus('✅ Grupo de produto adicionado','ok'); else driveStatus('⚠️ Salvo localmente (Firestore indisponível)','err');
+}
+
+async function gruposProdutoRemover(idx){
+  var g=GRUPOS_PRODUTO[idx];if(g===undefined)return;
+  if(GRUPOS_PRODUTO.length<=1){alert('⚠️ Precisa manter ao menos um grupo na lista.');return;}
+  if(!confirm('🗑️ Remover o grupo "'+g+'" da lista?\n\nProdutos que já usam esse grupo não serão alterados.'))return;
+  GRUPOS_PRODUTO.splice(idx,1);
+  var ok=await _gruposProdutoSalvarFirestore();
+  gruposProdutoRenderAdmin();
+  popularGruposProduto();
+  if(ok) driveStatus('🗑️ Grupo de produto removido','ok'); else driveStatus('⚠️ Removido localmente (Firestore indisponível)','err');
+}
+
+// ── Subgrupo de produto (detalhamento dentro de um Grupo, ex.: "Caixas
+// Ativas") — editável pelo Admin, mesmo padrão das categorias/endereçamentos.
+// Lista independente da de Grupos (sem hierarquia/dependência entre elas). ──
+var SUBGRUPOS_PRODUTO_PADRAO=['Geral'];
+var SUBGRUPOS_PRODUTO=SUBGRUPOS_PRODUTO_PADRAO.slice();
+
+function popularSubgruposProduto(){
+  ['pf-subgrupo'].forEach(function(id){
+    var sel=document.getElementById(id);
+    if(!sel) return;
+    var atual=sel.value;
+    var lista=SUBGRUPOS_PRODUTO.slice();
+    if(atual && lista.indexOf(atual)<0) lista.push(atual);
+    sel.innerHTML='<option value="">Selecione...</option>'+lista.map(function(s){
+      return '<option'+(s===atual?' selected':'')+'>'+eh(s)+'</option>';
+    }).join('');
+  });
+}
+
+async function subgruposProdutoCarregar(){
+  try{
+    var snap=await fbDb.collection('config').doc('subgruposProduto').get();
+    if(snap.exists && Array.isArray(snap.data().lista) && snap.data().lista.length) SUBGRUPOS_PRODUTO=snap.data().lista.slice();
+    else SUBGRUPOS_PRODUTO=SUBGRUPOS_PRODUTO_PADRAO.slice();
+  }catch(e){
+    console.warn('subgruposProdutoCarregar:',e);
+    SUBGRUPOS_PRODUTO=SUBGRUPOS_PRODUTO_PADRAO.slice();
+  }
+  popularSubgruposProduto();
+}
+
+async function _subgruposProdutoSalvarFirestore(){
+  try{
+    await fbDb.collection('config').doc('subgruposProduto').set({lista:SUBGRUPOS_PRODUTO});
+    return true;
+  }catch(e){ console.warn('_subgruposProdutoSalvarFirestore:',e); return false; }
+}
+
+function subgruposProdutoRenderAdmin(){
+  var box=document.getElementById('subgruposproduto-lista');
+  if(!box) return;
+  if(!SUBGRUPOS_PRODUTO.length){box.innerHTML='<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:12px">Nenhum subgrupo cadastrado.</div>';return;}
+  box.innerHTML=SUBGRUPOS_PRODUTO.map(function(s,i){
+    return '<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">'
+      +'<span style="color:var(--text);font-size:12px">🗃️ '+eh(s)+'</span>'
+      +'<button class="btn btn-sm" style="background:#c62828;color:#fff" onclick="subgruposProdutoRemover('+i+')">🗑️ Remover</button>'
+      +'</div>';
+  }).join('');
+}
+
+async function subgruposProdutoAdicionar(){
+  var inp=document.getElementById('subgruposproduto-novo');
+  var val=(inp.value||'').trim();
+  if(!val){alert('⚠️ Informe o nome do novo subgrupo.');return;}
+  var jaExiste=SUBGRUPOS_PRODUTO.some(function(s){return s.toLowerCase()===val.toLowerCase();});
+  if(jaExiste){alert('⚠️ Esse subgrupo já existe na lista.');return;}
+  SUBGRUPOS_PRODUTO.push(val);
+  inp.value='';
+  var ok=await _subgruposProdutoSalvarFirestore();
+  subgruposProdutoRenderAdmin();
+  popularSubgruposProduto();
+  if(ok) driveStatus('✅ Subgrupo de produto adicionado','ok'); else driveStatus('⚠️ Salvo localmente (Firestore indisponível)','err');
+}
+
+async function subgruposProdutoRemover(idx){
+  var s=SUBGRUPOS_PRODUTO[idx];if(s===undefined)return;
+  if(SUBGRUPOS_PRODUTO.length<=1){alert('⚠️ Precisa manter ao menos um subgrupo na lista.');return;}
+  if(!confirm('🗑️ Remover o subgrupo "'+s+'" da lista?\n\nProdutos que já usam esse subgrupo não serão alterados.'))return;
+  SUBGRUPOS_PRODUTO.splice(idx,1);
+  var ok=await _subgruposProdutoSalvarFirestore();
+  subgruposProdutoRenderAdmin();
+  popularSubgruposProduto();
+  if(ok) driveStatus('🗑️ Subgrupo de produto removido','ok'); else driveStatus('⚠️ Removido localmente (Firestore indisponível)','err');
+}
+
 async function produtosCarregarStorage(){
   _produtosUltimoErro=null;
   if(!fbDb){ _produtosUltimoErro='Sem conexão com o servidor (Firebase indisponível).'; return false; }
@@ -17169,7 +17357,9 @@ function produtosRenderLista(filtro){
     var modelo=(p.modelo||'').toLowerCase();
     var cat=_categoriaProdutoNormalizada(p.categoria).toLowerCase();
     var serie=(p.numeroSerie||'').toLowerCase();
-    return nome.indexOf(filtro)>=0||marca.indexOf(filtro)>=0||modelo.indexOf(filtro)>=0||cat.indexOf(filtro)>=0||serie.indexOf(filtro)>=0;
+    var grupo=(p.grupo||'').toLowerCase();
+    var subgrupo=(p.subgrupo||'').toLowerCase();
+    return nome.indexOf(filtro)>=0||marca.indexOf(filtro)>=0||modelo.indexOf(filtro)>=0||cat.indexOf(filtro)>=0||serie.indexOf(filtro)>=0||grupo.indexOf(filtro)>=0||subgrupo.indexOf(filtro)>=0;
   }).sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
   if(!lista.length){box.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">Nenhum produto encontrado.</div>';return;}
   box.innerHTML=lista.map(function(p){
@@ -17196,8 +17386,9 @@ function produtosRenderLista(filtro){
       +'<div style="display:flex;align-items:center;gap:10px;min-width:0">'
       +thumb
       +'<div style="min-width:0">'
-      +'<div style="color:var(--text);font-size:13px;font-weight:700">'+eh(p.nome||'—')+'</div>'
+      +'<div style="color:var(--text);font-size:13px;font-weight:700">'+eh(p.nome||'—')+(p.preco?' <span style="color:#2e7d32;font-weight:800">· R$ '+fmtN(p.preco)+'</span>':'')+'</div>'
       +'<div style="color:var(--text-muted);font-size:11px;margin-top:2px">'+_iconeCategoriaProduto(p.categoria)+' '+eh(_categoriaProdutoNormalizada(p.categoria)||'—')+(p.marca?' · '+eh(p.marca):'')+(p.modelo?' '+eh(p.modelo):'')+qtd+'</div>'
+      +(p.grupo||p.subgrupo?'<div style="color:var(--text-muted);font-size:10px;margin-top:1px">🗂️ '+[p.grupo,p.subgrupo].filter(Boolean).map(eh).join(' / ')+'</div>':'')
       +(p.endereco?'<div style="color:var(--text-muted);font-size:10px;margin-top:1px">📍 '+eh(p.endereco)+'</div>':'')
       +sinaleiraHtml
       +'</div>'
@@ -17208,11 +17399,15 @@ function produtosRenderLista(filtro){
 }
 
 function _produtoLimparForm(){
-  ['pf-id','pf-nome','pf-marca','pf-modelo','pf-potencia','pf-voltagem','pf-peso','pf-dimensoes','pf-conectores','pf-ficha','pf-obs','pf-quantidade','pf-serie','pf-custo-terceiros'].forEach(function(id){
+  ['pf-id','pf-nome','pf-marca','pf-modelo','pf-potencia','pf-voltagem','pf-peso','pf-dimensoes','pf-conectores','pf-ficha','pf-obs','pf-quantidade','pf-serie','pf-custo-terceiros','pf-descricao','pf-preco'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value='';
   });
   popularCategoriasProduto();
   document.getElementById('pf-categoria').value='';
+  popularGruposProduto();
+  document.getElementById('pf-grupo').value='';
+  popularSubgruposProduto();
+  document.getElementById('pf-subgrupo').value='';
   popularEnderecosProduto();
   document.getElementById('pf-endereco').value='';
   _produtoFotoIdAtual='';
@@ -17248,6 +17443,10 @@ function produtoEditar(idx){
   document.getElementById('pf-quantidade').value=(p.quantidade!==undefined&&p.quantidade!==null)?p.quantidade:'';
   document.getElementById('pf-serie').value=p.numeroSerie||'';
   document.getElementById('pf-custo-terceiros').value=(p.custoLocacaoTerceiros!==undefined&&p.custoLocacaoTerceiros!==null&&p.custoLocacaoTerceiros!==0)?p.custoLocacaoTerceiros:'';
+  document.getElementById('pf-descricao').value=p.descricao||'';
+  document.getElementById('pf-grupo').value=p.grupo||'';
+  document.getElementById('pf-subgrupo').value=p.subgrupo||'';
+  document.getElementById('pf-preco').value=(p.preco!==undefined&&p.preco!==null&&p.preco!==0)?p.preco:'';
   document.getElementById('pf-endereco').value=p.endereco||'';
   _produtoFotoIdAtual=p.fotoId||'';
   _produtoFotoThumbAtual=p.fotoThumb||'';
@@ -17295,6 +17494,10 @@ async function produtoSalvar(){
     quantidade:parseInt(document.getElementById('pf-quantidade').value,10)||0,
     numeroSerie:document.getElementById('pf-serie').value.trim(),
     custoLocacaoTerceiros:parseFloat(document.getElementById('pf-custo-terceiros').value)||0,
+    descricao:document.getElementById('pf-descricao').value.trim(),
+    grupo:document.getElementById('pf-grupo').value||'',
+    subgrupo:document.getElementById('pf-subgrupo').value||'',
+    preco:parseFloat(document.getElementById('pf-preco').value)||0,
     endereco:document.getElementById('pf-endereco').value||'',
     fotoId:_produtoFotoIdAtual||'',
     fotoThumb:_produtoFotoThumbAtual||'',
@@ -19667,6 +19870,8 @@ unidadesCarregarStorage();
 movimentacoesCarregarStorage();
 estoqueCompromissosCarregarStorage();
 categoriasProdutoCarregar();
+gruposProdutoCarregar();
+subgruposProdutoCarregar();
 enderecosProdutoCarregar();
 calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
 // Auto-save a cada 3 minutos se houver alterações não salvas e orçamento já tiver ID no Drive
