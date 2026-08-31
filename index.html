@@ -2159,6 +2159,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       </div>
       <div style="display:flex;gap:7px;align-items:center">
         <button class="btn btn-r btn-sm" onclick="dashAtualizar(true)">🔄 Atualizar</button>
+        <button class="btn btn-o btn-sm" onclick="dashExportarExcel()" title="Exportar os dados filtrados (Resultados por Etapa + Taxa de Conversão por Consultor) em Excel">📊 Exportar Excel</button>
         <button class="btn btn-o btn-sm" onclick="document.getElementById('dash-ov').classList.remove('open');abrirHome()">✕</button>
       </div>
     </div>
@@ -13203,6 +13204,25 @@ function dashRenderizar(){
       +'</tbody></table></div>'
     : '<div class="dash-vazio">Nenhuma venda ganha com data de evento definida.</div>';
 
+  // Guarda os dados já calculados desta renderização pra exportação em Excel
+  // (dashExportarExcel()) — evita recalcular tudo de novo (mesmo padrão de
+  // relGetDadosTabela()/relExportarExcel() já usado nos Relatórios).
+  window._dashExport = {
+    filtrados: dados.length,
+    valTotal: valTotal,
+    valValTotal: valValTotal,
+    txQtd: txQtd,
+    txVal: txVal,
+    ganhoQtd: ganhoQtd,
+    ganhoVal: ganhoVal,
+    etapas: etapas.map(function(e){ return {label:e.label, qtd:e.qtd, val:e.val, pctQtd:e.pctQtd, pctVal:e.pctVal}; }),
+    consultores: consOrdem.map(function(c){
+      var pc = porCons[c];
+      var txR = pc.valValidados>0 ? Math.round(pc.valGanhos/pc.valValidados*100) : 0;
+      return {nome:c, validados:pc.validados, ganhos:pc.ganhos, perdidos:pc.perdidos, negociacao:pc.negociacao, standby:pc.standby, valValidados:pc.valValidados, valGanhos:pc.valGanhos, taxaConv:txR};
+    })
+  };
+
   document.getElementById('dash-corpo').innerHTML =
     '<div style="font-size:11px;color:var(--R);font-weight:900;text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid var(--R);padding-bottom:4px;margin-bottom:12px">📈 Desempenho Comercial</div>'
     + kpi
@@ -13219,6 +13239,77 @@ function dashRenderizar(){
     + '<div class="dash-box" style="margin-bottom:12px">'+evHtml+'</div>'
     + drillPanel;
 }
+
+// ── Exportar Excel — Dashboard Comercial ───────────────────────────────────────────────────────────
+// Pedido do usuario: botao para exportar os dados filtrados (periodo +
+// consultor selecionados na tela) do Dashboard Comercial. Reaproveita
+// window._dashExport (montado no fim de dashRenderizar(), com os mesmos
+// numeros das tabelas 'Resultados por Etapa' e 'Taxa de Conversao por
+// Consultor') em vez de recalcular tudo de novo, e o mesmo padrao de CSV
+// compativel com Excel (BOM UTF-8 + separador ';' + virgula decimal
+// pt-BR) ja usado em relExportarExcel()/_resultadosDrillExportarExcel()/
+// concExportarExcel()/logExportarExcel().
+function dashExportarExcel(){
+  var d = window._dashExport;
+  if(!d){ alert('Aguarde o dashboard carregar antes de exportar.'); return; }
+  if(!d.filtrados){ alert('Nenhum dado no período/filtro selecionado pra exportar.'); return; }
+
+  function csvEscape(v){
+    if(v===null||v===undefined) return '';
+    var s=String(v);
+    if(s.indexOf(';')>=0||s.indexOf('"')>=0||s.indexOf(String.fromCharCode(10))>=0){ s='"'+s.replace(/"/g,'""')+'"'; }
+    return s;
+  }
+  function fmtCsv(n){ return (parseFloat(n)||0).toFixed(2).replace('.',','); }
+
+  var de = document.getElementById('dash-de').value || '';
+  var ate = document.getElementById('dash-ate').value || '';
+  var tipoDtEl = document.getElementById('dash-tipo-data');
+  var tipoDtLabel = tipoDtEl ? tipoDtEl.options[tipoDtEl.selectedIndex].text : 'Data Criação';
+  var consEl = document.getElementById('dash-cons');
+  var consLabel = consEl && consEl.value ? consEl.value : 'Todos';
+
+  var bom = String.fromCharCode(0xFEFF);
+  var linhas = [
+    'Dashboard Comercial',
+    'Período: '+(de?fD(de):'-')+' até '+(ate?fD(ate):'-')+' (por '+tipoDtLabel+')',
+    'Consultor: '+consLabel,
+    'Orçamentos validados no filtro: '+d.filtrados,
+    ''
+  ];
+
+  linhas.push('Resultados por Etapa');
+  linhas.push(['Etapa','Qtd','Valor (R$)','% Qtd','% Valor'].map(csvEscape).join(';'));
+  linhas.push(['Total Validados', d.filtrados, fmtCsv(d.valValTotal), '100%', '100%'].map(csvEscape).join(';'));
+  d.etapas.forEach(function(e){
+    linhas.push([e.label, e.qtd, fmtCsv(e.val), e.pctQtd+'%', e.pctVal+'%'].map(csvEscape).join(';'));
+  });
+  linhas.push('');
+
+  linhas.push('Taxa de Conversão Global');
+  linhas.push(['Qtd: '+d.ganhoQtd+' ganhos / '+d.filtrados+' validados ('+d.txQtd+'%)'].map(csvEscape).join(';'));
+  linhas.push(['R$: '+fmtCsv(d.ganhoVal)+' ganho / '+fmtCsv(d.valValTotal)+' total ('+d.txVal+'%)'].map(csvEscape).join(';'));
+  linhas.push('');
+
+  linhas.push('Taxa de Conversão por Consultor');
+  linhas.push(['Consultor','Validados','Ganhos','Perdidos','Em Negociação','Standby','R$ Validado','R$ Ganho','Taxa Conv. R$'].map(csvEscape).join(';'));
+  var totV=0,totG=0,totP=0,totN=0,totS=0,totValid=0,totGanho=0;
+  d.consultores.forEach(function(c){ totV+=c.validados;totG+=c.ganhos;totP+=c.perdidos;totN+=c.negociacao;totS+=c.standby;totValid+=c.valValidados;totGanho+=c.valGanhos; });
+  var totTx = totValid>0 ? Math.round(totGanho/totValid*100) : 0;
+  linhas.push(['TOTAL', totV, totG, totP, totN, totS, fmtCsv(totValid), fmtCsv(totGanho), totTx+'%'].map(csvEscape).join(';'));
+  d.consultores.forEach(function(c){
+    linhas.push([c.nome, c.validados, c.ganhos, c.perdidos, c.negociacao, c.standby, fmtCsv(c.valValidados), fmtCsv(c.valGanhos), c.taxaConv+'%'].map(csvEscape).join(';'));
+  });
+
+  var csv = bom + linhas.join(String.fromCharCode(13,10));
+  var blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'CrazySom_DashboardComercial_'+new Date().toISOString().split('T')[0]+'.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 
 // ════════════════════════════════════════════════════════
 //  METAS COMERCIAIS — Firestore (config/metas). Meta Geral e Meta de
