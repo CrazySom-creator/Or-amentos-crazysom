@@ -931,6 +931,20 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
           <option>Wagner Wolff</option>
         </select>
       </div>
+      <div style="min-width:150px">
+        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">Ordenar por</label>
+        <select id="funil-home-ordem-campo" onchange="funilOrdemMudarCampo(this.value)" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--text);background:var(--surface-2)">
+          <option value="criacao">Data de Criação</option>
+          <option value="evento">Data do Evento</option>
+        </select>
+      </div>
+      <div style="min-width:170px">
+        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">&nbsp;</label>
+        <select id="funil-home-ordem-dir" onchange="funilOrdemMudarDirecao(this.value)" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--text);background:var(--surface-2)">
+          <option value="asc">↑ Mais antigo → Mais novo</option>
+          <option value="desc">↓ Mais novo → Mais antigo</option>
+        </select>
+      </div>
       <div>
         <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">&nbsp;</label>
         <button onclick="funilHomeRecarregar()" style="padding:7px 16px;background:var(--R);color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap">&#128260; Atualizar</button>
@@ -2892,6 +2906,20 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <option>Fabiano Santos</option><option>Giovana Borges</option>
         <option>Jéssica Elisandra</option><option>Rafael Oliveira</option>
         <option>Wagner Wolff</option>
+      </select>
+    </div>
+    <div style="min-width:150px">
+      <label>Ordenar por</label>
+      <select id="funil-ordem-campo" onchange="funilOrdemMudarCampo(this.value)" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--text);background:var(--surface)">
+        <option value="criacao">Data de Criação</option>
+        <option value="evento">Data do Evento</option>
+      </select>
+    </div>
+    <div style="min-width:170px">
+      <label>&nbsp;</label>
+      <select id="funil-ordem-dir" onchange="funilOrdemMudarDirecao(this.value)" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--text);background:var(--surface)">
+        <option value="asc">↑ Mais antigo → Mais novo</option>
+        <option value="desc">↓ Mais novo → Mais antigo</option>
       </select>
     </div>
     <div>
@@ -9161,6 +9189,82 @@ var FUNIL_FILTROS_DATA = [
     return isLead ? '' : ((item.form&&item.form['f-dia'])||'');
   }}
 ];
+
+// ── Ordenação das colunas do funil (Leads + orçamentos) — Data de Criação
+// ou Data do Evento, do mais antigo pro mais novo ou vice-versa. Um único
+// controle no topo do quadro, compartilhado entre os dois campos, aplicado
+// igualmente às colunas de Leads e às de orçamento.
+// Reaproveita o mesmo limite já documentado em FUNIL_FILTROS_DATA acima:
+// Leads têm criadoEmISO mas não têm Data do Evento própria; orçamentos têm
+// Data do Evento (f-dia/f-data) mas não guardam uma data de criação
+// separada e confiável. Por isso, quando o campo escolhido não existe pro
+// tipo do item, usa o outro campo como critério de desempate — assim o
+// quadro nunca fica em ordem arbitrária, e o padrão (campo="criacao",
+// direção="asc") reproduz exatamente o comportamento que já existia antes
+// desta mudança (Leads por criadoEmISO crescente, orçamentos por Data do
+// Evento crescente).
+var FUNIL_ORDEM_CAMPOS = {
+  criacao: { label:'Data de Criação', getData:function(item, isLead){
+    if(isLead) return (item.criadoEmISO||'').split('T')[0];
+    return (item.form&&(item.form['f-dia']||item.form['f-data']))||'';
+  }},
+  evento: { label:'Data do Evento', getData:function(item, isLead){
+    if(!isLead) return (item.form&&(item.form['f-dia']||item.form['f-data']))||'';
+    return (item.criadoEmISO||'').split('T')[0];
+  }}
+};
+var _fkOrdemAtual = { campo:'criacao', direcao:'asc' };
+function _fkOrdemCarregarStorage(){
+  try{
+    var raw = localStorage.getItem('crazySomOrdemFunil');
+    if(raw){
+      var d = JSON.parse(raw)||{};
+      if(FUNIL_ORDEM_CAMPOS[d.campo]) _fkOrdemAtual.campo = d.campo;
+      if(d.direcao==='asc'||d.direcao==='desc') _fkOrdemAtual.direcao = d.direcao;
+    }
+  }catch(e){}
+}
+function _fkOrdemSalvarStorage(){
+  try{ localStorage.setItem('crazySomOrdemFunil', JSON.stringify(_fkOrdemAtual)); }catch(e){}
+}
+_fkOrdemCarregarStorage();
+
+// Ordena um array de itens (Leads ou orçamentos) do quadro do funil segundo
+// _fkOrdemAtual. Não muta o array recebido, retorna um array novo.
+function _fkOrdenarItens(itens, isLead){
+  var campo = FUNIL_ORDEM_CAMPOS[_fkOrdemAtual.campo] || FUNIL_ORDEM_CAMPOS.criacao;
+  var mult = _fkOrdemAtual.direcao === 'desc' ? -1 : 1;
+  return itens.slice().sort(function(a,b){
+    var da = campo.getData(a, isLead) || '';
+    var db = campo.getData(b, isLead) || '';
+    if(da === db) return 0;
+    return (da < db ? -1 : 1) * mult;
+  });
+}
+// Mantém os 2 pares de seletores (tela cheia do funil + funil da Home)
+// sempre sincronizados com _fkOrdemAtual, seja qual deles o usuário mexeu.
+function _fkOrdemSincronizarSelects(){
+  ['funil-ordem-campo','funil-home-ordem-campo'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value=_fkOrdemAtual.campo;
+  });
+  ['funil-ordem-dir','funil-home-ordem-dir'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value=_fkOrdemAtual.direcao;
+  });
+}
+function funilOrdemMudarCampo(v){
+  if(!FUNIL_ORDEM_CAMPOS[v]) return;
+  _fkOrdemAtual.campo = v;
+  _fkOrdemSalvarStorage();
+  funilFiltrarLista();
+  funilHomeFiltrarLista();
+}
+function funilOrdemMudarDirecao(v){
+  if(v!=='asc'&&v!=='desc') return;
+  _fkOrdemAtual.direcao = v;
+  _fkOrdemSalvarStorage();
+  funilFiltrarLista();
+  funilHomeFiltrarLista();
+}
 var FK_DATA_PRESETS = [
   {id:'hoje', label:'Hoje'},
   {id:'semana', label:'Esta semana'},
@@ -9601,6 +9705,7 @@ function funilFiltrarLista(){
 function funilRenderKanban(kanbanId, filtroConsElId, statusElId, alertaElId){
   var kEl = document.getElementById(kanbanId);
   if(!kEl) return;
+  _fkOrdemSincronizarSelects();
   var filtroConsEl = document.getElementById(filtroConsElId);
   var cons = (filtroConsEl||{}).value || '';
   // Cargo sem permissão "Ver Funil de Toda a Equipe" -> força ver só os
@@ -9706,7 +9811,7 @@ function funilRenderKanban(kanbanId, filtroConsElId, statusElId, alertaElId){
 
     if(isLeadCol){
       itens = baseLeads.filter(function(l){ return (l.etapa||'sem_contato') === colKey; });
-      itens.sort(function(a,b){ return (a.criadoEmISO||'') < (b.criadoEmISO||'') ? -1 : 1; });
+      itens = _fkOrdenarItens(itens, true);
       totVal = itens.reduce(function(t,l){ return t+(parseFloat(l.valorEstimado)||0); }, 0);
       cardsHtml = itens.length
         ? itens.map(function(l){ return _fkLeadCardHtml(l, hoje); }).join('')
@@ -9716,11 +9821,7 @@ function funilRenderKanban(kanbanId, filtroConsElId, statusElId, alertaElId){
         var cs = (o.dados && o.dados.comercialStatus) || '';
         return colKey === 'sem_etapa' ? !FUNIL_SI[cs] : cs === colKey;
       });
-      itens.sort(function(a,b){
-        var da = (a.form&&(a.form['f-dia']||a.form['f-data']))||'';
-        var db = (b.form&&(b.form['f-dia']||b.form['f-data']))||'';
-        return da < db ? -1 : da > db ? 1 : 0;
-      });
+      itens = _fkOrdenarItens(itens, false);
       totVal = itens.reduce(function(t,o){ return t+dashValOrc(o); }, 0);
       cardsHtml = itens.length
         ? itens.map(function(o){ return _fkCardHtml(o, hoje); }).join('')
