@@ -162,6 +162,14 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center;}
 .ov.open{display:flex;}
 .modal-box{background:var(--surface);border-radius:12px;padding:24px 28px;width:100%;max-width:700px;max-height:90vh;overflow-y:auto;}
+/* Cabeçalho fixo (título + botão fechar) dos popups com conteúdo longo — o
+   .modal-box rola como uma coisa só (overflow-y:auto no próprio box), então
+   sem isso o cabeçalho (com o botão de fechar) rolava junto e sumia de vista
+   assim que a lista/tabela dentro do popup ficasse comprida. position:sticky
+   com top:0, dentro de um contêiner com overflow-y:auto, gruda o cabeçalho
+   no topo da área visível assim que o usuário rola — sem precisar de
+   position:fixed nem de compensar o padding do .modal-box manualmente. */
+.mb-head-sticky{position:sticky;top:0;z-index:2;background:var(--surface);}
 .modal-box h2{color:var(--text);font-size:16px;font-weight:800;margin-bottom:4px;}
 .modal-box .sub{color:var(--text-muted);font-size:11px;margin-bottom:16px;}
 .modal-tabs{display:flex;gap:8px;margin-bottom:16px;}
@@ -1050,7 +1058,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 <!-- Modal de Follow-ups/Tarefas Atrasadas (aberto pelos badges do funil) -->
 <div class="ov" id="fk-atrasados-modal" style="z-index:95500">
   <div class="modal-box" style="max-width:520px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <div><h2 id="fk-atrasados-titulo" style="margin-bottom:2px">⏰ Atrasados</h2><p class="sub" style="margin:0" id="fk-atrasados-sub"></p></div>
       <button class="btn btn-o btn-sm" onclick="document.getElementById('fk-atrasados-modal').classList.remove('open')">✕</button>
     </div>
@@ -1287,8 +1295,10 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 
 <div class="ov" id="aprov-ov">
   <div class="modal-box">
-    <h2>📋 Aprovações</h2>
-    <p class="sub">Gerencie os orçamentos em andamento</p>
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <div><h2 style="margin-bottom:2px">📋 Aprovações</h2><p class="sub" style="margin:0">Gerencie os orçamentos em andamento</p></div>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('aprov-ov').classList.remove('open');abrirHome()" title="Fechar">✕</button>
+    </div>
     <div style="display:flex;align-items:center;gap:8px">
       <div class="modal-tabs" style="flex:1">
         <div class="modal-tab active" id="tab-pend" onclick="mudarAbaAprov('pend')">⏳ Pendentes</div>
@@ -1304,7 +1314,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 
 <div class="ov" id="adm-ov">
   <div class="modal-box" style="max-width:780px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div><h2 style="margin-bottom:2px">⚙️ Administração</h2><p class="sub" style="margin:0">Usuários, Permissões e Acessos</p></div>
       <button class="btn btn-o btn-sm" onclick="document.getElementById('adm-ov').classList.remove('open');abrirHome()">✕</button>
     </div>
@@ -1450,7 +1460,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 <!-- ═══════════════════════════════════════════════════════ -->
 <div class="ov" id="cliente-hist-ov">
   <div class="modal-box" style="max-width:720px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <div><h2 style="margin-bottom:2px">📋 Histórico do Cliente</h2><p class="sub" style="margin:0" id="cliente-hist-sub">Orçamentos anteriores</p></div>
       <button class="btn btn-o btn-sm" onclick="document.getElementById('cliente-hist-ov').classList.remove('open')">✕</button>
     </div>
@@ -1463,7 +1473,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 <!-- ═══════════════════════════════════════════════════════ -->
 <div class="ov" id="evento-hist-ov" style="z-index:9500">
   <div class="modal-box" style="max-width:720px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <div><h2 style="margin-bottom:2px">🎪 Orçamentos deste Evento</h2><p class="sub" style="margin:0" id="evento-hist-sub">Orçamentos vinculados</p></div>
       <button class="btn btn-o btn-sm" onclick="document.getElementById('evento-hist-ov').classList.remove('open')">✕</button>
     </div>
@@ -1473,7 +1483,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 
 <div class="ov" id="clientes-ov">
   <div class="modal-box" style="max-width:780px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <div><h2 style="margin-bottom:2px">👥 Cadastro de Clientes</h2><p class="sub" style="margin:0">Clientes cadastrados (PF/PJ)</p></div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-g btn-sm" onclick="clienteNovo()">+ Novo Cliente</button>
@@ -1488,9 +1498,9 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 <!-- ═══════════════════════════════════════════════════════ -->
 <!--  MODAL FORMULÁRIO DE CLIENTE (NOVO/EDITAR)             -->
 <!-- ═══════════════════════════════════════════════════════ -->
-<div class="ov" id="cliente-form-ov">
+<div class="ov" id="cliente-form-ov" style="z-index:9100">
   <div class="modal-box" style="max-width:700px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <h2 style="margin-bottom:2px" id="cliente-form-titulo">👤 Novo Cliente</h2>
       <button class="btn btn-o btn-sm" onclick="document.getElementById('cliente-form-ov').classList.remove('open')">✕</button>
     </div>
@@ -1555,7 +1565,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 <!-- ═══════════════════════════════════════════════════════ -->
 <div class="ov" id="eventos-ov">
   <div class="modal-box" style="max-width:780px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <div><h2 style="margin-bottom:2px">🎪 Cadastro de Eventos</h2><p class="sub" style="margin:0">Eventos recorrentes — reaproveite tipo e endereço em orçamentos futuros</p></div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-g btn-sm" onclick="eventoNovo()">+ Novo Evento</button>
@@ -1571,9 +1581,9 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 <!-- ═══════════════════════════════════════════════════════ -->
 <!--  MODAL FORMULÁRIO DE EVENTO (NOVO/EDITAR)               -->
 <!-- ═══════════════════════════════════════════════════════ -->
-<div class="ov" id="evento-form-ov">
+<div class="ov" id="evento-form-ov" style="z-index:9100">
   <div class="modal-box" style="max-width:640px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <h2 style="margin-bottom:2px" id="evento-form-titulo">🎪 Novo Evento</h2>
       <button class="btn btn-o btn-sm" onclick="document.getElementById('evento-form-ov').classList.remove('open')">✕</button>
     </div>
@@ -1612,7 +1622,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 <!-- ═══════════════════════════════════════════════════════ -->
 <div class="ov" id="produtos-ov">
   <div class="modal-box" style="max-width:780px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <div><h2 style="margin-bottom:2px">📦 Cadastro de Produtos</h2><p class="sub" style="margin:0">Catálogo de equipamentos com ficha técnica e foto</p></div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-g btn-sm" onclick="produtoNovo()">+ Novo Produto</button>
@@ -1630,9 +1640,9 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 <!-- ═══════════════════════════════════════════════════════ -->
 <!--  MODAL FORMULÁRIO DE PRODUTO (NOVO/EDITAR)               -->
 <!-- ═══════════════════════════════════════════════════════ -->
-<div class="ov" id="produto-form-ov">
+<div class="ov" id="produto-form-ov" style="z-index:9100">
   <div class="modal-box" style="max-width:640px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <h2 style="margin-bottom:2px" id="produto-form-titulo">📦 Novo Produto</h2>
       <button class="btn btn-o btn-sm" onclick="document.getElementById('produto-form-ov').classList.remove('open')">✕</button>
     </div>
@@ -1716,9 +1726,9 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 <!-- ═══════════════════════════════════════════════════════ -->
 <!--  MODAL UNIDADES DO PRODUTO (rastreamento individual/QR)  -->
 <!-- ═══════════════════════════════════════════════════════ -->
-<div class="ov" id="produto-unidades-ov">
+<div class="ov" id="produto-unidades-ov" style="z-index:9100">
   <div class="modal-box" style="max-width:640px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <div><h2 style="margin-bottom:2px" id="pu-titulo">📦 Unidades do Produto</h2><p class="sub" style="margin:0" id="pu-sub">Controle individual por QR Code</p></div>
       <button class="btn btn-o btn-sm" onclick="document.getElementById('produto-unidades-ov').classList.remove('open')">✕</button>
     </div>
@@ -1736,7 +1746,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 <!-- ═══════════════════════════════════════════════════════ -->
 <div class="ov" id="faltantes-ov">
   <div class="modal-box" style="max-width:780px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <div><h2 style="margin-bottom:2px">⚠️ Itens Faltantes no Estoque</h2><p class="sub" style="margin:0">Equipamentos onde a demanda dos orçamentos ativos excede o cadastrado — considere locação com terceiros</p></div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-o btn-sm" onclick="faltantesRenderizar()">🔄 Atualizar</button>
@@ -1764,9 +1774,9 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 <!-- ═══════════════════════════════════════════════════════ -->
 <!--  MODAL BIPAR EQUIPAMENTO (leitor de QR — câmera/USB)     -->
 <!-- ═══════════════════════════════════════════════════════ -->
-<div class="ov" id="scanner-ov">
+<div class="ov" id="scanner-ov" style="z-index:9100">
   <div class="modal-box" style="max-width:520px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <div><h2 style="margin-bottom:2px">🔎 Bipar Equipamento</h2><p class="sub" style="margin:0">Escaneie o QR Code da etiqueta ou use um leitor USB</p></div>
       <button class="btn btn-o btn-sm" onclick="scannerFechar()">✕</button>
     </div>
@@ -2075,7 +2085,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 
 <div class="ov" id="log-os-ov" style="z-index:9200">
   <div class="modal-box" style="max-width:900px;width:95vw">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <h2 style="margin-bottom:2px" id="log-os-titulo">Ordem de Serviço</h2>
       <button class="btn btn-o btn-sm" onclick="document.getElementById('log-os-ov').classList.remove('open')">✕</button>
     </div>
@@ -2089,7 +2099,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 
 <div class="ov" id="log-dia-pop-ov" style="z-index:9100">
   <div class="modal-box" style="max-width:640px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <h2 style="margin-bottom:2px" id="log-dia-pop-titulo">Eventos do dia</h2>
       <button class="btn btn-o btn-sm" onclick="document.getElementById('log-dia-pop-ov').classList.remove('open')">✕</button>
     </div>
@@ -2397,7 +2407,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 
 <div class="ov" id="dash-ger-ov">
   <div class="modal-box" style="max-width:1100px;padding:0">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:var(--surface-3);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">
+    <div class="mb-head-sticky" style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:var(--surface-3);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">
       <div><h2 style="margin:0;font-size:16px;color:var(--text)">&#128202; Dashboard Gerencial</h2>
       <p style="margin:2px 0 0;font-size:11px;color:var(--text-muted)" id="dash-ger-sub">Carregando...</p></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -17387,6 +17397,23 @@ async function abrirProdutos(){
   }finally{
     esconderCarregando();
   }
+}
+
+// _produtoBuscaModoSelecao segue o mesmo padrão de _clienteBuscaModoSelecao/
+// _eventoBuscaModoSelecao (troca o botão "✏️ Editar" da lista por "✅
+// Selecionar" — ver produtosRenderLista()), mas nenhum lugar do sistema
+// ainda liga esse modo (nenhum "clienteAbrirBuscaModal()"/"eventoAbrir
+// BuscaModal()" equivalente pra Produtos foi implementado), então esse botão
+// nunca aparece hoje na prática. A função abaixo existe pra o botão "✅
+// Selecionar" nunca quebrar com "produtoSelecionarParaOrcamento is not a
+// function" CASO esse modo venha a ser ligado no futuro — hoje ela só fecha
+// o modal com segurança, já que não há um destino (campo/seção) definido
+// pra selecionar.
+function produtoSelecionarParaOrcamento(idx){
+  var p=PRODUTOS[idx];if(!p)return;
+  console.warn('produtoSelecionarParaOrcamento: modo de seleção de produto ainda não tem um destino configurado no orçamento — fechando sem selecionar.');
+  _produtoBuscaModoSelecao=false;
+  document.getElementById('produtos-ov').classList.remove('open');
 }
 
 function _produtosStatus(msg,tipo){
