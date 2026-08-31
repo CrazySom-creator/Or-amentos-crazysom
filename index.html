@@ -10010,7 +10010,7 @@ function _fkCardHtml(o, hoje){
 
   var resumo = _fkResumoAcompanhamento(o.dados&&o.dados.criadoEmISO, histCom, (o.dados&&o.dados.atividades)||[], hoje);
   var infoPartes=[];
-  if(resumo.criadoISO) infoPartes.push('🗓️ '+(resumo.criadoEstimado?'~':'')+fD(resumo.criadoISO));
+  if(resumo.criadoISO) infoPartes.push('🗓️ Criado: '+(resumo.criadoEstimado?'~':'')+fD(resumo.criadoISO));
   // Nas colunas terminais (Venda Ganha/Perdida) "dias nesta etapa" não faz sentido
   // — a negociação já está fechada. Mostramos a data do fechamento em vez disso.
   if(cs==='ganha' || cs==='perdida'){
@@ -10034,7 +10034,7 @@ function _fkCardHtml(o, hoje){
     + '<div class="fk-card-meta"><span>'+eh(f['f-num']||'—')+'</span>'
     + (f['f-cons'] ? '<span>· '+eh(f['f-cons'])+'</span>' : '')
     + '</div>'
-    + (dataEv ? '<div class="fk-card-evento">📆 '+dataEv+'</div>' : '')
+    + (dataEv ? '<div class="fk-card-evento">📆 Evento: '+dataEv+'</div>' : '')
     + infoHtml
     + ultObs
     + '<div class="fk-card-foot"><span class="fk-card-val">'+fmt(val)+'</span>'+fuBadge+esfriandoBadge+'</div>'
@@ -10053,7 +10053,7 @@ function _fkLeadCardHtml(lead, hoje){
 
   var resumo = _fkResumoAcompanhamento(lead.criadoEmISO, lead.hist||[], lead.atividades||[], hoje);
   var infoPartes=[];
-  if(resumo.criadoISO) infoPartes.push('🗓️ '+fD(resumo.criadoISO));
+  if(resumo.criadoISO) infoPartes.push('🗓️ Criado: '+fD(resumo.criadoISO));
   if(resumo.diasEtapa!==null) infoPartes.push('⏱️ '+_fkDiasTexto(resumo.diasEtapa)+' nesta etapa');
   if(resumo.ultimaInteracaoISO) infoPartes.push('🕒 '+fD(resumo.ultimaInteracaoISO));
   var infoHtml = infoPartes.length ? '<div class="fk-card-info" title="Criado · Dias na etapa · Última interação">'+infoPartes.join(' · ')+'</div>' : '';
