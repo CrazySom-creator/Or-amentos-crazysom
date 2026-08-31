@@ -13206,20 +13206,23 @@ function dashRenderizar(){
 
   // Guarda os dados já calculados desta renderização pra exportação em Excel
   // (dashExportarExcel()) — evita recalcular tudo de novo (mesmo padrão de
-  // relGetDadosTabela()/relExportarExcel() já usado nos Relatórios).
+  // relGetDadosTabela()/relExportarExcel() já usado nos Relatórios). Uma
+  // linha por orçamento validado (nº, cliente, evento, consultor, status,
+  // data do evento, local, valor) — layout tabular pedido pelo usuário.
   window._dashExport = {
-    filtrados: dados.length,
-    valTotal: valTotal,
-    valValTotal: valValTotal,
-    txQtd: txQtd,
-    txVal: txVal,
-    ganhoQtd: ganhoQtd,
-    ganhoVal: ganhoVal,
-    etapas: etapas.map(function(e){ return {label:e.label, qtd:e.qtd, val:e.val, pctQtd:e.pctQtd, pctVal:e.pctVal}; }),
-    consultores: consOrdem.map(function(c){
-      var pc = porCons[c];
-      var txR = pc.valValidados>0 ? Math.round(pc.valGanhos/pc.valValidados*100) : 0;
-      return {nome:c, validados:pc.validados, ganhos:pc.ganhos, perdidos:pc.perdidos, negociacao:pc.negociacao, standby:pc.standby, valValidados:pc.valValidados, valGanhos:pc.valGanhos, taxaConv:txR};
+    itens: validados.map(function(o){
+      var f = o.form||{};
+      var cs = (o.dados && o.dados.comercialStatus) || '';
+      return {
+        num: f['f-num']||'',
+        cliente: f['f-cliente']||'',
+        evento: f['f-nome-evento']||'',
+        consultor: f['f-cons']||'',
+        status: COM_LBL[cs] || 'Sem etapa',
+        data: f['f-dia']||'',
+        local: f['f-local']||'',
+        valor: dashValOrc(o)
+      };
     })
   };
 
@@ -13252,7 +13255,7 @@ function dashRenderizar(){
 function dashExportarExcel(){
   var d = window._dashExport;
   if(!d){ alert('Aguarde o dashboard carregar antes de exportar.'); return; }
-  if(!d.filtrados){ alert('Nenhum dado no período/filtro selecionado pra exportar.'); return; }
+  if(!d.itens || !d.itens.length){ alert('Nenhum dado no período/filtro selecionado pra exportar.'); return; }
 
   function csvEscape(v){
     if(v===null||v===undefined) return '';
@@ -13262,43 +13265,19 @@ function dashExportarExcel(){
   }
   function fmtCsv(n){ return (parseFloat(n)||0).toFixed(2).replace('.',','); }
 
-  var de = document.getElementById('dash-de').value || '';
-  var ate = document.getElementById('dash-ate').value || '';
-  var tipoDtEl = document.getElementById('dash-tipo-data');
-  var tipoDtLabel = tipoDtEl ? tipoDtEl.options[tipoDtEl.selectedIndex].text : 'Data Criação';
-  var consEl = document.getElementById('dash-cons');
-  var consLabel = consEl && consEl.value ? consEl.value : 'Todos';
-
   var bom = String.fromCharCode(0xFEFF);
-  var linhas = [
-    'Dashboard Comercial',
-    'Período: '+(de?fD(de):'-')+' até '+(ate?fD(ate):'-')+' (por '+tipoDtLabel+')',
-    'Consultor: '+consLabel,
-    'Orçamentos validados no filtro: '+d.filtrados,
-    ''
-  ];
+  var linhas = [];
+  linhas.push(['Nº','Cliente','Nome do Evento','Consultor','Status','Data','Local','Valor (R$)'].map(csvEscape).join(';'));
 
-  linhas.push('Resultados por Etapa');
-  linhas.push(['Etapa','Qtd','Valor (R$)','% Qtd','% Valor'].map(csvEscape).join(';'));
-  linhas.push(['Total Validados', d.filtrados, fmtCsv(d.valValTotal), '100%', '100%'].map(csvEscape).join(';'));
-  d.etapas.forEach(function(e){
-    linhas.push([e.label, e.qtd, fmtCsv(e.val), e.pctQtd+'%', e.pctVal+'%'].map(csvEscape).join(';'));
+  var itensOrdenados = d.itens.slice().sort(function(a,b){
+    var da=a.data||'', db=b.data||'';
+    if(da===db) return 0;
+    if(!da) return 1;
+    if(!db) return -1;
+    return da<db?-1:1;
   });
-  linhas.push('');
-
-  linhas.push('Taxa de Conversão Global');
-  linhas.push(['Qtd: '+d.ganhoQtd+' ganhos / '+d.filtrados+' validados ('+d.txQtd+'%)'].map(csvEscape).join(';'));
-  linhas.push(['R$: '+fmtCsv(d.ganhoVal)+' ganho / '+fmtCsv(d.valValTotal)+' total ('+d.txVal+'%)'].map(csvEscape).join(';'));
-  linhas.push('');
-
-  linhas.push('Taxa de Conversão por Consultor');
-  linhas.push(['Consultor','Validados','Ganhos','Perdidos','Em Negociação','Standby','R$ Validado','R$ Ganho','Taxa Conv. R$'].map(csvEscape).join(';'));
-  var totV=0,totG=0,totP=0,totN=0,totS=0,totValid=0,totGanho=0;
-  d.consultores.forEach(function(c){ totV+=c.validados;totG+=c.ganhos;totP+=c.perdidos;totN+=c.negociacao;totS+=c.standby;totValid+=c.valValidados;totGanho+=c.valGanhos; });
-  var totTx = totValid>0 ? Math.round(totGanho/totValid*100) : 0;
-  linhas.push(['TOTAL', totV, totG, totP, totN, totS, fmtCsv(totValid), fmtCsv(totGanho), totTx+'%'].map(csvEscape).join(';'));
-  d.consultores.forEach(function(c){
-    linhas.push([c.nome, c.validados, c.ganhos, c.perdidos, c.negociacao, c.standby, fmtCsv(c.valValidados), fmtCsv(c.valGanhos), c.taxaConv+'%'].map(csvEscape).join(';'));
+  itensOrdenados.forEach(function(it){
+    linhas.push([it.num, it.cliente, it.evento, it.consultor, it.status, it.data?fD(it.data):'', it.local, fmtCsv(it.valor)].map(csvEscape).join(';'));
   });
 
   var csv = bom + linhas.join(String.fromCharCode(13,10));
