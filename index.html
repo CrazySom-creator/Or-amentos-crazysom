@@ -3413,7 +3413,24 @@ function marcarAlterado(){
   _naoSalvo = true;
   if(aprovStatus==='aprovado'){
     var atualSnap=tirarSnapshot();
-    var diffs=snapshotAprovado?compararSnapshots(snapshotAprovado,atualSnap):[];
+    if(!snapshotAprovado){
+      // Orçamento está "aprovado" mas não existe snapshot de referência
+      // salvo (ex.: orçamento aprovado antes desta trava existir, ou por
+      // algum fluxo antigo que não gravava snapshotAprovado). Sem baseline
+      // não dá pra montar um diff detalhado do que mudou — mas um orçamento
+      // aprovado NUNCA pode continuar "aprovado" silenciosamente enquanto
+      // está sendo editado. Por segurança (fail-safe), qualquer edição
+      // nessas condições já derruba pra nova análise, em vez de não fazer
+      // nada (bug relatado: itens adicionados depois de aprovado sem voltar
+      // pra aprovação — orçamento 20266322).
+      aprovHist.push({ico:'⚠️',acao:'Aprovação anulada por alteração',usuario:usuarioAtual?usuarioAtual.nome:'Sistema',cargo:usuarioAtual?(NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel):'',data:new Date().toLocaleString('pt-BR'),obs:'Alteração feita em orçamento já aprovado (sem snapshot de referência salvo para comparar). Necessita nova aprovação.',diffs:[]});
+      aprovStatus='analise';
+      snapshotAnterior=atualSnap;
+      renderStatusOrc();
+      renderAprovInline();
+      return;
+    }
+    var diffs=compararSnapshots(snapshotAprovado,atualSnap);
     if(diffsRequeremAprovacao(diffs)){
       aprovHist.push({ico:'⚠️',acao:'Aprovação anulada por alteração',usuario:usuarioAtual?usuarioAtual.nome:'Sistema',cargo:usuarioAtual?(NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel):'',data:new Date().toLocaleString('pt-BR'),obs:'Alteração em valores/quantidades de itens ou na data do evento. Necessita nova aprovação.',diffs:diffs});
       aprovStatus='analise';
@@ -4228,6 +4245,71 @@ function getBotoesAcaoLista(orc,idx){
 
 function toggleDetalhes(idx){var el=document.getElementById('det-'+idx);if(el)el.classList.toggle('open');}
 
+// ── Snapshot "puro" equivalente a tirarSnapshot(), mas operando sobre um
+// objeto `dados` já salvo (form+state), em vez dos globais/DOM da tela do
+// orçamento. Necessário porque aprovAcaoLista() (botão rápido "✅ Aprovar"
+// na lista de Aprovações) aprova um orçamento SEM abrir o editor completo —
+// então não dá pra chamar tirarSnapshot() (ela lê `state`/getForm() da tela
+// atual, que aqui não corresponde ao orçamento sendo aprovado). Sem este
+// snapshot, marcarAlterado() nunca tinha uma base pra comparar depois, e
+// qualquer alteração feita DEPOIS dessa aprovação rápida (ex.: adicionar um
+// ambiente/itens novos) não derrubava o status de volta pra análise — bug
+// relatado pelo usuário no orçamento 20266322. ──
+function _tirarSnapshotDeDados(dadosObj){
+  var form=(dadosObj&&dadosObj.form)||{};
+  var st=(dadosObj&&dadosObj.state)||{};
+  var SECS6=['som','video','luz','estrutura','servico','logistica'];
+  function rowsDe(s){
+    var secSt=st[s];
+    if(!secSt||!secSt.rows) return [];
+    var out=[];
+    Object.keys(secSt.rows).forEach(function(aid){(secSt.rows[aid]||[]).forEach(function(r){out.push(r);});});
+    return out;
+  }
+  function baseSec(s){return rowsDe(s).reduce(function(t,r){return t+rowTot(r);},0);}
+  var bvPct=parseFloat(form['f-bv'])||0;
+  var comItens=SECS6.filter(function(s){return baseSec(s)>0;});
+  var bvBase=SECS6.reduce(function(t,s){return t+baseSec(s);},0)*(1+IMP);
+  var bvVal=bvPct>0?bvBase*bvPct/100:0;
+  function totalSec(s){
+    var base=baseSec(s);
+    if(bvVal>0&&comItens.indexOf(s)>=0) base+=(bvVal/(1+IMP))/comItens.length;
+    return base;
+  }
+  var totais={};
+  SECS6.forEach(function(s){totais[s]=totalSec(s);});
+  var bruto=SECS6.reduce(function(t,s){return t+totalSec(s);},0);
+  var fimp=(dadosObj&&dadosObj.finImposto)||'cimp';
+  var modoSimp=(fimp==='simp');
+  var cImp=bruto*(1+IMP);
+  var drs=parseFloat(form['desc-rs'])||0,dpct=parseFloat(form['desc-pct'])||0;
+  var vdsi,vdci;
+  if(drs>0){
+    if(modoSimp){vdsi=bruto-drs;vdci=vdsi*(1+IMP);}
+    else{vdci=cImp-drs;vdsi=vdci/(1+IMP);}
+  } else {
+    var dv=bruto*(dpct/100);
+    vdsi=bruto-dv;vdci=vdsi*(1+IMP);
+  }
+  var arred=aplicarArredondamento(vdsi,vdci,modoSimp,arredondValorDe(form));
+  vdsi=arred.vdsi;vdci=arred.vdci;
+  var vl=parseFloat(form['val-liq'])||0;
+  var total=vl>0?vl:(modoSimp?vdsi:vdci);
+  var itens={};
+  SECS6.forEach(function(s){
+    itens[s]=rowsDe(s).map(function(r){
+      return {id:r.id,name:r.name,qty:r.qty,val:r.val,diaria:r.diaria,painel:!!r.painel,palco:!!r.palco,larg:r.larg,alt:r.alt,prof:r.prof,carp:r.carp,carpT:r.carpT,elObj:r.elObj?{v:r.elObj.v}:null};
+    });
+  });
+  return {
+    cliente:form['f-cliente']||'',local:form['f-local']||'',tipo:form['f-tipo']||'',
+    dia:form['f-dia']||'',diasFim:form['f-dia-fim']||'',publico:form['f-pub']||'',
+    descPct:form['desc-pct']||'0',descRs:form['desc-rs']||'0',arredRs:form['arred-rs']||'0',
+    valLiq:form['val-liq']||'',pgto:form['f-pgto']||'',
+    totalBruto:bruto,totalFinal:total,totaisSec:totais,itens:itens
+  };
+}
+
 async function aprovAcaoLista(idx,novo,ev){
   ev.stopPropagation();var orc=_listaAprov[idx];if(!orc)return;
   var obs=(document.getElementById('obs-'+idx)||{}).value||'';
@@ -4237,10 +4319,14 @@ async function aprovAcaoLista(idx,novo,ev){
   try{
     var btn=ev.target;btn.disabled=true;btn.textContent='⏳ Salvando...';
     var novoDados=JSON.parse(JSON.stringify(orc.dados));novoDados.aprovStatus=novo;novoDados.aprovHist=novoHist;
+    // Aprovação rápida direto da lista (sem abrir o orçamento): grava o
+    // snapshot de baseline igual à aprovação feita dentro do editor, senão
+    // futuras alterações não derrubam mais o status pra nova análise.
+    if(novo==='aprovado'){ novoDados.snapshotAprovado=_tirarSnapshotDeDados(novoDados); }
     var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:orc.driveId,numero:orc.form['f-num']||'SN',cliente:orc.form['f-cliente']||'SemCliente',data:orc.form['f-data']||new Date().toISOString().split('T')[0],dados:novoDados})});
     var d=await r.json();if(!d.ok)throw new Error(d.erro||'Erro ao salvar');
     if(typeof _driveCache!=='undefined') delete _driveCache[orc.driveId];
-    if(driveIdAtual===orc.driveId){aprovStatus=novo;aprovHist=novoHist;renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();}
+    if(driveIdAtual===orc.driveId){aprovStatus=novo;aprovHist=novoHist;if(novo==='aprovado')snapshotAprovado=novoDados.snapshotAprovado;renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();}
     carregarListaAprov(abaAprovAtual);
   }catch(e){alert('⚠️ Erro: '+e.message);}
 }
