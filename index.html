@@ -6858,7 +6858,8 @@ function downloadPDF(){
   if(_bloqueadoSemAprovacao())return;
   var num=gv('f-num')||'orcamento';
   var cli=(gv('f-cliente')||'cliente').replace(/[^a-zA-Z0-9À-ÿ\s]/g,'').trim();
-  var nomeArq=num+' - '+cli;
+  var evtPdf=(gv('f-nome-evento')||'').replace(/[^a-zA-Z0-9À-ÿ\s]/g,'').trim();
+  var nomeArq=evtPdf?(num+' - '+cli+' - '+evtPdf):(num+' - '+cli);
   var html=buildPDF(tipoAtual);
   var css=getCSSImpressao();
   // A4 = 210mm. A 96dpi: 794px. Margens 15mm cada lado = 30mm total = ~113px.
