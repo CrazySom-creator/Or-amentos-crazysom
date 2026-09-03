@@ -3097,7 +3097,14 @@ var SCRIPT_URL='https://script.google.com/macros/s/AKfycbwV251xtPwAUjSn-CJM88-iy
     var num=body.numero||'SN';
     var cli=body.cliente||'SemCliente';
     var data=body.data||new Date().toISOString().split('T')[0];
-    var nome=num+' - '+cli+' - '+data+'.json';
+    // Pedido do usuário: o nome salvo (e exibido em Buscar/Aprovações/
+    // Histórico do cliente etc., que remontam o nome a partir dessas mesmas
+    // partes separadas por " - ") deve incluir o Nome do Evento entre o
+    // Cliente e a Data. Só entra quando o campo estiver preenchido — sem
+    // isso, mantém o formato antigo (Número - Cliente - Data), sem inserir
+    // um segmento vazio no meio do nome.
+    var evt=(body.dados&&body.dados.form&&body.dados.form['f-nome-evento'])||'';
+    var nome=evt?(num+' - '+cli+' - '+evt+' - '+data+'.json'):(num+' - '+cli+' - '+data+'.json');
     var doc=Object.assign({},body.dados,{_driveId:id,_driveNome:nome,_driveModificado:_fmtDataBr(new Date())});
     await fbDb.collection('orcamentos').doc(id).set(doc);
     return {ok:true,id:id,nome:nome};
