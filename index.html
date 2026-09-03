@@ -16481,10 +16481,16 @@ function clienteVerificarDoc(){
 
 // ═══════════════════════════════════════════════════════
 // HISTÓRICO DE ORÇAMENTOS DO CLIENTE
-// Busca no Firestore todos os orçamentos já feitos para o mesmo CNPJ/CPF
-// (por igualdade exata do campo formatado — fmtDoc() sempre produz o mesmo
-// formato pro mesmo número, então a busca é confiável) e, se houver algum
-// (fora o orçamento que está aberto agora), mostra um botão pra consultar.
+// Busca no Firestore os orçamentos já feitos para este cliente. Antes,
+// buscava SÓ por igualdade exata do CNPJ/CPF formatado — parecia confiável
+// (fmtDoc() sempre produz o mesmo formato pro mesmo número DIGITADO AGORA),
+// mas não cobria orçamentos antigos onde o CNPJ ficou em branco, foi digitado
+// com formatação diferente, ou teve um typo — casos comuns num cliente com
+// dezenas de orçamentos ao longo do tempo. Bug relatado: cliente com 25
+// orçamentos (visíveis na busca por nome da Home) aparecia com só 3 no
+// histórico. Agora a busca combina DOIS critérios (união, sem duplicar):
+// mesmo CNPJ/CPF exato (mais confiável quando preenchido) E mesmo nome de
+// cliente exato (pega o resto, mesmo com CNPJ divergente/ausente).
 // ═══════════════════════════════════════════════════════
 var _clienteHistLista=[];
 var _clienteHistTimer=null;
@@ -16493,7 +16499,9 @@ function clienteHistoricoBuscar(docDig,docFormatado){
   clearTimeout(_clienteHistTimer);
   var elBtn=document.getElementById('f-cliente-hist-status');
   if(!elBtn)return;
-  if(docDig.length!==11&&docDig.length!==14){elBtn.innerHTML='';_clienteHistLista=[];return;}
+  var nomeAtualBusca=(gv('f-cliente')||'').trim();
+  var temDoc=(docDig.length===11||docDig.length===14);
+  if(!temDoc&&!nomeAtualBusca){elBtn.innerHTML='';_clienteHistLista=[];return;}
   // Guarda o orçamento/documento vigentes no momento da busca — se o usuário
   // trocar de orçamento (abrir outro) ou editar o CPF/CNPJ de novo enquanto
   // esta consulta assíncrona ainda está em andamento, o resultado que chegar
@@ -16503,17 +16511,32 @@ function clienteHistoricoBuscar(docDig,docFormatado){
   var _idNoMomento=driveIdAtual;
   _clienteHistTimer=setTimeout(async function(){
     try{
-      var snap=await fbDb.collection('orcamentos').where('form.f-doc','==',docFormatado).get();
+      // União de dois critérios (sem duplicar): mesmo CNPJ/CPF exato (mais
+      // confiável quando preenchido) E mesmo nome de cliente exato — pega o
+      // resto do histórico quando o CNPJ ficou em branco, com formatação
+      // diferente ou com typo em algum orçamento antigo. Bug relatado: cliente
+      // com 25 orçamentos (visível na busca por nome da Home) aparecia com só
+      // 3 no histórico, porque a busca antiga usava só o CNPJ exato.
+      var porId={};
+      if(temDoc){
+        var snapDoc=await fbDb.collection('orcamentos').where('form.f-doc','==',docFormatado).get();
+        snapDoc.forEach(function(doc){porId[doc.id]=doc;});
+      }
+      if(nomeAtualBusca){
+        var snapNome=await fbDb.collection('orcamentos').where('form.f-cliente','==',nomeAtualBusca).get();
+        snapNome.forEach(function(doc){porId[doc.id]=doc;});
+      }
       if(driveIdAtual!==_idNoMomento||_clienteSoDigitos(gv('f-doc'))!==docDig){return;}
       var lista=[];
       var nomeAtualNorm=_normNome(gv('f-cliente'));
-      snap.forEach(function(doc){
-        if(doc.id===driveIdAtual)return; // não conta o orçamento que está aberto agora
+      Object.keys(porId).forEach(function(id){
+        if(id===driveIdAtual)return; // não conta o orçamento que está aberto agora
+        var doc=porId[id];
         var d=doc.data();
         var cliNome=(d.form&&d.form['f-cliente'])||'';
         lista.push({
-          id:doc.id,
-          nome:d._driveNome||doc.id,
+          id:id,
+          nome:d._driveNome||id,
           cliNome:cliNome,
           nomeDivergente:!!(nomeAtualNorm&&cliNome&&_normNome(cliNome)!==nomeAtualNorm),
           num:(d.form&&d.form['f-num'])||'—',
