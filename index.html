@@ -902,6 +902,12 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <div class="home-card-desc">Usuários, permissões e configurações do sistema</div>
       </div>
 
+      <div class="home-card" style="border-color:var(--border-strong);background:var(--surface-2)" id="home-btn-transfer" style="display:none" onclick="transferAbrirLote();fecharHome()">
+        <div class="home-card-ico">🔄</div>
+        <div class="home-card-title">Transferência de Responsável</div>
+        <div class="home-card-desc">Passe orçamentos e leads de um consultor pra outro (férias, desligamento)</div>
+      </div>
+
     </div>
 
     <div style="height:32px"></div>
@@ -1213,8 +1219,9 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <button onclick="leadAdicionarAtividade()" style="padding:7px 14px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">+ Nota</button>
     </div>
 
-    <div style="margin-bottom:14px">
-      <button onclick="leadIniciarConversao(_leadDetId)" style="width:100%;padding:9px;background:var(--R);color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:800;cursor:pointer">🚀 Converter em Orçamento →</button>
+    <div style="display:flex;gap:6px;margin-bottom:14px">
+      <button onclick="leadIniciarConversao(_leadDetId)" style="flex:1;padding:9px;background:var(--R);color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:800;cursor:pointer">🚀 Converter em Orçamento →</button>
+      <button onclick="transferAbrirIndividual('lead',_leadDetId)" title="Transferir este lead para outro consultor, mantendo todo o histórico" style="padding:9px 12px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:5px;font-size:12px;font-weight:700;cursor:pointer">🔄</button>
     </div>
 
     <div style="background:var(--surface-3);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:12px">
@@ -1492,6 +1499,45 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <button class="btn btn-o btn-sm" onclick="document.getElementById('evento-hist-ov').classList.remove('open')">✕</button>
     </div>
     <div id="evento-hist-lista" style="max-height:460px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  MODAL TRANSFERÊNCIA DE RESPONSÁVEL (orçamentos + leads) -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="transfer-ov" style="z-index:97000">
+  <div class="modal-box" style="max-width:820px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <div><h2 style="margin-bottom:2px">🔄 Transferência de Responsável</h2><p class="sub" style="margin:0" id="transfer-sub">Passe orçamentos e leads de um consultor para outro, mantendo todo o histórico</p></div>
+      <button class="btn btn-o btn-sm" onclick="transferFechar()">✕</button>
+    </div>
+    <div id="transfer-bloco-busca" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:12px 0">
+      <div style="flex:1;min-width:180px">
+        <label style="font-size:11px;font-weight:700;color:var(--text);display:block;margin-bottom:4px">De (consultor atual)</label>
+        <select id="transfer-de" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);color:var(--text);font-size:12px"><option value="">Selecione...</option></select>
+      </div>
+      <button class="btn btn-o btn-sm" onclick="transferBuscar()">🔍 Buscar orçamentos e leads</button>
+    </div>
+    <div id="transfer-status" style="font-size:11px;color:var(--text-muted);margin-bottom:8px"></div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-bottom:6px">
+      <input type="checkbox" id="transfer-todos" checked onchange="transferMarcarTodos(this.checked)" style="width:14px;height:14px;cursor:pointer"> Selecionar todos
+    </label>
+    <div id="transfer-lista" style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-bottom:14px">
+      <div style="padding:16px;text-align:center;color:var(--text-muted);font-size:12px">Escolha o consultor de origem e clique em Buscar.</div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
+      <div style="flex:1;min-width:180px">
+        <label style="font-size:11px;font-weight:700;color:var(--text);display:block;margin-bottom:4px">Para (novo responsável)</label>
+        <select id="transfer-para" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);color:var(--text);font-size:12px"><option value="">Selecione...</option></select>
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:11px;font-weight:700;color:var(--text);display:block;margin-bottom:4px">Motivo (opcional — ex.: Férias, Desligamento)</label>
+      <textarea id="transfer-motivo" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);color:var(--text);font-size:12px;min-height:50px;box-sizing:border-box" placeholder="Fica registrado no histórico de cada orçamento/lead transferido"></textarea>
+    </div>
+    <div style="display:flex;justify-content:flex-end">
+      <button class="btn btn-g btn-sm" id="transfer-btn-executar" onclick="transferExecutar()">🔄 Transferir selecionados</button>
+    </div>
   </div>
 </div>
 
@@ -2574,7 +2620,10 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     <div><label>Data</label><input type="date" id="f-data" oninput="marcarAlterado()"></div>
     <div><label>Validade</label><input type="date" id="f-val" oninput="marcarAlterado()"></div>
     <div><label>Consultor</label>
-      <select id="f-cons" onchange="marcarAlterado()"><option value="">Selecione...</option></select>
+      <div style="display:flex;gap:6px">
+        <select id="f-cons" onchange="marcarAlterado()" style="flex:1"><option value="">Selecione...</option></select>
+        <button type="button" class="btn btn-o btn-sm" onclick="transferAbrirIndividualAtual()" title="Transferir este orçamento para outro consultor, mantendo todo o histórico" style="white-space:nowrap;padding:6px 9px;font-size:12px">🔄</button>
+      </div>
     </div>
   </div>
   <div class="g4">
@@ -6172,6 +6221,7 @@ function _renderizarHome(){
   var tudo=['adm','gerente','diretor'].includes(nivel);
   _homeShow('home-btn-ger', tudo||dashTemAcesso('dash-ger'));
   _homeShow('home-btn-adm', nivel==='adm');
+  _homeShow('home-btn-transfer', tudo);
   _homeShow('home-btn-aprov', true);
   _homeShow('home-btn-elab', dashTemAcesso('dash-elab'));
   _homeShow('home-btn-metas', dashTemAcesso('dash-metas'));
@@ -18828,6 +18878,305 @@ async function popularConsultores(){
   // Preserva o consultor de um orçamento antigo mesmo se a pessoa não estiver mais na lista ativa
   if(atual && nomes.indexOf(atual)<0) nomes.push(atual);
   sel.innerHTML='<option value="">Selecione...</option>'+nomes.map(function(n){return '<option'+(n===atual?' selected':'')+'>'+eh(n)+'</option>';}).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// TRANSFERÊNCIA DE RESPONSÁVEL — orçamentos e leads, individual ou em lote.
+// Pedido do usuário: "os consultores podem sair de férias ou ser desligados
+// da empresa e quando isso acontece vai mudar o responsável pelo orçamento,
+// com isso o novo responsável vai precisar de todo o histórico pra dar
+// andamento". Só troca QUEM é o responsável (form['f-cons'] no orçamento,
+// .consultor no lead) — todo o resto (aprovHist, comercialHist, atividades,
+// contratoHist, financeiro etc.) permanece intacto, e a própria transferência
+// fica registrada como uma atividade (aparece na linha do tempo de quem abrir
+// depois, tanto no card do funil quanto no detalhe do lead).
+//
+// Dois pontos de entrada, mesma tela (#transfer-ov):
+//  - transferAbrirLote(): modo lote — usuário escolhe o consultor de ORIGEM,
+//    o sistema busca TUDO que está com ele (orçamentos em qualquer status +
+//    leads) e lista com checkbox (todos marcados por padrão).
+//  - transferAbrirIndividual(tipo,id): modo individual — abre já com um único
+//    item marcado (o que o usuário estava vendo), sem precisar buscar nada.
+//    Reaproveita a mesma lista/execução do modo lote.
+// Gated a adm/gerente/diretor — mesmo nível de acesso da Aprovações em lote
+// e da exclusão direta de orçamentos.
+// ═══════════════════════════════════════════════════════
+var _transferItens = [];
+var _transferModoIndividual = false;
+
+function _transferPodeUsar(){
+  return !!(usuarioAtual && ['adm','gerente','diretor'].indexOf(usuarioAtual.nivel) >= 0);
+}
+
+async function _transferPopularConsultoresSelect(selId){
+  var sel = document.getElementById(selId);
+  if(!sel) return;
+  var atual = sel.value;
+  var nomes = [];
+  try{
+    var snap = await fbDb.collection('config').doc('consultoresNomes').get();
+    if(snap.exists && Array.isArray(snap.data().nomes)) nomes = snap.data().nomes.slice();
+  }catch(e){ console.warn('_transferPopularConsultoresSelect:', e); }
+  if(!nomes.length && Array.isArray(USUARIOS)) nomes = USUARIOS.map(function(u){ return u.nome; });
+  nomes = nomes.filter(function(n,i){ return n && nomes.indexOf(n)===i; }).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
+  if(atual && nomes.indexOf(atual)<0) nomes.push(atual);
+  sel.innerHTML = '<option value="">Selecione...</option>' + nomes.map(function(n){ return '<option'+(n===atual?' selected':'')+'>'+eh(n)+'</option>'; }).join('');
+}
+
+async function transferAbrirLote(){
+  if(!_transferPodeUsar()){ alert('⚠️ Você não tem permissão para transferir responsáveis. Fale com um gerente, diretor ou administrador.'); return; }
+  _transferModoIndividual = false;
+  _transferItens = [];
+  var blocoBusca = document.getElementById('transfer-bloco-busca');
+  if(blocoBusca) blocoBusca.style.display = 'flex';
+  var lista = document.getElementById('transfer-lista');
+  if(lista) lista.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:12px">Escolha o consultor de origem e clique em Buscar.</div>';
+  var statusEl = document.getElementById('transfer-status');
+  if(statusEl) statusEl.textContent = '';
+  await _transferPopularConsultoresSelect('transfer-de');
+  await _transferPopularConsultoresSelect('transfer-para');
+  document.getElementById('transfer-ov').classList.add('open');
+}
+
+async function transferAbrirIndividualAtual(){
+  if(!driveIdAtual){ alert('⚠️ Salve o orçamento antes de transferir o responsável.'); return; }
+  await transferAbrirIndividual('orcamento', driveIdAtual);
+}
+
+async function transferAbrirIndividual(tipo, id){
+  if(!_transferPodeUsar()){ alert('⚠️ Você não tem permissão para transferir responsáveis. Fale com um gerente, diretor ou administrador.'); return; }
+  if(!id){ alert('⚠️ Item inválido para transferência.'); return; }
+  _transferModoIndividual = true;
+  var blocoBusca = document.getElementById('transfer-bloco-busca');
+  if(blocoBusca) blocoBusca.style.display = 'none';
+  var statusEl = document.getElementById('transfer-status');
+  if(statusEl) statusEl.textContent = '⏳ Carregando...';
+  document.getElementById('transfer-lista').innerHTML = '';
+  await _transferPopularConsultoresSelect('transfer-para');
+  var item = tipo==='lead' ? _transferCarregarItemLead(id) : await _transferCarregarItemOrcamento(id);
+  document.getElementById('transfer-ov').classList.add('open');
+  if(!item){
+    if(statusEl) statusEl.textContent = '⚠️ Item não encontrado.';
+    _transferItens = [];
+    _transferRenderLista();
+    return;
+  }
+  item.selecionado = true;
+  _transferItens = [item];
+  document.getElementById('transfer-todos').checked = true;
+  if(statusEl) statusEl.textContent = '';
+  _transferRenderLista();
+}
+
+function transferFechar(){
+  document.getElementById('transfer-ov').classList.remove('open');
+  var blocoBusca = document.getElementById('transfer-bloco-busca');
+  if(blocoBusca) blocoBusca.style.display = 'flex';
+}
+
+// Busca no Firestore todos os orçamentos (qualquer status — rascunho, em
+// análise, aprovado etc., não só validados) com o consultor indicado.
+async function _transferBuscarOrcamentos(consultorNome){
+  var lista = [];
+  try{
+    var snap = await fbDb.collection('orcamentos').where('form.f-cons','==',consultorNome).get();
+    snap.forEach(function(doc){
+      var d = doc.data();
+      var f = d.form || {};
+      lista.push({
+        tipo: 'orcamento', id: doc.id,
+        titulo: f['f-num'] || '—',
+        cliente: f['f-cliente'] || '—',
+        consultorAtual: f['f-cons'] || '',
+        status: d.aprovStatus || 'rascunho',
+        valor: dashValOrc({form:f, dados:d})
+      });
+    });
+  }catch(e){ console.warn('_transferBuscarOrcamentos:', e); }
+  return lista;
+}
+
+// LEADS já fica carregado em memória (mesmo array usado pelo Funil) —
+// evita uma query extra, só garante que já foi carregado antes de filtrar.
+function _transferBuscarLeads(consultorNome){
+  return (LEADS||[]).filter(function(l){ return l.consultor === consultorNome; }).map(function(l){
+    return {
+      tipo: 'lead', id: l.id,
+      titulo: l.nome || '—',
+      cliente: l.nome || '—',
+      consultorAtual: l.consultor || '',
+      status: l.etapa || 'sem_contato',
+      valor: parseFloat(l.valorEstimado) || 0
+    };
+  });
+}
+
+async function _transferCarregarItemOrcamento(id){
+  try{
+    var r = await fetch(SCRIPT_URL+'?action=load&id='+id);
+    var d = await r.json();
+    if(!d.ok) return null;
+    var dados = d.dados || {};
+    var f = dados.form || {};
+    return {
+      tipo:'orcamento', id:id,
+      titulo: f['f-num'] || '—',
+      cliente: f['f-cliente'] || '—',
+      consultorAtual: f['f-cons'] || '',
+      status: dados.aprovStatus || 'rascunho',
+      valor: dashValOrc({form:f, dados:dados})
+    };
+  }catch(e){ console.warn('_transferCarregarItemOrcamento:', e); return null; }
+}
+
+function _transferCarregarItemLead(id){
+  var l = (LEADS||[]).find(function(x){ return x.id === id; });
+  if(!l) return null;
+  return {
+    tipo:'lead', id:id,
+    titulo: l.nome || '—',
+    cliente: l.nome || '—',
+    consultorAtual: l.consultor || '',
+    status: l.etapa || 'sem_contato',
+    valor: parseFloat(l.valorEstimado) || 0
+  };
+}
+
+function _transferRenderLista(){
+  var el = document.getElementById('transfer-lista');
+  if(!el) return;
+  if(!_transferItens.length){
+    el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:12px">Nenhum item encontrado.</div>';
+    return;
+  }
+  el.innerHTML = _transferItens.map(function(it,i){
+    var siLabel = it.tipo==='orcamento' ? ((SI[it.status]||SI.rascunho).label) : ((LEAD_COL_SI[it.status]||{}).label||it.status);
+    var icone = it.tipo==='orcamento' ? '📄' : '🎯';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border)">'
+      +'<input type="checkbox" '+(it.selecionado?'checked':'')+' onchange="transferToggleItem('+i+',this.checked)" style="width:14px;height:14px;cursor:pointer;flex-shrink:0">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:11px;color:var(--text);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+icone+' '+eh(it.titulo)+' — '+eh(it.cliente)+'</div>'
+      +'<div style="font-size:10px;color:var(--text-muted);margin-top:1px">'+siLabel+'</div>'
+      +'</div>'
+      +'<div style="font-size:11px;font-weight:800;color:#66bb6a;white-space:nowrap">'+fmt(it.valor)+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function transferToggleItem(i, checked){
+  if(_transferItens[i]) _transferItens[i].selecionado = checked;
+}
+
+function transferMarcarTodos(checked){
+  _transferItens.forEach(function(it){ it.selecionado = checked; });
+  _transferRenderLista();
+}
+
+async function transferBuscar(){
+  if(!_transferPodeUsar()) return;
+  var consultor = document.getElementById('transfer-de').value;
+  var statusEl = document.getElementById('transfer-status');
+  if(!consultor){ alert('⚠️ Selecione o consultor de origem.'); return; }
+  if(statusEl) statusEl.textContent = '⏳ Buscando...';
+  document.getElementById('transfer-lista').innerHTML = '';
+  if(!_leadsCarregado){ await leadsCarregarStorage(); _leadsCarregado = true; }
+  var orcs = await _transferBuscarOrcamentos(consultor);
+  var leads = _transferBuscarLeads(consultor);
+  _transferItens = orcs.concat(leads);
+  _transferItens.forEach(function(it){ it.selecionado = true; });
+  var chkTodos = document.getElementById('transfer-todos');
+  if(chkTodos) chkTodos.checked = true;
+  _transferRenderLista();
+  if(statusEl){
+    statusEl.textContent = _transferItens.length
+      ? (_transferItens.length+' item(ns) encontrado(s) para "'+consultor+'".')
+      : ('Nenhum orçamento ou lead encontrado para "'+consultor+'".');
+  }
+}
+
+async function _transferirOrcamento(id, novoConsultor, motivo){
+  var r = await fetch(SCRIPT_URL+'?action=load&id='+id);
+  var d = await r.json();
+  if(!d.ok) throw new Error(d.erro || 'Orçamento não encontrado');
+  var dados = d.dados || {};
+  dados.form = dados.form || {};
+  var consultorAntigo = dados.form['f-cons'] || '—';
+  dados.form['f-cons'] = novoConsultor;
+  dados.atividades = (dados.atividades||[]).concat([{
+    texto: '🔄 Responsável transferido de "'+consultorAntigo+'" para "'+novoConsultor+'"'+(motivo?' — Motivo: '+motivo:''),
+    usuario: usuarioAtual ? usuarioAtual.nome : '—',
+    data: new Date().toLocaleString('pt-BR'),
+    dataISO: new Date().toISOString().split('T')[0]
+  }]);
+  var r2 = await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
+    action:'save', id:id,
+    numero: dados.form['f-num']||'SN',
+    cliente: dados.form['f-cliente']||'SemCliente',
+    data: dados.form['f-data']||new Date().toISOString().split('T')[0],
+    dados: dados
+  })});
+  var d2 = await r2.json();
+  if(!d2.ok) throw new Error(d2.erro || 'Erro ao salvar');
+  if(typeof _driveCache!=='undefined') delete _driveCache[id];
+  if(driveIdAtual === id){
+    var selCons = document.getElementById('f-cons');
+    if(selCons) selCons.value = novoConsultor;
+    atividades = dados.atividades;
+    if(typeof marcarAlterado==='function') marcarAlterado();
+  }
+  return true;
+}
+
+async function _transferirLead(id, novoConsultor, motivo){
+  var lead = (LEADS||[]).find(function(l){ return l.id === id; });
+  if(!lead) throw new Error('Lead não encontrado');
+  var consultorAntigo = lead.consultor || '—';
+  lead.consultor = novoConsultor;
+  lead.atividades = (lead.atividades||[]).concat([{
+    texto: '🔄 Responsável transferido de "'+consultorAntigo+'" para "'+novoConsultor+'"'+(motivo?' — Motivo: '+motivo:''),
+    usuario: usuarioAtual ? usuarioAtual.nome : '—',
+    data: new Date().toLocaleString('pt-BR'),
+    dataISO: new Date().toISOString().split('T')[0]
+  }]);
+  lead.atualizadoEm = new Date().toLocaleString('pt-BR');
+  lead.atualizadoPor = usuarioAtual ? usuarioAtual.nome : '';
+  var ok = await _leadSalvarFirestore(lead);
+  if(!ok) throw new Error('Erro ao salvar lead no Firestore');
+  return true;
+}
+
+async function transferExecutar(){
+  if(!_transferPodeUsar()){ alert('⚠️ Você não tem permissão para transferir responsáveis.'); return; }
+  var novoConsultor = document.getElementById('transfer-para').value;
+  if(!novoConsultor){ alert('⚠️ Selecione o novo responsável.'); return; }
+  var selecionados = _transferItens.filter(function(it){ return it.selecionado; });
+  if(!selecionados.length){ alert('⚠️ Selecione pelo menos um item pra transferir.'); return; }
+  if(!confirm('Transferir '+selecionados.length+' item(ns) para "'+novoConsultor+'"?\n\nO responsável muda e fica registrado no histórico de cada orçamento/lead — o restante do histórico continua intacto.')) return;
+  var motivo = (document.getElementById('transfer-motivo').value||'').trim();
+  var btn = document.getElementById('transfer-btn-executar');
+  var statusEl = document.getElementById('transfer-status');
+  if(btn) btn.disabled = true;
+  var okCount = 0, erros = [];
+  for(var i=0; i<selecionados.length; i++){
+    var it = selecionados[i];
+    if(statusEl) statusEl.textContent = '⏳ Transferindo '+(i+1)+'/'+selecionados.length+'...';
+    try{
+      if(it.tipo === 'orcamento') await _transferirOrcamento(it.id, novoConsultor, motivo);
+      else await _transferirLead(it.id, novoConsultor, motivo);
+      okCount++;
+    }catch(e){ erros.push(it.titulo+': '+e.message); }
+  }
+  if(btn) btn.disabled = false;
+  if(statusEl) statusEl.textContent = '✅ '+okCount+' transferido(s)'+(erros.length?(', ⚠️ '+erros.length+' com erro'):'')+'.';
+  if(erros.length) alert('⚠️ Alguns itens não puderam ser transferidos:\n\n'+erros.join('\n'));
+  if(typeof _homeInvalidarCacheBusca==='function') _homeInvalidarCacheBusca();
+  if(typeof funilFiltrarLista==='function') funilFiltrarLista();
+  if(typeof funilHomeFiltrarLista==='function') funilHomeFiltrarLista();
+  if(_transferModoIndividual){
+    setTimeout(transferFechar, 900);
+  }else{
+    await transferBuscar();
+  }
 }
 
 function renderAdmList(){
