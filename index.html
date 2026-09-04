@@ -1516,6 +1516,14 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
         <label style="font-size:11px;font-weight:700;color:var(--text);display:block;margin-bottom:4px">De (consultor atual)</label>
         <select id="transfer-de" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);color:var(--text);font-size:12px"><option value="">Selecione...</option></select>
       </div>
+      <div style="min-width:220px">
+        <label style="font-size:11px;font-weight:700;color:var(--text);display:block;margin-bottom:4px">Orçamentos</label>
+        <div style="display:flex;gap:12px;padding:8px 0 8px 2px">
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-dim);cursor:pointer"><input type="radio" name="transfer-situacao" id="transfer-situacao-aberto" value="aberto" checked style="cursor:pointer">Em aberto</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-dim);cursor:pointer"><input type="radio" name="transfer-situacao" id="transfer-situacao-fechado" value="fechado" style="cursor:pointer">Fechados</label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-dim);cursor:pointer"><input type="radio" name="transfer-situacao" id="transfer-situacao-ambos" value="ambos" style="cursor:pointer">Ambos</label>
+        </div>
+      </div>
       <button class="btn btn-o btn-sm" onclick="transferBuscar()">🔍 Buscar orçamentos e leads</button>
     </div>
     <div id="transfer-status" style="font-size:11px;color:var(--text-muted);margin-bottom:8px"></div>
@@ -18933,6 +18941,8 @@ async function transferAbrirLote(){
   if(lista) lista.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:12px">Escolha o consultor de origem e clique em Buscar.</div>';
   var statusEl = document.getElementById('transfer-status');
   if(statusEl) statusEl.textContent = '';
+  var radioAberto = document.getElementById('transfer-situacao-aberto');
+  if(radioAberto) radioAberto.checked = true;
   await _transferPopularConsultoresSelect('transfer-de');
   await _transferPopularConsultoresSelect('transfer-para');
   document.getElementById('transfer-ov').classList.add('open');
@@ -18974,14 +18984,29 @@ function transferFechar(){
   if(blocoBusca) blocoBusca.style.display = 'flex';
 }
 
-// Busca no Firestore todos os orçamentos (qualquer status — rascunho, em
-// análise, aprovado etc., não só validados) com o consultor indicado.
-async function _transferBuscarOrcamentos(consultorNome){
+// Um orçamento é considerado "fechado" quando já chegou a uma etapa
+// terminal do funil comercial (Venda Ganha ou Venda Perdida) — mesmo
+// critério usado em todo o resto do sistema (Dashboard, Resultados
+// Mensais etc.). Qualquer outra situação (sem etapa, proposta enviada,
+// em negociação, standby) conta como "em aberto".
+function _transferOrcamentoFechado(d){
+  var cs = (d && d.comercialStatus) || '';
+  return cs === 'ganha' || cs === 'perdida';
+}
+
+// Busca no Firestore todos os orçamentos (qualquer status de aprovação —
+// rascunho, em análise, aprovado etc., não só validados) com o consultor
+// indicado, filtrando por situação: 'aberto' (padrão), 'fechado' ou 'ambos'.
+async function _transferBuscarOrcamentos(consultorNome, situacao){
+  situacao = situacao || 'aberto';
   var lista = [];
   try{
     var snap = await fbDb.collection('orcamentos').where('form.f-cons','==',consultorNome).get();
     snap.forEach(function(doc){
       var d = doc.data();
+      var fechado = _transferOrcamentoFechado(d);
+      if(situacao==='aberto' && fechado) return;
+      if(situacao==='fechado' && !fechado) return;
       var f = d.form || {};
       lista.push({
         tipo: 'orcamento', id: doc.id,
@@ -19072,16 +19097,24 @@ function transferMarcarTodos(checked){
   _transferRenderLista();
 }
 
+function _transferSituacaoSelecionada(){
+  var el = document.querySelector('input[name="transfer-situacao"]:checked');
+  return el ? el.value : 'aberto';
+}
+
 async function transferBuscar(){
   if(!_transferPodeUsar()) return;
   var consultor = document.getElementById('transfer-de').value;
+  var situacao = _transferSituacaoSelecionada();
   var statusEl = document.getElementById('transfer-status');
   if(!consultor){ alert('⚠️ Selecione o consultor de origem.'); return; }
   if(statusEl) statusEl.textContent = '⏳ Buscando...';
   document.getElementById('transfer-lista').innerHTML = '';
   if(!_leadsCarregado){ await leadsCarregarStorage(); _leadsCarregado = true; }
-  var orcs = await _transferBuscarOrcamentos(consultor);
-  var leads = _transferBuscarLeads(consultor);
+  var orcs = await _transferBuscarOrcamentos(consultor, situacao);
+  // Leads não têm etapa "fechada" (só viram orçamento ou seguem em aberto),
+  // então só entram quando a situação escolhida não é "Fechados".
+  var leads = (situacao==='fechado') ? [] : _transferBuscarLeads(consultor);
   _transferItens = orcs.concat(leads);
   _transferItens.forEach(function(it){ it.selecionado = true; });
   var chkTodos = document.getElementById('transfer-todos');
