@@ -2708,7 +2708,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
   <div class="g4" style="margin-bottom:8px">
     <div><label>Horário Início</label><input type="time" id="f-hi" oninput="marcarAlterado()"></div>
     <div><label>Horário Encerramento</label><input type="time" id="f-hf" oninput="marcarAlterado()"></div>
-    <div><label>Dias do Evento</label><input id="f-dias-ev" readonly style="background:#fffde7;border-color:#ffe082;font-weight:700"></div>
+    <div><label>Dias do Evento</label><input id="f-dias-ev" readonly style="background:#fffde7;border-color:#ffe082;font-weight:700;color:#000"></div>
     <div><label>Diárias Equip. (½)</label><input id="f-diarias-equip" readonly style="background:#e8f4fd;border-color:#90caf9;font-weight:700;color:#1565c0"></div>
   </div>
   <div class="g4" style="margin-bottom:8px">
@@ -2725,7 +2725,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
   </div>
   <div class="g3">
     <div><label>Público Estimado</label><input type="number" id="f-pub" placeholder="500" oninput="marcarAlterado()"></div>
-    <div style="grid-column:span 2"><label>Observações Gerais</label><textarea id="f-obs" style="background:#fffde7;border-color:#ffe082;min-height:52px" placeholder="Detalhes, restrições, motivo de revisão..." oninput="marcarAlterado()"></textarea></div>
+    <div style="grid-column:span 2"><label>Observações Gerais</label><textarea id="f-obs" style="background:#fffde7;border-color:#ffe082;min-height:52px;color:#000" placeholder="Detalhes, restrições, motivo de revisão..." oninput="marcarAlterado()"></textarea></div>
     <div style="grid-column:span 2"><label style="display:flex;align-items:center;gap:6px">🔧 Observações da OS <span style="background:var(--R);color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;letter-spacing:.5px">SOMENTE PARA MONTAGEM</span></label><textarea id="f-obs-os" style="background:var(--surface-3);border:1px solid var(--border-strong);color:var(--text);min-height:60px;margin-top:3px" placeholder="Informações internas para o time de montagem: particularidades do local, contato no evento, cuidados especiais com equipamentos, sequência de montagem..." oninput="marcarAlterado()"></textarea><span style="font-size:10px;color:var(--text-muted);margin-top:2px;display:block">⚠️ Este campo aparece apenas na OS — não é exibido no orçamento do cliente.</span></div>
   </div>
 </div>
@@ -4437,7 +4437,7 @@ function buildSecPane(s){
   pane.innerHTML=info+'<div class="amb-bar" id="ambbar-'+s+'"></div><div id="ambcontent-'+s+'"></div>'+bvHtml;
   // Restaurar valor do BV da variável _bvStorage (percentual)
   if(s==='servico'){var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value=_bvStorage>0?String(_bvStorage).replace('.',',')+'%':'0%';}
-  if(s==='logistica'){pane.innerHTML+='<div style="margin-top:11px"><label>Serviços inclusos no PDF (um por linha)</label><textarea id="f-svinc" style="margin-top:4px;background:#f0f7ff;border-color:#90caf9;min-height:60px" oninput="marcarAlterado()"></textarea></div>';setTimeout(function(){var ta=document.getElementById('f-svinc');if(ta&&!ta.value)ta.value='Montagem\nDesmontagem\nTransporte';},10);}
+  if(s==='logistica'){pane.innerHTML+='<div style="margin-top:11px"><label>Serviços inclusos no PDF (um por linha)</label><textarea id="f-svinc" style="margin-top:4px;background:#f0f7ff;border-color:#90caf9;min-height:60px;color:#000" oninput="marcarAlterado()"></textarea></div>';setTimeout(function(){var ta=document.getElementById('f-svinc');if(ta&&!ta.value)ta.value='Montagem\nDesmontagem\nTransporte';},10);}
   renderAmbBar(s);renderAmbContent(s);
 }
 function renderAmbBar(s){
@@ -4457,7 +4457,7 @@ function renderAmbBar(s){
   var ativo=st.ambientes.find(function(a){return a.id===st.ambAtiva;});
   if(ativo&&ativo.id!=='default'){
     var inp=document.createElement('input');inp.type='text';inp.value=ativo.nome;inp.placeholder='Nome do ambiente';
-    inp.style.cssText='max-width:160px;margin-left:8px;font-size:11px;padding:3px 7px;border:1px solid #90caf9;background:#f0f7ff;border-radius:4px;';
+    inp.style.cssText='max-width:160px;margin-left:8px;font-size:11px;padding:3px 7px;border:1px solid #90caf9;background:#f0f7ff;border-radius:4px;color:#000;';
     inp.addEventListener('input',function(){ativo.nome=inp.value;bar.querySelectorAll('.abtn').forEach(function(b){if(b.dataset.ambid===ativo.id)b.textContent=inp.value||'Ambiente';});calc();});
     inp.addEventListener('blur',function(){renderAmbBar(s);});
     bar.appendChild(inp);
