@@ -6144,7 +6144,7 @@ async function limpar(){
   snapshotAnterior=null;
   snapshotAprovado=null;
   finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();
-  buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+  buildTabs();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
   _atualizarBtnClonar();
   // Gerar número automático para o novo orçamento
   if(usuarioAtual) setTimeout(gerarNumeroAuto, 300);
@@ -6585,7 +6585,7 @@ async function _resetarEstadoOrcamento(){
   snapshotAnterior=null;
   snapshotAprovado=null;
   finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();
-  buildTabs();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+  buildTabs();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
   _atualizarBtnClonar();
 }
 
