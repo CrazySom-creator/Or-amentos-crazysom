@@ -4390,7 +4390,7 @@ function buildOrcCard(orc,idx){
   var infoAgd=orc.st!=='aprovado'?'<b>Aguardando:</b> '+(aguardando[orc.st]||'—')+(minhaVez?' <b style="color:#ff9800">← SUA VEZ</b>':'')+'<br>':'';
   var infoEv=orc.form['f-dia']?new Date(orc.form['f-dia']+'T12:00:00').toLocaleDateString('pt-BR'):'';
   return '<div class="orc-card '+orc.st+'" id="orc-card-'+idx+'" onclick="toggleDetalhes('+idx+')">'
-    +'<div class="orc-topo"><span class="orc-num">'+(orc.form['f-num']||'—')+'</span><span class="orc-cli">'+(orc.form['f-cliente']||'—')+'</span><span class="orc-badge" style="background:'+si.bg+';color:'+si.tx+';border:1px solid '+si.bd+'">'+si.label+'</span></div>'
+    +'<div class="orc-topo"><span class="orc-num">'+(orc.form['f-num']||'—')+'</span><span class="orc-cli">'+(orc.form['f-cliente']||'—')+(orc.form['f-nome-evento']?' — '+orc.form['f-nome-evento']:'')+'</span><span class="orc-badge" style="background:'+si.bg+';color:'+si.tx+';border:1px solid '+si.bd+'">'+si.label+'</span></div>'
     +'<div class="orc-info">'+infoAgd+(orc.form['f-cons']?'<b>Consultor:</b> '+orc.form['f-cons']+' · ':'')+(infoEv?'<b>Evento:</b> '+infoEv+' · ':'')+' <b>Atualizado:</b> '+orc.modificado+(ult?'<br><b>Última ação:</b> '+ult.acao+' por '+_nomeUsuario(ult.usuario):'')+'</div>'
     +'<div class="etapas">'+etapasHTML+'</div>'
     +'<div id="det-'+idx+'" class="aprov-detalhe">'+histHtml
@@ -8883,7 +8883,7 @@ async function _contratoCriarCobranca(orc){
     consultor:f['f-cons']||'',
     vinculoTipo:'orcamento',
     vinculoId:driveId,
-    vinculoLabel:(f['f-cliente']||'—')+' · '+(f['f-num']||'—'),
+    vinculoLabel:(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+f['f-nome-evento']:'')+' · '+(f['f-num']||'—'),
     autoContrato:'cobranca',
     status:'pendente',
     criadoEm:new Date().toLocaleString('pt-BR'),
@@ -10135,7 +10135,7 @@ function fkAbrirAtrasados(tipo){
       var histCom=(o.dados&&o.dados.comercialHist)||[];
       var resumo=_fkResumoAcompanhamento(o.dados&&o.dados.criadoEmISO, histCom, (o.dados&&o.dados.atividades)||[], hojeEsfr);
       var cs=(o.dados&&o.dados.comercialStatus)||'';
-      return {id:o.driveId, titulo:f['f-cliente']||'—', sub:(f['f-num']||'—')+(f['f-cons']?' · '+f['f-cons']:'')+' · '+(FUNIL_SI[cs]?FUNIL_SI[cs].label:cs), dias:resumo.diasEtapa||0};
+      return {id:o.driveId, titulo:(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+f['f-nome-evento']:''), sub:(f['f-num']||'—')+(f['f-cons']?' · '+f['f-cons']:'')+' · '+(FUNIL_SI[cs]?FUNIL_SI[cs].label:cs), dias:resumo.diasEtapa||0};
     }).sort(function(a,b){ return b.dias-a.dias; });
     box.innerHTML = itensEsfr.length
       ? itensEsfr.map(function(x){
@@ -10170,7 +10170,7 @@ function fkAbrirAtrasados(tipo){
     if(sub) sub.textContent = total+' negociaç'+(total!==1?'ões':'ão')+' com follow-up vencido — clique pra abrir';
     var itensOrc = orc.map(function(o){
       var f=o.form||{};
-      return {tipo:'orc', id:o.driveId, titulo:f['f-cliente']||'—', sub:(f['f-num']||'—')+(f['f-cons']?' · '+f['f-cons']:''), fu:(o.dados&&o.dados.followupData)||''};
+      return {tipo:'orc', id:o.driveId, titulo:(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+f['f-nome-evento']:''), sub:(f['f-num']||'—')+(f['f-cons']?' · '+f['f-cons']:''), fu:(o.dados&&o.dados.followupData)||''};
     });
     var itensLead = lead.map(function(l){
       return {tipo:'lead', id:l.id, titulo:l.nome||'—', sub:(l.consultor||'')+(l.telefone?' · '+l.telefone:''), fu:l.followupData||''};
@@ -10301,7 +10301,7 @@ function _fkCardHtml(o, hoje){
     : '';
 
   return '<div class="fk-card" draggable="true" ondragstart="_fkDragStart(event,\''+driveId+'\',\'orc\')" ondragend="_fkDragEnd(event)" onclick="fkAbrirDetalhe(\''+driveId+'\')">'
-    + '<div class="fk-card-cli">'+eh(f['f-cliente']||'—')+'</div>'
+    + '<div class="fk-card-cli">'+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' <span style="font-weight:600;opacity:.8">— '+eh(f['f-nome-evento'])+'</span>':'')+'</div>'
     + '<div class="fk-card-meta"><span>'+eh(f['f-num']||'—')+'</span>'
     + (f['f-cons'] ? '<span>· '+eh(f['f-cons'])+'</span>' : '')
     + '</div>'
@@ -10525,7 +10525,7 @@ async function _fkCriarPassoCadencia(driveId, etapa, passo){
     consultor: f['f-cons'] || (usuarioAtual?usuarioAtual.nome:''),
     vinculoTipo: 'orcamento',
     vinculoId: driveId,
-    vinculoLabel: (f['f-cliente']||'—')+' · '+(f['f-num']||'—'),
+    vinculoLabel: (f['f-cliente']||'—')+(f['f-nome-evento']?' — '+f['f-nome-evento']:'')+' · '+(f['f-num']||'—'),
     autoEtapa: etapa,
     autoEtapaPasso: passo,
     status: 'pendente',
@@ -10834,7 +10834,7 @@ function fkAbrirDetalhe(driveId, forcarEtapa){
   var f = orc.form || {};
   var d = orc.dados || {};
 
-  document.getElementById('fk-det-titulo').textContent = f['f-cliente'] || '—';
+  document.getElementById('fk-det-titulo').textContent = (f['f-cliente']||'—')+(f['f-nome-evento']?' — '+f['f-nome-evento']:'');
   document.getElementById('fk-det-sub').textContent = (f['f-num']||'—')
     + (f['f-cons'] ? ' · '+f['f-cons'] : '')
     + (f['f-dia'] ? ' · Evento: '+fD(f['f-dia']) : '');
@@ -11069,7 +11069,7 @@ function tarefaAbrirNovaDoOrcamento(){
   if(!_fkDetDriveId) return;
   var orc=_funilCache.find(function(o){ return o.driveId===_fkDetDriveId; });
   var f=(orc&&orc.form)||{};
-  var label=(f['f-cliente']||'—')+' · '+(f['f-num']||'—');
+  var label=(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+f['f-nome-evento']:'')+' · '+(f['f-num']||'—');
   tarefaAbrirForm('orcamento', _fkDetDriveId, label, f['f-cons']||'');
 }
 
@@ -12033,6 +12033,7 @@ function relGerarPeriodo(){
       +'<td>'+eh(f['f-num']||'—')+'</td>'
       +'<td>'+eh(f['f-data']?fD(f['f-data']):'—')+'</td>'
       +'<td>'+eh(f['f-cliente']||'—')+'</td>'
+      +'<td>'+eh(f['f-nome-evento']||'—')+'</td>'
       +'<td>'+eh(f['f-cons']||'—')+'</td>'
       +'<td><span class="rel-badge" style="background:'+cor+'22;color:'+cor+';border:1px solid '+cor+'">'+stLabel+'</span></td>'
       +'<td>'+comLabel+'</td>'
@@ -12042,9 +12043,9 @@ function relGerarPeriodo(){
 
   document.getElementById('rel-periodo-body').innerHTML=dados.length?
     '<div style="overflow-x:auto"><table class="rel-table"><thead><tr>'
-    +'<th>Nº</th><th>Data</th><th>Cliente</th><th>Consultor</th><th>Status</th><th>Comercial</th><th class="r">Valor</th>'
+    +'<th>Nº</th><th>Data</th><th>Cliente</th><th>Nome do Evento</th><th>Consultor</th><th>Status</th><th>Comercial</th><th class="r">Valor</th>'
     +'</tr></thead><tbody>'+rows
-    +'<tr class="total-row"><td colspan="6">TOTAL</td><td class="r">'+fmt(total)+'</td></tr>'
+    +'<tr class="total-row"><td colspan="7">TOTAL</td><td class="r">'+fmt(total)+'</td></tr>'
     +'</tbody></table></div>'
     :'<div class="rel-empty">Nenhum orçamento encontrado no período.</div>';
 }
@@ -12237,6 +12238,7 @@ function relGerarFinanceiro(){
       parcelas.push({
         num:o.form&&o.form['f-num']||'—',
         cliente:o.form&&o.form['f-cliente']||'—',
+        evento:o.form&&o.form['f-nome-evento']||'',
         cons:o.form&&o.form['f-cons']||'—',
         desc:p.desc||'—',
         data:p.data||'',
@@ -12273,6 +12275,7 @@ function relGerarFinanceiro(){
     return '<tr>'
       +'<td>'+eh(p.num)+'</td>'
       +'<td>'+eh(p.cliente)+'</td>'
+      +'<td>'+eh(p.evento||'—')+'</td>'
       +'<td>'+eh(p.cons)+'</td>'
       +'<td>'+eh(p.desc)+'</td>'
       +'<td>'+(p.data?fD(p.data):'—')+'</td>'
@@ -12285,7 +12288,7 @@ function relGerarFinanceiro(){
 
   document.getElementById('rel-fin-body').innerHTML=parcelas.length?
     '<div style="overflow-x:auto"><table class="rel-table"><thead><tr>'
-    +'<th>Nº Orc.</th><th>Cliente</th><th>Consultor</th><th>Parcela</th><th>Vencimento</th><th>Forma</th><th class="r">Valor</th><th>Status</th><th>Comprovantes</th>'
+    +'<th>Nº Orc.</th><th>Cliente</th><th>Nome do Evento</th><th>Consultor</th><th>Parcela</th><th>Vencimento</th><th>Forma</th><th class="r">Valor</th><th>Status</th><th>Comprovantes</th>'
     +'</tr></thead><tbody>'+rows+'</tbody></table></div>'
     :'<div class="rel-empty">Nenhuma parcela encontrada.</div>';
 }
@@ -12445,6 +12448,7 @@ function relGerarProximos(){
       +'<td>'+(f['f-dia']?fD(f['f-dia']):'—')+'</td>'
       +'<td>'+eh(f['f-num']||'—')+'</td>'
       +'<td>'+eh(f['f-cliente']||'—')+'</td>'
+      +'<td>'+eh(f['f-nome-evento']||'—')+'</td>'
       +'<td>'+eh(f['f-local']||'—')+'</td>'
       +'<td>'+eh(f['f-cons']||'—')+'</td>'
       +'<td><span class="rel-badge" style="background:'+cor+'22;color:'+cor+';border:1px solid '+cor+'">'+SI_LABELS2[o.st]+'</span></td>'
@@ -12455,7 +12459,7 @@ function relGerarProximos(){
 
   document.getElementById('rel-prox-body').innerHTML=dados.length?
     '<div style="overflow-x:auto"><table class="rel-table"><thead><tr>'
-    +'<th>Prazo</th><th>Data Evento</th><th>Nº</th><th>Cliente</th><th>Local</th><th>Consultor</th><th>Status</th><th>Comercial</th><th class="r">Valor</th>'
+    +'<th>Prazo</th><th>Data Evento</th><th>Nº</th><th>Cliente</th><th>Nome do Evento</th><th>Local</th><th>Consultor</th><th>Status</th><th>Comercial</th><th class="r">Valor</th>'
     +'</tr></thead><tbody>'+rows+'</tbody></table></div>'
     :'<div class="rel-empty">Nenhum evento encontrado no período.</div>';
 }
@@ -12489,14 +12493,14 @@ function relGetDadosTabela(){
     if(stFiltro)dados=dados.filter(function(o){return o.st===stFiltro;});
     var SI_LABELS={rascunho:'Rascunho',analise:'Em Análise',gerencial:'Ap. Gerencial',diretoria:'Ap. Diretoria',aprovado:'Aprovado',revisao:'Revisão'};
     var COM_LABELS={enviada:'Prop. Enviada',negociacao:'Em Negociação',standby:'Standby',ganha:'Venda Ganha',perdida:'Venda Perdida'};
-    var cabecalho=['Nº Orc.','Data','Cliente','Consultor','Status Interno','Status Comercial','Valor (R$)'];
+    var cabecalho=['Nº Orc.','Data','Cliente','Nome do Evento','Consultor','Status Interno','Status Comercial','Valor (R$)'];
     var linhas=dados.map(function(o){
       var f=o.form||{};
       var bruto=0;
       try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){if(o.dados&&o.dados.state&&o.dados.state[s]){var st2=o.dados.state[s];Object.keys(st2.rows||{}).forEach(function(aid){(st2.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});});}});}catch(e){}
-      return[f['f-num']||'',f['f-data']?fD(f['f-data']):'',f['f-cliente']||'',f['f-cons']||'',SI_LABELS[o.st]||o.st,COM_LABELS[o.dados&&o.dados.comercialStatus||'']||'',bruto*(1+IMP)];
+      return[f['f-num']||'',f['f-data']?fD(f['f-data']):'',f['f-cliente']||'',f['f-nome-evento']||'',f['f-cons']||'',SI_LABELS[o.st]||o.st,COM_LABELS[o.dados&&o.dados.comercialStatus||'']||'',bruto*(1+IMP)];
     });
-    return{titulo:relGetTituloAba()+'  ('+de+' a '+ate+')',cabecalho:cabecalho,linhas:linhas,moeda:[6]};
+    return{titulo:relGetTituloAba()+'  ('+de+' a '+ate+')',cabecalho:cabecalho,linhas:linhas,moeda:[7]};
   }
 
   if(aba==='consultor'){
@@ -12532,9 +12536,9 @@ function relGetDadosTabela(){
       var hist=(o.dados&&o.dados.comercialHist)||[];
       var motivo='Não informado';
       for(var i=hist.length-1;i>=0;i--){if(hist[i].status==='perdida'&&hist[i].motivo){motivo=hist[i].motivo;break;}}
-      linhas.push([(o.form&&o.form['f-num'])||'',(o.form&&o.form['f-data'])?fD(o.form['f-data']):'',(o.form&&o.form['f-cliente'])||'',(o.form&&o.form['f-cons'])||'',motivo]);
+      linhas.push([(o.form&&o.form['f-num'])||'',(o.form&&o.form['f-data'])?fD(o.form['f-data']):'',(o.form&&o.form['f-cliente'])||'',(o.form&&o.form['f-nome-evento'])||'',(o.form&&o.form['f-cons'])||'',motivo]);
     });
-    return{titulo:relGetTituloAba()+'  ('+de+' a '+ate+')',cabecalho:['Nº Orc.','Data','Cliente','Consultor','Motivo da Perda'],linhas:linhas,moeda:[]};
+    return{titulo:relGetTituloAba()+'  ('+de+' a '+ate+')',cabecalho:['Nº Orc.','Data','Cliente','Nome do Evento','Consultor','Motivo da Perda'],linhas:linhas,moeda:[]};
   }
 
   if(aba==='financeiro'){
@@ -12557,11 +12561,11 @@ function relGetDadosTabela(){
         var stReal=p.status==='pago'?'pago':(atrasado?'atrasado':'pendente');
         if(stFiltro&&stReal!==stFiltro)return;
         var ST_LBL={pago:'Pago',pendente:'Pendente',atrasado:'Atrasado'};
-        parcelas.push([(o.form&&o.form['f-num'])||'',(o.form&&o.form['f-cliente'])||'',(o.form&&o.form['f-cons'])||'',p.desc||'',p.data?fD(p.data):'',p.forma||'',parseFloat(p.valor)||0,ST_LBL[stReal]||stReal,ANEXO_LBL2[anexoStatus]]);
+        parcelas.push([(o.form&&o.form['f-num'])||'',(o.form&&o.form['f-cliente'])||'',(o.form&&o.form['f-nome-evento'])||'',(o.form&&o.form['f-cons'])||'',p.desc||'',p.data?fD(p.data):'',p.forma||'',parseFloat(p.valor)||0,ST_LBL[stReal]||stReal,ANEXO_LBL2[anexoStatus]]);
       });
     });
-    parcelas.sort(function(a,b){return a[4]>b[4]?1:-1;});
-    return{titulo:relGetTituloAba()+'  ('+de+' a '+ate+')',cabecalho:['Nº Orc.','Cliente','Consultor','Parcela','Vencimento','Forma Pgto','Valor (R$)','Status','Comprovantes'],linhas:parcelas,moeda:[6]};
+    parcelas.sort(function(a,b){return a[5]>b[5]?1:-1;});
+    return{titulo:relGetTituloAba()+'  ('+de+' a '+ate+')',cabecalho:['Nº Orc.','Cliente','Nome do Evento','Consultor','Parcela','Vencimento','Forma Pgto','Valor (R$)','Status','Comprovantes'],linhas:parcelas,moeda:[7]};
   }
 
   if(aba==='eventos'){
@@ -12609,9 +12613,9 @@ function relGetDadosTabela(){
       var f=o.form||{};var bruto=0;
       try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){if(o.dados&&o.dados.state&&o.dados.state[s]){var st2=o.dados.state[s];Object.keys(st2.rows||{}).forEach(function(aid){(st2.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});});}});}catch(e){}
       var diasR=Math.ceil((new Date((f['f-dia']||hoje)+'T12:00:00')-new Date(hoje+'T12:00:00'))/(1000*60*60*24));
-      return[f['f-data']?fD(f['f-data']):'',f['f-num']||'',f['f-cliente']||'',f['f-local']||'',f['f-cons']||'',SI_LABELS2[o.st]||o.st,COM2[o.dados&&o.dados.comercialStatus||'']||'',diasR,bruto*(1+IMP)];
+      return[f['f-data']?fD(f['f-data']):'',f['f-num']||'',f['f-cliente']||'',f['f-nome-evento']||'',f['f-local']||'',f['f-cons']||'',SI_LABELS2[o.st]||o.st,COM2[o.dados&&o.dados.comercialStatus||'']||'',diasR,bruto*(1+IMP)];
     });
-    return{titulo:relGetTituloAba()+'  ('+de+' a '+ate+')',cabecalho:['Data Evento','Nº Orc.','Cliente','Local','Consultor','Status Interno','Comercial','Dias p/ Evento','Valor (R$)'],linhas:linhas,moeda:[8]};
+    return{titulo:relGetTituloAba()+'  ('+de+' a '+ate+')',cabecalho:['Data Evento','Nº Orc.','Cliente','Nome do Evento','Local','Consultor','Status Interno','Comercial','Dias p/ Evento','Valor (R$)'],linhas:linhas,moeda:[9]};
   }
   return null;
 }
@@ -12961,7 +12965,7 @@ function dashElabRenderizar(){
         var f=o.form||{};var val=dashValOrc(o);var cs=o.dados&&o.dados.comercialStatus||'';
         var cor=SI_COR[o.st]||'var(--surface-3)';var dias=f['f-data']?diasAtras(f['f-data']):null;
         return '<div style="padding:7px 10px;border-bottom:1px solid var(--border-strong);display:flex;align-items:center;gap:8px">'
-          +'<div style="flex:1;min-width:0"><div style="font-size:11px;color:var(--text-dim);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+          +'<div style="flex:1;min-width:0"><div style="font-size:11px;color:var(--text-dim);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+'</div>'
           +'<div style="font-size:10px;color:var(--text-muted);margin-top:1px">'+eh(f['f-num']||'')+(f['f-data']?' · '+fD(f['f-data']):'')+(f['f-cons']?' · '+f['f-cons']:'')+(dias!==null?' · <span style="color:'+(dias>30?'#ef5350':dias>15?'#ffa726':'var(--text-muted)')+'">'+dias+'d</span>':'')+'</div></div>'
           +(cs?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+(COM_COR2[cs]||'var(--surface-3)')+'33;color:'+(COM_COR2[cs]||'var(--text-muted)')+';border:1px solid '+(COM_COR2[cs]||'var(--surface-3)')+';white-space:nowrap">'+(COM_LBL2[cs]||cs)+'</span>':'')
           +'<span style="font-size:10px;font-weight:800;color:var(--text);white-space:nowrap;min-width:80px;text-align:right">'+fmt(val)+'</span>'
@@ -13075,7 +13079,7 @@ function dashElabDrill(key, titulo){
   corpo.innerHTML='<div style="max-height:340px;overflow-y:auto">'+lista.map(function(o){
     var f=o.form||{};var val=dashValOrc(o);var cor=SI_COR2[o.st]||'var(--surface-3)';
     return '<div style="padding:7px 12px;border-bottom:1px solid var(--border-strong);display:flex;align-items:center;gap:8px">'
-      +'<div style="flex:1;min-width:0"><div style="font-size:11px;color:var(--text-dim);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:11px;color:var(--text-dim);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+'</div>'
       +'<div style="font-size:10px;color:var(--text-muted);margin-top:1px">'+eh(f['f-num']||'')+(f['f-data']?' · '+fD(f['f-data']):'')+(f['f-cons']?' · '+f['f-cons']:'')+'</div></div>'
       +'<span style="font-size:10px;font-weight:800;color:var(--text);white-space:nowrap">'+fmt(val)+'</span>'
       +'<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:'+cor+'22;color:'+cor+';border:1px solid '+cor+';white-space:nowrap">'+(SI_LBL2[o.st]||o.st)+'</span>'
@@ -13102,7 +13106,7 @@ function dashRenderizar(){
       +lista.map(function(o){
         var f=o.form||{};var val=dashValOrc(o);var cs=o.dados&&o.dados.comercialStatus||'';var cor=SI_COR[o.st]||'var(--surface-3)';
         return'<div style="padding:7px 10px;border-bottom:1px solid var(--border-strong);display:flex;align-items:center;gap:8px">'
-          +'<div style="flex:1;min-width:0"><div style="font-size:11px;color:var(--text-dim);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+          +'<div style="flex:1;min-width:0"><div style="font-size:11px;color:var(--text-dim);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+'</div>'
           +'<div style="font-size:10px;color:var(--text-muted);margin-top:1px">'+eh(f['f-num']||'')+(f['f-data']?' · '+fD(f['f-data']):'')+(f['f-cons']?' · '+f['f-cons']:'')+'</div></div>'
           +(cs?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+(COM_COR[cs]||'var(--surface-3)')+'33;color:'+(COM_COR[cs]||'var(--text-muted)')+';border:1px solid '+(COM_COR[cs]||'var(--surface-3)')+';white-space:nowrap">'+(COM_LBL[cs]||cs)+'</span>':'')
           +'<span style="font-size:10px;font-weight:800;color:var(--text);white-space:nowrap;min-width:80px;text-align:right">'+fmt(val)+'</span>'
@@ -14870,7 +14874,7 @@ function _resultadosAbrirLista(base){
 
   var header='<div style="display:flex;align-items:center;gap:8px;background:var(--surface-2);border-bottom:2px solid var(--R);padding:5px 10px;font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">'
     +'<span style="min-width:72px">'+(base==='evento'?'Data Evento':'Data Venda')+'</span>'
-    +'<span style="flex:1">Cliente</span>'
+    +'<span style="flex:1">Cliente / Evento</span>'
     +'<span style="min-width:90px;text-align:center">Consultor</span>'
     +'<span style="min-width:80px;text-align:right">Valor</span>'
     +'</div>';
@@ -14884,7 +14888,7 @@ function _resultadosAbrirLista(base){
       +(o.driveId?'onclick="dashDrillAbrirOrc(\''+o.driveId+'\',\''+eh(f['f-cliente']||'')+'\')" title="Clique para abrir o orçamento"':'')+'>'
       +'<div style="min-width:72px;color:var(--text-muted);font-size:9px;flex-shrink:0">'+(dataRef?fD(dataRef):'—')+'</div>'
       +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:11px;color:var(--text);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+      +'<div style="font-size:11px;color:var(--text);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+'</div>'
       +'<div style="font-size:9px;color:var(--text-muted);margin-top:1px">'+eh(f['f-num']||'')+(o.driveId?'<span style="color:var(--text-dim);margin-left:6px">↗ clique para abrir</span>':'')+'</div>'
       +'</div>'
       +'<div style="min-width:90px;text-align:center;font-size:9px;color:var(--text-muted);flex-shrink:0">'+eh(f['f-cons']||'—')+'</div>'
@@ -14931,7 +14935,7 @@ function _resultadosDrillExportarExcel(){
   }
   var colData = d.base==='evento' ? 'Data Evento' : 'Data Venda';
   var bom='\uFEFF';
-  var linhas=[d.titulo,'',[colData,'Nº Orçamento','Cliente','Consultor','Valor (R$)'].map(csvEscape).join(';')];
+  var linhas=[d.titulo,'',[colData,'Nº Orçamento','Cliente','Nome do Evento','Consultor','Valor (R$)'].map(csvEscape).join(';')];
   d.lista.forEach(function(o){
     var f=o.form||{};
     var dataRef = d.base==='evento' ? (f['f-dia']||'') : (_metaDataGanha(o)||'');
@@ -14940,15 +14944,16 @@ function _resultadosDrillExportarExcel(){
       csvEscape(dataRef?fD(dataRef):''),
       csvEscape(f['f-num']||''),
       csvEscape(f['f-cliente']||''),
+      csvEscape(f['f-nome-evento']||''),
       csvEscape(f['f-cons']||''),
       val.toFixed(2).replace('.',',')
     ].join(';'));
   });
   var totalAuto=d.lista.reduce(function(t,o){return t+dashValOrc(o);},0);
-  linhas.push(['','','','TOTAL', totalAuto.toFixed(2).replace('.',',')].join(';'));
+  linhas.push(['','','','','TOTAL', totalAuto.toFixed(2).replace('.',',')].join(';'));
   if(d.manual){
-    linhas.push(['','','','+ Ajuste manual (Metas)', d.manual.toFixed(2).replace('.',',')].join(';'));
-    linhas.push(['','','','TOTAL GERAL', (totalAuto+d.manual).toFixed(2).replace('.',',')].join(';'));
+    linhas.push(['','','','','+ Ajuste manual (Metas)', d.manual.toFixed(2).replace('.',',')].join(';'));
+    linhas.push(['','','','','TOTAL GERAL', (totalAuto+d.manual).toFixed(2).replace('.',',')].join(';'));
   }
   var csv=bom+linhas.join('\r\n');
   var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
@@ -15160,7 +15165,7 @@ function concRenderizarTabela(){
 
   var header='<div style="display:flex;align-items:center;gap:8px;background:var(--surface-2);border-bottom:2px solid var(--R);padding:5px 10px;font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">'
     +'<span style="min-width:72px">Data Evento</span>'
-    +'<span style="flex:1">Cliente</span>'
+    +'<span style="flex:1">Cliente / Evento</span>'
     +'<span style="min-width:90px;text-align:center">Consultor</span>'
     +'<span style="min-width:64px;text-align:center">Montagem</span>'
     +'<span style="min-width:64px;text-align:center">Evento</span>'
@@ -15175,7 +15180,7 @@ function concRenderizarTabela(){
       +(o.driveId?'onclick="dashDrillAbrirOrc(\''+o.driveId+'\',\''+eh(f['f-cliente']||'')+'\')" title="Clique para abrir o orçamento"':'')+'>'
       +'<div style="min-width:72px;color:var(--text-muted);font-size:9px;flex-shrink:0">'+(f['f-dia']?fD(f['f-dia']):'—')+'</div>'
       +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:11px;color:var(--text);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+      +'<div style="font-size:11px;color:var(--text);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+'</div>'
       +'<div style="font-size:9px;color:var(--text-muted);margin-top:1px">'+eh(f['f-num']||'')+(o.driveId?'<span style="color:var(--text-dim);margin-left:6px">↗ clique para abrir</span>':'')+'</div>'
       +'</div>'
       +'<div style="min-width:90px;text-align:center;font-size:9px;color:var(--text-muted);flex-shrink:0">'+eh(f['f-cons']||'—')+'</div>'
@@ -15276,7 +15281,7 @@ function concExportarExcel(){
   var bom='\uFEFF';
   var linhas=[
     'Conciliação de Agenda — Vendas Ganhas x Google Agenda','',
-    ['Data Evento','Nº Orçamento','Cliente','Consultor','Montagem','Evento','Desmontagem','Status Geral'].map(csvEscape).join(';')
+    ['Data Evento','Nº Orçamento','Cliente','Nome do Evento','Consultor','Montagem','Evento','Desmontagem','Status Geral'].map(csvEscape).join(';')
   ];
   itens.forEach(function(it){
     var o=it.o, f=o.form||{}, st=it.status, live=it.live||{};
@@ -15284,6 +15289,7 @@ function concExportarExcel(){
       csvEscape(f['f-dia']?fD(f['f-dia']):''),
       csvEscape(f['f-num']||''),
       csvEscape(f['f-cliente']||''),
+      csvEscape(f['f-nome-evento']||''),
       csvEscape(f['f-cons']||''),
       csvEscape(celTipo(st.tipos[0],live.montagem)),
       csvEscape(celTipo(st.tipos[1],live.evento)),
@@ -15615,7 +15621,7 @@ function _logCardDia(it,diaISO){
   return '<div style="padding:10px 12px;border:1px solid var(--border-strong);border-left:4px solid '+corFase+';border-radius:6px;margin-bottom:8px;background:var(--surface-3);cursor:pointer" '
     +(o.driveId?'onclick="logAbrirPreviewOS(\''+o.driveId+'\')" title="Clique para ver o orçamento"':'')+'>'
     +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
-    +'<div style="font-size:12px;font-weight:800;color:var(--text)">'+(hora?hora+' — ':'')+eh(f['f-cliente']||'—')+'</div>'
+    +'<div style="font-size:12px;font-weight:800;color:var(--text)">'+(hora?hora+' — ':'')+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+'</div>'
     +'<div style="display:flex;gap:6px;align-items:center">'
     +'<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:10px;background:'+st.cor+'22;color:'+st.cor+'">'+st.label+'</span>'
     +'<span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:'+corFase+'22;color:'+corFase+'">'+LOG_FASE_LABEL[fase]+'</span>'
@@ -15647,7 +15653,7 @@ function _logRenderizarSemana(){
       var dot=it.status&&it.status.label==='Fechado'?'🟢':'🟡';
       return '<div style="font-size:9px;padding:3px 5px;border-radius:4px;background:'+corFase+'22;color:'+corFase+';margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" '
         +(it.o.driveId?'onclick="logAbrirPreviewOS(\''+it.o.driveId+'\')"':'')
-        +' title="'+eh(f['f-cliente']||'')+' — '+LOG_FASE_LABEL[fase]+'">'+dot+' '+eh(f['f-cliente']||'—')+'</div>';
+        +' title="'+eh(f['f-cliente']||'')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+' — '+LOG_FASE_LABEL[fase]+'">'+dot+' '+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+'</div>';
     }).join('');
     return '<div style="flex:1;min-width:0;border:1px solid var(--border);border-radius:6px;overflow:hidden'+(ehHoje?';border-color:var(--R)':'')+'">'
       +'<div style="background:var(--surface-2);padding:5px;text-align:center;font-size:10px;font-weight:800;color:'+(ehHoje?'var(--R)':'var(--text-dim)')+';cursor:pointer" onclick="logIrParaDia(\''+diaISO+'\')">'+headerTxt+'</div>'
@@ -15688,7 +15694,7 @@ function _logRenderizarMes(){
         var dot=it.status&&it.status.label==='Fechado'?'🟢':'🟡';
         return '<div style="font-size:8px;padding:1px 3px;border-radius:3px;background:'+corFase+'22;color:'+corFase+';margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" '
           +(it.o.driveId?'onclick="logAbrirPreviewOS(\''+it.o.driveId+'\')"':'')
-          +' title="'+eh(f['f-cliente']||'')+' — '+LOG_FASE_LABEL[fase]+'">'+dot+' '+eh(f['f-cliente']||'—')+'</div>';
+          +' title="'+eh(f['f-cliente']||'')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+' — '+LOG_FASE_LABEL[fase]+'">'+dot+' '+eh(f['f-cliente']||'—')+'</div>';
       }).join('');
       var maisHtml=doDia.length>maxChips?('<div style="font-size:8px;color:var(--text-dim);cursor:pointer;text-decoration:underline" onclick="logAbrirDiaPopup(\''+dia.iso+'\')">+'+(doDia.length-maxChips)+' mais</div>'):'';
       corpoHtml+='<div style="border:1px solid var(--border);border-radius:4px;min-height:64px;padding:3px;opacity:'+(dia.noMes?'1':'.4')+(ehHoje?';border-color:var(--R)':'')+'">'
@@ -15716,7 +15722,7 @@ function logAbrirPreviewOS(driveId){
   var it=(window._logItens||[]).find(function(x){ return x.o.driveId===driveId; });
   if(!it){alert('Orçamento não encontrado na lista atual.');return;}
   var f=it.o.form||{};
-  document.getElementById('log-os-titulo').textContent=eh(f['f-cliente']||'Orçamento')+' — OS '+(f['f-num']||'');
+  document.getElementById('log-os-titulo').textContent=eh(f['f-cliente']||'Orçamento')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+' — OS '+(f['f-num']||'');
   document.getElementById('log-os-iframe').srcdoc=_montarOSHtml(it.o.form, it.o.dados);
   var btn=document.getElementById('log-os-abrir-btn');
   btn.onclick=function(){
@@ -15768,7 +15774,7 @@ function logExportarExcel(){
   var bom='\uFEFF';
   var linhas=[
     'Logística de Eventos — Fechados e Pré-reservados','',
-    ['Nº','Cliente','Consultor','Status','Montagem','Evento','Desmontagem','Local','Valor'].map(csvEscape).join(';')
+    ['Nº','Cliente','Nome do Evento','Consultor','Status','Montagem','Evento','Desmontagem','Local','Valor'].map(csvEscape).join(';')
   ];
   itens.forEach(function(it){
     var o=it.o, f=o.form||{}, st=it.status||{label:''};
@@ -15777,6 +15783,7 @@ function logExportarExcel(){
     linhas.push([
       csvEscape(f['f-num']||''),
       csvEscape(f['f-cliente']||''),
+      csvEscape(f['f-nome-evento']||''),
       csvEscape(f['f-cons']||''),
       csvEscape(st.label),
       csvEscape(f['f-dm']?fD(f['f-dm'])+(f['f-hm']?' '+f['f-hm']:''):''),
@@ -15807,6 +15814,7 @@ function logExportarPDF(){
     return '<tr>'
       +'<td>'+eh(f['f-num']||'')+'</td>'
       +'<td>'+eh(f['f-cliente']||'')+'</td>'
+      +'<td>'+eh(f['f-nome-evento']||'')+'</td>'
       +'<td>'+eh(f['f-cons']||'')+'</td>'
       +'<td>'+eh(st.label)+'</td>'
       +'<td>'+(f['f-dm']?fD(f['f-dm']):'')+'</td>'
@@ -15837,7 +15845,7 @@ function logExportarPDF(){
     +'<div id="st">Gerando PDF...</div>'
     +'<div id="pw">'
     +'<div class="hdr"><h1>🚚 CRAZY SOM — LOGÍSTICA DE EVENTOS</h1><span>Gerado em: '+hoje+'</span></div>'
-    +'<table><thead><tr><th>Nº</th><th>Cliente</th><th>Consultor</th><th>Status</th><th>Montagem</th><th>Evento</th><th>Desmontagem</th><th>Valor</th></tr></thead><tbody>'
+    +'<table><thead><tr><th>Nº</th><th>Cliente</th><th>Nome do Evento</th><th>Consultor</th><th>Status</th><th>Montagem</th><th>Evento</th><th>Desmontagem</th><th>Valor</th></tr></thead><tbody>'
     +linhasHtml
     +'</tbody></table>'
     +'<div style="margin-top:14px;font-size:9px;color:#aaa;text-align:center;border-top:1px solid #ddd;padding-top:6px">Crazy Som Audiovisuais – Sistema de Orçamentos – CNPJ: 10.909.827/0001-76</div>'
@@ -19130,6 +19138,7 @@ async function _transferBuscarOrcamentos(consultorNome, situacao){
         tipo: 'orcamento', id: doc.id,
         titulo: f['f-num'] || '—',
         cliente: f['f-cliente'] || '—',
+        evento: f['f-nome-evento'] || '',
         consultorAtual: f['f-cons'] || '',
         status: d.aprovStatus || 'rascunho',
         valor: dashValOrc({form:f, dados:d})
@@ -19165,6 +19174,7 @@ async function _transferCarregarItemOrcamento(id){
       tipo:'orcamento', id:id,
       titulo: f['f-num'] || '—',
       cliente: f['f-cliente'] || '—',
+      evento: f['f-nome-evento'] || '',
       consultorAtual: f['f-cons'] || '',
       status: dados.aprovStatus || 'rascunho',
       valor: dashValOrc({form:f, dados:dados})
@@ -19198,7 +19208,7 @@ function _transferRenderLista(){
     return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border)">'
       +'<input type="checkbox" '+(it.selecionado?'checked':'')+' onchange="transferToggleItem('+i+',this.checked)" style="width:14px;height:14px;cursor:pointer;flex-shrink:0">'
       +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:11px;color:var(--text);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+icone+' '+eh(it.titulo)+' — '+eh(it.cliente)+'</div>'
+      +'<div style="font-size:11px;color:var(--text);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+icone+' '+eh(it.titulo)+' — '+eh(it.cliente)+(it.evento?' — '+eh(it.evento):'')+'</div>'
       +'<div style="font-size:10px;color:var(--text-muted);margin-top:1px">'+siLabel+'</div>'
       +'</div>'
       +'<div style="font-size:11px;font-weight:800;color:#66bb6a;white-space:nowrap">'+fmt(it.valor)+'</div>'
@@ -19542,7 +19552,7 @@ function dashDrill(key, tituloEnc){
   // Cabeçalho
   var header='<div style="display:flex;align-items:center;gap:8px;background:var(--surface-2);border-bottom:2px solid var(--R);padding:5px 10px;font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">'
     +'<span style="min-width:72px">Data Orc.</span>'
-    +'<span style="flex:1">Cliente</span>'
+    +'<span style="flex:1">Cliente / Evento</span>'
     +(mostrarDias?'<span style="min-width:52px;text-align:center;color:#ffa726">⏱️ Dias</span>':'')
     +'<span style="min-width:90px;text-align:center">Consultor</span>'
     +'<span style="min-width:80px;text-align:right">Valor</span>'
@@ -19578,7 +19588,7 @@ function dashDrill(key, tituloEnc){
       +(o.driveId?'onclick="dashDrillAbrirOrc(\''+o.driveId+'\',\''+eh(o.nome||'')+'\')" title="Clique para abrir o orçamento"':'')+'>'
       +'<div style="min-width:72px;color:var(--text-muted);font-size:9px;flex-shrink:0">'+(f['f-data']?fD(f['f-data']):'—')+'</div>'
       +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:11px;color:var(--text);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+      +'<div style="font-size:11px;color:var(--text);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+'</div>'
       +'<div style="font-size:9px;color:var(--text-muted);margin-top:1px">'+eh(f['f-num']||'')+(f['f-cons']?' · '+eh(f['f-cons']):'')+(o.driveId?'<span style="color:var(--text-dim);margin-left:6px">↗ clique para abrir</span>':'')+'</div>'
       +'</div>'
       +diasHtml
@@ -19733,7 +19743,7 @@ async function osModBuscar(){
 
   // Renderizar lista
   var header='<div style="display:grid;grid-template-columns:40px auto 1fr auto auto;gap:0;background:var(--surface-2);border-bottom:2px solid var(--R);padding:6px 12px;font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800;align-items:center">'
-    +'<span></span><span>Data Evento</span><span>Cliente · Nº · Consultor</span><span style="text-align:center;min-width:80px">Local</span><span style="text-align:center;min-width:70px">OS</span>'
+    +'<span></span><span>Data Evento</span><span>Cliente / Evento · Nº · Consultor</span><span style="text-align:center;min-width:80px">Local</span><span style="text-align:center;min-width:70px">OS</span>'
     +'</div>';
 
   var rows=_osModFiltrados.map(function(o,idx){
@@ -19748,7 +19758,7 @@ async function osModBuscar(){
         +diasStr
       +'</div>'
       +'<div style="min-width:0">'
-        +'<div style="font-size:11px;color:var(--text);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+'</div>'
+        +'<div style="font-size:11px;color:var(--text);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+'</div>'
         +'<div style="font-size:9px;color:var(--text-muted);margin-top:1px">'+eh(f['f-num']||'—')+(f['f-cons']?' · '+eh(f['f-cons']):'')+(f['f-tipo']?' · '+eh(f['f-tipo']):'')+'</div>'
       +'</div>'
       +'<div style="font-size:10px;color:var(--text-muted);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px" title="'+eh(f['f-local']||'')+'">'+eh((f['f-local']||'—').substring(0,18))+'</div>'
@@ -19814,13 +19824,13 @@ function osModGerarOS(lista){
     var faltando=CAMPOS_OBR_OS.filter(function(c){return !f[c.id];}).map(function(c){return c.label;});
     if(!f['f-hi']||!f['f-hf']) faltando.push('Horário de início e fim do evento');
     if(faltando.length>0){
-      incompletos.push({num:f['f-num']||'S/N', cliente:f['f-cliente']||'(sem nome)', faltando:faltando});
+      incompletos.push({num:f['f-num']||'S/N', cliente:f['f-cliente']||'(sem nome)', evento:f['f-nome-evento']||'', faltando:faltando});
     }
   });
   if(incompletos.length>0){
     var msg='⚠️ DADOS INCOMPLETOS PARA EMISSÃO DA OS\n\n';
     incompletos.forEach(function(it){
-      msg+='Orçamento Nº '+it.num+' — '+it.cliente+'\n';
+      msg+='Orçamento Nº '+it.num+' — '+it.cliente+(it.evento?' — '+it.evento:'')+'\n';
       it.faltando.forEach(function(f){ msg+='   • '+f+'\n'; });
       msg+='\n';
     });
@@ -19917,6 +19927,7 @@ function osModGerarOS(lista){
       +'<div class="hr"><div class="os">ORDEM DE SERVIÇO</div><div class="osn">'+num+'</div><div class="osd">Emissão: '+dataorc+'</div></div></div>'
       +'<div class="info"><table>'
       +'<tr><td class="lbl">Cliente:</td><td><b>'+eh(f['f-cliente']||'—')+'</b></td><td class="lbl">Consultor:</td><td>'+eh(f['f-cons']||'—')+'</td></tr>'
+      +(f['f-nome-evento']?'<tr><td class="lbl">Evento:</td><td colspan="3" style="font-size:13px;font-weight:900;color:#c0001a">'+eh(f['f-nome-evento'])+'</td></tr>':'')
       +'<tr><td class="lbl">Local:</td><td><b>'+eh(f['f-local']||'—')+'</b></td><td class="lbl">Tipo:</td><td>'+eh(f['f-tipo']||'—')+'</td></tr>'
       +(endEv?'<tr><td class="lbl">Endereço:</td><td colspan="3">'+eh(endEv)+'</td></tr>':'')
       +'<tr><td class="lbl">Data/Hora:</td><td>'+horEv+'</td><td class="lbl">Público:</td><td>'+(f['f-pub']?parseInt(f['f-pub']).toLocaleString('pt-BR')+' pessoas':'—')+'</td></tr>'
@@ -20047,6 +20058,7 @@ function dashFinRenderizar(){
       todas.push({
         num:     o.form&&o.form['f-num']||'—',
         cliente: o.form&&o.form['f-cliente']||'—',
+        evento:  o.form&&o.form['f-nome-evento']||'',
         cons:    o.form&&o.form['f-cons']||'—',
         desc:    p.desc||'—',
         data:    p.data||'',
@@ -20132,7 +20144,7 @@ function dashFinRenderizar(){
     var base = '<div class="fin-row" style="gap:6px">'
       +'<div style="min-width:72px;color:var(--text-muted);font-size:9px">'+fD(p.data)+'</div>'
       +'<div style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" '+nomeClick+'>'
-        +'<span style="'+nomeStyle+'" title="Clique para abrir o orçamento">'+eh(p.cliente)+'</span>'
+        +'<span style="'+nomeStyle+'" title="Clique para abrir o orçamento">'+eh(p.cliente)+(p.evento?' — '+eh(p.evento):'')+'</span>'
         +'<span style="font-size:9px;color:var(--text-muted);margin-left:4px">· '+eh(p.num)+'</span>'
       +'</div>';
     campos.forEach(function(c){base+=c;});
@@ -20154,7 +20166,7 @@ function dashFinRenderizar(){
         var nomeClick = p.driveId?'onclick="dashFinAbrirOrc(\''+p.driveId+'\',\''+eh(p.nome)+'\')"':'';
         var nomeStyle = p.driveId?'cursor:pointer;color:#90caf9;text-decoration:underline dotted;font-weight:700':'color:#ffffff;font-weight:700';
         return '<div style="padding:6px 10px;border-bottom:1px solid var(--border-strong);display:flex;align-items:center;gap:8px;background:var(--surface-3)">'
-          +'<div style="flex:1;min-width:0"><div style="font-size:11px;'+nomeStyle+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis" '+nomeClick+' title="Clique para abrir">'+eh(p.cliente)+'</div>'
+          +'<div style="flex:1;min-width:0"><div style="font-size:11px;'+nomeStyle+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis" '+nomeClick+' title="Clique para abrir">'+eh(p.cliente)+(p.evento?' — '+eh(p.evento):'')+'</div>'
           +'<div style="font-size:9px;color:var(--text-muted);margin-top:1px">'+eh(p.num)+' · '+eh(p.cons)+' · '+fD(p.data)+' · '+eh(p.desc)+'</div></div>'
           +'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+corVal+'22;color:'+corVal+';border:1px solid '+corVal+';white-space:nowrap">'+p.forma+'</span>'
           +'<span style="font-size:10px;font-weight:800;color:'+corVal+';white-space:nowrap">'+fmt(p.valor)+'</span>'
@@ -20221,7 +20233,7 @@ function dashFinRenderizar(){
     return '<div class="fin-row">'
       +'<div style="min-width:36px;text-align:center;font-weight:800;color:'+corDias+'">'+dias+'d</div>'
       +'<div style="min-width:72px;color:var(--text-muted);font-size:9px">'+fD(p.data)+'</div>'
-      +'<div style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Clique para abrir o orçamento"><span '+nomeClick+'>'+eh(p.cliente)+'</span></div>'
+      +'<div style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Clique para abrir o orçamento"><span '+nomeClick+'>'+eh(p.cliente)+(p.evento?' — '+eh(p.evento):'')+'</span></div>'
       +'<div style="min-width:65px;color:var(--text-muted);font-size:9px;text-align:right">'+eh(p.forma||'—')+'</div>'
       +'<div style="min-width:80px;text-align:right;font-weight:800;color:#ffa726">'+fmt(p.valor)+'</div>'
       +'</div>';
@@ -20233,7 +20245,7 @@ function dashFinRenderizar(){
     return '<div class="fin-row">'
       +'<div style="min-width:46px;text-align:center;font-weight:800;color:#ef5350">'+diasAtras2+'d</div>'
       +'<div style="min-width:72px;color:var(--text-muted);font-size:9px">'+fD(p.data)+'</div>'
-      +'<div style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Clique para abrir o orçamento"><span '+nomeClick+'>'+eh(p.cliente)+'</span></div>'
+      +'<div style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Clique para abrir o orçamento"><span '+nomeClick+'>'+eh(p.cliente)+(p.evento?' — '+eh(p.evento):'')+'</span></div>'
       +'<div style="min-width:65px;color:var(--text-muted);font-size:9px;text-align:right">'+eh(p.cons||'—')+'</div>'
       +'<div style="min-width:80px;text-align:right;font-weight:800;color:#ef5350">'+fmt(p.valor)+'</div>'
       +'</div>';
@@ -20291,7 +20303,7 @@ function dashFinDrill(key, titulo){
   var ST_COR2={pago:'#66bb6a',pendente:'#ffa726',atrasado:'#ef5350'};
   corpo.innerHTML='<div style="max-height:360px;overflow-y:auto">'
     +'<div style="display:flex;gap:4px;background:var(--surface-2);border-bottom:2px solid var(--R);padding:5px 10px;font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">'
-    +'<span style="min-width:72px">Venc.</span><span style="flex:1">Cliente</span><span style="min-width:90px;text-align:center">Consultor</span><span style="min-width:70px;text-align:right">Forma</span><span style="min-width:80px;text-align:right">Valor</span>'
+    +'<span style="min-width:72px">Venc.</span><span style="flex:1">Cliente / Evento</span><span style="min-width:90px;text-align:center">Consultor</span><span style="min-width:70px;text-align:right">Forma</span><span style="min-width:80px;text-align:right">Valor</span>'
     +'</div>'
     +lista.map(function(p){
       var cor2=ST_COR2[p.status]||'var(--text-muted)';
@@ -20301,7 +20313,7 @@ function dashFinDrill(key, titulo){
       return '<div style="padding:6px 10px;border-bottom:1px solid var(--border-strong);display:flex;align-items:center;gap:6px;background:var(--surface-3)">'
         +'<div style="min-width:72px;color:var(--text-muted);font-size:9px;flex-shrink:0">'+fD(p.data)+'</div>'
         +'<div style="flex:1;min-width:0">'
-        +'<div '+nomeAttrs+' style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Clique para abrir o orçamento">'+(p.cliente&&p.cliente!=='—'?eh(p.cliente):'(sem cliente)')+'</div>'
+        +'<div '+nomeAttrs+' style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Clique para abrir o orçamento">'+(p.cliente&&p.cliente!=='—'?eh(p.cliente):'(sem cliente)')+(p.evento?' — '+eh(p.evento):'')+'</div>'
         +'<div style="font-size:9px;color:var(--text-muted);margin-top:1px">Orc: '+eh(p.num)+' · '+eh(p.desc)+'</div>'
         +'</div>'
         +'<div style="min-width:90px;text-align:center;font-size:9px;color:var(--text-dim);flex-shrink:0">'+eh(p.cons)+'</div>'
@@ -20825,7 +20837,7 @@ function dashGerRenderizar(){
     if(cs==='ganha'){porCons[c2].ganhos++;porCons[c2].volGanho+=val;}
     if(cs==='perdida') porCons[c2].perdidos++;
     porCons[c2].margemSum+=margPct;porCons[c2].margemCnt++;
-    margens.push({num:o.form&&o.form['f-num']||'?',nome:o.form&&o.form['f-cliente']||'?',cons:c2,val:val,marg:margPct,cs:cs});
+    margens.push({num:o.form&&o.form['f-num']||'?',nome:o.form&&o.form['f-cliente']||'?',evento:o.form&&o.form['f-nome-evento']||'',cons:c2,val:val,marg:margPct,cs:cs});
   });
   var taxaConv=cntAprov>0?Math.round(cntGanho/cntAprov*100):0;
   var ticketMedio=cntAprov>0?volAprov/cntAprov:0;
@@ -20876,7 +20888,7 @@ function dashGerRenderizar(){
   var sortedMarg=margens.slice().sort(function(a,b2){return b2.marg-a.marg;});
   if(sortedMarg.length){
     html+='<div style="font-size:11px;font-weight:900;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Orcamentos por Margem (top 20)</div>';
-    html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:var(--surface-3);color:var(--text-muted);font-size:10px"><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)">N.</th><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)">Cliente</th><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)">Consultor</th><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)">Status</th><th style="padding:7px 10px;text-align:right;border-bottom:1px solid var(--border)">Valor Final</th><th style="padding:7px 10px;text-align:center;border-bottom:1px solid var(--border)">Margem</th></tr></thead><tbody>';
+    html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:var(--surface-3);color:var(--text-muted);font-size:10px"><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)">N.</th><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)">Cliente</th><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)">Nome do Evento</th><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)">Consultor</th><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)">Status</th><th style="padding:7px 10px;text-align:right;border-bottom:1px solid var(--border)">Valor Final</th><th style="padding:7px 10px;text-align:center;border-bottom:1px solid var(--border)">Margem</th></tr></thead><tbody>';
     sortedMarg.slice(0,20).forEach(function(m,i){
       var mc=m.marg>=45?'#66bb6a':m.marg>=30?'#ffa726':'#ef5350';
       var csSI=typeof FUNIL_SI!=='undefined'&&FUNIL_SI[m.cs]||null;
@@ -20884,6 +20896,7 @@ function dashGerRenderizar(){
       html+='<tr style="border-bottom:1px solid var(--border-strong);background:'+(i%2===0?'#080808':'#0a0a0a')+'">'
         +'<td style="padding:7px 10px;color:var(--text-muted);font-size:10px">'+eh(m.num)+'</td>'
         +'<td style="padding:7px 10px;font-weight:700;color:var(--text-dim)">'+eh(m.nome)+'</td>'
+        +'<td style="padding:7px 10px;color:var(--text-muted)">'+eh(m.evento||'—')+'</td>'
         +'<td style="padding:7px 10px;color:var(--text-muted)">'+eh(m.cons)+'</td>'
         +'<td style="padding:7px 10px">'+csL+'</td>'
         +'<td style="padding:7px 10px;text-align:right;font-weight:800;color:var(--text)">'+fmt(m.val)+'</td>'
