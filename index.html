@@ -3678,6 +3678,11 @@ function _agendaContadorItensSobrepostos(periodo){
   return (_dashDados||[]).filter(function(o){
     if(o.driveId&&o.driveId===driveIdAtual) return false;
     if(!_logStatus(o)) return false;
+    // Mesma regra da grade da Logística (Task #199 / _logOcupaAgenda): um
+    // "pré-reservado" só ocupa a agenda de verdade se já tiver pré-reserva
+    // real criada no Google Agenda — senão o contador conta orçamento que
+    // a Logística nem mostra (bug: contador "5", grade com só 1 evento).
+    if(!_logOcupaAgenda(o)) return false;
     var range=_logRangeEvento(o);
     if(!range) return false;
     return periodo.inicio<=range.fim && range.inicio<=periodo.fim;
@@ -15518,6 +15523,32 @@ function _logStatus(o){
   return LOG_SI[cs]||null;
 }
 
+// "deve ser feito pré-reserva somente se tiver sido feito na agenda
+// google" — estar em negociação/proposta enviada no funil, sozinho, NÃO
+// segura a data pra ninguém; só conta como "pré-reservado" de verdade quem
+// já tem uma pré-reserva criada no Google Agenda (botão 📌 Pré-Agenda),
+// identificada pelo mesmo ID (preReservaEventId) que a integração já
+// guarda. Extraída como função própria (Task #226 bugfix) porque o
+// contador de ocupação do botão Agenda (_agendaContadorItensSobrepostos)
+// usava só _logStatus(o) sem essa checagem, contando como "ocupando a
+// data" orçamentos que a grade da Logística corretamente não mostra —
+// causava o contador (ex.: "5") divergir da grade (ex.: 1 evento real).
+function _logTemPreReservaReal(o){
+  return !!(o&&o.dados&&o.dados.googleAgenda&&o.dados.googleAgenda.preReservaEventId);
+}
+
+// Um orçamento só "ocupa" a agenda (conta como evento real de verdade,
+// pra grade da Logística E pro contador de ocupação) se: Fechado (Venda
+// Ganha) — sempre conta; ou Pré-reservado (enviada/negociação/standby) —
+// só conta se já tiver a pré-reserva real no Google Agenda (ver
+// _logTemPreReservaReal acima). Qualquer outra etapa não ocupa.
+function _logOcupaAgenda(o){
+  var cs=(o&&o.dados&&o.dados.comercialStatus)||'';
+  if(cs==='ganha') return true;
+  if(['enviada','negociacao','standby'].indexOf(cs)>=0) return _logTemPreReservaReal(o);
+  return false;
+}
+
 // Recalcula a lista filtrada (fechados/pré-reservados + consultor) e
 // repassa pra visão ativa (Dia/Semana/Mês). Chamada sempre que um filtro
 // muda, a visão muda, navega o período, ou os dados são atualizados.
@@ -15532,16 +15563,7 @@ function logRenderizar(){
     if(cs==='ganha'){ if(!mostrarFechado) return false; }
     else if(['enviada','negociacao','standby'].indexOf(cs)>=0){
       if(!mostrarPre) return false;
-      // Pedido do usuário: "deve ser feito pré-reserva somente se tiver
-      // sido feito na agenda google" — estar em negociação/proposta enviada
-      // no funil, sozinho, NÃO segura a data pra ninguém; só conta como
-      // "pré-reservado" de verdade quem já tem uma pré-reserva criada no
-      // Google Agenda (botão 📌 Pré-Agenda), identificada pelo mesmo ID
-      // (preReservaEventId) que a integração já guarda. Sem isso, o evento
-      // simplesmente não aparece na Logística (não é uma etapa que a
-      // logística precisa reservar recurso ainda).
-      var temPreReserva=!!(o.dados&&o.dados.googleAgenda&&o.dados.googleAgenda.preReservaEventId);
-      if(!temPreReserva) return false;
+      if(!_logTemPreReservaReal(o)) return false;
     }
     else return false; // qualquer outra etapa (rascunho, lead, perdida etc.) não entra na logística
     if(cons && (o.form&&o.form['f-cons'])!==cons) return false;
