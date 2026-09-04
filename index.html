@@ -2712,15 +2712,15 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     <div><label>Diárias Equip. (½)</label><input id="f-diarias-equip" readonly style="background:#e8f4fd;border-color:#90caf9;font-weight:700;color:#1565c0"></div>
   </div>
   <div class="g4" style="margin-bottom:8px">
-    <div><label>Início Montagem</label><input type="date" id="f-dm" oninput="marcarAlterado()"></div>
+    <div><label>Início Montagem</label><input type="date" id="f-dm" oninput="marcarAlterado();atualizarContadorAgendaOrc()"></div>
     <div><label>Hora Montagem</label><input type="time" id="f-hm" oninput="marcarAlterado()"></div>
-    <div><label>Fim Montagem</label><input type="date" id="f-dm-fim" oninput="marcarAlterado()"></div>
-    <div></div>
+    <div><label>Fim Montagem</label><input type="date" id="f-dm-fim" oninput="marcarAlterado();atualizarContadorAgendaOrc()"></div>
+    <div><label>Agenda</label><button type="button" class="btn btn-o btn-sm" id="btn-agenda-contador" onclick="abrirAgendaLogisticaDoOrcamento()" title="Ver a agenda da Logística pra esse período — eventos fechados e pré-reservados que se sobrepõem" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px">📅 Agenda <span id="agenda-contador-badge" style="background:var(--surface-3);border-radius:10px;padding:1px 8px;font-weight:800;font-size:11px;color:var(--text-dim)">—</span></button></div>
   </div>
   <div class="g4" style="margin-bottom:8px">
-    <div><label>Início Desmontagem</label><input type="date" id="f-dd" oninput="marcarAlterado()"></div>
+    <div><label>Início Desmontagem</label><input type="date" id="f-dd" oninput="marcarAlterado();atualizarContadorAgendaOrc()"></div>
     <div><label>Hora Desmontagem</label><input type="time" id="f-hd" oninput="marcarAlterado()"></div>
-    <div><label>Fim Desmontagem</label><input type="date" id="f-dd-fim" oninput="marcarAlterado()"></div>
+    <div><label>Fim Desmontagem</label><input type="date" id="f-dd-fim" oninput="marcarAlterado();atualizarContadorAgendaOrc()"></div>
     <div></div>
   </div>
   <div class="g3">
@@ -3628,6 +3628,106 @@ function calcDiariasAuto(){
     SECS.forEach(function(s){try{renderRows(s);}catch(e){}});
     calc();
   }catch(e){}
+  // Início/Fim do Evento também mudam a janela de ocupação do contador da
+  // Agenda (cai no fallback f-dia/f-dia-fim quando Montagem/Desmontagem não
+  // estão preenchidas) — recalcula junto, sem precisar duplicar o oninput.
+  try{ atualizarContadorAgendaOrc(); }catch(e){}
+}
+
+// ═══════════════════════════════════════════════════════
+// CONTADOR DE AGENDA — pedido do usuário: "criar um contador de eventos
+// para a data ou período que o consultor selecionou assim ele sabe se a
+// data ou período está sobrecarregado", com um botão "Agenda" que abre a
+// Logística já naquele período pra ver quais eventos e a complexidade.
+//
+// Reaproveita a MESMA semântica da Logística de Eventos (_logRangeEvento,
+// _logStatus): janela de Montagem até Desmontagem (fallback pro dia do
+// Evento), contando só orçamentos Fechados (Venda Ganha) ou Pré-reservados
+// (Proposta Enviada/Negociação/Standby) — os únicos que realmente ocupam
+// equipe/equipamento numa data, igual a Logística já considera.
+//
+// _dashDados é carregado uma vez por sessão do editor (reaproveitando
+// dashAtualizar(), a mesma busca usada pelo Dashboard/Logística, com cache
+// de sessão) — evita refazer a listagem completa a cada data alterada.
+// ═══════════════════════════════════════════════════════
+var _agendaContadorCarregado=false;
+var _agendaContadorCarregando=false;
+
+// Janela de ocupação do orçamento ABERTO na tela agora — mesma lógica de
+// _logRangeEvento(), só que lendo os campos ao vivo (gv()) em vez de um
+// form já salvo, pra refletir o que o consultor está digitando.
+function _agendaContadorPeriodoAtual(){
+  var inicio=gv('f-dm')||gv('f-dia')||'';
+  if(!inicio) return null;
+  var fim=gv('f-dd-fim')||gv('f-dd')||gv('f-dia-fim')||gv('f-dia')||inicio;
+  if(fim<inicio) fim=inicio;
+  return {inicio:inicio, fim:fim};
+}
+
+async function _agendaContadorGarantirDados(){
+  if(_agendaContadorCarregado||_agendaContadorCarregando) return;
+  _agendaContadorCarregando=true;
+  try{ await dashAtualizar(); }catch(e){ console.warn('_agendaContadorGarantirDados:',e); }
+  _agendaContadorCarregando=false;
+  _agendaContadorCarregado=true;
+}
+
+// Quantos outros orçamentos (Fechados/Pré-reservados) se sobrepõem ao
+// período atual — exclui o próprio orçamento aberto na tela.
+function _agendaContadorItensSobrepostos(periodo){
+  return (_dashDados||[]).filter(function(o){
+    if(o.driveId&&o.driveId===driveIdAtual) return false;
+    if(!_logStatus(o)) return false;
+    var range=_logRangeEvento(o);
+    if(!range) return false;
+    return periodo.inicio<=range.fim && range.inicio<=periodo.fim;
+  });
+}
+
+function _agendaContadorPintar(el,estado){
+  var cores={
+    vazio:      {bg:'var(--surface-3)', tx:'var(--text-dim)'},
+    livre:      {bg:'#2e7d3233',        tx:'#66bb6a'},
+    atencao:    {bg:'#e6510033',        tx:'#ffa726'},
+    sobrecarga: {bg:'#c6282833',        tx:'#ef5350'}
+  };
+  var c=cores[estado]||cores.vazio;
+  el.style.background=c.bg;
+  el.style.color=c.tx;
+}
+
+// Atualiza o badge do botão "📅 Agenda" — chamada nas mudanças de data
+// (Início/Fim do Evento via calcDiariasAuto(), Montagem/Desmontagem via
+// oninput direto) e ao carregar um orçamento na tela.
+async function atualizarContadorAgendaOrc(){
+  var el=document.getElementById('agenda-contador-badge');
+  if(!el) return;
+  var periodo=_agendaContadorPeriodoAtual();
+  if(!periodo){
+    el.textContent='—';
+    el.title='Preencha uma data (Montagem ou Início do Evento) pra ver a ocupação da agenda nesse período.';
+    _agendaContadorPintar(el,'vazio');
+    return;
+  }
+  if(!_agendaContadorCarregado){
+    el.textContent='…';
+    await _agendaContadorGarantirDados();
+  }
+  var itens=_agendaContadorItensSobrepostos(periodo);
+  var n=itens.length;
+  el.textContent=String(n);
+  el.title=n===0
+    ? 'Nenhum outro evento fechado/pré-reservado nesse período.'
+    : n+' evento(s) fechado(s)/pré-reservado(s) se sobrepõem a esse período — clique pra ver na Agenda da Logística.';
+  _agendaContadorPintar(el, n===0?'livre':(n<=2?'atencao':'sobrecarga'));
+}
+
+// Botão "📅 Agenda" — abre a Logística já no período do orçamento aberto,
+// pra o consultor ver quais eventos batem e a complexidade de cada um.
+async function abrirAgendaLogisticaDoOrcamento(){
+  var periodo=_agendaContadorPeriodoAtual();
+  if(periodo){ _logData=periodo.inicio; _logView='semana'; }
+  await abrirLogistica();
 }
 
 var PRECOS={
@@ -7893,6 +7993,13 @@ async function googleAgendaEnviarPreReserva(){
     alert('⚠️ Salve o orçamento antes de criar a pré-reserva.\n\nAssim o sistema consegue lembrar qual evento já foi criado e evitar duplicar da próxima vez.');
     return;
   }
+  // Captura o id AGORA — a autorização do Google (token) e o envio à API
+  // podem demorar, e se o usuário sair do orçamento nesse meio-tempo
+  // (voltar pra Home, abrir outro orçamento) driveIdAtual muda ou fica
+  // vazio. Sem essa captura, o Firestore acaba recebendo um path vazio
+  // (erro "doc() cannot be called with an empty path") ou gravando o ID do
+  // evento no orçamento ERRADO.
+  var idOrcamentoEnvio=driveIdAtual;
   if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
   if(!GOOGLE_AGENDA_CONFIG.clientId||!GOOGLE_AGENDA_CONFIG.calendarId){
     alert('⚠️ A integração com o Google Agenda ainda não foi configurada.\n\nPeça a um administrador para configurar em Admin > Google Agenda.');
@@ -7912,9 +8019,10 @@ async function googleAgendaEnviarPreReserva(){
   var resultado=await _gaEnviarListaEventos([_gaEventoPreReserva()],descricao,enderecoEvento,idsExistentes,GOOGLE_AGENDA_CONFIG.calendarId,token);
   var novosIds=resultado.novosIds, erros=resultado.erros;
 
-  orcAtualGoogleAgenda=Object.assign({},idsExistentes,novosIds);
+  var googleAgendaAtualizado=Object.assign({},idsExistentes,novosIds);
+  if(driveIdAtual===idOrcamentoEnvio) orcAtualGoogleAgenda=googleAgendaAtualizado;
   try{
-    await fbDb.collection('orcamentos').doc(driveIdAtual).set({googleAgenda:orcAtualGoogleAgenda},{merge:true});
+    await fbDb.collection('orcamentos').doc(idOrcamentoEnvio).set({googleAgenda:googleAgendaAtualizado},{merge:true});
   }catch(e){
     erros.push('Não foi possível salvar o ID do evento no orçamento: '+e.message);
   }
@@ -7944,6 +8052,13 @@ async function googleAgendaEnviarOS(){
     alert('⚠️ Salve o orçamento antes de enviar para a Agenda.\n\nAssim o sistema consegue lembrar quais eventos já foram criados e evitar duplicar da próxima vez que você reenviar.');
     return;
   }
+  // Captura o id AGORA — a autorização do Google (token) e o envio à API
+  // podem demorar, e se o usuário sair do orçamento nesse meio-tempo
+  // (voltar pra Home, abrir outro orçamento) driveIdAtual muda ou fica
+  // vazio. Sem essa captura, o Firestore acaba recebendo um path vazio
+  // (erro "doc() cannot be called with an empty path", reportado pelo
+  // usuário) ou gravando os IDs dos eventos no orçamento ERRADO.
+  var idOrcamentoEnvio=driveIdAtual;
   if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
   if(!GOOGLE_AGENDA_CONFIG.clientId||!GOOGLE_AGENDA_CONFIG.calendarId){
     alert('⚠️ A integração com o Google Agenda ainda não foi configurada.\n\nPeça a um administrador para configurar em Admin > Google Agenda.');
@@ -7965,13 +8080,16 @@ async function googleAgendaEnviarOS(){
   var novosIds=resultado.novosIds;
   var erros=resultado.erros;
 
-  orcAtualGoogleAgenda=Object.assign({},idsExistentes,novosIds);
+  var googleAgendaAtualizado=Object.assign({},idsExistentes,novosIds);
+  if(driveIdAtual===idOrcamentoEnvio) orcAtualGoogleAgenda=googleAgendaAtualizado;
   try{
     // Merge imediato no Firestore — além de manter orcAtualGoogleAgenda em
     // memória (que já garante persistência no próximo save normal via
     // getDadosCompletos()), grava direto para o caso do usuário sair sem
-    // salvar de novo depois de enviar pra agenda.
-    await fbDb.collection('orcamentos').doc(driveIdAtual).set({googleAgenda:orcAtualGoogleAgenda},{merge:true});
+    // salvar de novo depois de enviar pra agenda. Usa o id CAPTURADO no
+    // início da função (idOrcamentoEnvio), não driveIdAtual, que pode ter
+    // mudado durante a espera pela autorização/envio.
+    await fbDb.collection('orcamentos').doc(idOrcamentoEnvio).set({googleAgenda:googleAgendaAtualizado},{merge:true});
   }catch(e){
     erros.push('Não foi possível salvar os IDs dos eventos no orçamento: '+e.message);
   }
