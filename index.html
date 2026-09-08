@@ -4002,7 +4002,15 @@ function renderStatusOrc(){
   var obsHtml='<textarea id="aprov-obs" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:4px;font-size:11px;resize:vertical;height:52px;margin-top:8px;background:var(--surface);color:var(--text)" placeholder="Observação / Motivo...">'+obsVal+'</textarea>';
   function btn(cor,txt,fn){return '<button onclick="'+fn+'" style="padding:8px 15px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;color:var(--text);background:'+cor+';margin:3px">'+txt+'</button>';}
   if(nivel==='consultor'&&(aprovStatus==='rascunho'||aprovStatus==='revisao')){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#1565c0',aprovStatus==='rascunho'?'📤 Enviar para Análise Técnica':'📤 Reenviar para Análise Técnica',"aprovAcao('analise')")+'</div>';}
-  else if(nivel==='tecnico'&&aprovStatus==='analise'){if(cImp<=LIMITE_TEC){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar (até R$ 4.000)',"aprovAcao('aprovado')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}else{acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#e65100','📊 Encaminhar ao Gerente',"aprovAcao('gerencial')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}}
+  // Um usuário de nível Área Técnica que ELE PRÓPRIO está elaborando o
+  // orçamento (ainda em Rascunho ou Revisão, antes de qualquer envio) não
+  // precisa passar pelo passo de "Enviar para Análise Técnica" — ele já É
+  // a análise técnica. Pedido do usuário: "quero que apareça os botões de
+  // aprovação com exceção do envio para análise técnica pois ele já é o
+  // mesmo". Por isso o nível "tecnico" agora também aciona os botões de
+  // ação (Aprovar/Encaminhar ao Gerente/Solicitar Revisão) em Rascunho e
+  // Revisão, não só quando o status já está formalmente em "Análise".
+  else if(nivel==='tecnico'&&(aprovStatus==='analise'||aprovStatus==='rascunho'||aprovStatus==='revisao')){if(cImp<=LIMITE_TEC){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar (até R$ 4.000)',"aprovAcao('aprovado')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}else{acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#e65100','📊 Encaminhar ao Gerente',"aprovAcao('gerencial')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}}
   else if(nivel==='gerente'&&aprovStatus==='gerencial'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#6a1b9a','🏆 Enviar para Diretoria',"aprovAcao('diretoria')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}
   else if(nivel==='diretor'&&aprovStatus==='diretoria'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#c62828','🔄 Reprovar / Revisão',"aprovAcao('revisao')")+'</div>';}
   else if(['adm','gerente','diretor'].includes(usuarioAtual.nivel)&&aprovStatus!=='aprovado'&&aprovStatus!=='rascunho'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#6a1b9a','🏆 Enviar para Diretoria',"aprovAcao('diretoria')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}
@@ -4040,7 +4048,10 @@ function renderAprovInline(){
   function btn(cor,txt,st){var b=document.createElement('button');b.className='acao-btn';b.style.background=cor;b.textContent=txt;b.onclick=function(){aprovAcaoInline(st);};return b;}
   btnsEl.innerHTML='';var mostrar=false;
   if(nivel==='consultor'&&(aprovStatus==='rascunho'||aprovStatus==='revisao')){mostrar=true;btnsEl.appendChild(btn('#1565c0',aprovStatus==='rascunho'?'📤 Enviar para Análise Técnica':'📤 Reenviar para Análise Técnica','analise'));}
-  else if(nivel==='tecnico'&&aprovStatus==='analise'){mostrar=true;if(cImp<=LIMITE_TEC){btnsEl.appendChild(btn('#2e7d32','✅ Aprovar (até R$ 4.000)','aprovado'));}else{btnsEl.appendChild(btn('#e65100','📊 Encaminhar ao Gerente','gerencial'));}btnsEl.appendChild(btn('#c62828','🔄 Solicitar Revisão','revisao'));}
+  // Mesma regra de renderStatusOrc(): Área Técnica elaborando o próprio
+  // orçamento pula o passo de "Enviar para Análise Técnica" (ele já é a
+  // análise técnica) e vai direto pros botões de ação.
+  else if(nivel==='tecnico'&&(aprovStatus==='analise'||aprovStatus==='rascunho'||aprovStatus==='revisao')){mostrar=true;if(cImp<=LIMITE_TEC){btnsEl.appendChild(btn('#2e7d32','✅ Aprovar (até R$ 4.000)','aprovado'));}else{btnsEl.appendChild(btn('#e65100','📊 Encaminhar ao Gerente','gerencial'));}btnsEl.appendChild(btn('#c62828','🔄 Solicitar Revisão','revisao'));}
   else if(nivel==='gerente'&&aprovStatus==='gerencial'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#6a1b9a','🏆 Enviar para Diretoria','diretoria'));btnsEl.appendChild(btn('#c62828','🔄 Solicitar Revisão','revisao'));}
   else if(nivel==='diretor'&&aprovStatus==='diretoria'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#c62828','🔄 Reprovar / Revisão','revisao'));}
   else if(['adm','gerente','diretor'].includes(usuarioAtual.nivel)&&aprovStatus!=='aprovado'&&aprovStatus!=='rascunho'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#6a1b9a','🏆 Enviar para Diretoria','diretoria'));btnsEl.appendChild(btn('#c62828','🔄 Solicitar Revisão','revisao'));}
