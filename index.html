@@ -3801,6 +3801,15 @@ async function doLogin(){
     return;
   }
   var perfil=perfilSnap.data();
+  // Usuário bloqueado (ex.: funcionário desligado da empresa) — o cadastro e
+  // todo o histórico vinculado a ele (orçamentos, tarefas, aprovações etc.)
+  // permanecem intactos, só o login é impedido. Ver admBloquear()/renderAdmList().
+  if(perfil.bloqueado){
+    err.textContent='⛔ Este usuário está bloqueado. Contate o administrador.';
+    try{await fbAuth.signOut();}catch(e0){}
+    document.getElementById('l-pass').value='';
+    return;
+  }
   var u={id:email,nome:perfil.nome||email,nivel:perfil.nivel||'consultor',cargo:perfil.cargo||'',comissaoPercentual:perfil.comissaoPercentual||0,emailComercial:perfil.emailComercial||''};
   try{
     var _sR=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'lock',lockAction:'session-check',usuarioId:u.id,usuarioNome:u.nome,deviceId:_getDeviceId(),ttl:35*60*1000})});
@@ -19003,7 +19012,7 @@ async function usuariosCarregarFirestore(){
     var lista=[];
     snap.forEach(function(doc){
       var d=doc.data();
-      lista.push({id:doc.id,nome:d.nome||doc.id,nivel:d.nivel||'consultor',cargo:d.cargo||'',comissaoPercentual:d.comissaoPercentual||0,emailComercial:d.emailComercial||''});
+      lista.push({id:doc.id,nome:d.nome||doc.id,nivel:d.nivel||'consultor',cargo:d.cargo||'',comissaoPercentual:d.comissaoPercentual||0,emailComercial:d.emailComercial||'',bloqueado:!!d.bloqueado});
     });
     USUARIOS=lista;
   }catch(e){
@@ -19028,7 +19037,13 @@ async function usuariosCarregarFirestore(){
 // regra nova no Firestore.
 async function _salvarNomesConsultoresPublico(){
   try{
-    var nomes=USUARIOS.map(function(u){return u.nome;})
+    // Usuários bloqueados (ex.: desligados da empresa) somem dos dropdowns de
+    // seleção (novo orçamento etc.), mas continuam existindo em USUARIOS/
+    // Firestore — orçamentos/tarefas antigos vinculados a eles guardam o nome
+    // como texto solto e não são afetados (ver popularConsultores(), que já
+    // preserva o nome do consultor atual de um orçamento aberto mesmo que ele
+    // não esteja mais nesta lista pública).
+    var nomes=USUARIOS.filter(function(u){return !u.bloqueado;}).map(function(u){return u.nome;})
       .filter(function(n,i,arr){return n&&arr.indexOf(n)===i;})
       .sort(function(a,b){return a.localeCompare(b,'pt-BR');});
     await fbDb.collection('config').doc('consultoresNomes').set({nomes:nomes});
@@ -19386,7 +19401,7 @@ function renderAdmList(){
     _salvarNomesConsultoresPublico(); // republica a lista de nomes toda vez que o Admin abre este painel
     popularConsultores();
     var avisoHtml='<div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--text-muted)">'
-      +'ℹ️ Use <b>+ Novo Usuário</b> pra criar a conta de login e o perfil de uma vez. O botão 🗑️ exclui os dois juntos. Aqui embaixo você também pode editar nome, nível e cargo de quem já existe.'
+      +'ℹ️ Use <b>+ Novo Usuário</b> pra criar a conta de login e o perfil de uma vez. O botão 🔒 <b>bloqueia</b> o login de um usuário (ex.: funcionário desligado) sem apagar nada do histórico dele — orçamentos, tarefas e aprovações continuam intactos. O botão 🗑️ já exclui a conta e o perfil PERMANENTEMENTE. Aqui embaixo você também pode editar nome, nível e cargo de quem já existe.'
       +'</div>';
     document.getElementById('adm-list').innerHTML=avisoHtml+USUARIOS.map(function(u,i){
     var cargoVal=u.cargo||'';
@@ -19400,15 +19415,16 @@ function renderAdmList(){
         return '<option value="'+c+'"'+(cargoVal===c?' selected':'')+'>'+c+'</option>';
       }).join('');
 
-    return '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:8px">'
+    return '<div style="background:var(--surface-2);border:1px solid '+(u.bloqueado?'#ef5350':'var(--border)')+';border-radius:6px;padding:12px;margin-bottom:8px'+(u.bloqueado?';opacity:0.7':'')+'">'
       // Cabeçalho
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
       +'<div>'
-      +'<div style="font-size:12px;font-weight:800;color:var(--text)">'+u.nome+'</div>'
+      +'<div style="font-size:12px;font-weight:800;color:var(--text)">'+u.nome+(u.bloqueado?' <span style="background:#ef5350;color:#fff;border-radius:3px;padding:1px 6px;font-size:9px;font-weight:800;vertical-align:middle">🔒 BLOQUEADO</span>':'')+'</div>'
       +'<div style="font-size:10px;color:var(--text-muted);margin-top:1px">'+u.id+(cargoVal?' · <span style="color:#ffa726">'+cargoVal+'</span>':'')+'</div>'
       +'</div>'
       +'<div style="display:flex;gap:5px">'
       +'<button onclick="admSalvar('+i+')" style="padding:5px 12px;background:var(--R);color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">💾 Salvar</button>'
+      +(u.nivel!=='adm'?'<button onclick="admBloquear('+i+')" style="padding:5px 10px;background:var(--surface-3);color:'+(u.bloqueado?'#66bb6a':'#ffa726')+';border:none;border-radius:4px;font-size:11px;cursor:pointer" title="'+(u.bloqueado?'Desbloquear — permite login novamente':'Bloquear — impede login sem apagar o histórico')+'">'+(u.bloqueado?'🔓':'🔒')+'</button>':'')
       +(u.nivel!=='adm'?'<button onclick="admDel('+i+')" style="padding:5px 10px;background:var(--surface-3);color:#ef5350;border:none;border-radius:4px;font-size:11px;cursor:pointer">🗑️</button>':'')
       +'</div>'
       +'</div>'
@@ -19463,6 +19479,32 @@ async function admSalvar(i){
     alert('✅ Perfil de "'+nome+'" salvo com sucesso!');
   }catch(e){
     alert('❌ Erro ao salvar: '+e.message);
+  }
+}
+
+// Bloqueia/desbloqueia o LOGIN de um usuário sem apagar nada — diferente de
+// admDel() (exclusão permanente da conta e do perfil), aqui só um campo
+// "bloqueado" é gravado no doc usuarios/{email}. Todo o histórico vinculado
+// ao usuário (orçamentos, tarefas, aprovações, itens de logística etc.)
+// referencia o nome/e-mail como texto solto, então continua 100% intacto e
+// visível — só o login (checado em doLogin()) passa a ser recusado, e o
+// nome some dos dropdowns de seleção (ver _salvarNomesConsultoresPublico()).
+// Pensado pro caso de funcionário desligado da empresa.
+async function admBloquear(i){
+  var u=USUARIOS[i];
+  var vaiBloquear=!u.bloqueado;
+  var msg=vaiBloquear
+    ? '🔒 Bloquear o login de "'+u.nome+'" ('+u.id+')?\n\nEle não conseguirá mais entrar no sistema, mas todo o histórico (orçamentos, tarefas, aprovações etc.) permanece intacto e pode ser desfeito a qualquer momento clicando em 🔓.'
+    : '🔓 Desbloquear "'+u.nome+'" ('+u.id+')?\n\nEle voltará a conseguir fazer login normalmente.';
+  if(!confirm(msg))return;
+  try{
+    await fbDb.collection('usuarios').doc(u.id).set({bloqueado:vaiBloquear},{merge:true});
+    USUARIOS[i]=Object.assign({},u,{bloqueado:vaiBloquear});
+    await _salvarNomesConsultoresPublico(); // remove/devolve o nome nos dropdowns de seleção
+    renderAdmList();
+    alert(vaiBloquear ? '🔒 "'+u.nome+'" foi bloqueado. O histórico dele continua intacto.' : '🔓 "'+u.nome+'" foi desbloqueado.');
+  }catch(e){
+    alert('❌ Erro ao '+(vaiBloquear?'bloquear':'desbloquear')+': '+e.message);
   }
 }
 
