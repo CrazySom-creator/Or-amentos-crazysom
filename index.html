@@ -16451,7 +16451,20 @@ function permRenderizar(){
           +'<input type="checkbox" class="perm-cb" data-campo="'+c.id+'"'+(checked?' checked':'')
           +' style="width:14px;height:14px;cursor:pointer"> '+c.label+'</label>';
       }).join('')
-      +'</div></div>';
+      +'</div>'
+      // As permissões que "negam por padrão" (confirmar pagamento, aprovar
+      // crédito, status do contrato) ficam nos quadros coloridos no TOPO desta
+      // tela, longe do grupo a que pertencem. Marcar todas as caixas do grupo
+      // Financeiro e mesmo assim o cargo não conseguir dar baixa parecia um
+      // defeito do sistema. Este aviso liga uma coisa à outra.
+      +(mod.id==='financeiro'
+        ? '<div style="margin-top:8px;background:#1a1508;border:1px solid #f9a825;border-radius:5px;padding:8px 10px;font-size:10px;color:#ffca28;line-height:1.5">'
+          +'⚠️ <b>Confirmar pagamento (dar baixa) NÃO está neste grupo.</b> "Parcelas do Financeiro" acima libera apenas adicionar/remover/editar parcelas. '
+          +'Para o cargo poder marcar uma parcela como <b>paga</b>, role até o topo desta tela e marque a caixa amarela '
+          +'<b>"💰 Pode Marcar Parcela como Paga"</b> — ela vem desmarcada por padrão.'
+          +'</div>'
+        : '')
+      +'</div>';
   });
   document.getElementById('perm-corpo').innerHTML=html;
 }
