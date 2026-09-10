@@ -16087,7 +16087,7 @@ function logExportarPDF(){
   if(!itens.length){alert('Nenhum evento para exportar (ajuste os filtros).');return;}
   var hoje=new Date().toLocaleString('pt-BR');
   var nomeArq='CrazySom_Logistica_'+new Date().toISOString().split('T')[0];
-  var linhasHtml=itens.map(function(it){
+  var linhasArr=itens.map(function(it){
     var f=it.o.form||{}, st=it.status||{label:''};
     return '<tr>'
       +'<td>'+eh(f['f-num']||'')+'</td>'
@@ -16103,6 +16103,27 @@ function logExportarPDF(){
       +'<td class="h">'+eh(f['f-dd']?(f['f-hd']||''):'')+'</td>'
       +'<td>'+eh(f['f-local']||'')+'</td>'
       +'</tr>';
+  });
+
+  // O gerador de PDF fatia uma IMAGEM da página, e nesse modo o cabeçalho da
+  // tabela não se repete sozinho: da página 2 em diante a tabela ficava sem os
+  // títulos das colunas, e sem eles não dá pra saber qual data é montagem,
+  // evento ou desmontagem. Por isso a lista é quebrada em blocos, cada bloco
+  // com a sua própria tabela (portanto o seu próprio cabeçalho) e uma quebra
+  // de página forçada entre eles. LINHAS_POR_PAGINA é conservador de propósito:
+  // considera o pior caso, em que o nome do cliente e o local ocupam duas
+  // linhas cada, pra nenhum bloco transbordar da folha.
+  var LINHAS_POR_PAGINA=15;
+  var CAB='<thead><tr><th>Nº</th><th>Cliente</th><th>Nome do Evento</th><th>Consultor</th><th>Status</th>'
+    +'<th>Montagem</th><th class="h">Hora</th><th>Evento</th><th class="h">Hora</th>'
+    +'<th>Desmontagem</th><th class="h">Hora</th><th>Local</th></tr></thead>';
+  var blocos=[];
+  for(var _i=0;_i<linhasArr.length;_i+=LINHAS_POR_PAGINA){
+    blocos.push(linhasArr.slice(_i,_i+LINHAS_POR_PAGINA).join(''));
+  }
+  if(!blocos.length) blocos=[''];
+  var tabelasHtml=blocos.map(function(b,idx){
+    return '<table class="bloco'+(idx<blocos.length-1?' quebra':'')+'">'+CAB+'<tbody>'+b+'</tbody></table>';
   }).join('');
   var w=window.open('','_blank','width=1000,height=800');
   if(!w){alert('Pop-up bloqueado! Libere pop-ups pra este site e tente de novo.');return;}
@@ -16117,8 +16138,25 @@ function logExportarPDF(){
     +'.hdr span{font-size:10px;opacity:.85}'
     +'table{width:100%;border-collapse:collapse;font-size:10px}'
     +'th{background:#f2f2f2;text-align:left;padding:6px;border-bottom:2px solid #ccc}'
-    +'td{padding:6px;border-bottom:1px solid #eee}'
+    +'td{padding:6px;border-bottom:1px solid #eee;vertical-align:top}'
     +'th.h,td.h{width:42px;text-align:center;white-space:nowrap;color:#555}'
+    // Uma linha NUNCA pode ser cortada ao meio na virada de página: sem isto o
+    // gerador fatia a imagem da tabela num ponto arbitrário e o último evento
+    // de cada página aparece pela metade (metade embaixo, metade na página
+    // seguinte), dando a impressão de dado faltando ou repetido.
+    +'tr{page-break-inside:avoid;break-inside:avoid}'
+    // Cabeçalho se repete em todas as páginas — a partir da página 2 a tabela
+    // ficava sem os títulos das colunas, e sem eles é impossível saber qual
+    // data é montagem, evento ou desmontagem.
+    +'thead{display:table-header-group}'
+    +'tbody{display:table-row-group}'
+    // Cada bloco é uma tabela própria (com cabeçalho próprio) e força a virada
+    // de página logo depois, de modo que toda página comece com os títulos das
+    // colunas. O último bloco não força quebra, pra não gerar folha em branco.
+    +'table.bloco{margin-bottom:0}'
+    +'table.quebra{page-break-after:always;break-after:page}'
+    // Respiro no fim da página pra última linha não encostar no corte.
+    +'#pw{padding-bottom:8mm}'
     +'#st{position:fixed;top:0;left:0;right:0;background:#d63447;color:#fff;text-align:center;padding:10px;font-size:13px;font-weight:bold;z-index:9999}'
     +'@media print{#st{display:none}}'
     +'</style>'
@@ -16127,17 +16165,17 @@ function logExportarPDF(){
     +'<div id="st">Gerando PDF...</div>'
     +'<div id="pw">'
     +'<div class="hdr"><h1>🚚 CRAZY SOM — LOGÍSTICA DE EVENTOS</h1><span>Período: '+eh(_logRelPeriodoLabel())+'<br>Ordenação: '+eh(_logRelOrdemLabel())+'<br>Gerado em: '+hoje+'</span></div>'
-    +'<table><thead><tr><th>Nº</th><th>Cliente</th><th>Nome do Evento</th><th>Consultor</th><th>Status</th>'
-    +'<th>Montagem</th><th class="h">Hora</th><th>Evento</th><th class="h">Hora</th><th>Desmontagem</th><th class="h">Hora</th><th>Local</th></tr></thead><tbody>'
-    +linhasHtml
-    +'</tbody></table>'
+    +tabelasHtml
     +'<div style="margin-top:14px;font-size:9px;color:#aaa;text-align:center;border-top:1px solid #ddd;padding-top:6px">Crazy Som Audiovisuais – Sistema de Orçamentos – CNPJ: 10.909.827/0001-76</div>'
     +'</div>'
     +'<script>'
     +'window.onload=function(){setTimeout(function(){'
-    +'var opt={margin:5,filename:"'+nomeArq+'.pdf",image:{type:"jpeg",quality:1},'
+    +'var opt={margin:[6,5,10,5],filename:"'+nomeArq+'.pdf",image:{type:"jpeg",quality:1},'
     +'html2canvas:{scale:2,useCORS:true,logging:false,backgroundColor:"#ffffff"},'
-    +'jsPDF:{unit:"mm",format:"a4",orientation:"landscape"},pagebreak:{mode:["css","legacy"]}};'
+    +'jsPDF:{unit:"mm",format:"a4",orientation:"landscape"},'
+    // avoid:"tr" faz o gerador procurar a borda da linha mais próxima antes de
+    // virar a página, em vez de cortar onde a folha acabou.
+    +'pagebreak:{mode:["css","legacy"],avoid:"tr"}};'
     +'html2pdf().set(opt).from(document.getElementById("pw")).save().then(function(){'
     +'document.getElementById("st").style.background="#2e7d32";'
     +'document.getElementById("st").textContent="PDF salvo! Pode fechar esta janela.";'
