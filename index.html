@@ -2145,6 +2145,20 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       </div>
     </div>
 
+    <!-- Período que define o recorte dos relatórios (PDF/Excel). É separado da
+         navegação Dia/Semana/Mês de propósito: dá pra estar olhando a semana na
+         tela e mesmo assim exportar o mês inteiro, ou o intervalo exato de uma
+         viagem/montagem, sem perder a posição do calendário. Vem preenchido com
+         o período que está à vista, que é o uso mais comum. -->
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:9px 12px;margin:10px 0 0">
+      <div style="font-size:10px;font-weight:800;color:var(--R);text-transform:uppercase;letter-spacing:.5px;padding-bottom:7px">📄 Período dos relatórios</div>
+      <div><label style="font-size:9px">De</label><input type="date" id="log-rel-de" onchange="logRelAtualizarInfo()" style="font-size:11px;padding:5px 7px"></div>
+      <div><label style="font-size:9px">Até</label><input type="date" id="log-rel-ate" onchange="logRelAtualizarInfo()" style="font-size:11px;padding:5px 7px"></div>
+      <button class="btn btn-o btn-sm" onclick="logRelPeriodoDaTela()" title="Copia para os campos acima o período que está sendo exibido no calendário">📆 Usar período da tela</button>
+      <button class="btn btn-o btn-sm" onclick="logRelPeriodoLimpar()" title="Limpa as datas — o relatório passa a incluir todos os eventos carregados">♾️ Tudo</button>
+      <span id="log-rel-info" style="font-size:10px;color:var(--text-muted);padding-bottom:7px"></span>
+    </div>
+
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin:10px 0">
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" id="log-btn-dia" onclick="logMudarView('dia')">Dia</button>
@@ -15459,6 +15473,9 @@ async function abrirLogistica(){
   elCons.innerHTML='<option value="">Todos</option>'+_metasNomes.map(function(n){return '<option value="'+eh(n)+'">'+eh(n)+'</option>';}).join('');
 
   if(!_logData) _logData=_logISO(new Date());
+  // Abre já com o período à vista preenchido — é o recorte que o usuário quer
+  // exportar na maioria das vezes. Ele pode alargar/estreitar à vontade depois.
+  logRelPeriodoDaTela();
   logRenderizar();
 }
 
@@ -15696,6 +15713,8 @@ function logRenderizar(){
   if(_logView==='dia') _logRenderizarDia();
   else if(_logView==='mes') _logRenderizarMes();
   else _logRenderizarSemana();
+  // Mantém "N eventos entrarão no relatório" coerente com os filtros atuais.
+  if(typeof logRelAtualizarInfo==='function') logRelAtualizarInfo();
 }
 
 function _logAtualizarToggleBtns(){
@@ -15891,6 +15910,66 @@ function logAbrirDiaPopup(iso){
 // concExportarExcel()/relExportarExcel(), exportando a lista ATUALMENTE
 // filtrada (Fechado/Pré-reservado, Consultor e Fase), uma linha por
 // orçamento com as 3 datas de ocupação. ──
+// ── Período dos relatórios (PDF/Excel) ──────────────────────────────────────
+// Intervalo que o usuário escolhe nos campos De/Até do popup da Logística.
+// Independente da navegação Dia/Semana/Mês: dá pra exportar um recorte
+// diferente do que está na tela sem perder a posição do calendário.
+
+// Início e fim do período que está sendo EXIBIDO agora, conforme a visão ativa.
+function _logPeriodoVisivel(){
+  if(!_logData) _logData=_logISO(new Date());
+  if(_logView==='dia') return {de:_logData, ate:_logData};
+  if(_logView==='semana'){
+    var dom=_logInicioSemana(_logData);
+    return {de:dom, ate:_logAddDias(dom,6)};
+  }
+  var ano=parseInt(_logData.substring(0,4),10), mes=parseInt(_logData.substring(5,7),10);
+  var ultimo=new Date(ano,mes,0);
+  return {de:_logISO(new Date(ano,mes-1,1)), ate:_logISO(ultimo)};
+}
+
+function logRelPeriodoDaTela(){
+  var p=_logPeriodoVisivel();
+  var de=document.getElementById('log-rel-de'), ate=document.getElementById('log-rel-ate');
+  if(de) de.value=p.de;
+  if(ate) ate.value=p.ate;
+  logRelAtualizarInfo();
+}
+
+function logRelPeriodoLimpar(){
+  var de=document.getElementById('log-rel-de'), ate=document.getElementById('log-rel-ate');
+  if(de) de.value='';
+  if(ate) ate.value='';
+  logRelAtualizarInfo();
+}
+
+function _logRelPeriodo(){
+  var de=(document.getElementById('log-rel-de')||{}).value||'';
+  var ate=(document.getElementById('log-rel-ate')||{}).value||'';
+  // Datas invertidas (usuário digitou Até antes de De) são trocadas em vez de
+  // devolver relatório vazio sem explicar por quê.
+  if(de&&ate&&de>ate){var t=de;de=ate;ate=t;}
+  return {de:de, ate:ate};
+}
+
+// Texto do período para o cabeçalho do PDF/CSV.
+function _logRelPeriodoLabel(){
+  var p=_logRelPeriodo();
+  if(p.de&&p.ate) return fD(p.de)+' a '+fD(p.ate);
+  if(p.de) return 'a partir de '+fD(p.de);
+  if(p.ate) return 'até '+fD(p.ate);
+  return 'Todos os eventos carregados';
+}
+
+function logRelAtualizarInfo(){
+  var el=document.getElementById('log-rel-info');
+  if(!el) return;
+  var n=_logLinhasExport().length;
+  var p=_logRelPeriodo();
+  el.textContent=(p.de||p.ate?'':'Sem filtro de data — ')
+    +(n===1?'1 evento entrará':n+' eventos entrarão')+' no relatório';
+}
+
 function _logLinhasExport(){
   var itens=window._logItens||[];
   var elFase=document.getElementById('log-filtro-fase');
@@ -15899,6 +15978,18 @@ function _logLinhasExport(){
     return (it.o.form&&it.o.form['f-dm']&&fv==='montagem') ||
            (it.o.form&&it.o.form['f-dia']&&fv==='evento') ||
            (it.o.form&&it.o.form['f-dd']&&fv==='desmontagem');
+  });
+  // Recorte por período: entra no relatório todo evento cuja janela de
+  // ocupação (montagem → desmontagem) encoste no intervalo escolhido, e não
+  // apenas os que começam dentro dele — um evento que monta dia 28 e desmonta
+  // dia 2 precisa aparecer nos dois meses, senão some do planejamento.
+  var p=_logRelPeriodo();
+  if(p.de||p.ate) itens=itens.filter(function(it){
+    var r=it.range||{};
+    if(!r.inicio||!r.fim) return false;
+    if(p.ate && r.inicio>p.ate) return false;
+    if(p.de  && r.fim   <p.de ) return false;
+    return true;
   });
   return itens;
 }
@@ -15912,14 +16003,15 @@ function logExportarExcel(){
     return s;
   }
   var bom='\uFEFF';
+  // Sem coluna de valores: este relatório é operacional (vai para equipe de
+  // montagem, motoristas e parceiros), então não expõe preço de venda.
   var linhas=[
     'Logística de Eventos — Fechados e Pré-reservados','',
-    ['Nº','Cliente','Nome do Evento','Consultor','Status','Montagem','Evento','Desmontagem','Local','Valor'].map(csvEscape).join(';')
+    'Período: '+_logRelPeriodoLabel(),'',
+    ['Nº','Cliente','Nome do Evento','Consultor','Status','Montagem','Evento','Desmontagem','Local'].map(csvEscape).join(';')
   ];
   itens.forEach(function(it){
     var o=it.o, f=o.form||{}, st=it.status||{label:''};
-    var valor=0;
-    try{ valor=dashValOrc(o); }catch(e){}
     linhas.push([
       csvEscape(f['f-num']||''),
       csvEscape(f['f-cliente']||''),
@@ -15929,8 +16021,7 @@ function logExportarExcel(){
       csvEscape(f['f-dm']?fD(f['f-dm'])+(f['f-hm']?' '+f['f-hm']:''):''),
       csvEscape(f['f-dia']?fD(f['f-dia'])+(f['f-hi']?' '+f['f-hi']:''):''),
       csvEscape(f['f-dd']?fD(f['f-dd'])+(f['f-hd']?' '+f['f-hd']:''):''),
-      csvEscape(f['f-local']||''),
-      csvEscape(fmt(valor))
+      csvEscape(f['f-local']||'')
     ].join(';'));
   });
   var csv=bom+linhas.join('\r\n');
@@ -15949,8 +16040,6 @@ function logExportarPDF(){
   var nomeArq='CrazySom_Logistica_'+new Date().toISOString().split('T')[0];
   var linhasHtml=itens.map(function(it){
     var f=it.o.form||{}, st=it.status||{label:''};
-    var valor=0;
-    try{ valor=dashValOrc(it.o); }catch(e){}
     return '<tr>'
       +'<td>'+eh(f['f-num']||'')+'</td>'
       +'<td>'+eh(f['f-cliente']||'')+'</td>'
@@ -15960,7 +16049,7 @@ function logExportarPDF(){
       +'<td>'+(f['f-dm']?fD(f['f-dm']):'')+'</td>'
       +'<td>'+(f['f-dia']?fD(f['f-dia']):'')+'</td>'
       +'<td>'+(f['f-dd']?fD(f['f-dd']):'')+'</td>'
-      +'<td style="text-align:right">'+fmt(valor)+'</td>'
+      +'<td>'+eh(f['f-local']||'')+'</td>'
       +'</tr>';
   }).join('');
   var w=window.open('','_blank','width=1000,height=800');
@@ -15984,8 +16073,8 @@ function logExportarPDF(){
     +'</head><body>'
     +'<div id="st">Gerando PDF...</div>'
     +'<div id="pw">'
-    +'<div class="hdr"><h1>🚚 CRAZY SOM — LOGÍSTICA DE EVENTOS</h1><span>Gerado em: '+hoje+'</span></div>'
-    +'<table><thead><tr><th>Nº</th><th>Cliente</th><th>Nome do Evento</th><th>Consultor</th><th>Status</th><th>Montagem</th><th>Evento</th><th>Desmontagem</th><th>Valor</th></tr></thead><tbody>'
+    +'<div class="hdr"><h1>🚚 CRAZY SOM — LOGÍSTICA DE EVENTOS</h1><span>Período: '+eh(_logRelPeriodoLabel())+'<br>Gerado em: '+hoje+'</span></div>'
+    +'<table><thead><tr><th>Nº</th><th>Cliente</th><th>Nome do Evento</th><th>Consultor</th><th>Status</th><th>Montagem</th><th>Evento</th><th>Desmontagem</th><th>Local</th></tr></thead><tbody>'
     +linhasHtml
     +'</tbody></table>'
     +'<div style="margin-top:14px;font-size:9px;color:#aaa;text-align:center;border-top:1px solid #ddd;padding-top:6px">Crazy Som Audiovisuais – Sistema de Orçamentos – CNPJ: 10.909.827/0001-76</div>'
