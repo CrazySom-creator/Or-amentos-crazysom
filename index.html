@@ -309,6 +309,15 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .home-card-ico{font-size:28px;line-height:1;margin-bottom:4px;}
 .home-card-title{color:var(--text);font-size:13px;font-weight:800;letter-spacing:.3px;}
 .home-card-desc{color:var(--text-muted);font-size:10px;line-height:1.5;}
+/* Módulo sem acesso liberado em Admin > Acessos por Cargo: continua VISÍVEL,
+   mas esmaecido e sem reagir ao mouse — assim a pessoa enxerga que o módulo
+   existe (e pode pedir liberação) em vez de ele simplesmente sumir da tela,
+   que dava a impressão de sistema quebrado ou incompleto. O bloqueio real do
+   clique é feito no JS (_homeShow + a checagem dentro de cada função de
+   abertura); o CSS aqui é só a aparência. */
+.home-card.bloqueado{opacity:.42;filter:grayscale(1);cursor:not-allowed;}
+.home-card.bloqueado:hover{background:var(--surface);border-color:var(--border);transform:none;box-shadow:none;}
+.home-card.bloqueado::after{content:'🔒';position:absolute;top:12px;right:12px;font-size:13px;opacity:.9;filter:grayscale(0);}
 .home-card-badge{position:absolute;top:12px;right:12px;background:var(--R);color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;display:none;}
 .home-card-badge.show{display:block;}
 .home-orc-atual{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:16px;cursor:pointer;transition:all .18s;margin-bottom:16px;}
@@ -6466,26 +6475,68 @@ function _renderizarHome(){
   _homeShow('home-btn-ger', tudo||dashTemAcesso('dash-ger'));
   _homeShow('home-btn-adm', nivel==='adm');
   _homeShow('home-btn-transfer', tudo);
-  _homeShow('home-btn-aprov', true);
-  _homeShow('home-btn-elab', dashTemAcesso('dash-elab'));
-  _homeShow('home-btn-metas', dashTemAcesso('dash-metas'));
-  _homeShow('home-btn-resultados', dashTemAcesso('dash-resultados'));
-  _homeShow('home-btn-conc', dashTemAcesso('dash-conc'));
+  _homeShow('home-btn-aprov', tudo||dashTemAcesso('aprovacoes'));
+  _homeShow('home-btn-elab', tudo||dashTemAcesso('dash-elab'));
+  _homeShow('home-btn-metas', tudo||dashTemAcesso('dash-metas'));
+  _homeShow('home-btn-resultados', tudo||dashTemAcesso('dash-resultados'));
+  _homeShow('home-btn-conc', tudo||dashTemAcesso('dash-conc'));
   _homeShow('home-btn-log', tudo||dashTemAcesso('dash-log'));
-  _homeShow('home-btn-fin', dashTemAcesso('dash-fin'));
-  _homeShow('home-btn-os', dashTemAcesso('mod-os'));
-  _homeShow('home-btn-rel', true);
+  _homeShow('home-btn-fin', tudo||dashTemAcesso('dash-fin'));
+  _homeShow('home-btn-os', tudo||dashTemAcesso('mod-os'));
+  _homeShow('home-btn-rel', tudo||dashTemAcesso('rel'));
   _homeShow('home-btn-com', dashTemAcesso('dash-com')||tudo);
   _homeShow('home-btn-funil', tudo||['adm','gerente','diretor','consultor','assistente'].includes(nivel)||dashTemAcesso('funil-card'));
   _homeShow('home-btn-tarefas', true);
+  _homeShow('home-btn-clientes', tudo||dashTemAcesso('mod-clientes'));
+  _homeShow('home-btn-eventos', tudo||dashTemAcesso('mod-eventos'));
+  _homeShow('home-btn-produtos', tudo||dashTemAcesso('mod-produtos'));
   _homeShow('home-btn-faltantes', tudo||dashTemAcesso('dash-faltantes'));
   atualizarBadgeTarefas();
   // (home-btn-clonar removido — clonar está apenas na tela do orçamento)
 }
 
+// Antes, módulo sem acesso era ESCONDIDO (display:none). Pedido do usuário:
+// deixar visível porém esmaecido e não clicável, pra pessoa saber que o módulo
+// existe e poder pedir liberação, em vez de a tela simplesmente vir sem ele.
+//
+// O clique é bloqueado de duas formas independentes, de propósito: aqui, na
+// captura do evento do card (fase de captura + stopPropagation, então o
+// onclick do próprio card nunca chega a rodar), e novamente dentro de cada
+// função de abertura (_moduloBloqueado), porque um módulo também pode ser
+// aberto por outros caminhos que não o card da Home.
 function _homeShow(id, show){
   var el=document.getElementById(id);
-  if(el) el.style.display=show?'':'none';
+  if(!el) return;
+  el.style.display='';                       // nunca mais esconder
+  el.classList.toggle('bloqueado', !show);
+  if(!show){
+    el.title='🔒 Sem acesso a este módulo. Peça a um Gerente, Diretor ou Administrador para liberar em Admin > Acessos por Cargo.';
+    el.setAttribute('aria-disabled','true');
+  }else{
+    el.removeAttribute('title');
+    el.removeAttribute('aria-disabled');
+  }
+  if(!el.dataset.bloqHandler){
+    el.dataset.bloqHandler='1';
+    el.addEventListener('click', function(ev){
+      if(!el.classList.contains('bloqueado')) return;
+      ev.stopPropagation();
+      ev.preventDefault();
+      alert('🔒 Você não tem acesso a este módulo.\n\nPeça a um Gerente, Diretor ou Administrador para liberar em Admin > Acessos por Cargo.');
+    }, true);   // captura: roda ANTES do onclick do card
+  }
+}
+
+// Guarda usada dentro das funções que abrem cada módulo. Impede a entrada
+// mesmo que a função seja chamada fora do card da Home (atalho, console,
+// outro botão). Devolve true quando o acesso está bloqueado.
+function _moduloBloqueado(dashId){
+  if(!usuarioAtual) return true;
+  if(['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0) return false;
+  if(typeof dashTemAcesso!=='function') return false;
+  if(dashTemAcesso(dashId)) return false;
+  alert('🔒 Você não tem acesso a este módulo.\n\nPeça a um Gerente, Diretor ou Administrador para liberar em Admin > Acessos por Cargo.');
+  return true;
 }
 
 function homeNovoOrcamento(){
@@ -6653,12 +6704,14 @@ async function homeAbrirOrc(driveId, nome){
 }
 
 function homeAbrirAprovacoes(){
+  if(_moduloBloqueado('aprovacoes')) return;
   homeFecharBusca();
   fecharHome();
   abrirAprovacoes();
 }
 
 function homeAbrirElab(){
+  if(_moduloBloqueado('dash-elab')) return;
   homeFecharBusca();
   fecharHome();
   abrirDashElab();
@@ -12042,6 +12095,7 @@ function relAba(aba){
 }
 
 async function abrirRelatorios(){
+  if(_moduloBloqueado('rel')) return;
   document.getElementById('rel-ov').classList.add('open');
   var btnImportarRD=document.getElementById('btn-importar-historico-rd');
   if(btnImportarRD){
@@ -12945,6 +12999,7 @@ function relExportarPDF(){
 var _dashDados = [];
 
 async function abrirDashboard(){
+  if(_moduloBloqueado('dash-com')) return;
   document.getElementById('dash-ov').classList.add('open');
   // Período padrão: início do mês vigente até hoje
   var hoje = new Date();
@@ -14340,6 +14395,7 @@ function metasAba(aba){
 }
 
 async function abrirMetas(){
+  if(_moduloBloqueado('dash-metas')) return;
   document.getElementById('metas-ov').classList.add('open');
   document.getElementById('meta-ano').value=new Date().getFullYear();
   document.getElementById('metas-sub').textContent='Carregando dados...';
@@ -14786,6 +14842,7 @@ function _metasMontarTabelaTicket(ano,ganhosTodos){
 // ════════════════════════════════════════════════════════
 
 async function abrirResultados(){
+  if(_moduloBloqueado('dash-resultados')) return;
   document.getElementById('resultados-ov').classList.add('open');
   document.getElementById('resultados-sub').textContent='Carregando dados...';
   await metasCarregar();
@@ -15178,6 +15235,7 @@ async function resultadosExportarPDF(){
 // ════════════════════════════════════════════════════════
 
 async function abrirConciliacao(){
+  if(_moduloBloqueado('dash-conc')) return;
   document.getElementById('conc-ov').classList.add('open');
   document.getElementById('conc-sub').textContent='Carregando dados...';
   document.getElementById('conc-status').textContent='';
@@ -15468,6 +15526,7 @@ var _logView='semana'; // 'dia' | 'semana' | 'mes'
 var _logData=''; // ISO YYYY-MM-DD — dia de referência do período mostrado
 
 async function abrirLogistica(){
+  if(_moduloBloqueado('dash-log')) return;
   document.getElementById('log-ov').classList.add('open');
   document.getElementById('log-sub').textContent='Carregando dados...';
   await metasCarregarConsultoresNomes();
@@ -16350,7 +16409,15 @@ var DASH_MODULOS = [
   {id:'mod-os',     label:'📋 Módulo Ordens de Serviço'},
   {id:'aprovacoes', label:'📋 Aprovações (modal)'},
   {id:'funil-card', label:'📊 Funil de Vendas (card fixo)'},
-  {id:'dash-faltantes', label:'⚠️ Itens Faltantes (Estoque)'}
+  {id:'dash-faltantes', label:'⚠️ Itens Faltantes (Estoque)'},
+  // Estes existiam na Home mas não apareciam aqui, então não havia como
+  // restringi-los por cargo. Continuam LIBERADOS por padrão (dashTemAcesso()
+  // devolve true quando o Admin nunca mexeu na caixa), então nada muda até
+  // alguém desmarcar de propósito.
+  {id:'dash-ger',      label:'📊 Dashboard Gerencial'},
+  {id:'mod-clientes',  label:'👥 Cadastro de Clientes'},
+  {id:'mod-eventos',   label:'📅 Cadastro de Eventos'},
+  {id:'mod-produtos',  label:'📦 Estoque — Produtos'}
 ];
 
 // Permissões padrão — todos os campos liberados para adm/gerente/diretor
@@ -16761,6 +16828,7 @@ async function _clienteExcluirFirestore(id){
 }
 
 async function abrirClientes(){
+  if(_moduloBloqueado('mod-clientes')) return;
   _clienteBuscaModoSelecao=false;
   document.getElementById('clientes-busca').value='';
   document.getElementById('clientes-lista').innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">⏳ Carregando clientes...</div>';
@@ -17240,6 +17308,7 @@ async function _eventoExcluirFirestore(id){
 }
 
 async function abrirEventos(){
+  if(_moduloBloqueado('mod-eventos')) return;
   _eventoBuscaModoSelecao=false;
   document.getElementById('eventos-busca').value='';
   document.getElementById('eventos-lista').innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">⏳ Carregando eventos...</div>';
@@ -18194,6 +18263,7 @@ async function _produtoExcluirFirestore(id){
 }
 
 async function abrirProdutos(){
+  if(_moduloBloqueado('mod-produtos')) return;
   _produtoBuscaModoSelecao=false;
   document.getElementById('produtos-busca').value='';
   document.getElementById('produtos-lista').innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">⏳ Carregando produtos...</div>';
@@ -18886,6 +18956,7 @@ function estoqueListaFaltantes(filtro){
 }
 
 async function abrirFaltantes(){
+  if(_moduloBloqueado('dash-faltantes')) return;
   document.getElementById('faltantes-ov').classList.add('open');
   if(typeof mostrarCarregando==='function') mostrarCarregando('⏳ Carregando itens faltantes...');
   try{
@@ -20011,6 +20082,7 @@ var _osModDados = [];
 var _osModFiltrados = [];
 
 async function abrirModuloOS(){
+  if(_moduloBloqueado('mod-os')) return;
   document.getElementById('os-mod-ov').classList.add('open');
   // Preencher semana atual como padrão
   osModAtalho('semana');
@@ -20372,6 +20444,7 @@ function osModGerarOS(lista){
 }
 
 async function abrirDashFin(){
+  if(_moduloBloqueado('dash-fin')) return;
   document.getElementById('dashfin-ov').classList.add('open');
   var hoje = new Date();
   var inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -21160,6 +21233,7 @@ document.querySelectorAll('.ov').forEach(function(ov){
 
 // DASHBOARD GERENCIAL
 async function abrirDashGerencial(){
+  if(_moduloBloqueado('dash-ger')) return;
   document.getElementById('dash-ger-ov').classList.add('open');
   var hoje=new Date();var ini=new Date(hoje.getFullYear(),hoje.getMonth(),1);
   var deEl=document.getElementById('dash-ger-de'),ateEl=document.getElementById('dash-ger-ate');
