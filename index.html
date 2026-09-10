@@ -15991,6 +15991,23 @@ function _logLinhasExport(){
     if(p.de  && r.fim   <p.de ) return false;
     return true;
   });
+  // Ordem cronológica pela DATA DO EVENTO — é assim que a logística lê o
+  // relatório (o que acontece primeiro aparece primeiro). Datas em formato
+  // aaaa-mm-dd comparam corretamente como texto, sem precisar converter.
+  // Desempate: hora de início do evento e, por fim, nome do cliente, para que
+  // dois eventos no mesmo dia saiam sempre na mesma ordem em toda emissão.
+  // Orçamento sem data de evento cai para o início da janela de ocupação
+  // (montagem) e, na falta das duas, vai para o fim da lista em vez de
+  // embaralhar o começo do relatório.
+  itens=itens.slice().sort(function(a,b){
+    var fa=a.o.form||{}, fb=b.o.form||{};
+    var da=fa['f-dia']||(a.range&&a.range.inicio)||'9999-12-31';
+    var db=fb['f-dia']||(b.range&&b.range.inicio)||'9999-12-31';
+    if(da!==db) return da<db?-1:1;
+    var ha=fa['f-hi']||'99:99', hb=fb['f-hi']||'99:99';
+    if(ha!==hb) return ha<hb?-1:1;
+    return String(fa['f-cliente']||'').localeCompare(String(fb['f-cliente']||''),'pt-BR');
+  });
   return itens;
 }
 function logExportarExcel(){
@@ -16008,7 +16025,8 @@ function logExportarExcel(){
   var linhas=[
     'Logística de Eventos — Fechados e Pré-reservados','',
     'Período: '+_logRelPeriodoLabel(),'',
-    ['Nº','Cliente','Nome do Evento','Consultor','Status','Montagem','Evento','Desmontagem','Local'].map(csvEscape).join(';')
+    ['Nº','Cliente','Nome do Evento','Consultor','Status',
+     'Montagem','Hora Montagem','Evento','Hora Evento','Desmontagem','Hora Desmontagem','Local'].map(csvEscape).join(';')
   ];
   itens.forEach(function(it){
     var o=it.o, f=o.form||{}, st=it.status||{label:''};
@@ -16018,9 +16036,12 @@ function logExportarExcel(){
       csvEscape(f['f-nome-evento']||''),
       csvEscape(f['f-cons']||''),
       csvEscape(st.label),
-      csvEscape(f['f-dm']?fD(f['f-dm'])+(f['f-hm']?' '+f['f-hm']:''):''),
-      csvEscape(f['f-dia']?fD(f['f-dia'])+(f['f-hi']?' '+f['f-hi']:''):''),
-      csvEscape(f['f-dd']?fD(f['f-dd'])+(f['f-hd']?' '+f['f-hd']:''):''),
+      csvEscape(f['f-dm']?fD(f['f-dm']):''),
+      csvEscape(f['f-dm']?(f['f-hm']||''):''),
+      csvEscape(f['f-dia']?fD(f['f-dia']):''),
+      csvEscape(f['f-dia']?(f['f-hi']||''):''),
+      csvEscape(f['f-dd']?fD(f['f-dd']):''),
+      csvEscape(f['f-dd']?(f['f-hd']||''):''),
       csvEscape(f['f-local']||'')
     ].join(';'));
   });
@@ -16047,8 +16068,11 @@ function logExportarPDF(){
       +'<td>'+eh(f['f-cons']||'')+'</td>'
       +'<td>'+eh(st.label)+'</td>'
       +'<td>'+(f['f-dm']?fD(f['f-dm']):'')+'</td>'
+      +'<td class="h">'+eh(f['f-dm']?(f['f-hm']||''):'')+'</td>'
       +'<td>'+(f['f-dia']?fD(f['f-dia']):'')+'</td>'
+      +'<td class="h">'+eh(f['f-dia']?(f['f-hi']||''):'')+'</td>'
       +'<td>'+(f['f-dd']?fD(f['f-dd']):'')+'</td>'
+      +'<td class="h">'+eh(f['f-dd']?(f['f-hd']||''):'')+'</td>'
       +'<td>'+eh(f['f-local']||'')+'</td>'
       +'</tr>';
   }).join('');
@@ -16066,6 +16090,7 @@ function logExportarPDF(){
     +'table{width:100%;border-collapse:collapse;font-size:10px}'
     +'th{background:#f2f2f2;text-align:left;padding:6px;border-bottom:2px solid #ccc}'
     +'td{padding:6px;border-bottom:1px solid #eee}'
+    +'th.h,td.h{width:42px;text-align:center;white-space:nowrap;color:#555}'
     +'#st{position:fixed;top:0;left:0;right:0;background:#d63447;color:#fff;text-align:center;padding:10px;font-size:13px;font-weight:bold;z-index:9999}'
     +'@media print{#st{display:none}}'
     +'</style>'
@@ -16074,7 +16099,8 @@ function logExportarPDF(){
     +'<div id="st">Gerando PDF...</div>'
     +'<div id="pw">'
     +'<div class="hdr"><h1>🚚 CRAZY SOM — LOGÍSTICA DE EVENTOS</h1><span>Período: '+eh(_logRelPeriodoLabel())+'<br>Gerado em: '+hoje+'</span></div>'
-    +'<table><thead><tr><th>Nº</th><th>Cliente</th><th>Nome do Evento</th><th>Consultor</th><th>Status</th><th>Montagem</th><th>Evento</th><th>Desmontagem</th><th>Local</th></tr></thead><tbody>'
+    +'<table><thead><tr><th>Nº</th><th>Cliente</th><th>Nome do Evento</th><th>Consultor</th><th>Status</th>'
+    +'<th>Montagem</th><th class="h">Hora</th><th>Evento</th><th class="h">Hora</th><th>Desmontagem</th><th class="h">Hora</th><th>Local</th></tr></thead><tbody>'
     +linhasHtml
     +'</tbody></table>'
     +'<div style="margin-top:14px;font-size:9px;color:#aaa;text-align:center;border-top:1px solid #ddd;padding-top:6px">Crazy Som Audiovisuais – Sistema de Orçamentos – CNPJ: 10.909.827/0001-76</div>'
