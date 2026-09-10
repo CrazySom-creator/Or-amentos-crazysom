@@ -762,13 +762,13 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     <div class="home-section-title">📄 Orçamentos</div>
     <div class="home-grid">
 
-      <div class="home-card primary" onclick="homeNovoOrcamento()">
+      <div class="home-card primary" id="home-btn-novo" onclick="homeNovoOrcamento()">
         <div class="home-card-ico">➕</div>
         <div class="home-card-title">Novo Orçamento</div>
         <div class="home-card-desc">Criar orçamento em branco com numeração automática</div>
       </div>
 
-      <div class="home-card green" onclick="homeAbrirBusca()">
+      <div class="home-card green" id="home-btn-buscar" onclick="homeAbrirBusca()">
         <div class="home-card-ico">🔍</div>
         <div class="home-card-title">Abrir / Buscar</div>
         <div class="home-card-desc">Buscar por número, cliente, data, consultor…</div>
@@ -1366,7 +1366,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div class="rel-tab active" onclick="admAba('usuarios')">👤 Usuários</div>
       <div class="rel-tab" onclick="admAba('cargos')">👔 Cargos</div>
       <div class="rel-tab" onclick="admAba('permissoes')">🔐 Permissões por Cargo</div>
-      <div class="rel-tab" onclick="admAba('dashboards')">📊 Acesso a Dashboards</div>
+      <div class="rel-tab" onclick="admAba('dashboards')">🧩 Permissões por Módulo</div>
       <div class="rel-tab" onclick="admAba('tiposevento')">🎪 Tipos de Evento</div>
       <div class="rel-tab" onclick="admAba('tipostarefa')">📋 Tipos de Tarefa</div>
       <div class="rel-tab" onclick="admAba('categoriasproduto')">📂 Categorias de Produto</div>
@@ -1404,9 +1404,13 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
     </div>
     <!-- ABA Acesso Dashboards -->
     <div class="rel-pane" id="admpane-dashboards">
-      <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Defina quais dashboards e relatórios cada cargo pode acessar.</p>
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--text-muted);line-height:1.6">
+        Defina, por cargo, <b>a quais módulos do sistema cada pessoa pode entrar</b> — inclusive os operacionais (Novo Orçamento, Abrir/Buscar, Aprovações, Funil, Tarefas, Logística e Ordens de Serviço).<br>
+        Módulo desmarcado continua <b>visível na tela inicial, porém acinzentado e com cadeado</b>, e não abre de jeito nenhum — assim a pessoa sabe que ele existe e pode pedir liberação.<br>
+        <span style="color:var(--text-dim)">Gerente, Diretor e Administrador entram em tudo, independentemente das caixas. <b>Administração</b> é exclusiva do nível Administrador e <b>Transferência de Responsável</b> de Gerente/Diretor/Admin — por isso aparecem apenas como informação, sem caixa.</span>
+      </div>
       <div id="dash-acesso-corpo"></div>
-      <button onclick="dashAcessoSalvar()" style="margin-top:12px;padding:7px 18px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Acessos</button>
+      <button onclick="dashAcessoSalvar()" style="margin-top:12px;padding:7px 18px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Permissões</button>
     </div>
     <!-- ABA Tipos de Evento -->
     <div class="rel-pane" id="admpane-tiposevento">
@@ -6469,28 +6473,18 @@ function _renderizarHome(){
     }
   }
 
-  // Visibilidade dos cards por nível
+  // Visibilidade dos cards: percorre o REGISTRO de módulos, então nenhum card
+  // fica de fora do controle de acesso por esquecimento. Módulo sem liberação
+  // não some da tela — fica esmaecido e sem clique (ver _homeShow).
   var nivel=usuarioAtual?usuarioAtual.nivel:'';
   var tudo=['adm','gerente','diretor'].includes(nivel);
-  _homeShow('home-btn-ger', tudo||dashTemAcesso('dash-ger'));
-  _homeShow('home-btn-adm', nivel==='adm');
-  _homeShow('home-btn-transfer', tudo);
-  _homeShow('home-btn-aprov', tudo||dashTemAcesso('aprovacoes'));
-  _homeShow('home-btn-elab', tudo||dashTemAcesso('dash-elab'));
-  _homeShow('home-btn-metas', tudo||dashTemAcesso('dash-metas'));
-  _homeShow('home-btn-resultados', tudo||dashTemAcesso('dash-resultados'));
-  _homeShow('home-btn-conc', tudo||dashTemAcesso('dash-conc'));
-  _homeShow('home-btn-log', tudo||dashTemAcesso('dash-log'));
-  _homeShow('home-btn-fin', tudo||dashTemAcesso('dash-fin'));
-  _homeShow('home-btn-os', tudo||dashTemAcesso('mod-os'));
-  _homeShow('home-btn-rel', tudo||dashTemAcesso('rel'));
-  _homeShow('home-btn-com', dashTemAcesso('dash-com')||tudo);
-  _homeShow('home-btn-funil', tudo||['adm','gerente','diretor','consultor','assistente'].includes(nivel)||dashTemAcesso('funil-card'));
-  _homeShow('home-btn-tarefas', true);
-  _homeShow('home-btn-clientes', tudo||dashTemAcesso('mod-clientes'));
-  _homeShow('home-btn-eventos', tudo||dashTemAcesso('mod-eventos'));
-  _homeShow('home-btn-produtos', tudo||dashTemAcesso('mod-produtos'));
-  _homeShow('home-btn-faltantes', tudo||dashTemAcesso('dash-faltantes'));
+  DASH_MODULOS.forEach(function(m){
+    var liberado;
+    if(m.so==='adm')          liberado = (nivel==='adm');
+    else if(m.so==='gestao')  liberado = tudo;
+    else                      liberado = tudo || dashTemAcesso(m.id);
+    _homeShow(m.card, liberado);
+  });
   atualizarBadgeTarefas();
   // (home-btn-clonar removido — clonar está apenas na tela do orçamento)
 }
@@ -6540,6 +6534,7 @@ function _moduloBloqueado(dashId){
 }
 
 function homeNovoOrcamento(){
+  if(_moduloBloqueado('mod-novo')) return;
   homeFecharBusca();
   fecharHome();
   limpar();
@@ -6556,6 +6551,7 @@ var _homeBuscaCache = [];
 var _homeBuscaCarregada = false;
 
 function homeAbrirBusca(){
+  if(_moduloBloqueado('mod-buscar')) return;
   var panel = document.getElementById('home-busca-panel');
   if(!panel) return;
   panel.style.display = 'block';
@@ -11457,6 +11453,7 @@ function tarefasRenderNoDetalhe(vinculoTipo, vinculoId, containerId){
 
 // ── Tela dedicada "Minhas Tarefas" ──────────────────────────────────
 async function abrirMinhasTarefas(){
+  if(_moduloBloqueado('mod-tarefas')) return;
   var ov=document.getElementById('tarefas-ov');
   if(!ov) return;
   ov.style.display='flex';
@@ -11564,6 +11561,7 @@ function tarefasRenderMinhas(){
 // ════════════════════════════════════════════════════════
 
 function abrirFunilHome(){
+  if(_moduloBloqueado('funil-card')) return;
   var ov = document.getElementById('funil-home-ov');
   if(!ov) return;
   ov.style.display = 'flex';
@@ -16397,28 +16395,52 @@ var PERM_MODULOS = [
   ]}
 ];
 
+// ════════════════════════════════════════════════════════
+//  REGISTRO ÚNICO DE MÓDULOS — usado em três lugares ao mesmo tempo:
+//  (1) monta a aba Admin > Permissões por Módulo,
+//  (2) decide quais cards da Home ficam liberados ou esmaecidos,
+//  (3) alimenta a trava _moduloBloqueado() dentro de cada função de abertura.
+//  Manter tudo numa lista só é o que impede o problema anterior, em que um
+//  módulo existia na Home mas não aparecia na tela de acessos — e por isso
+//  não tinha como ser bloqueado.
+//
+//  Para acrescentar um módulo novo no futuro: inclua uma linha aqui, dê o
+//  mesmo id ao card na Home e chame _moduloBloqueado('<id>') na função que
+//  abre o módulo. Nada mais precisa ser alterado.
+//
+//  campos: id (chave salva no banco) · card (id do card na Home) ·
+//          label (texto na tela de acessos) · grupo (seção da tela) ·
+//          so: 'adm' = exclusivo do nível Administrador (não configurável)
+//              'gestao' = exclusivo de Gerente/Diretor/Admin (não configurável)
+// ════════════════════════════════════════════════════════
 var DASH_MODULOS = [
-  {id:'dash-elab',  label:'📋 Dashboard Elaboração'},
-  {id:'dash-com',   label:'📈 Dashboard Comercial'},
-  {id:'dash-metas', label:'🎯 Metas'},
-  {id:'dash-resultados', label:'🏆 Resultados Mensais (Diretoria)'},
-  {id:'dash-conc', label:'🔄 Conciliação de Agenda (Diretoria)'},
-  {id:'dash-log', label:'🚚 Logística de Eventos'},
-  {id:'dash-fin',   label:'💰 Dashboard Financeiro'},
-  {id:'rel',        label:'📄 Relatórios'},
-  {id:'mod-os',     label:'📋 Módulo Ordens de Serviço'},
-  {id:'aprovacoes', label:'📋 Aprovações (modal)'},
-  {id:'funil-card', label:'📊 Funil de Vendas (card fixo)'},
-  {id:'dash-faltantes', label:'⚠️ Itens Faltantes (Estoque)'},
-  // Estes existiam na Home mas não apareciam aqui, então não havia como
-  // restringi-los por cargo. Continuam LIBERADOS por padrão (dashTemAcesso()
-  // devolve true quando o Admin nunca mexeu na caixa), então nada muda até
-  // alguém desmarcar de propósito.
-  {id:'dash-ger',      label:'📊 Dashboard Gerencial'},
-  {id:'mod-clientes',  label:'👥 Cadastro de Clientes'},
-  {id:'mod-eventos',   label:'📅 Cadastro de Eventos'},
-  {id:'mod-produtos',  label:'📦 Estoque — Produtos'}
+  // ── Operacionais — o dia a dia da equipe comercial ──
+  {id:'mod-novo',       card:'home-btn-novo',       label:'➕ Novo Orçamento',            grupo:'Operacional'},
+  {id:'mod-buscar',     card:'home-btn-buscar',     label:'🔍 Abrir / Buscar Orçamento',  grupo:'Operacional'},
+  {id:'aprovacoes',     card:'home-btn-aprov',      label:'📋 Aprovações',                grupo:'Operacional'},
+  {id:'funil-card',     card:'home-btn-funil',      label:'📊 CRM — Funil de Vendas',     grupo:'Operacional'},
+  {id:'mod-tarefas',    card:'home-btn-tarefas',    label:'📋 Minhas Tarefas',            grupo:'Operacional'},
+  {id:'dash-log',       card:'home-btn-log',        label:'🚚 Logística de Eventos',      grupo:'Operacional'},
+  {id:'mod-os',         card:'home-btn-os',         label:'🗂️ Ordens de Serviço',        grupo:'Operacional'},
+  // ── Cadastros ──
+  {id:'mod-clientes',   card:'home-btn-clientes',   label:'👥 Cadastro de Clientes',      grupo:'Cadastros'},
+  {id:'mod-eventos',    card:'home-btn-eventos',    label:'🎪 Cadastro de Eventos',       grupo:'Cadastros'},
+  {id:'mod-produtos',   card:'home-btn-produtos',   label:'📦 Estoque — Produtos',        grupo:'Cadastros'},
+  {id:'dash-faltantes', card:'home-btn-faltantes',  label:'⚠️ Itens Faltantes (Estoque)', grupo:'Cadastros'},
+  // ── Gestão e análise ──
+  {id:'dash-elab',      card:'home-btn-elab',       label:'📐 Dashboard Elaboração',      grupo:'Gestão'},
+  {id:'dash-com',       card:'home-btn-com',        label:'📈 Dashboard Comercial',       grupo:'Gestão'},
+  {id:'dash-metas',     card:'home-btn-metas',      label:'🎯 Metas',                     grupo:'Gestão'},
+  {id:'dash-resultados',card:'home-btn-resultados', label:'🏆 Resultados Mensais',        grupo:'Gestão'},
+  {id:'dash-conc',      card:'home-btn-conc',       label:'🔄 Conciliação de Agenda',     grupo:'Gestão'},
+  {id:'dash-fin',       card:'home-btn-fin',        label:'💰 Financeiro',                grupo:'Gestão'},
+  {id:'dash-ger',       card:'home-btn-ger',        label:'📊 Dashboard Gerencial',       grupo:'Gestão'},
+  {id:'rel',            card:'home-btn-rel',        label:'📄 Relatórios',                grupo:'Gestão'},
+  // ── Restritos por nível — aparecem na lista apenas como informação ──
+  {id:'mod-transfer',   card:'home-btn-transfer',   label:'🔄 Transferência de Responsável', grupo:'Restrito', so:'gestao'},
+  {id:'mod-adm',        card:'home-btn-adm',        label:'⚙️ Administração',             grupo:'Restrito', so:'adm'}
 ];
+var MODULO_GRUPOS=['Operacional','Cadastros','Gestão','Restrito'];
 
 // Permissões padrão — todos os campos liberados para adm/gerente/diretor
 // Para outros cargos, começa restrito
@@ -16762,23 +16784,49 @@ function permRenderizar(){
 }
 
 function dashAcessoRenderizar(){
-  var cargos=CARGOS;
   var html='';
-  cargos.forEach(function(cargo){
+  CARGOS.forEach(function(cargo){
     var ac=(_dashAcessos[cargo])||{};
-    html+='<div class="dash-acesso-cargo" data-cargo="'+cargo+'" style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:8px">'
-      +'<div style="font-size:11px;color:var(--text);font-weight:800;margin-bottom:8px">👔 '+cargo+'</div>'
-      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px">'
-      +DASH_MODULOS.map(function(d){
-        var checked=ac[d.id]===undefined?true:ac[d.id];
-        return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--text-dim);padding:3px 6px;border-radius:3px;background:var(--surface)">'
-          +'<input type="checkbox" class="dash-acesso-cb" data-dash="'+d.id+'"'+(checked?' checked':'')
-          +' style="width:14px;height:14px;cursor:pointer"> '+d.label+'</label>';
-      }).join('')
-      +'</div></div>';
+    html+='<div class="dash-acesso-cargo" data-cargo="'+eh(cargo)+'" style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:11px 13px;margin-bottom:10px">'
+      +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px">'
+      +'<div style="font-size:12px;color:var(--text);font-weight:800">👔 '+eh(cargo)+'</div>'
+      +'<button type="button" onclick="dashAcessoMarcarTodos(this,true)" style="padding:3px 9px;font-size:10px;font-weight:700;border:1px solid var(--border-strong);background:var(--surface);color:var(--text-dim);border-radius:4px;cursor:pointer">Marcar todos</button>'
+      +'<button type="button" onclick="dashAcessoMarcarTodos(this,false)" style="padding:3px 9px;font-size:10px;font-weight:700;border:1px solid var(--border-strong);background:var(--surface);color:var(--text-dim);border-radius:4px;cursor:pointer">Desmarcar todos</button>'
+      +'</div>';
+    MODULO_GRUPOS.forEach(function(grupo){
+      var doGrupo=DASH_MODULOS.filter(function(m){return m.grupo===grupo;});
+      if(!doGrupo.length) return;
+      html+='<div style="font-size:9px;color:var(--R);font-weight:800;text-transform:uppercase;letter-spacing:.6px;margin:8px 0 5px">'+grupo+'</div>'
+        +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px">'
+        +doGrupo.map(function(m){
+          // Módulos restritos por NÍVEL não têm caixa: liberar por cargo não
+          // teria efeito nenhum, e uma caixa que não faz nada confunde mais do
+          // que ajuda. Aparecem só para o Admin saber que o módulo existe.
+          if(m.so){
+            var aviso=m.so==='adm'?'somente Administrador':'somente Gerente/Diretor/Admin';
+            return '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);padding:3px 6px;border-radius:3px;background:var(--surface);opacity:.75">'
+              +'🔒 '+m.label+' <span style="font-size:9px;color:var(--text-dim)">('+aviso+')</span></div>';
+          }
+          var checked=ac[m.id]===undefined?true:ac[m.id];
+          return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--text-dim);padding:3px 6px;border-radius:3px;background:var(--surface)">'
+            +'<input type="checkbox" class="dash-acesso-cb" data-dash="'+m.id+'"'+(checked?' checked':'')
+            +' style="width:14px;height:14px;cursor:pointer"> '+m.label+'</label>';
+        }).join('')
+        +'</div>';
+    });
+    html+='</div>';
   });
   document.getElementById('dash-acesso-corpo').innerHTML=html;
 }
+
+// Marca/desmarca de uma vez todas as caixas do cargo em que o botão foi
+// clicado — com 20 módulos, ir de uma em uma era trabalhoso.
+function dashAcessoMarcarTodos(btn,valor){
+  var bloco=btn.closest('.dash-acesso-cargo');
+  if(!bloco) return;
+  bloco.querySelectorAll('.dash-acesso-cb').forEach(function(cb){cb.checked=valor;});
+}
+
 
 // ════════════════════════════════════════════════
 //  USUÁRIOS — Firebase Auth + Firestore como fonte de verdade
