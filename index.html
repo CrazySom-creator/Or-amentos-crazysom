@@ -5274,16 +5274,41 @@ function getDadosCompletos(){
 // gerando duplicidade. Esta fila garante que um save só começa depois que o
 // anterior terminou.
 var _salvarNoDriveFila=Promise.resolve();
+var FILA_SALVAR_TIMEOUT_MS=3*60*1000;
 function salvarNoDrive(opts){
   var _prox=_salvarNoDriveFila.then(function(){ return _salvarNoDriveInterno(opts); });
-  // Mantém a fila viva mesmo se este save falhar, para não travar os próximos
-  _salvarNoDriveFila=_prox.catch(function(){});
+  // Mantém a fila viva mesmo se este save falhar, para não travar os próximos.
+  //
+  // REDE DE SEGURANÇA (bug crítico corrigido): a fila NUNCA pode ficar presa a
+  // um save que não termina. Se um save ficar pendurado (ex.: um modal
+  // esperando uma decisão do usuário que nunca chega), TODOS os salvamentos
+  // seguintes da sessão ficavam em silêncio para sempre — incluindo o auto-save
+  // e a baixa de pagamentos do Financeiro. O usuário clicava em Salvar, nada
+  // acontecia, e só um F5 resolvia. Agora, se um save passar de
+  // FILA_SALVAR_TIMEOUT_MS sem responder, a fila é liberada assim mesmo para os
+  // próximos salvamentos continuarem funcionando (o save travado segue seu
+  // curso; só deixa de bloquear a fila).
+  _salvarNoDriveFila=new Promise(function(liberar){
+    var t=setTimeout(function(){
+      console.warn('[salvarNoDrive] Save sem resposta — fila liberada por segurança.');
+      liberar();
+    }, FILA_SALVAR_TIMEOUT_MS);
+    _prox.then(function(){clearTimeout(t);liberar();},function(){clearTimeout(t);liberar();});
+  });
   return _prox;
 }
 
 async function _salvarNoDriveInterno(opts){
   opts=opts||{};
-  if(_modoLeitura){driveStatus('⛔ Modo somente leitura — salvar bloqueado','err');return;}
+  // Retorna null (e não undefined) para que quem chama consiga distinguir
+  // "não salvou" de "salvou" — salvarESair() testava `!== null` e, com
+  // undefined, saía da tela e limpava o orçamento como se tivesse salvado,
+  // descartando o trabalho do usuário sem aviso.
+  if(_modoLeitura){
+    driveStatus('⛔ Modo somente leitura — salvar bloqueado','err');
+    alert('⛔ Este orçamento está aberto em SOMENTE LEITURA porque outra pessoa está editando.\n\nNada foi salvo. Use "🔄 Tentar Editar" no aviso laranja do topo para assumir a edição e então salvar.');
+    return null;
+  }
   // Validar número do orçamento obrigatório
   var _num=gv('f-num')||'';
   if(!_num.trim()){
@@ -5435,6 +5460,12 @@ async function _salvarNoDriveInterno(opts){
             async function(){
               await _driveCarregarDados(driveIdAtual, driveNumAtual||num, _modoLeitura);
               driveStatus('🔄 Recarregado — faça suas alterações novamente','ok');
+              resolve(null);
+            },
+            // Cancelar — precisa responder também, senão a fila de
+            // salvamentos trava e nada mais é salvo até recarregar a página.
+            function(){
+              driveStatus('⚠️ Não salvo — o orçamento continua aberto com suas alterações','err');
               resolve(null);
             }
           );
@@ -5842,7 +5873,15 @@ async function lockModalLeitura(){
 }
 
 // ── Modal de conflito de versão ──────────────────────────
-function versaoMostrarConflito(onSobrescrever,onRecarregar){
+// IMPORTANTE: quem chama esta função fica ESPERANDO uma das três respostas
+// (sobrescrever, recarregar ou cancelar) para poder continuar. Por isso os TRÊS
+// botões precisam obrigatoriamente avisar de volta. Antes, o botão "Cancelar"
+// apenas fechava o modal sem avisar ninguém: o salvamento ficava esperando uma
+// resposta que nunca vinha e, como os salvamentos são feitos em fila, TODOS os
+// salvamentos seguintes da sessão paravam em silêncio — inclusive a baixa de
+// pagamentos no Financeiro e o auto-save. O usuário clicava em Salvar e nada
+// acontecia até recarregar a página.
+function versaoMostrarConflito(onSobrescrever,onRecarregar,onCancelar){
   var m=document.getElementById('versao-modal');if(m)m.remove();
   var modal=document.createElement('div');
   modal.id='versao-modal';
@@ -5862,7 +5901,7 @@ function versaoMostrarConflito(onSobrescrever,onRecarregar){
   document.body.appendChild(modal);
   modal.querySelector('#vbtn-reload').onclick=function(){modal.remove();onRecarregar();};
   modal.querySelector('#vbtn-force').onclick=function(){modal.remove();onSobrescrever();};
-  modal.querySelector('#vbtn-cancel').onclick=function(){modal.remove();};
+  modal.querySelector('#vbtn-cancel').onclick=function(){modal.remove();if(onCancelar)onCancelar();};
 }
 
 // ── Banner somente leitura ───────────────────────────────
@@ -6572,7 +6611,13 @@ async function salvarESair(){
   btns.forEach(function(b){ b.disabled=true; b.textContent='💾 Salvando...'; });
   try{
     var resultado = await salvarNoDrive({mostrarStatus:true});
-    if(resultado !== null){ // null = usuário cancelou (ex: número duplicado)
+    // Só sai da tela se REALMENTE salvou. Qualquer resultado vazio (null ou
+    // undefined) significa que o salvamento não aconteceu — número duplicado,
+    // campo obrigatório em branco, modo somente leitura, conflito de versão
+    // cancelado etc. Antes o teste era `!== null`, então um retorno undefined
+    // fazia o sistema limpar o orçamento e voltar ao menu como se tivesse
+    // salvado, descartando o trabalho do usuário em silêncio.
+    if(resultado){
       // Sai por completo do orçamento (mesmo comportamento de "Sair sem
       // salvar"), já que os dados acabaram de ser salvos com segurança
       await _resetarEstadoOrcamento();
@@ -16215,6 +16260,14 @@ function permTemAcesso(campo){
 // Aplica as permissões nos campos do formulário bloqueando/habilitando
 function aplicarPermissoes(){
   if(!usuarioAtual) return;
+  // Em SOMENTE LEITURA não há permissão que valha: o orçamento está travado
+  // por outra pessoa. Sem esta guarda, aplicarPermissoes() (que roda 150ms
+  // depois de carregar o orçamento) reabilitava todos os campos que
+  // ativarModoLeitura() tinha acabado de bloquear — o usuário digitava
+  // achando que podia editar e, ao salvar, o sistema recusava sem explicar,
+  // perdendo o trabalho. Quem sai do modo leitura é desativarModoLeitura(),
+  // que já chama aplicarPermissoes() no fim.
+  if(_modoLeitura) return;
   var nivel=usuarioAtual.nivel||'';
   // ADM/gerente/diretor: tudo liberado
   var tudo = ['adm','gerente','diretor'].includes(nivel);
