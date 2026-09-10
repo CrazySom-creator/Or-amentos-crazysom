@@ -2154,6 +2154,12 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
       <div style="font-size:10px;font-weight:800;color:var(--R);text-transform:uppercase;letter-spacing:.5px;padding-bottom:7px">📄 Período dos relatórios</div>
       <div><label style="font-size:9px">De</label><input type="date" id="log-rel-de" onchange="logRelAtualizarInfo()" style="font-size:11px;padding:5px 7px"></div>
       <div><label style="font-size:9px">Até</label><input type="date" id="log-rel-ate" onchange="logRelAtualizarInfo()" style="font-size:11px;padding:5px 7px"></div>
+      <div><label style="font-size:9px">Ordem (data do evento)</label>
+        <select id="log-rel-ordem" onchange="logRelAtualizarInfo()" style="font-size:11px;padding:5px 7px">
+          <option value="asc">⬆️ Crescente — mais antigo primeiro</option>
+          <option value="desc">⬇️ Decrescente — mais recente primeiro</option>
+        </select>
+      </div>
       <button class="btn btn-o btn-sm" onclick="logRelPeriodoDaTela()" title="Copia para os campos acima o período que está sendo exibido no calendário">📆 Usar período da tela</button>
       <button class="btn btn-o btn-sm" onclick="logRelPeriodoLimpar()" title="Limpa as datas — o relatório passa a incluir todos os eventos carregados">♾️ Tudo</button>
       <span id="log-rel-info" style="font-size:10px;color:var(--text-muted);padding-bottom:7px"></span>
@@ -15943,6 +15949,12 @@ function logRelPeriodoLimpar(){
   logRelAtualizarInfo();
 }
 
+// Sentido da ordenação escolhido no seletor: 'asc' (padrão) ou 'desc'.
+function _logRelOrdem(){
+  var el=document.getElementById('log-rel-ordem');
+  return (el&&el.value==='desc')?'desc':'asc';
+}
+
 function _logRelPeriodo(){
   var de=(document.getElementById('log-rel-de')||{}).value||'';
   var ate=(document.getElementById('log-rel-ate')||{}).value||'';
@@ -15961,13 +15973,22 @@ function _logRelPeriodoLabel(){
   return 'Todos os eventos carregados';
 }
 
+// Texto da ordenação para o cabeçalho do PDF/CSV — quem recebe o arquivo sabe
+// por que a lista está naquela sequência sem precisar perguntar.
+function _logRelOrdemLabel(){
+  return _logRelOrdem()==='desc'
+    ? 'Data do evento — decrescente (mais recente primeiro)'
+    : 'Data do evento — crescente (mais antigo primeiro)';
+}
+
 function logRelAtualizarInfo(){
   var el=document.getElementById('log-rel-info');
   if(!el) return;
   var n=_logLinhasExport().length;
   var p=_logRelPeriodo();
   el.textContent=(p.de||p.ate?'':'Sem filtro de data — ')
-    +(n===1?'1 evento entrará':n+' eventos entrarão')+' no relatório';
+    +(n===1?'1 evento entrará':n+' eventos entrarão')+' no relatório'
+    +' · ordem '+(_logRelOrdem()==='desc'?'decrescente':'crescente');
 }
 
 function _logLinhasExport(){
@@ -15991,21 +16012,27 @@ function _logLinhasExport(){
     if(p.de  && r.fim   <p.de ) return false;
     return true;
   });
-  // Ordem cronológica pela DATA DO EVENTO — é assim que a logística lê o
-  // relatório (o que acontece primeiro aparece primeiro). Datas em formato
-  // aaaa-mm-dd comparam corretamente como texto, sem precisar converter.
-  // Desempate: hora de início do evento e, por fim, nome do cliente, para que
-  // dois eventos no mesmo dia saiam sempre na mesma ordem em toda emissão.
-  // Orçamento sem data de evento cai para o início da janela de ocupação
-  // (montagem) e, na falta das duas, vai para o fim da lista em vez de
-  // embaralhar o começo do relatório.
+  // Ordenação pela DATA DO EVENTO, no sentido escolhido no seletor "Ordem":
+  // crescente (o que acontece primeiro aparece primeiro — bom pra escala de
+  // equipe) ou decrescente (mais recente primeiro — bom pra conferir o que
+  // acabou de acontecer). Datas em formato aaaa-mm-dd comparam corretamente
+  // como texto, sem precisar converter. Desempate pela hora de início e, por
+  // fim, pelo nome do cliente, pra que duas emissões seguidas do mesmo
+  // relatório saiam sempre idênticas.
+  // Orçamento sem data de evento usa o início da janela de ocupação
+  // (montagem). Sem nenhuma das duas, fica SEMPRE no fim da lista — nos dois
+  // sentidos — em vez de encabeçar o relatório no modo decrescente.
+  var dir=_logRelOrdem()==='desc'?-1:1;
   itens=itens.slice().sort(function(a,b){
     var fa=a.o.form||{}, fb=b.o.form||{};
-    var da=fa['f-dia']||(a.range&&a.range.inicio)||'9999-12-31';
-    var db=fb['f-dia']||(b.range&&b.range.inicio)||'9999-12-31';
-    if(da!==db) return da<db?-1:1;
+    var da=fa['f-dia']||(a.range&&a.range.inicio)||'';
+    var db=fb['f-dia']||(b.range&&b.range.inicio)||'';
+    if(!da&&!db) return 0;
+    if(!da) return 1;   // sem data sempre por último
+    if(!db) return -1;
+    if(da!==db) return (da<db?-1:1)*dir;
     var ha=fa['f-hi']||'99:99', hb=fb['f-hi']||'99:99';
-    if(ha!==hb) return ha<hb?-1:1;
+    if(ha!==hb) return (ha<hb?-1:1)*dir;
     return String(fa['f-cliente']||'').localeCompare(String(fb['f-cliente']||''),'pt-BR');
   });
   return itens;
@@ -16024,7 +16051,8 @@ function logExportarExcel(){
   // montagem, motoristas e parceiros), então não expõe preço de venda.
   var linhas=[
     'Logística de Eventos — Fechados e Pré-reservados','',
-    'Período: '+_logRelPeriodoLabel(),'',
+    'Período: '+_logRelPeriodoLabel(),
+    'Ordenação: '+_logRelOrdemLabel(),'',
     ['Nº','Cliente','Nome do Evento','Consultor','Status',
      'Montagem','Hora Montagem','Evento','Hora Evento','Desmontagem','Hora Desmontagem','Local'].map(csvEscape).join(';')
   ];
@@ -16098,7 +16126,7 @@ function logExportarPDF(){
     +'</head><body>'
     +'<div id="st">Gerando PDF...</div>'
     +'<div id="pw">'
-    +'<div class="hdr"><h1>🚚 CRAZY SOM — LOGÍSTICA DE EVENTOS</h1><span>Período: '+eh(_logRelPeriodoLabel())+'<br>Gerado em: '+hoje+'</span></div>'
+    +'<div class="hdr"><h1>🚚 CRAZY SOM — LOGÍSTICA DE EVENTOS</h1><span>Período: '+eh(_logRelPeriodoLabel())+'<br>Ordenação: '+eh(_logRelOrdemLabel())+'<br>Gerado em: '+hoje+'</span></div>'
     +'<table><thead><tr><th>Nº</th><th>Cliente</th><th>Nome do Evento</th><th>Consultor</th><th>Status</th>'
     +'<th>Montagem</th><th class="h">Hora</th><th>Evento</th><th class="h">Hora</th><th>Desmontagem</th><th class="h">Hora</th><th>Local</th></tr></thead><tbody>'
     +linhasHtml
