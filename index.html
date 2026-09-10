@@ -6137,7 +6137,38 @@ function getForm(){var o={};FORM_IDS.forEach(function(id){var e=document.getElem
 // setForm() sempre varre TODO o FORM_IDS (a lista canônica de campos),
 // preenchendo com '' qualquer campo ausente em `f` — mesma garantia que
 // getForm() já dava (sempre lê todo FORM_IDS), agora simétrica na escrita.
-function setForm(f){f=f||{};FORM_IDS.forEach(function(id){var e=document.getElementById(id);if(e)e.value=(f[id]!==undefined&&f[id]!==null)?f[id]:'';});sv('orc-disp',f['f-num']||'—');}
+// Um <select> DESCARTA em silêncio qualquer valor que não exista entre as suas
+// opções. Isso apagava dados históricos ao abrir um orçamento antigo: o
+// consultor responsável que saiu da empresa (e por isso saiu da lista de
+// ativos), um tipo de evento desativado, uma fonte removida — o campo
+// simplesmente virava vazio na tela. Duas consequências graves:
+//   1. a autoria se perdia de vez no save seguinte (gravava consultor em
+//      branco por cima do nome de quem realmente vendeu);
+//   2. o salvamento passava a ser RECUSADO ("Selecione o Consultor
+//      Responsável"), travando qualquer alteração no orçamento — inclusive a
+//      baixa de pagamentos no Financeiro.
+// Agora, se o valor gravado não existir mais na lista, ele é reinserido como
+// opção (identificada como inativa no caso do consultor) para que o registro
+// nunca perca o que foi salvo. popularConsultores() já preserva o nome do
+// consultor do orçamento aberto, então a opção continua lá depois.
+function setForm(f){
+  f=f||{};
+  FORM_IDS.forEach(function(id){
+    var e=document.getElementById(id);
+    if(!e) return;
+    var v=(f[id]!==undefined&&f[id]!==null)?f[id]:'';
+    e.value=v;
+    if(v && e.tagName==='SELECT' && e.value!==String(v)){
+      var opt=document.createElement('option');
+      opt.value=v;
+      opt.text=(id==='f-cons')?(v+' (inativo)'):v;
+      opt.dataset.valorPreservado='1';
+      e.appendChild(opt);
+      e.value=v;
+    }
+  });
+  sv('orc-disp',f['f-num']||'—');
+}
 function salvar(){var blob=new Blob([JSON.stringify({form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,snapshotAprovado:snapshotAprovado,finParcelas:finParcelas,finObs:finObs},null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(gv('f-num')||'orc')+' - '+(gv('f-cliente')||'cliente')+'.json';a.click();URL.revokeObjectURL(a.href);}
 function carregar(input){
   var file=input.files[0];if(!file)return;
