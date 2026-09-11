@@ -318,6 +318,9 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .home-card.bloqueado{opacity:.42;filter:grayscale(1);cursor:not-allowed;}
 .home-card.bloqueado:hover{background:var(--surface);border-color:var(--border);transform:none;box-shadow:none;}
 .home-card.bloqueado::after{content:'🔒';position:absolute;top:12px;right:12px;font-size:13px;opacity:.9;filter:grayscale(0);}
+/* Módulo em desenvolvimento (desativado de propósito) — obra, não cadeado. */
+.home-card.em-obra::after{content:'🚧';}
+.home-card.em-obra::before{content:'EM DESENVOLVIMENTO';position:absolute;bottom:0;left:0;right:0;background:#e65100;color:#fff;font-size:8px;font-weight:800;letter-spacing:.8px;text-align:center;padding:2px 0;filter:grayscale(0);}
 .home-card-badge{position:absolute;top:12px;right:12px;background:var(--R);color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;display:none;}
 .home-card-badge.show{display:block;}
 .home-orc-atual{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:16px;cursor:pointer;transition:all .18s;margin-bottom:16px;}
@@ -4755,7 +4758,7 @@ function _popularSelecaoComSinaleira(s,sel){
     var o=document.createElement('option');
     o.value=JSON.stringify({n:it.n,v:vAj});
     var rotulo=it.n+(vAj?' – R$ '+fmtN(vAj):'');
-    if(typeof _produtoPorNomeItem==='function'){
+    if(_estoqueAtivo() && typeof _produtoPorNomeItem==='function'){
       var p=_produtoPorNomeItem(it.n);
       if(p){
         var sinal=_estoqueSinaleiraSync(p.id, typeof driveIdAtual!=='undefined'?driveIdAtual:null);
@@ -4850,6 +4853,7 @@ function secTotAll(s){
 // ou, se ainda em rascunho/análise, avisa (⚠️) quando a quantidade pedida
 // excede o que está livre agora — sem bloquear a adição do item.
 function _rowSinaleiraBadge(r){
+  if(!_estoqueAtivo()) return '';   // módulo de Estoque desativado
   if(!r||r.custom||typeof _produtoPorNomeItem!=='function') return '';
   var p=_produtoPorNomeItem(r.name);
   if(!p) return '';
@@ -5613,7 +5617,7 @@ async function _executarSave(num,cli,dt,opts){
     if(opts.mostrarStatus!==false) driveStatus('✅ Salvo: '+d.nome,'ok');
     driveListarSilencioso();
     _eventoAutoRegistrar();
-    if(typeof estoqueRecalcularCompromissos==='function') estoqueRecalcularCompromissos(d.id);
+    if(_estoqueAtivo() && typeof estoqueRecalcularCompromissos==='function') estoqueRecalcularCompromissos(d.id);
     if(opts.onSucesso) opts.onSucesso(d);
     if(_eraNovo) _verificarColisaoPosSave(num,d.id);
     return d;
@@ -6529,6 +6533,7 @@ function _renderizarHome(){
   var nivel=usuarioAtual?usuarioAtual.nivel:'';
   var tudo=['adm','gerente','diretor'].includes(nivel);
   DASH_MODULOS.forEach(function(m){
+    if(m.desativado){ _homeDesativado(m.card); return; }
     var liberado;
     if(m.so==='adm')          liberado = (nivel==='adm');
     else if(m.so==='gestao')  liberado = tudo;
@@ -6548,9 +6553,32 @@ function _renderizarHome(){
 // onclick do próprio card nunca chega a rodar), e novamente dentro de cada
 // função de abertura (_moduloBloqueado), porque um módulo também pode ser
 // aberto por outros caminhos que não o card da Home.
+// Card de módulo DESATIVADO (em desenvolvimento). Visual diferente do "sem
+// permissão": aqui não é uma questão de acesso, é obra em andamento — por isso
+// 🚧 e não 🔒, e a mensagem diz que nada foi perdido.
+function _homeDesativado(id){
+  var el=document.getElementById(id);
+  if(!el) return;
+  el.style.display='';
+  el.classList.add('bloqueado','em-obra');
+  el.title='🚧 Módulo em desenvolvimento — temporariamente desativado. Nenhum dado foi apagado.';
+  el.setAttribute('aria-disabled','true');
+  if(!el.dataset.bloqHandler){
+    el.dataset.bloqHandler='1';
+    el.addEventListener('click', function(ev){
+      if(!el.classList.contains('bloqueado')) return;
+      ev.stopPropagation(); ev.preventDefault();
+      alert(el.classList.contains('em-obra')
+        ? '🚧 Módulo em desenvolvimento\n\nO Estoque está temporariamente desativado enquanto as demais funções são finalizadas. Nenhum dado foi apagado — ele volta assim que estiver pronto.'
+        : '🔒 Você não tem acesso a este módulo.\n\nPeça a um Gerente, Diretor ou Administrador para liberar em Admin > Acessos por Cargo.');
+    }, true);
+  }
+}
+
 function _homeShow(id, show){
   var el=document.getElementById(id);
   if(!el) return;
+  el.classList.remove('em-obra');
   el.style.display='';                       // nunca mais esconder
   el.classList.toggle('bloqueado', !show);
   if(!show){
@@ -6566,7 +6594,9 @@ function _homeShow(id, show){
       if(!el.classList.contains('bloqueado')) return;
       ev.stopPropagation();
       ev.preventDefault();
-      alert('🔒 Você não tem acesso a este módulo.\n\nPeça a um Gerente, Diretor ou Administrador para liberar em Admin > Acessos por Cargo.');
+      alert(el.classList.contains('em-obra')
+        ? '🚧 Módulo em desenvolvimento\n\nO Estoque está temporariamente desativado enquanto as demais funções são finalizadas. Nenhum dado foi apagado — ele volta assim que estiver pronto.'
+        : '🔒 Você não tem acesso a este módulo.\n\nPeça a um Gerente, Diretor ou Administrador para liberar em Admin > Acessos por Cargo.');
     }, true);   // captura: roda ANTES do onclick do card
   }
 }
@@ -6574,7 +6604,27 @@ function _homeShow(id, show){
 // Guarda usada dentro das funções que abrem cada módulo. Impede a entrada
 // mesmo que a função seja chamada fora do card da Home (atalho, console,
 // outro botão). Devolve true quando o acesso está bloqueado.
+function _moduloDesativado(id){
+  var m=DASH_MODULOS.filter(function(x){return x.id===id;})[0];
+  return !!(m && m.desativado);
+}
+
+// O Estoque alimenta a "sinaleira" de disponibilidade na tela de orçamento
+// (🟢 3 livres, 🔴 ocupado etc.). Com o módulo desativado esses números ficam
+// incompletos, e número errado é pior que número nenhum: o consultor fecharia
+// venda confiando numa disponibilidade que não existe. Por isso a sinaleira
+// também sai de cena enquanto o módulo estiver fora do ar.
+function _estoqueAtivo(){
+  return !_moduloDesativado('mod-produtos');
+}
+
 function _moduloBloqueado(dashId){
+  // Módulo desativado não abre para NINGUÉM — nem para o Administrador. É um
+  // estado de "em desenvolvimento", não uma questão de permissão.
+  if(_moduloDesativado(dashId)){
+    alert('🚧 Módulo em desenvolvimento\n\nO Estoque está temporariamente desativado enquanto as demais funções são finalizadas. Nenhum dado foi apagado — ele volta assim que estiver pronto.');
+    return true;
+  }
   if(!usuarioAtual) return true;
   if(['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0) return false;
   if(typeof dashTemAcesso!=='function') return false;
@@ -16743,8 +16793,13 @@ var DASH_MODULOS = [
   // ── Cadastros ──
   {id:'mod-clientes',   card:'home-btn-clientes',   label:'👥 Cadastro de Clientes',      grupo:'Cadastros'},
   {id:'mod-eventos',    card:'home-btn-eventos',    label:'🎪 Cadastro de Eventos',       grupo:'Cadastros'},
-  {id:'mod-produtos',   card:'home-btn-produtos',   label:'📦 Estoque — Produtos',        grupo:'Cadastros'},
-  {id:'dash-faltantes', card:'home-btn-faltantes',  label:'⚠️ Itens Faltantes (Estoque)', grupo:'Cadastros'},
+  // ── ESTOQUE DESATIVADO TEMPORARIAMENTE ──────────────────────────────────
+  // Pedido do usuário (set/2026): o módulo de Estoque fica fora do ar até as
+  // demais funções dele ficarem prontas. Nada foi apagado — para religar,
+  // basta remover "desativado:true" das duas linhas abaixo (e a sinaleira de
+  // estoque na tela de orçamento volta junto, ver _estoqueAtivo()).
+  {id:'mod-produtos',   card:'home-btn-produtos',   label:'📦 Estoque — Produtos',        grupo:'Cadastros', desativado:true},
+  {id:'dash-faltantes', card:'home-btn-faltantes',  label:'⚠️ Itens Faltantes (Estoque)', grupo:'Cadastros', desativado:true},
   // ── Gestão e análise ──
   {id:'dash-elab',      card:'home-btn-elab',       label:'📐 Dashboard Elaboração',      grupo:'Gestão'},
   {id:'dash-com',       card:'home-btn-com',        label:'📈 Dashboard Comercial',       grupo:'Gestão'},
@@ -17128,6 +17183,10 @@ function dashAcessoRenderizar(){
           // Módulos restritos por NÍVEL não têm caixa: liberar por cargo não
           // teria efeito nenhum, e uma caixa que não faz nada confunde mais do
           // que ajuda. Aparecem só para o Admin saber que o módulo existe.
+          if(m.desativado){
+            return '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);padding:3px 6px;border-radius:3px;background:var(--surface);opacity:.75">'
+              +'🚧 '+m.label+' <span style="font-size:9px;color:#e65100;font-weight:700">(em desenvolvimento)</span></div>';
+          }
           if(m.so){
             var aviso=m.so==='adm'?'somente Administrador':'somente Gerente/Diretor/Admin';
             return '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);padding:3px 6px;border-radius:3px;background:var(--surface);opacity:.75">'
