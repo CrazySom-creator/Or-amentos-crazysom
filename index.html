@@ -4070,6 +4070,11 @@ function renderStatusOrc(){
   else if(nivel==='diretor'&&aprovStatus==='diretoria'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#c62828','🔄 Reprovar / Revisão',"aprovAcao('revisao')")+'</div>';}
   else if(['adm','gerente','diretor'].includes(usuarioAtual.nivel)&&aprovStatus!=='aprovado'&&aprovStatus!=='rascunho'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#6a1b9a','🏆 Enviar para Diretoria',"aprovAcao('diretoria')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}
   else{var msgs={rascunho:'Aguardando envio pelo consultor.',analise:'Aguardando análise técnica.',gerencial:'Aguardando aprovação do gerente.',diretoria:'Aguardando aprovação da diretoria.',aprovado:'✅ Orçamento aprovado!',revisao:'🔄 Revisão solicitada.'};acoes='<p style="font-size:11px;color:var(--text-muted);padding:6px 0">'+(msgs[aprovStatus]||'')+'</p>';}
+  // Cancelar aprovação — só aparece com o orçamento aprovado e para quem tem
+  // a permissão; em vermelho porque desfaz uma decisão já tomada.
+  if(aprovStatus==='aprovado'&&_podeCancelarAprovacao()){
+    acoes+='<div style="margin-top:6px"><button onclick="cancelarAprovacao()" title="Desfaz a aprovação e devolve o orçamento para Análise Técnica — exige motivo e fica registrado no histórico" style="padding:7px 14px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;color:#fff;background:#c62828;margin:3px">↩️ Cancelar Aprovação</button></div>';
+  }
   if(nivel==='consultor'&&driveIdAtual&&aprovStatus!=='rascunho'){acoes+='<div style="margin-top:6px"><button onclick="toggleNegociacaoBox()" style="padding:7px 14px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;color:#fff;background:#e65100;margin:3px">🤝 Negociação / Desconto</button></div>';}
   sa.innerHTML=acoes;
 }
@@ -4110,6 +4115,15 @@ function renderAprovInline(){
   else if(nivel==='gerente'&&aprovStatus==='gerencial'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#6a1b9a','🏆 Enviar para Diretoria','diretoria'));btnsEl.appendChild(btn('#c62828','🔄 Solicitar Revisão','revisao'));}
   else if(nivel==='diretor'&&aprovStatus==='diretoria'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#c62828','🔄 Reprovar / Revisão','revisao'));}
   else if(['adm','gerente','diretor'].includes(usuarioAtual.nivel)&&aprovStatus!=='aprovado'&&aprovStatus!=='rascunho'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#6a1b9a','🏆 Enviar para Diretoria','diretoria'));btnsEl.appendChild(btn('#c62828','🔄 Solicitar Revisão','revisao'));}
+  if(aprovStatus==='aprovado'&&_podeCancelarAprovacao()){
+    mostrar=true;
+    var bCan=document.createElement('button');
+    bCan.className='acao-btn';bCan.style.background='#c62828';
+    bCan.textContent='↩️ Cancelar Aprovação';
+    bCan.title='Desfaz a aprovação e devolve o orçamento para Análise Técnica — exige motivo e fica registrado no histórico';
+    bCan.onclick=function(){cancelarAprovacao();};
+    btnsEl.appendChild(bCan);
+  }
   if(nivel==='consultor'&&driveIdAtual&&aprovStatus!=='rascunho'){mostrar=true;var bNeg=document.createElement('button');bNeg.className='acao-btn';bNeg.style.background='#e65100';bNeg.textContent='🤝 Negociação / Desconto';bNeg.onclick=function(){toggleNegociacaoBox();};btnsEl.appendChild(bNeg);}
   box.style.display=mostrar?'block':'none';
   // Reaplicar permissões nos botões reconstruídos
@@ -11785,6 +11799,62 @@ function finFormatarDataPrompt(isoDate){
 // e _contratoPodeMarcar(). Deliberadamente separada de "finParcelas" (que
 // controla adicionar/remover/editar a estrutura das parcelas), pra dar pra
 // autorizar alguém só a confirmar pagamento sem deixar mexer no parcelamento.
+// Quem pode CANCELAR uma aprovação já concedida (botão "Cancelar Aprovação"
+// no painel Status do Orçamento). Serve para aprovação clicada por engano ou
+// quando a negociação mudou depois de aprovada. Mesmo padrão "nega por
+// padrão, libera por exceção" das demais ações sensíveis: Gerência, Diretoria
+// e Admin sempre podem; qualquer outro cargo só com a permissão
+// "cancelar-aprovacao" marcada em Admin > Permissões por Cargo.
+function _podeCancelarAprovacao(){
+  if(!usuarioAtual) return false;
+  if(['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0) return true;
+  var cargo=typeof _cargoEfetivo==='function'?_cargoEfetivo(usuarioAtual):(usuarioAtual.cargo||'');
+  return !!(cargo && _permissoes[cargo] && _permissoes[cargo]['cancelar-aprovacao']===true);
+}
+
+// Devolve o orçamento de "Aprovado" para "Em Análise Técnica" — o mesmo
+// estado que marcarAlterado() já usa quando uma alteração derruba a aprovação,
+// então o fluxo de re-aprovação continua sendo um só. A justificativa é
+// OBRIGATÓRIA e fica registrada no histórico: cancelar aprovação é uma ação
+// que muda o status comercial do orçamento e precisa ser rastreável depois.
+async function cancelarAprovacao(){
+  if(!_podeCancelarAprovacao()){
+    alert('⚠️ Você não tem permissão para cancelar aprovações.\n\nPeça a um Gerente, Diretor ou Administrador para liberar isso em Admin > Permissões por Cargo.');
+    return;
+  }
+  if(aprovStatus!=='aprovado'){ alert('Este orçamento não está aprovado.'); return; }
+
+  var avisoVenda = (comercialStatus==='ganha')
+    ? '\n\n🚨 ATENÇÃO: este orçamento já está marcado como VENDA GANHA. Cancelar a aprovação NÃO desfaz a venda nem o financeiro — confirme com a gerência antes de prosseguir.'
+    : '';
+  if(!confirm('↩️ Cancelar a aprovação deste orçamento?\n\nEle volta para "Em Análise Técnica" e precisará passar de novo por todo o fluxo de aprovação.'+avisoVenda+'\n\nDeseja continuar?')) return;
+
+  var motivo=prompt('Informe o motivo do cancelamento (obrigatório):\n\nEx.: aprovação clicada por engano, cliente renegociou valores, mudança de escopo.','');
+  if(motivo===null) return;
+  motivo=(motivo||'').trim();
+  if(!motivo){ alert('O motivo é obrigatório para cancelar uma aprovação.'); return; }
+
+  aprovHist.push({
+    ico:'↩️',
+    acao:'Aprovação CANCELADA',
+    usuario:usuarioAtual.nome,
+    cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,
+    data:new Date().toLocaleString('pt-BR'),
+    obs:motivo
+  });
+  aprovStatus='analise';
+  // Sem aprovação vigente não há mais "estado aprovado" de referência; manter
+  // o snapshot faria marcarAlterado() comparar com uma aprovação que não
+  // existe mais e registrar anulações duplicadas no histórico.
+  snapshotAprovado=null;
+
+  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+  driveStatus('↩️ Aprovação cancelada — orçamento voltou para Análise Técnica','ok');
+  if(driveIdAtual){
+    try{ await salvarNoDrive({mostrarStatus:false}); }catch(e){}
+  }
+}
+
 function _finPodeMarcarPago(){
   if(!usuarioAtual) return false;
   if(['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0) return true;
@@ -16508,6 +16578,8 @@ async function permSalvar(){
   if(contratoEl) _permissoes[cargo]['contrato-status']=contratoEl.checked;
   var finPagoEl=document.getElementById('perm-fin-marcar-pago');
   if(finPagoEl) _permissoes[cargo]['fin-marcar-pago']=finPagoEl.checked;
+  var cancAprovEl=document.getElementById('perm-cancelar-aprovacao');
+  if(cancAprovEl) _permissoes[cargo]['cancelar-aprovacao']=cancAprovEl.checked;
   try{ localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes)); }catch(e){}
   var btn=document.querySelector('#admpane-permissoes button[onclick="permSalvar()"]');
   if(btn){btn.textContent='⏳ Salvando...';btn.disabled=true;}
@@ -16754,6 +16826,12 @@ function permRenderizar(){
     +'<input type="checkbox" id="perm-fin-marcar-pago"'+(perm['fin-marcar-pago']===true?' checked':'')+' style="width:14px;height:14px;cursor:pointer"> 💰 Pode Marcar Parcela como Paga'
     +'</label>'
     +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px;margin-left:22px">Permite confirmar/desfazer o pagamento de uma parcela no Acompanhamento Financeiro. Separada da permissão "Parcelas do Financeiro" (que controla adicionar/remover/editar o parcelamento) — dá pra liberar só a confirmação de pagamento sem deixar mexer na estrutura das parcelas. Vem DESMARCADA por padrão. Gerência, Diretoria e Administradores já podem marcar sempre.</div>'
+    +'</div>'
+    +'<div style="background:#200b0b;border:1px solid #c62828;border-radius:6px;padding:10px 12px;margin-bottom:10px">'
+    +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#ef5350;font-weight:800;text-transform:uppercase">'
+    +'<input type="checkbox" id="perm-cancelar-aprovacao"'+(perm['cancelar-aprovacao']===true?' checked':'')+' style="width:14px;height:14px;cursor:pointer"> ↩️ Pode Cancelar Aprovação'
+    +'</label>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px;margin-left:22px">Permite desfazer a aprovação de um orçamento já aprovado (aprovação clicada por engano, ou negociação alterada depois). O orçamento volta para Análise Técnica e precisa passar de novo por todo o fluxo. Exige um motivo, que fica gravado no histórico do orçamento. Vem DESMARCADA por padrão. Gerência, Diretoria e Administradores já podem cancelar sempre.</div>'
     +'</div>';
   PERM_MODULOS.forEach(function(mod){
     html+='<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:8px">'
