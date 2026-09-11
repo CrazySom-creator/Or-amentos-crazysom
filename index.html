@@ -525,6 +525,12 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 .fk-col-count{background:rgba(255,255,255,.28);border-radius:10px;padding:1px 7px;font-size:10px;flex-shrink:0;}
 /* Cabeçalho da coluna abre a etapa em tela cheia — o ícone ⛶ só aparece no
    hover pra não poluir o quadro, mas o cursor de mão já sinaliza o clique. */
+/* Linha com mudança de etapa marcada e ainda não salva. */
+tr.fk-linha-alterada{background:#fff3e0;}
+tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ffb74d;}
+/* Nome do cliente é um atalho para abrir o orçamento completo. */
+.fk-cli-link{color:var(--R);text-decoration:underline;text-underline-offset:2px;cursor:pointer;}
+.fk-cli-link:hover{filter:brightness(1.2);}
 .fk-col-head-click{cursor:pointer;user-select:none;}
 .fk-col-head-click:hover{filter:brightness(1.12);}
 .fk-col-expand{opacity:0;font-size:11px;flex-shrink:0;transition:opacity .15s;}
@@ -1130,6 +1136,7 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
           <option value="evento">Ordenar: data do evento</option>
           <option value="cliente">Ordenar: cliente (A-Z)</option>
         </select>
+        <button class="btn btn-r btn-sm" id="fk-etapa-salvar" onclick="fkEtapaSalvar()" disabled style="opacity:.45;cursor:not-allowed" title="Grava todas as mudanças de etapa marcadas na coluna 'Mover para'">💾 Salvar</button>
         <button class="btn btn-o btn-sm" onclick="fkEtapaExportar()" title="Exporta a lista desta etapa em CSV/Excel">📊 Excel</button>
         <button class="btn btn-o btn-sm" onclick="fkFecharEtapa()">✕ Fechar</button>
       </div>
@@ -10685,15 +10692,30 @@ function _fkDragLeave(ev){
 // ════════════════════════════════════════════════════════
 var _fkBaseFiltrada = {orc:[], leads:[]};
 var _fkEtapaAtual = '';
+// Mudanças de etapa escolhidas na lista e ainda NÃO gravadas: id -> nova etapa.
+// A troca deixou de ser aplicada no ato justamente pra permitir conferir vários
+// itens, ajustar o que for preciso e só então gravar tudo de uma vez no botão
+// Salvar — e é isso que faz a etapa escolhida continuar visível no seletor.
+var _fkEtapaPendentes = {};
 
 function fkAbrirEtapa(colKey){
   _fkEtapaAtual = colKey;
+  _fkEtapaPendentes = {};
   var busca=document.getElementById('fk-etapa-busca'); if(busca) busca.value='';
   document.getElementById('fk-etapa-ov').classList.add('open');
   fkEtapaRenderizar();
 }
 
+function _fkEtapaTemPendencias(){
+  return Object.keys(_fkEtapaPendentes).length > 0;
+}
+
 function fkFecharEtapa(){
+  if(_fkEtapaTemPendencias()){
+    var n=Object.keys(_fkEtapaPendentes).length;
+    if(!confirm('⚠️ Você tem '+n+' mudança(s) de etapa ainda não salva(s).\n\nFechar agora descarta essas alterações. Deseja fechar mesmo assim?')) return;
+  }
+  _fkEtapaPendentes = {};
   document.getElementById('fk-etapa-ov').classList.remove('open');
 }
 
@@ -10771,7 +10793,9 @@ function fkEtapaRenderizar(){
   tit.innerHTML='<span style="background:'+si.bg+';color:'+si.tx+';padding:3px 10px;border-radius:6px;font-size:14px">'+si.label+'</span>';
   document.getElementById('fk-etapa-sub').innerHTML=
     '<b>'+linhas.length+'</b> negociação(ões) nesta etapa &nbsp;·&nbsp; Total: <b style="color:var(--R)">'+fmt(total)+'</b>'
-    +' &nbsp;·&nbsp; <span style="color:var(--text-dim)">clique numa linha para abrir e editar</span>';
+    +' &nbsp;·&nbsp; <span style="color:var(--text-dim)">clique no <b style="color:var(--R)">nome do cliente</b> para abrir o orçamento · clique no resto da linha para ver o detalhe</span>';
+
+  _fkEtapaAtualizarBotaoSalvar();
 
   var corpo=document.getElementById('fk-etapa-corpo');
   if(!linhas.length){
@@ -10800,16 +10824,20 @@ function fkEtapaRenderizar(){
       var diasTxt = r.dias>=15
         ? '<span style="color:#c62828;font-weight:800">'+r.dias+'d</span>'
         : (r.dias>=7 ? '<span style="color:#e65100;font-weight:700">'+r.dias+'d</span>' : r.dias+'d');
-      var sel='<select onchange="fkEtapaMover(this,\''+r.tipo+'\',\''+r.id+'\')" onclick="event.stopPropagation()" style="width:100%;font-size:10px;padding:3px 5px">'
+      // A escolha fica GRAVADA no seletor (e a linha destacada) até o usuário
+      // clicar em Salvar — antes, o seletor voltava pra "manter" e não dava pra
+      // conferir o que tinha sido marcado.
+      var pend=(_fkEtapaPendentes[r.id]||{}).etapa||'';
+      var sel='<select onchange="fkEtapaMover(this,\''+r.tipo+'\',\''+r.id+'\')" onclick="event.stopPropagation()" style="width:100%;font-size:10px;padding:3px 5px'+(pend?';border-color:#e65100;font-weight:800':'')+'">'
         +'<option value="">— manter —</option>'
         +destinos.map(function(k){
           var s2=FUNIL_COL_SI[k]||{label:k};
-          return k===_fkEtapaAtual?'':'<option value="'+k+'">'+s2.label+'</option>';
+          return k===_fkEtapaAtual?'':'<option value="'+k+'"'+(pend===k?' selected':'')+'>'+s2.label+'</option>';
         }).join('')
         +'</select>';
-      return '<tr style="cursor:pointer" onclick="fkEtapaAbrirItem(\''+r.tipo+'\',\''+r.id+'\')" title="Abrir para conferir e editar">'
+      return '<tr class="'+(pend?'fk-linha-alterada':'')+'" style="cursor:pointer" onclick="fkEtapaAbrirItem(\''+r.tipo+'\',\''+r.id+'\')" title="Abrir o painel de detalhe para conferir e editar">'
         +'<td style="font-weight:700">'+eh(r.num)+'</td>'
-        +'<td style="font-weight:700">'+eh(r.cliente)+'</td>'
+        +'<td onclick="event.stopPropagation();fkEtapaAbrirOrcamento(\''+r.tipo+'\',\''+r.id+'\')" title="Abrir o orçamento completo para edição"><span class="fk-cli-link">'+eh(r.cliente)+'</span></td>'
         +'<td>'+eh(r.evento||'—')+'</td>'
         +'<td>'+eh(r.consultor||'—')+'</td>'
         +'<td>'+(r.dataEvento?fD(r.dataEvento):'—')+'</td>'
@@ -10822,7 +10850,30 @@ function fkEtapaRenderizar(){
     +'</tbody></table></div>';
 }
 
-// Abre o registro completo (mesmo modal de detalhe do cartão do quadro).
+// Clique no NOME DO CLIENTE abre o orçamento completo para edição — o mesmo
+// caminho do "Abrir orçamento" da Home. Fecha a listagem e o funil antes, pra
+// o editor não ficar atrás de dois popups. Lead ainda não tem orçamento
+// gerado, então cai no detalhe do lead.
+async function fkEtapaAbrirOrcamento(tipo,id){
+  if(tipo==='lead'){ leadAbrirDetalhe(id); return; }
+  var orc=(_funilCache||[]).filter(function(o){return o.driveId===id;})[0];
+  var f=(orc&&orc.form)||{};
+  var nome=(f['f-num']||'')+' - '+(f['f-cliente']||'');
+  if(_fkEtapaTemPendencias()){
+    if(!confirm('⚠️ Há mudanças de etapa não salvas nesta lista.\n\nAbrir o orçamento agora descarta essas marcações. Continuar?')) return;
+  }
+  if(!confirm('Abrir o orçamento "'+nome+'" para edição?')) return;
+  _fkEtapaPendentes={};
+  document.getElementById('fk-etapa-ov').classList.remove('open');
+  if(typeof fecharFunilHome==='function') fecharFunilHome();
+  if(typeof fecharHome==='function') fecharHome();
+  _origemOrc=abrirFunilHome;
+  window.scrollTo({top:0,behavior:'smooth'});
+  await driveCarregar(id, nome);
+}
+
+// Abre o painel de DETALHE (mesmo do cartão do quadro) — clique em qualquer
+// outra parte da linha.
 function fkEtapaAbrirItem(tipo,id){
   if(tipo==='lead') leadAbrirDetalhe(id);
   else fkAbrirDetalhe(id);
@@ -10832,14 +10883,76 @@ function fkEtapaAbrirItem(tipo,id){
 // e soltar (_fkDropOrc/_fkDropLead): etapas terminais pedem confirmação no
 // modal de detalhe, lead não pula direto pra orçamento, e o histórico é
 // gravado igual. Sem duplicar regra de negócio em dois lugares.
+// Registra a escolha como PENDENTE — não grava nada ainda. O seletor mantém a
+// etapa escolhida à vista e a linha fica destacada, pra ficar claro o que vai
+// mudar quando clicar em Salvar.
 function fkEtapaMover(sel,tipo,id){
   var nova=sel.value;
-  sel.value='';
-  if(!nova) return;
-  if(tipo==='lead') _fkDropLead(id,nova);
-  else _fkDropOrc(id,nova);
-  // A lista se redesenha sozinha quando o funil termina de salvar
-  // (funilFiltrarLista chama fkEtapaRenderizar se o popup estiver aberto).
+  if(nova) _fkEtapaPendentes[id]={etapa:nova, tipo:tipo};
+  else delete _fkEtapaPendentes[id];
+  var tr=sel.closest('tr');
+  if(tr) tr.classList.toggle('fk-linha-alterada', !!nova);
+  _fkEtapaAtualizarBotaoSalvar();
+}
+
+function _fkEtapaAtualizarBotaoSalvar(){
+  var btn=document.getElementById('fk-etapa-salvar');
+  if(!btn) return;
+  var n=Object.keys(_fkEtapaPendentes).length;
+  btn.disabled = n===0;
+  btn.style.opacity = n===0 ? '.45' : '1';
+  btn.style.cursor = n===0 ? 'not-allowed' : 'pointer';
+  btn.textContent = n===0 ? '💾 Salvar' : '💾 Salvar ('+n+')';
+}
+
+// Grava todas as mudanças pendentes de uma vez, reaproveitando as mesmas
+// funções do arrastar-e-soltar — nenhuma regra de negócio é duplicada aqui.
+// Venda Ganha e Perdida são a exceção: exigem confirmação e motivo no modal de
+// detalhe (perdida sem motivo não pode entrar no sistema), então não são
+// gravadas em lote; ficam pendentes e o primeiro caso é aberto pro usuário
+// resolver individualmente.
+async function fkEtapaSalvar(){
+  var ids=Object.keys(_fkEtapaPendentes);
+  if(!ids.length) return;
+
+  var terminais=ids.filter(function(id){
+    var e=_fkEtapaPendentes[id].etapa;
+    return e==='ganha'||e==='perdida';
+  });
+  var diretos=ids.filter(function(id){ return terminais.indexOf(id)<0; });
+
+  var btn=document.getElementById('fk-etapa-salvar');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Salvando...'; }
+
+  var ok=0, erro=0;
+  for(var i=0;i<diretos.length;i++){
+    var id=diretos[i], p=_fkEtapaPendentes[id];
+    try{
+      if(p.tipo==='lead') await _fkDropLead(id,p.etapa);
+      else                await _fkMudarEtapaRapido(id,p.etapa);
+      delete _fkEtapaPendentes[id];
+      ok++;
+    }catch(e){ erro++; }
+  }
+
+  funilFiltrarLista();
+  funilHomeFiltrarLista();
+
+  if(terminais.length){
+    var primeiro=terminais[0];
+    var p2=_fkEtapaPendentes[primeiro];
+    alert('✅ '+ok+' mudança(s) de etapa salva(s).\n\n⚠️ '+terminais.length+' item(ns) marcado(s) como Venda Ganha ou Perdida precisam de confirmação individual (a perdida exige o motivo). Vou abrir o primeiro agora; repita para os demais.');
+    delete _fkEtapaPendentes[primeiro];
+    _fkEtapaAtualizarBotaoSalvar();
+    if(p2.tipo==='lead') leadAbrirDetalhe(primeiro);
+    else fkAbrirDetalhe(primeiro, p2.etapa);
+    return;
+  }
+
+  _fkEtapaAtualizarBotaoSalvar();
+  fkEtapaRenderizar();
+  alert(erro ? ('✅ '+ok+' salva(s), ⚠️ '+erro+' com erro. Tente novamente as que continuam marcadas.')
+             : ('✅ '+ok+' mudança(s) de etapa salva(s) com sucesso.'));
 }
 
 function fkEtapaExportar(){
