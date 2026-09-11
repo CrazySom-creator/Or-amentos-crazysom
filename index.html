@@ -10199,9 +10199,18 @@ function fkExcluirFiltroSalvo(){
 
 fkAtualizarContadorFiltros();
 
+// O quadro do funil NÃO aparece mais na tela do orçamento (pedido do usuário).
+// Ele ocupava a tela inteira abaixo do orçamento desde o login, competindo com
+// a elaboração, e hoje tem lugar próprio: o módulo "CRM — Funil de Vendas" na
+// tela inicial, com o quadro em tela cheia e a listagem por etapa.
+// A função continua existindo (é chamada no login e em outros pontos) e o HTML
+// do card segue no arquivo — para reexibi-lo, basta voltar a linha comentada
+// abaixo. O painel "🤝 Acompanhamento Comercial" do próprio orçamento não é
+// afetado: ele é outra coisa e continua onde estava.
 function funilMostrarCard(){
-  var card = document.getElementById('funil-card');
-  if(card) card.style.display = 'block';
+  // var card = document.getElementById('funil-card');
+  // if(card) card.style.display = 'block';
+  funilEsconderCard();
 }
 
 function funilEsconderCard(){
