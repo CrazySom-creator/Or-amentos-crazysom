@@ -531,6 +531,8 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
 /* Nome do cliente é um atalho para abrir o orçamento completo. */
 .fk-cli-link{color:var(--R);text-decoration:underline;text-underline-offset:2px;cursor:pointer;}
 .fk-cli-link:hover{filter:brightness(1.2);}
+.fk-fu-link{cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;}
+.fk-fu-link:hover{filter:brightness(1.25);}
 .fk-col-head-click{cursor:pointer;user-select:none;}
 .fk-col-head-click:hover{filter:brightness(1.12);}
 .fk-col-expand{opacity:0;font-size:11px;flex-shrink:0;transition:opacity .15s;}
@@ -10793,7 +10795,7 @@ function fkEtapaRenderizar(){
   tit.innerHTML='<span style="background:'+si.bg+';color:'+si.tx+';padding:3px 10px;border-radius:6px;font-size:14px">'+si.label+'</span>';
   document.getElementById('fk-etapa-sub').innerHTML=
     '<b>'+linhas.length+'</b> negociação(ões) nesta etapa &nbsp;·&nbsp; Total: <b style="color:var(--R)">'+fmt(total)+'</b>'
-    +' &nbsp;·&nbsp; <span style="color:var(--text-dim)">clique no <b style="color:var(--R)">nome do cliente</b> para abrir o orçamento · clique no resto da linha para ver o detalhe</span>';
+    +' &nbsp;·&nbsp; <span style="color:var(--text-dim)">clique no <b style="color:var(--R)">nome do cliente</b> para abrir o orçamento · no <b>follow-up</b> para agendar o próximo contato · no resto da linha para ver o detalhe</span>';
 
   _fkEtapaAtualizarBotaoSalvar();
 
@@ -10818,9 +10820,13 @@ function fkEtapaRenderizar(){
     +'</tr></thead><tbody>'
     +linhas.map(function(r,i){
       var atrasado = r.followup && r.followup < d.hoje;
+      // Follow-up é um atalho: abre o painel de acompanhamento já com o campo
+      // de próximo follow-up em foco. Quando não há data, mostra "+ definir"
+      // em vez de um traço morto — antes não havia como perceber que dali
+      // mesmo dava pra agendar o próximo contato.
       var fuTxt = r.followup
-        ? '<span style="color:'+(atrasado?'#c62828':'var(--text-muted)')+';font-weight:'+(atrasado?'800':'400')+'">'+(atrasado?'⏰ ':'')+fD(r.followup)+'</span>'
-        : '<span style="color:var(--text-dim)">—</span>';
+        ? '<span class="fk-fu-link" style="color:'+(atrasado?'#c62828':'var(--text)')+';font-weight:'+(atrasado?'800':'600')+'">'+(atrasado?'⏰ ':'')+fD(r.followup)+'</span>'
+        : '<span class="fk-fu-link" style="color:var(--text-dim)">+ definir</span>';
       var diasTxt = r.dias>=15
         ? '<span style="color:#c62828;font-weight:800">'+r.dias+'d</span>'
         : (r.dias>=7 ? '<span style="color:#e65100;font-weight:700">'+r.dias+'d</span>' : r.dias+'d');
@@ -10843,7 +10849,7 @@ function fkEtapaRenderizar(){
         +'<td>'+(r.dataEvento?fD(r.dataEvento):'—')+'</td>'
         +'<td style="text-align:right;font-weight:700">'+fmt(r.valor)+'</td>'
         +'<td style="text-align:center">'+diasTxt+'</td>'
-        +'<td>'+fuTxt+'</td>'
+        +'<td onclick="event.stopPropagation();fkEtapaAbrirFollowup(\''+r.tipo+'\',\''+r.id+'\')" title="Abrir o acompanhamento e definir/editar o próximo follow-up">'+fuTxt+'</td>'
         +'<td onclick="event.stopPropagation()">'+sel+'</td>'
         +'</tr>';
     }).join('')
@@ -10870,6 +10876,25 @@ async function fkEtapaAbrirOrcamento(tipo,id){
   _origemOrc=abrirFunilHome;
   window.scrollTo({top:0,behavior:'smooth'});
   await driveCarregar(id, nome);
+}
+
+// Clique na coluna FOLLOW-UP: abre o mesmo painel de acompanhamento do cartão
+// e leva direto ao campo "Próximo follow-up", já com foco e destacado — assim
+// dá pra percorrer a lista agendando os próximos contatos sem caçar o campo
+// dentro do painel a cada item.
+function fkEtapaAbrirFollowup(tipo,id){
+  fkEtapaAbrirItem(tipo,id);
+  setTimeout(function(){
+    var campo=document.getElementById('fk-det-followup-data');
+    if(!campo) return;            // lead usa outro painel, sem este campo
+    var caixa=campo.closest('div');
+    if(caixa&&caixa.parentElement) caixa.parentElement.scrollIntoView({behavior:'smooth',block:'center'});
+    campo.focus();
+    // Destaque temporário só pra guiar o olho até o campo.
+    var antes=campo.style.boxShadow;
+    campo.style.boxShadow='0 0 0 3px rgba(21,101,192,.45)';
+    setTimeout(function(){campo.style.boxShadow=antes;},1800);
+  },320);
 }
 
 // Abre o painel de DETALHE (mesmo do cartão do quadro) — clique em qualquer
