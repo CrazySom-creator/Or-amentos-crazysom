@@ -1051,7 +1051,12 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
 </div>
 
 <!-- Modal de detalhe do card do funil: timeline + follow-up + mudança de etapa -->
-<div class="ov" id="fk-detail-modal" style="z-index:96000">
+<!-- z-index acima da listagem de etapa (fk-etapa-ov, 96200): a listagem é
+     uma tela cheia OPACA, então com um valor menor este painel abria
+     atrás dela e o usuário não via nada acontecer ao clicar. Precisa
+     continuar ABAIXO do formulário de tarefa (98000), que pode ser
+     aberto de dentro deste painel. -->
+<div class="ov" id="fk-detail-modal" style="z-index:96600">
   <div class="modal-box" style="max-width:480px;position:relative">
     <button onclick="fkFecharDetalhe()" style="position:absolute;top:10px;right:12px;background:none;border:none;color:var(--text-muted);font-size:22px;line-height:1;cursor:pointer">&times;</button>
     <h2 id="fk-det-titulo">—</h2>
