@@ -520,6 +520,12 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 .fk-col.fk-col-over{background:#e3f2fd;border-color:#1565c0;}
 .fk-col-head{padding:8px 10px;border-radius:8px 8px 0 0;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:6px;}
 .fk-col-count{background:rgba(255,255,255,.28);border-radius:10px;padding:1px 7px;font-size:10px;flex-shrink:0;}
+/* Cabeçalho da coluna abre a etapa em tela cheia — o ícone ⛶ só aparece no
+   hover pra não poluir o quadro, mas o cursor de mão já sinaliza o clique. */
+.fk-col-head-click{cursor:pointer;user-select:none;}
+.fk-col-head-click:hover{filter:brightness(1.12);}
+.fk-col-expand{opacity:0;font-size:11px;flex-shrink:0;transition:opacity .15s;}
+.fk-col-head-click:hover .fk-col-expand{opacity:.95;}
 .fk-col-total{padding:5px 10px;font-size:10px;font-weight:700;color:var(--text-muted);background:var(--surface);border-bottom:1px solid var(--border);}
 .fk-col-body{flex:1;overflow-y:auto;padding:7px;display:flex;flex-direction:column;gap:7px;min-height:60px;}
 .fk-empty{text-align:center;color:var(--text-muted);font-size:10px;padding:14px 4px;}
@@ -1099,6 +1105,36 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 </div>
 
 <!-- Modal de Follow-ups/Tarefas Atrasadas (aberto pelos badges do funil) -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  ETAPA DO FUNIL EM TELA CHEIA — clicar no cabeçalho de uma coluna do    -->
+<!--  quadro abre aqui a mesma etapa em formato de LISTA, para conferência   -->
+<!--  e edição em lote. Mostra exatamente os itens que estão na coluna       -->
+<!--  (mesmos filtros do quadro), com busca, ordenação e troca de etapa      -->
+<!--  direto na linha.                                                       -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="fk-etapa-ov" style="z-index:96200">
+  <div class="modal-box">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding-bottom:8px">
+      <div>
+        <h2 id="fk-etapa-titulo" style="margin-bottom:2px">Etapa</h2>
+        <p class="sub" id="fk-etapa-sub" style="margin:0">—</p>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="fk-etapa-busca" oninput="fkEtapaRenderizar()" placeholder="🔍 Buscar cliente, nº, evento, consultor..." style="padding:6px 10px;font-size:11px;min-width:250px">
+        <select id="fk-etapa-ordem" onchange="fkEtapaRenderizar()" style="padding:6px 8px;font-size:11px">
+          <option value="dias">Ordenar: mais tempo na etapa</option>
+          <option value="valor">Ordenar: maior valor</option>
+          <option value="evento">Ordenar: data do evento</option>
+          <option value="cliente">Ordenar: cliente (A-Z)</option>
+        </select>
+        <button class="btn btn-o btn-sm" onclick="fkEtapaExportar()" title="Exporta a lista desta etapa em CSV/Excel">📊 Excel</button>
+        <button class="btn btn-o btn-sm" onclick="fkFecharEtapa()">✕ Fechar</button>
+      </div>
+    </div>
+    <div id="fk-etapa-corpo"></div>
+  </div>
+</div>
+
 <div class="ov" id="fk-atrasados-modal" style="z-index:95500">
   <div class="modal-box" style="max-width:520px">
     <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
@@ -10172,8 +10208,21 @@ function funilRecarregar(){
 }
 
 function funilFiltrarLista(){
+  // Se a listagem de uma etapa estiver aberta, ela é redesenhada no fim desta
+  // função (ver _fkSincronizarEtapaAberta) para refletir a mudança na hora.
+
   if(!_funilCarregado){ funilCarregarDados(); return; }
   funilRenderKanban('funil-kanban','funil-filtro-cons','funil-lista-status','funil-followup-alerta');
+  _fkSincronizarEtapaAberta();
+}
+
+// Redesenha a listagem de etapa em tela cheia quando ela está aberta, para que
+// uma troca de etapa feita ali (ou no quadro atrás) apareça na hora, sem o
+// usuário precisar fechar e abrir de novo. Roda depois do quadro porque é ele
+// que recalcula _fkBaseFiltrada.
+function _fkSincronizarEtapaAberta(){
+  var ov=document.getElementById('fk-etapa-ov');
+  if(ov && ov.classList.contains('open') && typeof fkEtapaRenderizar==='function') fkEtapaRenderizar();
 }
 
 // Renderiza o quadro kanban — compartilhado entre o card fixo e o overlay da home.
@@ -10207,6 +10256,12 @@ function funilRenderKanban(kanbanId, filtroConsElId, statusElId, alertaElId){
     if(!_fkItemPassaFiltros(l, true)) return false;
     return true;
   });
+
+  // A listagem em tela cheia de uma etapa (fkAbrirEtapa) precisa enxergar
+  // exatamente os mesmos itens do quadro — inclusive os filtros de consultor,
+  // data e campos vazios já aplicados aqui. Guardar a base filtrada evita
+  // recalcular esses filtros num segundo lugar e sair de sincronia.
+  _fkBaseFiltrada = {orc: baseOrc, leads: baseLeads};
 
   var hoje = new Date().toISOString().split('T')[0];
   var atrasadosOrc = baseOrc.filter(function(o){
@@ -10306,9 +10361,11 @@ function funilRenderKanban(kanbanId, filtroConsElId, statusElId, alertaElId){
 
     var dropAttr = colKey === 'sem_etapa' ? '' : ' ondrop="_fkDrop(event,\''+colKey+'\')"';
     return '<div class="fk-col" data-etapa="'+colKey+'" ondragover="_fkDragOver(event)" ondragleave="_fkDragLeave(event)"'+dropAttr+'>'
-      + '<div class="fk-col-head" style="background:'+si.bg+';color:'+si.tx+'">'
+      + '<div class="fk-col-head fk-col-head-click" style="background:'+si.bg+';color:'+si.tx+'"'
+      +   ' onclick="fkAbrirEtapa(\''+colKey+'\')" title="Abrir esta etapa em tela cheia, em formato de lista, para conferir e editar">'
       + '<span>'+si.label+'</span>'
       + '<span class="fk-col-count">'+itens.length+'</span>'
+      + '<span class="fk-col-expand">⛶</span>'
       + '</div>'
       + '<div class="fk-col-total">'+fmt(totVal)+'</div>'
       + '<div class="fk-col-body">'+cardsHtml+'</div>'
@@ -10569,6 +10626,196 @@ function _fkDragOver(ev){
 function _fkDragLeave(ev){
   ev.currentTarget.classList.remove('fk-col-over');
 }
+// ════════════════════════════════════════════════════════
+//  ETAPA DO FUNIL EM TELA CHEIA (lista)
+//  Clicar no cabeçalho de uma coluna abre a etapa como listagem, para
+//  conferir e editar vários itens sem depender do cartão estreito do quadro
+//  nem de arrastar e soltar. Trabalha sobre _fkBaseFiltrada — a mesma base já
+//  filtrada que o quadro usou — então lista exatamente o que está na coluna.
+// ════════════════════════════════════════════════════════
+var _fkBaseFiltrada = {orc:[], leads:[]};
+var _fkEtapaAtual = '';
+
+function fkAbrirEtapa(colKey){
+  _fkEtapaAtual = colKey;
+  var busca=document.getElementById('fk-etapa-busca'); if(busca) busca.value='';
+  document.getElementById('fk-etapa-ov').classList.add('open');
+  fkEtapaRenderizar();
+}
+
+function fkFecharEtapa(){
+  document.getElementById('fk-etapa-ov').classList.remove('open');
+}
+
+// Itens da etapa aberta, já filtrados pela busca e ordenados pela escolha do
+// usuário. Devolve uma lista normalizada (mesmos campos para lead e
+// orçamento) pra tabela não precisar tratar os dois formatos o tempo todo.
+function _fkEtapaItens(){
+  var colKey=_fkEtapaAtual;
+  var isLeadCol = LEAD_COL_ORDEM.indexOf(colKey) >= 0;
+  var hoje = new Date().toISOString().split('T')[0];
+  var linhas;
+
+  if(isLeadCol){
+    linhas = (_fkBaseFiltrada.leads||[])
+      .filter(function(l){ return (l.etapa||'sem_contato') === colKey; })
+      .map(function(l){
+        return {tipo:'lead', id:l.id, num:'—', cliente:l.empresa||l.nome||'—',
+                evento:l.nomeEvento||'', consultor:l.consultor||'', dataEvento:'',
+                valor:parseFloat(l.valorEstimado)||0, dias:_fkDiasNaEtapa(l,true),
+                followup:l.followupData||'', obj:l};
+      });
+  }else{
+    linhas = (_fkBaseFiltrada.orc||[])
+      .filter(function(o){
+        var cs=(o.dados&&o.dados.comercialStatus)||'';
+        return colKey==='sem_etapa' ? !FUNIL_SI[cs] : cs===colKey;
+      })
+      .map(function(o){
+        var f=o.form||{};
+        return {tipo:'orc', id:o.driveId, num:f['f-num']||'—', cliente:f['f-cliente']||'—',
+                evento:f['f-nome-evento']||'', consultor:f['f-cons']||'', dataEvento:f['f-dia']||'',
+                valor:dashValOrc(o), dias:_fkDiasNaEtapa(o,false),
+                followup:(o.dados&&o.dados.followupData)||'', obj:o};
+      });
+  }
+
+  var q=((document.getElementById('fk-etapa-busca')||{}).value||'').trim().toLowerCase();
+  if(q) linhas=linhas.filter(function(r){
+    return (r.cliente+' '+r.num+' '+r.evento+' '+r.consultor).toLowerCase().indexOf(q)>=0;
+  });
+
+  var ord=((document.getElementById('fk-etapa-ordem')||{}).value)||'dias';
+  linhas.sort(function(a,b){
+    if(ord==='valor')   return b.valor-a.valor;
+    if(ord==='cliente') return String(a.cliente).localeCompare(String(b.cliente),'pt-BR');
+    if(ord==='evento'){
+      // Sem data de evento vai pro fim, e não pro topo, pra não empurrar os
+      // eventos reais pra baixo.
+      var da=a.dataEvento||'9999-12-31', db=b.dataEvento||'9999-12-31';
+      return da<db?-1:da>db?1:0;
+    }
+    return (b.dias||0)-(a.dias||0);   // padrão: parado há mais tempo primeiro
+  });
+  return {linhas:linhas, hoje:hoje, isLeadCol:isLeadCol};
+}
+
+// Dias parados na etapa atual — reaproveita o histórico que o funil já grava.
+function _fkDiasNaEtapa(item, isLead){
+  try{
+    var hist = isLead ? (item.hist||[]) : ((item.dados&&item.dados.comercialHist)||[]);
+    var ult = hist.length ? hist[hist.length-1] : null;
+    var iso = ult && (ult.dataISO || '');
+    if(!iso) return 0;
+    return Math.max(0, Math.round((Date.now()-new Date(iso+'T12:00:00').getTime())/86400000));
+  }catch(e){ return 0; }
+}
+
+function fkEtapaRenderizar(){
+  var si=FUNIL_COL_SI[_fkEtapaAtual]||{label:_fkEtapaAtual,bg:'#555',tx:'#fff'};
+  var d=_fkEtapaItens();
+  var linhas=d.linhas;
+  var total=linhas.reduce(function(t,r){return t+r.valor;},0);
+
+  var tit=document.getElementById('fk-etapa-titulo');
+  tit.innerHTML='<span style="background:'+si.bg+';color:'+si.tx+';padding:3px 10px;border-radius:6px;font-size:14px">'+si.label+'</span>';
+  document.getElementById('fk-etapa-sub').innerHTML=
+    '<b>'+linhas.length+'</b> negociação(ões) nesta etapa &nbsp;·&nbsp; Total: <b style="color:var(--R)">'+fmt(total)+'</b>'
+    +' &nbsp;·&nbsp; <span style="color:var(--text-dim)">clique numa linha para abrir e editar</span>';
+
+  var corpo=document.getElementById('fk-etapa-corpo');
+  if(!linhas.length){
+    corpo.innerHTML='<div style="text-align:center;color:var(--text-dim);padding:40px 20px;font-size:12px">Nenhum item nesta etapa com os filtros atuais.</div>';
+    return;
+  }
+
+  // Destinos possíveis para troca rápida de etapa, respeitando a natureza do
+  // item: lead só anda entre etapas de lead; orçamento entre etapas de funil.
+  var destinos = d.isLeadCol ? LEAD_COL_ORDEM : FUNIL_COL_ORDEM.filter(function(k){
+    return LEAD_COL_ORDEM.indexOf(k)<0 && k!=='sem_etapa';
+  });
+
+  corpo.innerHTML='<div style="overflow-x:auto"><table class="it" style="width:100%;font-size:11px">'
+    +'<thead><tr>'
+    +'<th style="width:78px">Nº</th><th>Cliente</th><th>Evento</th><th style="width:120px">Consultor</th>'
+    +'<th style="width:88px">Data evento</th><th style="width:96px;text-align:right">Valor</th>'
+    +'<th style="width:82px;text-align:center">Parado há</th><th style="width:92px">Follow-up</th>'
+    +'<th style="width:168px">Mover para</th>'
+    +'</tr></thead><tbody>'
+    +linhas.map(function(r,i){
+      var atrasado = r.followup && r.followup < d.hoje;
+      var fuTxt = r.followup
+        ? '<span style="color:'+(atrasado?'#c62828':'var(--text-muted)')+';font-weight:'+(atrasado?'800':'400')+'">'+(atrasado?'⏰ ':'')+fD(r.followup)+'</span>'
+        : '<span style="color:var(--text-dim)">—</span>';
+      var diasTxt = r.dias>=15
+        ? '<span style="color:#c62828;font-weight:800">'+r.dias+'d</span>'
+        : (r.dias>=7 ? '<span style="color:#e65100;font-weight:700">'+r.dias+'d</span>' : r.dias+'d');
+      var sel='<select onchange="fkEtapaMover(this,\''+r.tipo+'\',\''+r.id+'\')" onclick="event.stopPropagation()" style="width:100%;font-size:10px;padding:3px 5px">'
+        +'<option value="">— manter —</option>'
+        +destinos.map(function(k){
+          var s2=FUNIL_COL_SI[k]||{label:k};
+          return k===_fkEtapaAtual?'':'<option value="'+k+'">'+s2.label+'</option>';
+        }).join('')
+        +'</select>';
+      return '<tr style="cursor:pointer" onclick="fkEtapaAbrirItem(\''+r.tipo+'\',\''+r.id+'\')" title="Abrir para conferir e editar">'
+        +'<td style="font-weight:700">'+eh(r.num)+'</td>'
+        +'<td style="font-weight:700">'+eh(r.cliente)+'</td>'
+        +'<td>'+eh(r.evento||'—')+'</td>'
+        +'<td>'+eh(r.consultor||'—')+'</td>'
+        +'<td>'+(r.dataEvento?fD(r.dataEvento):'—')+'</td>'
+        +'<td style="text-align:right;font-weight:700">'+fmt(r.valor)+'</td>'
+        +'<td style="text-align:center">'+diasTxt+'</td>'
+        +'<td>'+fuTxt+'</td>'
+        +'<td onclick="event.stopPropagation()">'+sel+'</td>'
+        +'</tr>';
+    }).join('')
+    +'</tbody></table></div>';
+}
+
+// Abre o registro completo (mesmo modal de detalhe do cartão do quadro).
+function fkEtapaAbrirItem(tipo,id){
+  if(tipo==='lead') leadAbrirDetalhe(id);
+  else fkAbrirDetalhe(id);
+}
+
+// Troca de etapa direto na lista, reaproveitando as MESMAS regras do arrastar
+// e soltar (_fkDropOrc/_fkDropLead): etapas terminais pedem confirmação no
+// modal de detalhe, lead não pula direto pra orçamento, e o histórico é
+// gravado igual. Sem duplicar regra de negócio em dois lugares.
+function fkEtapaMover(sel,tipo,id){
+  var nova=sel.value;
+  sel.value='';
+  if(!nova) return;
+  if(tipo==='lead') _fkDropLead(id,nova);
+  else _fkDropOrc(id,nova);
+  // A lista se redesenha sozinha quando o funil termina de salvar
+  // (funilFiltrarLista chama fkEtapaRenderizar se o popup estiver aberto).
+}
+
+function fkEtapaExportar(){
+  var d=_fkEtapaItens();
+  if(!d.linhas.length){alert('Nenhum item nesta etapa para exportar.');return;}
+  var si=FUNIL_COL_SI[_fkEtapaAtual]||{label:_fkEtapaAtual};
+  function esc(v){
+    var s2=String(v===null||v===undefined?'':v);
+    if(s2.indexOf(';')>=0||s2.indexOf('"')>=0||s2.indexOf('\n')>=0) s2='"'+s2.replace(/"/g,'""')+'"';
+    return s2;
+  }
+  var linhas=['Funil — '+si.label.replace(/[^\wÀ-ÿ \-\/]/g,'').trim(),'',
+    ['Nº','Cliente','Evento','Consultor','Data do Evento','Valor','Dias na Etapa','Follow-up'].map(esc).join(';')];
+  d.linhas.forEach(function(r){
+    linhas.push([esc(r.num),esc(r.cliente),esc(r.evento),esc(r.consultor),
+      esc(r.dataEvento?fD(r.dataEvento):''),esc(fmt(r.valor)),esc(r.dias),
+      esc(r.followup?fD(r.followup):'')].join(';'));
+  });
+  var blob=new Blob(['\uFEFF'+linhas.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='CrazySom_Funil_'+_fkEtapaAtual+'_'+new Date().toISOString().split('T')[0]+'.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 function _fkDrop(ev, novaEtapa){
   ev.preventDefault();
   ev.currentTarget.classList.remove('fk-col-over');
@@ -11670,6 +11917,7 @@ async function funilHomeCarregarDados(){
 function funilHomeFiltrarLista(){
   if(!_funilCarregado){ funilHomeCarregarDados(); return; }
   funilRenderKanban('funil-home-kanban','funil-home-filtro-cons','funil-home-lista-status','funil-home-followup-alerta');
+  _fkSincronizarEtapaAberta();
 }
 
 async function funilHomeAbrirOrcamento(driveId, nome){
