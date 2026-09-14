@@ -14933,6 +14933,7 @@ function _apresDados(ano, mes){
     melhorIdx:melhorIdx, melhorValor:fatMes[melhorIdx],
     metaAnual:metaAnual, metaAcum:metaAcum, metaMes:metaMes, pctMetaAnual:pctMetaAnual,
     pctMetaAcum:pctMetaAcum, pctMetaMes:pctMetaMes, gapMeta:gapMeta, falta:falta,
+    pctMes:pctMes, somaPct:somaPct,
     faltaPorMes:faltaPorMes, mesesRest:mesesRest, ritmoMedio:ritmoMedio,
     projAnual:projAnual, projMeses:projMeses, projVsMeta:projVsMeta, projVsAnt:projVsAnt, projBase:projBase,
     projAnosBase:anosComMensal,
@@ -15121,20 +15122,50 @@ function _apresModelo(d){
       +(b.meses.length?(' — '+APRES_MESES_LONGO[b.meses[0].m]+' concentra o maior valor ('+_apR(b.meses[0].val)+' em '+b.meses[0].qtd+' evento'+(b.meses[0].qtd>1?'s':'')+').'):'.')
   });
 
-  // ── 12 · Plano de meta por consultor ───────────────────────────────────
+  // ── 12 · Plano de meta da EMPRESA (geral, não por consultor) ───────────
+  //  Pedido do usuário (set/2026, troca de equipe em curso): a análise do que
+  //  falta para a meta passa a ser da empresa, não por consultor.
+  //  Método:
+  //    1) saldo da meta = meta anual − realizado até o mês de fechamento;
+  //    2) esse saldo é distribuído pelos meses que faltam usando o MESMO peso
+  //       percentual mensal do módulo Metas (pctMes) — a curva de sazonalidade
+  //       lançada a partir da planilha histórica, e não uma divisão linear;
+  //    3) cada mês é confrontado com o que JÁ ESTÁ VENDIDO para ele
+  //       (fatMes dos meses futuros = vendas ganhas agrupadas pela data do
+  //       evento), separando "já vendido" de "ainda falta vender".
   var catsResto=APRES_MESES.slice(d.mes);
-  var seriesCons=d.consMetas.slice(0,4).map(function(c,i){
-    return {nome:c.nome.split(' ')[0], vals:c.meses.slice(d.mes), cor:[APRES_COR.escuro,APRES_COR.red,APRES_COR.cinza,APRES_COR.laranja][i]};
-  });
-  var blocosCons=[{t:'chart',x:0.55,y:1.65,w:8.10,h:3.90,tipo:'stacked',cats:catsResto,series:seriesCons,rotulo:'k'},
-                  kpi(8.85,1.65,3.95,1.25,'META TOTAL '+d.ano, _apMi(d.metaAnual), 'Jan–Dez','texto',false)];
-  d.consMetas.slice(0,2).forEach(function(c,i){
-    blocosCons.push(kpi(8.85,3.05+i*1.40,3.95,1.25,'META '+c.nome.split(' ')[0].toUpperCase(), _apMi(c.anual), _apPct(c.pctDaMeta)+' da meta anual'));
-  });
-  S.push({n:12, kicker:'PLANO DE META POR CONSULTOR', titulo:'O que isso exige de '+(catsResto.length?APRES_MESES_LONGO[d.mes].toLowerCase()+' a dezembro':'aqui em diante'),
-    blocos:blocosCons,
-    nota:'Restam '+_apR(d.falta)+' em '+_apresRestoRot(d)
-      +(d.consMetas.length?(' — '+_apR(d.falta/d.consMetas.length)+' por consultor ativo.'):'.')
+  var pesoResto12=0;
+  for(var pr=d.mes;pr<12;pr++) pesoResto12+=d.pctMes[pr]||0;
+  var metaResto=[], vendResto=[], faltaResto=[];
+  for(var mr=d.mes;mr<12;mr++){
+    var mMeta = pesoResto12>0 ? d.falta*((d.pctMes[mr]||0)/pesoResto12) : 0;
+    var mVend = d.fatMes[mr]||0;
+    metaResto.push(mMeta);
+    vendResto.push(mVend);
+    faltaResto.push(Math.max(0, mMeta-mVend));
+  }
+  var vendTot   = vendResto.reduce(function(t,v){return t+v;},0);
+  var faltaVend = faltaResto.reduce(function(t,v){return t+v;},0);
+  var pctCoberto= d.falta>0 ? vendTot/d.falta*100 : 0;
+  // Mês mais descoberto — onde a prospecção precisa entrar primeiro.
+  var descIdx=0;
+  for(var di=1;di<faltaResto.length;di++){ if(faltaResto[di]>faltaResto[descIdx]) descIdx=di; }
+  var descNome=catsResto.length?APRES_MESES_LONGO[d.mes+descIdx]:'';
+
+  S.push({n:12, kicker:'PLANO DE META · EMPRESA',
+    titulo:'O que falta para bater a meta'+(catsResto.length?' de '+APRES_MESES_LONGO[d.mes].toLowerCase()+' a dezembro':''),
+    blocos:[
+      {t:'chart',x:0.55,y:1.65,w:8.10,h:3.90,tipo:'stacked',cats:catsResto,
+        series:[{nome:'Já vendido', vals:vendResto,  cor:APRES_COR.verde},
+                {nome:'Falta vender', vals:faltaResto, cor:APRES_COR.red}],rotulo:'k'},
+      kpi(8.85,1.65,3.95,1.25,'FALTA PARA A META ANUAL', _apMi(d.falta), 'de '+_apMi(d.metaAnual)+' · '+_apPct(d.pctMetaAnual)+' realizado'),
+      kpi(8.85,3.05,3.95,1.25,'JÁ VENDIDO PARA '+_apresRestoRot(d).toUpperCase(), _apMi(vendTot), _apPct(pctCoberto)+' do que falta','verde'),
+      kpi(8.85,4.45,3.95,1.25,'AINDA FALTA VENDER', _apMi(faltaVend),
+        (catsResto.length?_apR(faltaVend/catsResto.length)+'/mês':'—'),'red',true)
+    ],
+    nota:'A meta do mês segue o peso sazonal do módulo Metas, não uma divisão linear. Dos '+_apR(d.falta)+' que faltam, '
+      +_apR(vendTot)+' ('+_apPct(pctCoberto,0)+') já estão contratados — restam '+_apR(faltaVend)+' a vender'
+      +(descNome?', e '+descNome+' é o mês mais descoberto ('+_apR(faltaResto[descIdx])+' em aberto).':'.')
   });
 
   // ── 13 · Fechamento ────────────────────────────────────────────────────
