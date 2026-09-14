@@ -111,6 +111,16 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .btn-voltar-float{position:fixed;left:16px;bottom:16px;z-index:99999;width:46px;height:46px;border-radius:50%;background:var(--R);color:#fff;border:none;font-size:19px;display:none;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.5);transition:transform .15s ease,filter .15s ease;}
 .btn-voltar-float:hover{filter:brightness(.88);transform:scale(1.06);}
 .btn-voltar-float:active{transform:scale(.96);}
+/* O botao flutuante "Voltar" fica fixo no canto inferior esquerdo. Para que ele
+   nunca cubra nenhum controle, toda area rolavel reserva uma folga no rodape e
+   as barras de acao ficam alinhadas a direita. */
+.modal-box,.fk-drawer-body,.rel-modal,.fin-modal,.dash-modal{padding-bottom:84px!important;}
+.fk-drawer-foot{padding-bottom:20px;}
+body{padding-bottom:84px;}
+.rodape-acoes{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap;}
+/* Enquanto um popup/tela sobreposta esta aberto, a pagina de tras fica travada:
+   assim a barra de rolagem da direita passa a ser a da tela em uso. */
+body.fundo-travado{position:fixed!important;left:0;right:0;width:100%;overflow:hidden!important;}
 @media(max-width:600px){.btn-voltar-float{width:42px;height:42px;font-size:17px;left:10px;bottom:10px;}}
 .add-bar{display:flex;gap:6px;margin-top:7px;align-items:flex-end;flex-wrap:wrap;}
 .add-bar .f{flex:1;min-width:130px;}
@@ -1219,9 +1229,9 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       </div>
 
     </div>
-    <div class="fk-drawer-foot">
-      <button onclick="fkLimparFiltros()" style="flex:1;padding:9px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:12px;font-weight:700;cursor:pointer">Limpar filtros</button>
-      <button onclick="fkAplicarFiltros()" style="flex:1;padding:9px;background:var(--R);color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:800;cursor:pointer">Aplicar filtros</button>
+    <div class="fk-drawer-foot" style="justify-content:flex-end">
+      <button onclick="fkLimparFiltros()" style="padding:9px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:12px;font-weight:700;cursor:pointer">Limpar filtros</button>
+      <button onclick="fkAplicarFiltros()" style="padding:9px 18px;background:var(--R);color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:800;cursor:pointer">Aplicar filtros</button>
     </div>
   </div>
 </div>
@@ -1263,8 +1273,8 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px">Observação</label>
       <textarea id="lead-form-obs" placeholder="Como surgiu o contato, interesse do cliente, etc." style="width:100%;min-height:52px;padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--surface-2);color:var(--text);resize:vertical;box-sizing:border-box"></textarea>
     </div>
-    <div style="display:flex;gap:8px">
-      <button id="lead-form-salvar" onclick="leadCriar()" style="flex:1;padding:9px;background:#00695c;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:800;cursor:pointer">Criar Lead</button>
+    <div class="rodape-acoes">
+      <button id="lead-form-salvar" onclick="leadCriar()" style="padding:9px 18px;background:#00695c;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:800;cursor:pointer">Criar Lead</button>
       <button onclick="leadFecharForm()" style="padding:9px 16px;background:var(--surface-3);color:var(--text-dim);border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer">Cancelar</button>
     </div>
   </div>
@@ -1363,8 +1373,8 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <textarea id="tf-obs" placeholder="Detalhe o que precisa ser feito..." style="width:100%;min-height:52px;padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--surface-2);color:var(--text);resize:vertical;box-sizing:border-box"></textarea>
     </div>
 
-    <div style="display:flex;gap:8px">
-      <button id="tf-btn-salvar" onclick="tarefaSalvar()" style="flex:1;padding:9px;background:#1565c0;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:800;cursor:pointer">💾 Salvar Tarefa</button>
+    <div class="rodape-acoes">
+      <button id="tf-btn-salvar" onclick="tarefaSalvar()" style="padding:9px 18px;background:#1565c0;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:800;cursor:pointer">💾 Salvar Tarefa</button>
       <button onclick="tarefaFecharForm()" style="padding:9px 16px;background:var(--surface-3);color:var(--text-dim);border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer">Cancelar</button>
     </div>
     <div style="margin-top:12px;text-align:center;display:none" id="tf-btn-excluir-wrap">
@@ -1464,7 +1474,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <span style="color:var(--text-dim)">Gerente, Diretor e Administrador entram em tudo, independentemente das caixas. <b>Administração</b> é exclusiva do nível Administrador e <b>Transferência de Responsável</b> de Gerente/Diretor/Admin — por isso aparecem apenas como informação, sem caixa.</span>
       </div>
       <div id="dash-acesso-corpo"></div>
-      <button onclick="dashAcessoSalvar()" style="margin-top:12px;padding:7px 18px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Permissões</button>
+      <div class="rodape-acoes" style="margin-top:12px"><button onclick="dashAcessoSalvar()" style="padding:7px 18px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Permissões</button></div>
     </div>
     <!-- ABA Tipos de Evento -->
     <div class="rel-pane" id="admpane-tiposevento">
@@ -1699,9 +1709,9 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div style="grid-column:span 2"><label>Cidade / UF</label><input id="cf-cidade" placeholder="Porto Alegre / RS"></div>
     </div>
     <div style="margin-bottom:10px"><label>Observações</label><textarea id="cf-obs" placeholder="Observações gerais sobre o cliente..."></textarea></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+    <div class="rodape-acoes" style="margin-top:14px">
       <button class="btn btn-sm" id="cf-btn-excluir" style="background:#c62828;color:#fff;display:none" onclick="clienteExcluirAtual()">🗑️ Excluir Cliente</button>
-      <div style="margin-left:auto;display:flex;gap:8px">
+      <div style="display:flex;gap:8px">
         <button class="btn btn-o btn-sm" onclick="document.getElementById('cliente-form-ov').classList.remove('open')">Cancelar</button>
         <button class="btn btn-g btn-sm" onclick="clienteSalvar()">💾 Salvar Cliente</button>
       </div>
@@ -1756,9 +1766,9 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div style="grid-column:span 2"><label>Cidade / UF <span style="color:var(--R)">(obrigatório se não houver endereço)</span></label><input id="ef-cidade" placeholder="Porto Alegre / RS"></div>
     </div>
     <div style="margin-bottom:10px"><label>Observações</label><textarea id="ef-obs" placeholder="Observações gerais sobre o evento..."></textarea></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+    <div class="rodape-acoes" style="margin-top:14px">
       <button class="btn btn-sm" id="ef-btn-excluir" style="background:#c62828;color:#fff;display:none" onclick="eventoExcluirAtual()">🗑️ Excluir Evento</button>
-      <div style="margin-left:auto;display:flex;gap:8px">
+      <div style="display:flex;gap:8px">
         <button class="btn btn-o btn-sm" onclick="document.getElementById('evento-form-ov').classList.remove('open')">Cancelar</button>
         <button class="btn btn-g btn-sm" onclick="eventoSalvar()">💾 Salvar Evento</button>
       </div>
@@ -1862,9 +1872,9 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     <div style="margin-bottom:10px"><label>Ficha Técnica (especificações adicionais)</label><textarea id="pf-ficha" placeholder="Resposta em frequência, SPL máximo, ângulo de cobertura, etc."></textarea></div>
     <div style="margin-bottom:10px"><label>Observações</label><textarea id="pf-obs" placeholder="Cuidados de manuseio, acessórios que acompanham, etc."></textarea></div>
 
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+    <div class="rodape-acoes" style="margin-top:14px">
       <button class="btn btn-sm" id="pf-btn-excluir" style="background:#c62828;color:#fff;display:none" onclick="produtoExcluirAtual()">🗑️ Excluir Produto</button>
-      <div style="margin-left:auto;display:flex;gap:8px">
+      <div style="display:flex;gap:8px">
         <button class="btn btn-o btn-sm" onclick="document.getElementById('produto-form-ov').classList.remove('open')">Cancelar</button>
         <button class="btn btn-g btn-sm" onclick="produtoSalvar()">💾 Salvar Produto</button>
       </div>
@@ -6498,6 +6508,61 @@ function fecharHome(){
 
 // Mostra o botão flutuante "Voltar" apenas quando o usuário está dentro de
 // alguma tela do sistema (não no Menu/Home e não na tela de login).
+// ── Trava de rolagem do fundo ────────────────────────────────────────────
+// Sem isso a barra de rolagem da direita continua sendo a da tela de tras e
+// a roda do mouse rola o fundo em vez do popup que esta na frente.
+var _fundoScrollY = 0, _fundoTravado = false, _fundoAgendado = false;
+function _algumaSobreposicaoAberta(){
+  var sel = '.ov, .pov, .home-ov';
+  var els = document.querySelectorAll(sel);
+  for(var i=0;i<els.length;i++){
+    var e = els[i];
+    if(e.classList.contains('hidden')) continue;
+    if(e.style.display === 'none') continue;
+    var cs = getComputedStyle(e);
+    if(cs.display !== 'none' && cs.visibility !== 'hidden') return true;
+  }
+  return false;
+}
+function _aplicarTravaFundo(){
+  var deve = _algumaSobreposicaoAberta();
+  if(deve === _fundoTravado) return;
+  if(deve){
+    _fundoScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    document.body.style.top = (-_fundoScrollY) + 'px';
+    document.body.classList.add('fundo-travado');
+    _fundoTravado = true;
+  }else{
+    document.body.classList.remove('fundo-travado');
+    document.body.style.top = '';
+    window.scrollTo(0, _fundoScrollY);
+    _fundoTravado = false;
+  }
+}
+function _agendarTravaFundo(){
+  if(_fundoAgendado) return;
+  _fundoAgendado = true;
+  requestAnimationFrame(function(){ _fundoAgendado = false; _aplicarTravaFundo(); });
+}
+(function(){
+  function iniciar(){
+    try{
+      new MutationObserver(function(muts){
+        for(var i=0;i<muts.length;i++){
+          var t = muts[i].target;
+          if(t && t.classList && (t.classList.contains('ov')||t.classList.contains('pov')||t.classList.contains('home-ov'))){
+            _agendarTravaFundo(); return;
+          }
+        }
+        _agendarTravaFundo();
+      }).observe(document.documentElement, {subtree:true, attributes:true, attributeFilter:['class','style']});
+      _aplicarTravaFundo();
+    }catch(e){ console.warn('[trava de rolagem]', e); }
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
+  else iniciar();
+})();
+
 function _atualizarBtnVoltarFloat(){
   var b = document.getElementById('btn-voltar-float');
   if(!b) return;
