@@ -14625,16 +14625,39 @@ var APRES_PPTX_URL = 'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen
 // PPT de referência. Faturamento mensal completo só de 2025 (é o ano que o
 // comparativo mês a mês usa); dos demais guardamos o total do ano. Eventos:
 // total por ano. Tudo editável na aba "Base Histórica".
+//
+//  IMPORTANTE — por que os 12 meses de `fat` E de `ev` precisam estar
+//  preenchidos em 2022–2025:
+//    • `fat` mensal completo é o que marca o ano como COMPLETO
+//      (_apresAnoCompleto) e libera a sazonalidade real na projeção. Sem isso
+//      a projeção cai na curva da meta e não bate com a planilha.
+//    • `ev` mensal é o que permite comparar ticket médio Jan–<mês> contra
+//      Jan–<mês> dos anos anteriores. Sem isso o cálculo cai no total do ANO
+//      fechado e o ticket dos anos anteriores fica artificialmente baixo
+//      (ano inteiro de eventos contra faturamento do ano inteiro), inflando a
+//      variação do ano corrente.
+//    • `evTotal` continua sendo a fonte do gráfico anual de volume. Ele vem do
+//      fechamento oficial e difere em 1–5 eventos da soma dos meses (linhas de
+//      borda contadas de forma diferente no fechamento). A soma mensal serve
+//      só para os recortes Jan–<mês>.
 var APRES_HIST_PADRAO = {
-  '2022': {fat:[0,0,0,0,0,0,0,0,0,0,0,0], fatTotal:912701,    ev:[0,0,0,0,0,0,0,0,0,0,0,0], evTotal:551},
-  '2023': {fat:[0,0,0,0,0,0,0,0,0,0,0,0], fatTotal:1433540,   ev:[0,0,0,0,0,0,0,0,0,0,0,0], evTotal:513},
-  '2024': {fat:[0,0,0,0,0,0,0,0,0,0,0,0], fatTotal:1768179,   ev:[0,0,0,0,0,0,0,0,0,0,0,0], evTotal:492},
-  '2025': {fat:[33705,96978,299892.2,174679.5,161449.8,108890,128931.8,316142,0,0,0,0], fatTotal:2495149.2, ev:[0,0,0,0,0,0,0,0,0,0,0,0], evTotal:479},
+  '2022': {fat:[22171,16723,64767,29313,55566,44385,71040,87614,66926,146196,152404,155596], fatTotal:912701,
+           ev:[13,27,35,48,57,37,40,58,60,58,60,58], evTotal:551},
+  '2023': {fat:[43533,35200,162562,45967,93520,58386,33215,250926,107367.5,214852,251165,136846.5], fatTotal:1433540,
+           ev:[20,19,53,43,45,38,31,59,40,40,59,65], evTotal:513},
+  '2024': {fat:[75855,91675,377890,171456,36770,22695,31450,167830,82067,225874,304552,180065], fatTotal:1768179,
+           ev:[18,22,49,48,9,19,35,55,50,75,69,38], evTotal:492},
+  '2025': {fat:[33705,96978,299892.16,174679.48,161449.8,108890,128931.76,316142,402299,320260,308637,143285], fatTotal:2495149.2,
+           ev:[18,35,49,39,42,37,41,51,27,44,48,46], evTotal:479},
   // Ano corrente: os meses JÁ FECHADOS entram com o faturamento oficial da
   // planilha (Jan–Ago/2026, conferidos com o deck de referência). Set–Dez
   // ficam em branco de propósito — esses o sistema calcula sozinho pelas
   // vendas ganhas, e passam a ser oficiais quando você lançar o valor aqui.
-  '2026': {fat:[106150,76500,220785,319700,147282,146415,299977.5,375375,0,0,0,0], fatTotal:0, ev:[0,0,0,0,0,0,0,0,0,0,0,0], evTotal:0}
+  // `ev` segue a mesma regra: Jan–Ago são os eventos faturados da planilha
+  // (254). Sem esse lançamento o sistema contaria só as vendas ganhas que
+  // passaram pelo módulo de orçamentos (110) — menos da metade da operação.
+  '2026': {fat:[106150,76500,220785,319700,147282,146415,299977.5,375375,0,0,0,0], fatTotal:0,
+           ev:[25,18,42,38,28,35,25,43,0,0,0,0], evTotal:0}
 };
 var _apresHist = null;
 var _apresDadosCache = null;
@@ -14776,13 +14799,18 @@ function _apresDados(ano, mes){
   var pesos=[], anosComMensal=[], projBase='histórica';
   [anoAnt-3,anoAnt-2,anoAnt-1,anoAnt].forEach(function(a){ if(_apresAnoCompleto(a)) anosComMensal.push(a); });
   if(anosComMensal.length){
+    // Peso POOLED: soma o mês em todos os anos e divide pela soma dos anos —
+    // é o método da planilha de fechamento. A média simples das participações
+    // anuais daria outro resultado (dá o mesmo peso a um ano de R$ 913 mil e a
+    // um de R$ 2,5 mi) e a projeção deixaria de bater com a planilha.
+    var totGeral=0;
+    anosComMensal.forEach(function(a){
+      totGeral+=_apresHistAno(a).fat.reduce(function(t,v){return t+v;},0);
+    });
     for(var mIdx=0;mIdx<12;mIdx++){
       var acPeso=0;
-      anosComMensal.forEach(function(a){
-        var h=_apresHistAno(a), tot=h.fat.reduce(function(t,v){return t+v;},0);
-        if(tot>0) acPeso+=h.fat[mIdx]/tot;
-      });
-      pesos.push(acPeso/anosComMensal.length);
+      anosComMensal.forEach(function(a){ acPeso+=_apresHistAno(a).fat[mIdx]; });
+      pesos.push(totGeral>0 ? acPeso/totGeral : 0);
     }
   } else { pesos=pctMes.map(function(p){return p/somaPct;}); projBase='da curva da meta'; }
   var pesoAte=pesos.slice(0,mes).reduce(function(t,v){return t+v;},0);
