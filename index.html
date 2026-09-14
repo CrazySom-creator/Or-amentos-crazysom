@@ -14629,7 +14629,12 @@ var APRES_HIST_PADRAO = {
   '2022': {fat:[0,0,0,0,0,0,0,0,0,0,0,0], fatTotal:912701,    ev:[0,0,0,0,0,0,0,0,0,0,0,0], evTotal:551},
   '2023': {fat:[0,0,0,0,0,0,0,0,0,0,0,0], fatTotal:1433540,   ev:[0,0,0,0,0,0,0,0,0,0,0,0], evTotal:513},
   '2024': {fat:[0,0,0,0,0,0,0,0,0,0,0,0], fatTotal:1768179,   ev:[0,0,0,0,0,0,0,0,0,0,0,0], evTotal:492},
-  '2025': {fat:[33705,96978,299892.2,174679.5,161449.8,108890,128931.8,316142,0,0,0,0], fatTotal:2495149.2, ev:[0,0,0,0,0,0,0,0,0,0,0,0], evTotal:479}
+  '2025': {fat:[33705,96978,299892.2,174679.5,161449.8,108890,128931.8,316142,0,0,0,0], fatTotal:2495149.2, ev:[0,0,0,0,0,0,0,0,0,0,0,0], evTotal:479},
+  // Ano corrente: os meses JÁ FECHADOS entram com o faturamento oficial da
+  // planilha (Jan–Ago/2026, conferidos com o deck de referência). Set–Dez
+  // ficam em branco de propósito — esses o sistema calcula sozinho pelas
+  // vendas ganhas, e passam a ser oficiais quando você lançar o valor aqui.
+  '2026': {fat:[106150,76500,220785,319700,147282,146415,299977.5,375375,0,0,0,0], fatTotal:0, ev:[0,0,0,0,0,0,0,0,0,0,0,0], evTotal:0}
 };
 var _apresHist = null;
 var _apresDadosCache = null;
@@ -14719,6 +14724,17 @@ function _apresDados(ano, mes){
     fatMes[m]+=v; evMes[m]+=1;
     ganhasAno.push({o:o, v:v, dt:dt, m:m, cons:(o.form&&o.form['f-cons'])||'—'});
   });
+
+  // Faturamento OFICIAL sobrepõe o automático: qualquer mês lançado na Base
+  // Histórica para o ano corrente vale mais que a soma das vendas ganhas. É o
+  // que faz o deck bater com a contabilidade nos meses já fechados, sem perder
+  // a atualização automática dos meses em andamento (que ficam em branco).
+  var ovr=_apresHistAno(ano);
+  var mesesOficiais=[];
+  for(var oi=0;oi<12;oi++){
+    if(ovr.fat[oi]>0){ fatMes[oi]=ovr.fat[oi]; mesesOficiais.push(oi); }
+    if(ovr.ev[oi]>0){ evMes[oi]=ovr.ev[oi]; }
+  }
 
   var histAnt=_apresHistAno(anoAnt);
   var fatMesAnt=histAnt.fat.slice();
@@ -14901,7 +14917,8 @@ function _apresDados(ano, mes){
     backlog:{val:backlogV, qtd:backlog.length, meses:backlogMeses, ticketCons:ticketConsLista,
              ticketVenda:ticketVendaAno, vendasQtd:ganhasAno.length},
     consMetas:consMetas,
-    totalAnt:_apresTotFat(anoAnt), totalAnt3:_apresTotFat(anoAnt-3)
+    totalAnt:_apresTotFat(anoAnt), totalAnt3:_apresTotFat(anoAnt-3),
+    mesesOficiais:mesesOficiais
   };
 }
 
@@ -15389,7 +15406,11 @@ function apresRenderizar(){
     h+='<div style="background:#4a3800;border:1px solid #aa8800;border-radius:6px;padding:9px 12px;margin-bottom:12px;font-size:11px;color:#ffcc66;line-height:1.6">'
       +avisos.map(function(a){return '⚠️ '+a;}).join('<br>')+'</div>';
   }
-  h+='<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Confira os slides abaixo. Quando estiver certo, clique em <b>📊 Gerar PowerPoint</b> — o arquivo sai exatamente com este conteúdo.</div>';
+  var ofic=(d.mesesOficiais||[]).map(function(i){return APRES_MESES[i];});
+  h+='<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.7">Confira os slides abaixo. Quando estiver certo, clique em <b>📊 Gerar PowerPoint</b> — o arquivo sai exatamente com este conteúdo.<br>'
+    +'Faturamento de '+d.ano+': '
+    +(ofic.length?('<b>'+ofic.join(', ')+'</b> com o valor oficial lançado na Base Histórica'):'nenhum mês com valor oficial lançado')
+    +' · demais meses calculados pelas vendas ganhas do sistema.</div>';
   h+='<div id="apres-lista">'+slides.map(function(s){
     return '<div class="apres-slide-wrap">'
       +'<div class="apres-slide-cab"><span>Slide '+s.n+' · '+eh(s.capa?'Capa':(s.titulo||''))+'</span></div>'
@@ -15418,12 +15439,14 @@ window.addEventListener('resize',function(){
 
 // ── Aba Base Histórica ───────────────────────────────────────────────────
 function _apresHistHTML(){
+  var anoSel=parseInt((document.getElementById('apres-ano')||{}).value,10)||new Date().getFullYear();
+  _apresHistAno(anoSel);                       // garante a linha do ano corrente
   var anos=Object.keys(_apresHist).sort();
-  var hoje=new Date().getFullYear();
+  var hoje=anoSel;
   var h='<div style="font-size:11px;color:var(--text-muted);line-height:1.7;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:12px">'
     +'Os anos já fechados não estão no sistema de orçamentos — ficam guardados aqui e alimentam os slides de evolução anual, comparativo mensal, volume e ticket médio.<br>'
     +'Preencha o <b>faturamento mês a mês</b> de cada ano (é o que o comparativo com o ano anterior usa). Se você só tiver o total do ano, deixe os meses em branco e preencha a coluna <b>Total</b>.<br>'
-    +'<span style="color:var(--text-dim)">O ano corrente ('+hoje+') NÃO entra aqui — ele é calculado automaticamente pelas vendas ganhas do sistema, pela data do evento.</span></div>';
+    +'<b style="color:var(--text)">Ano corrente ('+hoje+'):</b> o mês <b>em branco</b> é calculado automaticamente pelas vendas ganhas do sistema (pela data do evento); o mês <b>preenchido</b> passa a valer o número oficial que você lançar — é assim que o deck bate com a contabilidade nos meses já fechados.</div>';
 
   ['fat','ev'].forEach(function(tipo){
     var rot=tipo==='fat'?'💰 Faturamento por mês (R$)':'🎪 Nº de eventos por mês';
