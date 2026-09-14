@@ -2325,6 +2325,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div style="display:flex;gap:7px;align-items:center">
         <button class="btn btn-r btn-sm" onclick="dashAtualizar(true)">🔄 Atualizar</button>
         <button class="btn btn-o btn-sm" onclick="dashExportarExcel()" title="Exportar os dados filtrados (Resultados por Etapa + Taxa de Conversão por Consultor) em Excel">📊 Exportar Excel</button>
+        <button class="btn btn-o btn-sm" onclick="dashExportarPDF()" title="Gera um PDF com a mesma aparência desta tela (KPIs, tabelas e gráficos), pronto pra apresentação mensal">📄 Exportar PDF</button>
         <button class="btn btn-o btn-sm" onclick="document.getElementById('dash-ov').classList.remove('open');abrirHome()">✕</button>
       </div>
     </div>
@@ -14425,6 +14426,122 @@ function dashExportarExcel(){
   a.download = 'CrazySom_DashboardComercial_'+new Date().toISOString().split('T')[0]+'.csv';
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+// ── Exportar PDF — Dashboard Comercial ────────────────────────────────────────
+// Pedido do usuario: um PDF "igual a tela" (KPIs, tabelas e graficos), nao a
+// planilha, pra colar na apresentacao mensal de resultados. Em vez de remontar
+// o layout do zero (como faz resultadosExportarPDF com _resultadosMontarHTML),
+// aqui CLONAMOS o proprio #dash-corpo ja renderizado e levamos junto o <style>
+// do app — assim o PDF acompanha automaticamente qualquer mudanca futura no
+// dashboard, sem duas versoes de layout pra manter em sincronia.
+// Ajustes feitos no clone: tira o painel de drill-down, remove os handlers de
+// clique/hover, solta as areas com rolagem (senao o html2canvas corta o que
+// esta fora da janela visivel) e escurece os textos que so existiam pra fundo
+// escuro (centro do donut).
+function _dashCssDoApp(){
+  var css='';
+  var tags=document.querySelectorAll('style');
+  for(var i=0;i<tags.length;i++) css += tags[i].textContent + '\n';
+  return css;
+}
+
+function _dashPeriodoLabel(){
+  var de=document.getElementById('dash-de').value||'';
+  var ate=document.getElementById('dash-ate').value||'';
+  var tipoSel=document.getElementById('dash-tipo-data');
+  var tipo=tipoSel?tipoSel.options[tipoSel.selectedIndex].text:'';
+  var cons=document.getElementById('dash-cons').value||'Todos os consultores';
+  var per = (de||ate) ? ((de?fD(de):'início')+' a '+(ate?fD(ate):'hoje')) : 'Todo o período';
+  return per+' · '+tipo+' · '+cons;
+}
+
+function dashExportarPDF(){
+  var corpo=document.getElementById('dash-corpo');
+  if(!corpo || !window._dashExport){ alert('Aguarde o dashboard carregar antes de exportar.'); return; }
+  if(corpo.querySelector('.dash-loading')){ alert('O dashboard ainda está carregando. Tente de novo em instantes.'); return; }
+
+  var clone=corpo.cloneNode(true);
+  var drill=clone.querySelector('#dash-drill'); if(drill) drill.remove();
+  clone.querySelectorAll('[onclick],[onmouseover],[onmouseout]').forEach(function(el){
+    el.removeAttribute('onclick'); el.removeAttribute('onmouseover'); el.removeAttribute('onmouseout');
+    el.style.cursor='default';
+  });
+  // Solta rolagens internas: no papel tudo precisa aparecer inteiro.
+  clone.querySelectorAll('*').forEach(function(el){
+    if(!el.style) return;
+    if(el.style.maxHeight){ el.style.maxHeight='none'; }
+    if(el.style.overflowY||el.style.overflowX||el.style.overflow){ el.style.overflow='visible'; el.style.overflowY='visible'; el.style.overflowX='visible'; }
+  });
+  // Centro do donut: os textos foram feitos pra fundo escuro.
+  clone.querySelectorAll('svg text').forEach(function(t){
+    var f=(t.getAttribute('fill')||'').toLowerCase();
+    if(f==='#fff'||f==='#ffffff'||f==='white') t.setAttribute('fill','#111');
+    if(f==='#aaa'||f==='#aaaaaa') t.setAttribute('fill','#555');
+  });
+  // O html2canvas nao desenha SVG inline de forma confiavel (o donut saia em
+  // branco no PDF). Convertemos cada SVG numa imagem embutida (data URI), que
+  // ele rasteriza sem problema. As medidas vem do SVG ORIGINAL da tela — o
+  // clone esta fora do documento e mediria zero.
+  var svgsOrig = corpo.querySelectorAll('svg');
+  var svgsClone = clone.querySelectorAll('svg');
+  for(var si=0; si<svgsClone.length; si++){
+    try{
+      var r0 = svgsOrig[si] ? svgsOrig[si].getBoundingClientRect() : null;
+      var lw = Math.round((r0&&r0.width)||140), lh = Math.round((r0&&r0.height)||140);
+      var sv = svgsClone[si];
+      sv.setAttribute('xmlns','http://www.w3.org/2000/svg');
+      sv.setAttribute('width', lw); sv.setAttribute('height', lh);
+      var txt = new XMLSerializer().serializeToString(sv);
+      var img = document.createElement('img');
+      img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(txt)));
+      img.style.width = lw+'px'; img.style.height = lh+'px'; img.style.flexShrink = '0';
+      sv.parentNode.replaceChild(img, sv);
+    }catch(e){ console.warn('[PDF dashboard] SVG nao convertido:', e); }
+  }
+
+  var hoje=new Date().toLocaleString('pt-BR');
+  var nomeArq='CrazySom_DashboardComercial_'+new Date().toISOString().split('T')[0];
+  var w=window.open('','_blank','width=1200,height=850');
+  if(!w){ alert('Pop-up bloqueado! Libere pop-ups pra este site e tente de novo.'); return; }
+
+  w.document.open();
+  w.document.write('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>'+nomeArq+'</title>'
+    +'<style>'+_dashCssDoApp()+'</style>'
+    +'<style>'
+    +'@page{size:A4 landscape;margin:8mm}'
+    +'html,body{background:#fff!important;padding:0!important;margin:0!important;overflow:visible!important;position:static!important}'
+    +'*{-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'body{width:1120px}'
+    +'#pw{width:1080px;margin:0;padding:8px 14px 16px;background:#fff}'
+    +'.hdr{background:#d63447;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-radius:6px}'
+    +'.hdr h1{font-size:15px;font-weight:900;margin:0}'
+    +'.hdr div.meta{text-align:right;font-size:10px;opacity:.9;line-height:1.5}'
+    +'.dash-box,.dash-kpi,.dash-card,.dash-row{page-break-inside:avoid;break-inside:avoid}'
+    +'table tr{page-break-inside:avoid}'
+    +'#st{position:fixed;top:0;left:0;right:0;background:#d63447;color:#fff;text-align:center;padding:10px;font-size:13px;font-weight:bold;z-index:99999}'
+    +'@media print{#st{display:none}}'
+    +'</style>'
+    +'<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>'
+    +'</head><body>'
+    +'<div id="st">Gerando PDF...</div>'
+    +'<div id="pw">'
+    +'<div class="hdr"><h1>📈 CRAZY SOM — DASHBOARD COMERCIAL</h1>'
+    +'<div class="meta">'+eh(_dashPeriodoLabel())+'<br>Gerado em: '+hoje+'</div></div>'
+    +clone.innerHTML
+    +'<div style="margin-top:14px;font-size:9px;color:#aaa;text-align:center;border-top:1px solid #ddd;padding-top:6px">Crazy Som Audiovisuais – Sistema de Orçamentos – CNPJ: 10.909.827/0001-76</div>'
+    +'</div>'
+    +'<script>'
+    +'window.onload=function(){setTimeout(function(){'
+    +'var opt={margin:5,filename:"'+nomeArq+'.pdf",image:{type:"jpeg",quality:1},'
+    +'html2canvas:{scale:2,useCORS:true,logging:false,backgroundColor:"#ffffff",scrollX:0,scrollY:0},'
+    +'jsPDF:{unit:"mm",format:"a4",orientation:"landscape"},pagebreak:{mode:["css","legacy"],avoid:[".dash-row",".dash-box","tr"]}};'
+    +'html2pdf().set(opt).from(document.getElementById("pw")).save().then(function(){'
+    +'document.getElementById("st").style.background="#2e7d32";'
+    +'document.getElementById("st").textContent="PDF salvo! Pode fechar esta janela.";'
+    +'});},1000);};'
+    +'<\/script></body></html>');
+  w.document.close();
 }
 
 

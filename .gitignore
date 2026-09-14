@@ -1,0 +1,7 @@
+# Pasta onde o app do Claude grava os arquivos entregues no chat
+Claude outputs/
+
+# Arquivos temporarios do Windows/editor
+Thumbs.db
+desktop.ini
+*.tmp
