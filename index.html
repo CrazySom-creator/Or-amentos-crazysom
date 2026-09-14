@@ -118,6 +118,11 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .fk-drawer-foot{padding-bottom:20px;}
 body{padding-bottom:84px;}
 .rodape-acoes{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap;}
+/* ── Apresentacao Gerencial: conferencia dos slides na tela ── */
+.apres-slide-wrap{margin-bottom:18px;}
+.apres-slide-cab{font-size:10px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;}
+.apres-slide-palco{width:100%;overflow:hidden;background:#fff;border:1px solid var(--border-strong);border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,.18);}
+.apres-slide-escala{width:1280px;height:720px;}
 /* Enquanto um popup/tela sobreposta esta aberto, a pagina de tras fica travada:
    assim a barra de rolagem da direita passa a ser a da tela em uso. */
 body.fundo-travado{position:fixed!important;left:0;right:0;width:100%;overflow:hidden!important;}
@@ -879,6 +884,12 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <div class="home-card-ico">🏆</div>
         <div class="home-card-title">Resultados Mensais</div>
         <div class="home-card-desc">Visão executiva de metas e atingimento — pronta pra reunião com a diretoria</div>
+      </div>
+
+      <div class="home-card red" id="home-btn-apres" onclick="abrirApresentacao();fecharHome()">
+        <div class="home-card-ico">🎤</div>
+        <div class="home-card-title">Apresentação Gerencial</div>
+        <div class="home-card-desc">Monta a apresentação mensal de resultados e gera o PowerPoint pronto para a diretoria</div>
       </div>
 
       <div class="home-card blue" id="home-btn-conc" onclick="abrirConciliacao();fecharHome()">
@@ -2353,6 +2364,38 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     </div>
 
     <div id="dash-corpo"><div class="dash-loading">⏳ Carregando orçamentos do Drive...</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  MÓDULO APRESENTAÇÃO GERENCIAL                        -->
+<!--  Monta os slides na tela pra conferência e gera o .pptx -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="apres-ov">
+  <div class="modal-box dash-modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap">
+      <div>
+        <h2 style="margin-bottom:2px">🎤 Apresentação Gerencial</h2>
+        <p class="sub" id="apres-sub" style="margin:0">Carregando dados...</p>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+        <span id="apres-status" style="font-size:10px;font-weight:700"></span>
+        <button class="btn btn-r btn-sm" onclick="apresAtualizar(true)" title="Rebusca os orçamentos e as metas antes de remontar os slides">🔄 Atualizar</button>
+        <button class="btn btn-g btn-sm" id="apres-btn-ppt" onclick="apresGerarPPTX()" title="Gera o arquivo .pptx com exatamente estes slides">📊 Gerar PowerPoint</button>
+        <button class="btn btn-o btn-sm" onclick="fecharApresentacao()">✕</button>
+      </div>
+    </div>
+
+    <div class="dash-filtros">
+      <div><label>Ano</label><select id="apres-ano" onchange="apresRenderizar()"></select></div>
+      <div><label>Mês de fechamento</label><select id="apres-mes" onchange="apresRenderizar()"></select></div>
+      <div style="display:flex;align-items:flex-end;gap:6px">
+        <button class="btn btn-sm" id="apres-aba-slides" onclick="apresAba('slides')" style="background:var(--R);color:#fff">🖥️ Slides</button>
+        <button class="btn btn-sm" id="apres-aba-hist" onclick="apresAba('hist')" style="background:var(--surface-2);color:var(--text-muted)">🗄️ Base Histórica</button>
+      </div>
+    </div>
+
+    <div id="apres-corpo"><div class="dash-loading">⏳ Carregando...</div></div>
   </div>
 </div>
 
@@ -14545,6 +14588,1062 @@ function dashExportarPDF(){
 }
 
 
+
+// ════════════════════════════════════════════════════════════════════════
+//  MÓDULO APRESENTAÇÃO GERENCIAL
+//  Pedido do usuário (set/2026): "um módulo que gere uma apresentação de
+//  resultados idêntica ao PPT, que atualize automático, e que monte os
+//  slides em telas pra eu conferir antes de gerar o arquivo".
+//
+//  Arquitetura em 3 camadas, deliberadamente separadas:
+//    1) _apresDados(ano,mes)  → calcula TODOS os números (uma vez).
+//    2) _apresModelo(d)       → transforma os números num MODELO de slides
+//                               (posições em polegadas, igual ao PPT).
+//    3) dois renderizadores a partir do MESMO modelo:
+//         _apresSlideHTML()   → a conferência na tela (dashboard)
+//         apresGerarPPTX()    → o arquivo .pptx (PptxGenJS)
+//       Assim o que você confere na tela é exatamente o que sai no arquivo;
+//       não existem dois layouts pra manter em sincronia.
+//
+//  Fontes de dados:
+//    • 2026 (ano corrente): vendas ganhas do próprio sistema, agrupadas
+//      pela DATA DO EVENTO (escolha do usuário) — atualiza sozinho.
+//    • 2022–2025: aba "Base Histórica" (config/apresHistorico no Firestore),
+//      já pré-carregada com os números do fechamento de agosto/2026.
+// ════════════════════════════════════════════════════════════════════════
+
+var APRES_COR = {
+  red:'C0392B', texto:'404040', muted:'6E6E6E', claro:'9E9E9E',
+  borda:'E8E8E8', fundo:'F5F5F5', escuro:'404040', branco:'FFFFFF',
+  verde:'27AE60', laranja:'E67E22', cinza:'888888', trilho:'E3E3E3'
+};
+var APRES_MESES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+var APRES_MESES_LONGO = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+var APRES_PPTX_URL = 'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
+
+// Base histórica padrão — números do fechamento de Ago/2026 conferidos com o
+// PPT de referência. Faturamento mensal completo só de 2025 (é o ano que o
+// comparativo mês a mês usa); dos demais guardamos o total do ano. Eventos:
+// total por ano. Tudo editável na aba "Base Histórica".
+var APRES_HIST_PADRAO = {
+  '2022': {fat:[0,0,0,0,0,0,0,0,0,0,0,0], fatTotal:912701,    ev:[0,0,0,0,0,0,0,0,0,0,0,0], evTotal:551},
+  '2023': {fat:[0,0,0,0,0,0,0,0,0,0,0,0], fatTotal:1433540,   ev:[0,0,0,0,0,0,0,0,0,0,0,0], evTotal:513},
+  '2024': {fat:[0,0,0,0,0,0,0,0,0,0,0,0], fatTotal:1768179,   ev:[0,0,0,0,0,0,0,0,0,0,0,0], evTotal:492},
+  '2025': {fat:[33705,96978,299892.2,174679.5,161449.8,108890,128931.8,316142,0,0,0,0], fatTotal:2495149.2, ev:[0,0,0,0,0,0,0,0,0,0,0,0], evTotal:479}
+};
+var _apresHist = null;
+var _apresDadosCache = null;
+var _apresAbaAtual = 'slides';
+var _apresCarregando = false;
+
+async function apresHistCarregar(){
+  try{
+    var snap = await fbDb.collection('config').doc('apresHistorico').get();
+    var d = (snap.exists && snap.data() && snap.data().anos) || null;
+    _apresHist = d || JSON.parse(JSON.stringify(APRES_HIST_PADRAO));
+  }catch(e){
+    console.warn('apresHistCarregar:', e);
+    _apresHist = _apresHist || JSON.parse(JSON.stringify(APRES_HIST_PADRAO));
+  }
+  // Garante os 12 slots em todo ano gravado (proteção contra dado antigo)
+  Object.keys(_apresHist).forEach(function(a){
+    var h=_apresHist[a];
+    h.fat=(h.fat||[]).concat([0,0,0,0,0,0,0,0,0,0,0,0]).slice(0,12).map(function(v){return parseFloat(v)||0;});
+    h.ev =(h.ev ||[]).concat([0,0,0,0,0,0,0,0,0,0,0,0]).slice(0,12).map(function(v){return parseFloat(v)||0;});
+    h.fatTotal=parseFloat(h.fatTotal)||0; h.evTotal=parseFloat(h.evTotal)||0;
+  });
+}
+
+async function apresHistSalvar(){
+  var st=document.getElementById('apres-hist-status');
+  try{
+    await fbDb.collection('config').doc('apresHistorico').set({anos:_apresHist, atualizadoEm:new Date().toISOString(), atualizadoPor:(usuarioAtual&&usuarioAtual.nome)||''});
+    if(st){ st.textContent='✅ Base histórica salva'; st.style.color='#66bb6a'; }
+    _apresDadosCache=null;
+    apresRenderizar();
+  }catch(e){
+    console.warn('apresHistSalvar:',e);
+    if(st){ st.textContent='❌ Erro ao salvar: '+e.message; st.style.color='#ef5350'; }
+  }
+  if(st) setTimeout(function(){ st.textContent=''; },4000);
+}
+
+function _apresHistAno(ano){
+  var k=String(ano);
+  if(!_apresHist[k]) _apresHist[k]={fat:[0,0,0,0,0,0,0,0,0,0,0,0],fatTotal:0,ev:[0,0,0,0,0,0,0,0,0,0,0,0],evTotal:0};
+  return _apresHist[k];
+}
+// Total do ano: soma dos meses quando houver lançamento mensal; senão o total digitado.
+function _apresTotFat(ano){ var h=_apresHistAno(ano); return h.fatTotal>0?h.fatTotal:h.fat.reduce(function(t,v){return t+v;},0); }
+function _apresTotEv(ano){ var h=_apresHistAno(ano); return h.evTotal>0?h.evTotal:h.ev.reduce(function(t,v){return t+v;},0); }
+function _apresTemMensalFat(ano){ return _apresHistAno(ano).fat.reduce(function(t,v){return t+v;},0)>0; }
+function _apresTemMensalEv(ano){ return _apresHistAno(ano).ev.reduce(function(t,v){return t+v;},0)>0; }
+// Ano COMPLETO = 12 meses lançados. Só esses servem de base pra sazonalidade
+// da projeção — um ano pela metade distorceria a curva (o acumulado até o mês
+// atual pareceria 100% do ano).
+function _apresAnoCompleto(ano){ return _apresHistAno(ano).fat.filter(function(v){return v>0;}).length===12; }
+
+// ── Formatações curtas usadas nos slides ──────────────────────────────────
+function _apMi(v){
+  v=parseFloat(v)||0;
+  if(Math.abs(v)>=1000000) return 'R$ '+(v/1000000).toFixed(2).replace('.',',')+' mi';
+  if(Math.abs(v)>=1000)    return 'R$ '+Math.round(v/1000)+' mil';
+  return fmt(v);
+}
+function _apK(v){ v=parseFloat(v)||0; return 'R$'+Math.round(v/1000)+'k'; }
+function _apPct(v,casas){ if(casas===undefined) casas=1; return (parseFloat(v)||0).toFixed(casas).replace('.',',')+'%'; }
+function _apSin(v,casas){ var n=parseFloat(v)||0; return (n>=0?'+':'')+_apPct(n,casas); }
+function _apNum(v){ return (parseFloat(v)||0).toLocaleString('pt-BR'); }
+// R$ cheio, sem centavos — é como o deck de referência mostra os valores.
+function _apR(v){ return 'R$ '+Math.round(parseFloat(v)||0).toLocaleString('pt-BR'); }
+
+// ════════════════════════════════════════════════════════
+//  1) CÁLCULO — todos os números da apresentação
+// ════════════════════════════════════════════════════════
+function _apresDados(ano, mes){
+  ano=parseInt(ano,10); mes=parseInt(mes,10);           // mes = 1..12 (mês de fechamento)
+  var anoAnt=ano-1;
+  var hoje=new Date(); var hojeISO=hoje.toISOString().split('T')[0];
+
+  // ── Vendas ganhas do sistema ───────────────────────────────────────────
+  var ganhas=(_dashDados||[]).filter(function(o){ return (o.dados&&o.dados.comercialStatus)==='ganha'; });
+  var fatMes=[0,0,0,0,0,0,0,0,0,0,0,0], evMes=[0,0,0,0,0,0,0,0,0,0,0,0];
+  var ganhasAno=[], ticketTodas=[];
+  ganhas.forEach(function(o){
+    var dt=(o.form&&o.form['f-dia'])||''; if(!dt) return;
+    var v=dashValOrc(o);
+    ticketTodas.push({v:v, cons:(o.form&&o.form['f-cons'])||'—', dt:dt});
+    if(dt.substring(0,4)!==String(ano)) return;
+    var m=parseInt(dt.substring(5,7),10)-1;
+    if(m<0||m>11) return;
+    fatMes[m]+=v; evMes[m]+=1;
+    ganhasAno.push({o:o, v:v, dt:dt, m:m, cons:(o.form&&o.form['f-cons'])||'—'});
+  });
+
+  var histAnt=_apresHistAno(anoAnt);
+  var fatMesAnt=histAnt.fat.slice();
+
+  var acum=0, acumSerie=[];
+  for(var i=0;i<12;i++){ acum+=fatMes[i]; acumSerie.push(i<mes?acum:null); }
+  var ytd=fatMes.slice(0,mes).reduce(function(t,v){return t+v;},0);
+  var ytdAnt=fatMesAnt.slice(0,mes).reduce(function(t,v){return t+v;},0);
+  var crescYtd = ytdAnt>0 ? (ytd/ytdAnt-1)*100 : 0;
+
+  var mesValor=fatMes[mes-1], mesValorAnt=fatMesAnt[mes-1];
+  var crescMes = mesValorAnt>0 ? (mesValor/mesValorAnt-1)*100 : 0;
+  var melhorIdx=0; for(var j=0;j<mes;j++){ if(fatMes[j]>fatMes[melhorIdx]) melhorIdx=j; }
+
+  // ── Metas ──────────────────────────────────────────────────────────────
+  var md=(_metasDados&&_metasDados[ano])||null;
+  var cfgMeta=md?(md.eventos&&md.eventos.total?md.eventos:md.geral):null;
+  var metaAnual=cfgMeta?(parseFloat(cfgMeta.total)||0):0;
+  var pctMes=[]; var somaPct=0;
+  for(var k=1;k<=12;k++){
+    var mm=(k<10?'0':'')+k;
+    var p=cfgMeta&&cfgMeta.pctMes?(parseFloat(cfgMeta.pctMes[mm])||0):0;
+    pctMes.push(p); somaPct+=p;
+  }
+  if(somaPct<=0){ pctMes=pctMes.map(function(){return 100/12;}); somaPct=100; }
+  var metaAcum=[], ac=0;
+  pctMes.forEach(function(p){ ac+=metaAnual*(p/somaPct); metaAcum.push(ac); });
+  var metaMes=metaAnual*(pctMes[mes-1]/somaPct);
+  var pctMetaAnual = metaAnual>0 ? ytd/metaAnual*100 : 0;
+  var pctMetaAcum  = metaAcum[mes-1]>0 ? ytd/metaAcum[mes-1]*100 : 0;
+  var gapMeta = ytd-metaAcum[mes-1];
+  var pctMetaMes = metaMes>0 ? mesValor/metaMes*100 : 0;
+  var falta = Math.max(0, metaAnual-ytd);
+  var mesesRest = 12-mes;
+  var faltaPorMes = mesesRest>0 ? falta/mesesRest : 0;
+  var ritmoMedio = mes>0 ? ytd/mes : 0;
+
+  // ── Projeção: sazonalidade histórica (média dos anos com mensal) ───────
+  var pesos=[], anosComMensal=[], projBase='histórica';
+  [anoAnt-3,anoAnt-2,anoAnt-1,anoAnt].forEach(function(a){ if(_apresAnoCompleto(a)) anosComMensal.push(a); });
+  if(anosComMensal.length){
+    for(var mIdx=0;mIdx<12;mIdx++){
+      var acPeso=0;
+      anosComMensal.forEach(function(a){
+        var h=_apresHistAno(a), tot=h.fat.reduce(function(t,v){return t+v;},0);
+        if(tot>0) acPeso+=h.fat[mIdx]/tot;
+      });
+      pesos.push(acPeso/anosComMensal.length);
+    }
+  } else { pesos=pctMes.map(function(p){return p/somaPct;}); projBase='da curva da meta'; }
+  var pesoAte=pesos.slice(0,mes).reduce(function(t,v){return t+v;},0);
+  var projAnual = pesoAte>0 ? ytd/pesoAte : ytd;
+  var pesoResto=pesos.slice(mes).reduce(function(t,v){return t+v;},0);
+  var projMeses=[];
+  for(var pm=0;pm<12;pm++){
+    projMeses.push(pm<mes ? 0 : (pesoResto>0 ? (projAnual-ytd)*(pesos[pm]/pesoResto) : 0));
+  }
+  var projVsMeta = metaAnual>0 ? (projAnual/metaAnual-1)*100 : 0;
+  var projVsAnt  = _apresTotFat(anoAnt)>0 ? (projAnual/_apresTotFat(anoAnt)-1)*100 : 0;
+
+  // ── Trimestres / semestre ──────────────────────────────────────────────
+  function soma(arr,de,ate){ var s=0; for(var i=de;i<ate;i++) s+=arr[i]||0; return s; }
+  var periodos=[
+    {rot:'T1 (Jan–Mar)', de:0, ate:3},
+    {rot:'T2 (Abr–Jun)', de:3, ate:6},
+    {rot:'1º Semestre',  de:0, ate:6},
+    {rot:'T3 parcial\n(Jul+Ago)', de:6, ate:Math.max(7,Math.min(9,mes))}
+  ];
+  periodos[3].rot = mes>=9 ? 'T3 (Jul–Set)' : ('T3 parcial\n(Jul'+(mes>=8?'+Ago':'')+')');
+  var perAtual=periodos.map(function(p){return soma(fatMes,p.de,Math.min(p.ate,mes));});
+  var perAnt  =periodos.map(function(p){return soma(fatMesAnt,p.de,Math.min(p.ate,mes));});
+  var crescT3  = perAnt[3]>0 ? (perAtual[3]/perAnt[3]-1)*100 : 0;
+  var crescSem = perAnt[2]>0 ? (perAtual[2]/perAnt[2]-1)*100 : 0;
+
+  // ── Volume e ticket médio ──────────────────────────────────────────────
+  var anosSerie=[anoAnt-3,anoAnt-2,anoAnt-1,anoAnt];
+  var evAnos=anosSerie.map(function(a){return _apresTotEv(a);});
+  var fatAnos=anosSerie.map(function(a){return _apresTotFat(a);});
+  var evYTD=evMes.slice(0,mes).reduce(function(t,v){return t+v;},0);
+  var evAntYTD=_apresTemMensalEv(anoAnt)?histAnt.ev.slice(0,mes).reduce(function(t,v){return t+v;},0):0;
+  var varVolAnual = evAnos[0]>0 ? (evAnos[3]/evAnos[0]-1)*100 : 0;
+  var varVolYTD   = evAntYTD>0 ? (evYTD/evAntYTD-1)*100 : 0;
+  var tickets=anosSerie.map(function(a){
+    var mensalFat=_apresTemMensalFat(a), mensalEv=_apresTemMensalEv(a);
+    var h=_apresHistAno(a);
+    if(mensalFat&&mensalEv){
+      var f=soma(h.fat,0,mes), e=soma(h.ev,0,mes);
+      return {ano:a, val:e>0?f/e:0, base:'Jan–'+APRES_MESES[mes-1].charAt(0)+APRES_MESES[mes-1].slice(1).toLowerCase()};
+    }
+    var tf=_apresTotFat(a), te=_apresTotEv(a);
+    return {ano:a, val:te>0?tf/te:0, base:'ano'};
+  });
+  var ticketAtual = evYTD>0 ? ytd/evYTD : 0;
+  tickets.push({ano:ano, val:ticketAtual, base:'Jan–'+APRES_MESES[mes-1].charAt(0)+APRES_MESES[mes-1].slice(1).toLowerCase()});
+  var ticketVar = tickets[0].val>0 ? (ticketAtual/tickets[0].val-1)*100 : 0;
+
+  // ── Funil comercial (orçamentos validados criados do mês de fechamento até hoje) ──
+  var iniFunil=String(ano)+'-'+((mes<10?'0':'')+mes)+'-01';
+  var validados=(_dashDados||[]).filter(function(o){
+    if(o.st!=='aprovado' && ((o.dados&&o.dados.aprovStatus)||'')!=='aprovado') return false;
+    var dc=(o.form&&o.form['f-data'])||'';
+    return dc>=iniFunil;
+  });
+  function etapaDe(o){ return (o.dados&&o.dados.comercialStatus)||''; }
+  var funilVal=validados.reduce(function(t,o){return t+dashValOrc(o);},0);
+  var fEnv=validados.filter(function(o){return etapaDe(o)==='enviada';});
+  var fGanha=validados.filter(function(o){return etapaDe(o)==='ganha';});
+  var funilEnvV=fEnv.reduce(function(t,o){return t+dashValOrc(o);},0);
+  var funilGanhoV=fGanha.reduce(function(t,o){return t+dashValOrc(o);},0);
+  var convQtd = validados.length>0 ? fGanha.length/validados.length*100 : 0;
+  var convVal = funilVal>0 ? funilGanhoV/funilVal*100 : 0;
+
+  var porCons={};
+  validados.forEach(function(o){
+    var c=(o.form&&o.form['f-cons'])||'—';
+    porCons[c]=porCons[c]||{nome:c,qtd:0,val:0,ganhos:0,ganhoVal:0};
+    porCons[c].qtd++; porCons[c].val+=dashValOrc(o);
+    if(etapaDe(o)==='ganha'){ porCons[c].ganhos++; porCons[c].ganhoVal+=dashValOrc(o); }
+  });
+  var consFunil=Object.keys(porCons).map(function(c){
+    var p=porCons[c]; p.conv = p.val>0 ? p.ganhoVal/p.val*100 : 0; return p;
+  }).sort(function(a,b){return b.conv-a.conv;}).slice(0,6);
+  var maiorPipe=Object.keys(porCons).map(function(c){return porCons[c];})
+    .sort(function(a,b){return (b.val-b.ganhoVal)-(a.val-a.ganhoVal);})[0]||null;
+
+  // ── Pipeline / backlog vendido (vendas ganhas com evento a partir de hoje) ──
+  var backlog=ganhasAno.filter(function(g){return g.dt>=hojeISO;});
+  var backlogV=backlog.reduce(function(t,g){return t+g.v;},0);
+  var porMesEv={};
+  backlog.forEach(function(g){ var k=g.m; porMesEv[k]=porMesEv[k]||{m:k,qtd:0,val:0}; porMesEv[k].qtd++; porMesEv[k].val+=g.v; });
+  var backlogMeses=Object.keys(porMesEv).map(function(k){return porMesEv[k];})
+    .sort(function(a,b){return b.val-a.val;}).slice(0,5);
+  var ticketCons={};
+  ganhasAno.forEach(function(g){
+    ticketCons[g.cons]=ticketCons[g.cons]||{nome:g.cons,qtd:0,val:0};
+    ticketCons[g.cons].qtd++; ticketCons[g.cons].val+=g.v;
+  });
+  var ticketConsLista=Object.keys(ticketCons).map(function(c){
+    var t=ticketCons[c]; t.ticket=t.qtd>0?t.val/t.qtd:0; return t;
+  }).sort(function(a,b){return b.ticket-a.ticket;}).slice(0,5);
+  var ticketVendaAno = ganhasAno.length>0 ? ganhasAno.reduce(function(t,g){return t+g.v;},0)/ganhasAno.length : 0;
+
+  // ── Meta por consultor (Set–Dez) ───────────────────────────────────────
+  var consMetas=[];
+  if(md&&md.consultores&&md.consultores.metaAnual){
+    var sel=(md.consultores.selecionados&&md.consultores.selecionados.length)?md.consultores.selecionados:Object.keys(md.consultores.metaAnual);
+    sel.forEach(function(nome){
+      var anualC=parseFloat(md.consultores.metaAnual[nome])||0;
+      if(anualC<=0) return;
+      var ativos=(md.consultores.mesesAtivos&&md.consultores.mesesAtivos[nome])||{};
+      var vals=[];
+      for(var mi=0;mi<12;mi++){
+        var mmk=((mi+1)<10?'0':'')+(mi+1);
+        var ativo = ativos[mmk]===false ? false : true;
+        vals.push(ativo ? anualC*(pctMes[mi]/somaPct) : 0);
+      }
+      consMetas.push({nome:nome, anual:anualC, meses:vals,
+        restante:vals.slice(mes).reduce(function(t,v){return t+v;},0),
+        pctDaMeta: metaAnual>0 ? anualC/metaAnual*100 : 0});
+    });
+    consMetas.sort(function(a,b){return b.anual-a.anual;});
+  }
+
+  return {
+    ano:ano, mes:mes, anoAnt:anoAnt, mesNome:APRES_MESES_LONGO[mes-1], mesCurto:APRES_MESES[mes-1],
+    fatMes:fatMes, fatMesAnt:fatMesAnt, evMes:evMes, acumSerie:acumSerie,
+    ytd:ytd, ytdAnt:ytdAnt, crescYtd:crescYtd, mesValor:mesValor, crescMes:crescMes,
+    melhorIdx:melhorIdx, melhorValor:fatMes[melhorIdx],
+    metaAnual:metaAnual, metaAcum:metaAcum, metaMes:metaMes, pctMetaAnual:pctMetaAnual,
+    pctMetaAcum:pctMetaAcum, pctMetaMes:pctMetaMes, gapMeta:gapMeta, falta:falta,
+    faltaPorMes:faltaPorMes, mesesRest:mesesRest, ritmoMedio:ritmoMedio,
+    projAnual:projAnual, projMeses:projMeses, projVsMeta:projVsMeta, projVsAnt:projVsAnt, projBase:projBase,
+    projAnosBase:anosComMensal,
+    periodos:periodos, perAtual:perAtual, perAnt:perAnt, crescT3:crescT3, crescSem:crescSem,
+    anosSerie:anosSerie, evAnos:evAnos, fatAnos:fatAnos, evYTD:evYTD, evAntYTD:evAntYTD,
+    varVolAnual:varVolAnual, varVolYTD:varVolYTD, tickets:tickets, ticketAtual:ticketAtual, ticketVar:ticketVar,
+    funil:{qtd:validados.length, val:funilVal, envQtd:fEnv.length, envVal:funilEnvV,
+           ganhoQtd:fGanha.length, ganhoVal:funilGanhoV, convQtd:convQtd, convVal:convVal,
+           consultores:consFunil, maiorPipe:maiorPipe, desde:iniFunil},
+    backlog:{val:backlogV, qtd:backlog.length, meses:backlogMeses, ticketCons:ticketConsLista,
+             ticketVenda:ticketVendaAno, vendasQtd:ganhasAno.length},
+    consMetas:consMetas,
+    totalAnt:_apresTotFat(anoAnt), totalAnt3:_apresTotFat(anoAnt-3)
+  };
+}
+
+// ════════════════════════════════════════════════════════
+//  2) MODELO DOS SLIDES — posições em polegadas (13,33 x 7,5")
+// ════════════════════════════════════════════════════════
+function _apresModelo(d){
+  var S=[];
+  var mesRot=d.mesCurto+'/'+String(d.ano).slice(2);
+  var mesRotAnt=d.mesCurto+'/'+String(d.anoAnt).slice(2);
+  var faixaYTD='Jan–'+d.mesCurto.charAt(0)+d.mesCurto.slice(1).toLowerCase();
+  var kpiH=1.85, kpiG=[0.55,3.66,6.78,9.89], kpiW=2.89, kpi3=[0.55,4.70,8.85], kpi3W=3.93;
+
+  function kpi(x,y,w,h,label,valor,sub,cor,escuro){
+    return {t:'kpi',x:x,y:y,w:w,h:h,label:label,valor:valor,sub:sub,cor:cor||'texto',escuro:!!escuro};
+  }
+
+  // ── 1 · Capa ───────────────────────────────────────────────────────────
+  S.push({n:1, capa:true, blocos:[
+    {t:'txt',x:0.55,y:2.15,w:9.0,h:0.4,  txt:'CRAZY SOM AUDIOVISUAIS', estilo:'kicker'},
+    {t:'txt',x:0.55,y:2.60,w:10.5,h:1.1, txt:'Resultados '+d.ano, estilo:'capaTitulo'},
+    {t:'txt',x:0.55,y:3.55,w:10.5,h:0.8, txt:'Fechamento de '+d.mesNome, estilo:'capaSub'},
+    {t:'txt',x:0.55,y:4.75,w:9.5,h:0.4,  txt:'Reunião Mensal de Resultados  ·  Diretoria  ·  Crazy Som Audiovisuais', estilo:'capaRodape'},
+    {t:'txt',x:0.55,y:6.75,w:8.0,h:0.35, txt:'Base: faturamento Jan/'+(d.anoAnt-3)+' a '+mesRot+'  ·  gerado pelo sistema em '+new Date().toLocaleDateString('pt-BR'), estilo:'capaNota'}
+  ]});
+
+  // ── 2 · O ano em números ───────────────────────────────────────────────
+  S.push({n:2, kicker:'POSIÇÃO · '+d.mesNome.toUpperCase()+'/'+d.ano, titulo:'O ano em números',
+    blocos:[
+      kpi(kpiG[0],1.75,kpiW,kpiH,'FATURAMENTO ACUM. '+faixaYTD.toUpperCase()+'/'+String(d.ano).slice(2), _apMi(d.ytd), 'vs '+_apMi(d.ytdAnt)+' em '+faixaYTD+'/'+String(d.anoAnt).slice(2)),
+      kpi(kpiG[1],1.75,kpiW,kpiH,'CRESCIMENTO YTD VS '+d.anoAnt, _apSin(d.crescYtd), 'mesmo período do ano anterior', d.crescYtd>=0?'red':'texto'),
+      kpi(kpiG[2],1.75,kpiW,kpiH,'MELHOR MÊS — '+APRES_MESES_LONGO[d.melhorIdx].toUpperCase()+'/'+d.ano, _apMi(d.melhorValor), _apSin(d.crescMes)+' vs '+mesRotAnt),
+      kpi(kpiG[3],1.75,kpiW,kpiH,'META ANUAL '+d.ano, _apMi(d.metaAnual), 'definida para o ano'),
+      kpi(kpi3[0],3.85,kpi3W,kpiH,'% DA META ANUAL ATINGIDA', _apPct(d.pctMetaAnual), 'em '+d.mes+' dos 12 meses'),
+      kpi(kpi3[1],3.85,kpi3W,kpiH,'DESEMPENHO VS META ACUM. ('+d.mesCurto+')', _apPct(d.pctMetaAcum), (d.gapMeta>=0?'gap positivo de ':'gap negativo de ')+_apR(Math.abs(d.gapMeta)), 'branco', true),
+      kpi(kpi3[2],3.85,kpi3W,kpiH,'FALTA PARA A META ANUAL', _apMi(d.falta), _apR(d.faltaPorMes)+'/mês em '+_apresRestoRot(d))
+    ],
+    nota: d.pctMetaAcum>=100
+      ? (d.mesNome+' manteve o acumulado acima da meta ('+_apPct(d.pctMetaAcum)+') e '+_apPct(d.pctMetaAnual)+' do ano já conquistado.')
+      : (d.mesNome+' fechou o acumulado em '+_apPct(d.pctMetaAcum)+' da meta — faltam '+_apR(Math.abs(d.gapMeta))+' para recolocar o ano na curva.')
+  });
+
+  // ── 3 · Evolução anual ─────────────────────────────────────────────────
+  var catsAnos=d.anosSerie.map(String).concat([d.ano+'\n(parcial)', d.ano+'\n(projeção)']);
+  var valsAnos=d.fatAnos.concat([d.ytd, d.projAnual]);
+  var coresAnos=[APRES_COR.escuro,APRES_COR.escuro,APRES_COR.escuro,APRES_COR.escuro,'E8E8E8',APRES_COR.red];
+  var crescHist=d.totalAnt3>0?(d.totalAnt/d.totalAnt3-1)*100:0;
+  S.push({n:3, kicker:'TRAJETÓRIA DE LONGO PRAZO', titulo:'Evolução anual do faturamento · '+d.anosSerie[0]+'–'+d.ano,
+    blocos:[{t:'chart',x:0.55,y:1.70,w:12.23,h:3.90,tipo:'col',cats:catsAnos,
+      series:[{nome:'Faturamento bruto (R$)',vals:valsAnos,cores:coresAnos}],rotulo:'k'}],
+    nota:'Faturamento anual cresceu '+_apPct(crescHist,0)+' de '+d.anosSerie[0]+' a '+d.anoAnt+'; em '+d.mes+' meses '+d.ano+' já soma '+_apMi(d.ytd)+' e projeta '+_apMi(d.projAnual)+' no fechamento.'
+  });
+
+  // ── 4 · Comparativo mensal ─────────────────────────────────────────────
+  var catsM=APRES_MESES.slice(0,d.mes);
+  var acima=0; for(var i=0;i<d.mes;i++){ if(d.fatMes[i]>d.fatMesAnt[i]) acima++; }
+  var abaixo=[]; for(var i2=0;i2<d.mes;i2++){ if(d.fatMes[i2]<=d.fatMesAnt[i2]) abaixo.push(APRES_MESES_LONGO[i2]); }
+  S.push({n:4, kicker:'COMPARATIVO MENSAL', titulo:'Desempenho mês a mês: '+d.ano+' vs '+d.anoAnt,
+    blocos:[{t:'chart',x:0.55,y:1.65,w:12.23,h:3.75,tipo:'col',cats:catsM,
+      series:[{nome:String(d.anoAnt),vals:d.fatMesAnt.slice(0,d.mes),cor:'E8E8E8'},
+              {nome:String(d.ano),vals:d.fatMes.slice(0,d.mes),cor:APRES_COR.escuro}],rotulo:'k'}],
+    nota:acima+' dos '+d.mes+' meses acima de '+d.anoAnt+(abaixo.length?(' — '+abaixo.join(', ')+(abaixo.length===1?' ficou abaixo.':' ficaram abaixo.')):'.')
+      +' '+APRES_MESES_LONGO[d.melhorIdx]+' foi o melhor mês do ano em valor absoluto: '+_apMi(d.melhorValor)+'.'
+  });
+
+  // ── 5 · Trimestres e semestre ──────────────────────────────────────────
+  S.push({n:5, kicker:'CONSOLIDADO POR PERÍODO', titulo:'Leitura trimestral e semestral',
+    blocos:[
+      {t:'chart',x:0.55,y:1.70,w:7.70,h:3.85,tipo:'col',cats:d.periodos.map(function(p){return p.rot;}),
+        series:[{nome:String(d.anoAnt),vals:d.perAnt,cor:'E8E8E8'},{nome:String(d.ano),vals:d.perAtual,cor:APRES_COR.escuro}],rotulo:'k'},
+      kpi(8.55,1.70,4.25,kpiH,'CRESCIMENTO DO T3 (PARCIAL)', _apSin(d.crescT3), 'vs mesmo período de '+d.anoAnt, d.crescT3>=0?'red':'texto'),
+      kpi(8.55,3.72,4.25,kpiH,'CRESCIMENTO DO 1º SEMESTRE', _apSin(d.crescSem), 'vs 1º semestre '+d.anoAnt, d.crescSem>=0?'red':'texto')
+    ],
+    nota:'O T3 já cresce '+_apSin(d.crescT3)+' sobre o mesmo período de '+d.anoAnt+' e o 1º semestre fechou '+_apSin(d.crescSem)+'. Historicamente o 2º semestre responde por cerca de 2/3 do ano — é onde a meta se decide.'
+  });
+
+  // ── 6 · Volume operacional ─────────────────────────────────────────────
+  S.push({n:6, kicker:'VOLUME OPERACIONAL', titulo:'Quantidade de eventos: '+d.anosSerie[0]+'–'+d.ano,
+    blocos:[
+      kpi(kpi3[0],1.60,kpi3W,1.20,'TOTAL DE EVENTOS — '+d.anoAnt, _apNum(d.evAnos[3]), 'ano fechado (12 meses)','texto',false),
+      kpi(kpi3[1],1.60,kpi3W,1.20,'EVENTOS — '+faixaYTD.toUpperCase()+'/'+d.ano, _apNum(d.evYTD), 'ano parcial'),
+      kpi(kpi3[2],1.60,kpi3W,1.20,'VARIAÇÃO DO VOLUME ANUAL', _apSin(d.varVolAnual), _apNum(d.evAnos[0])+' ('+d.anosSerie[0]+') → '+_apNum(d.evAnos[3])+' ('+d.anoAnt+')', d.varVolAnual>=0?'texto':'red'),
+      {t:'chart',x:0.55,y:2.90,w:12.23,h:1.50,tipo:'col',cats:d.anosSerie.map(String).concat([d.ano+'\n(parcial)']),
+        series:[{nome:'Nº de eventos',vals:d.evAnos.concat([d.evYTD]),cor:APRES_COR.cinza}],rotulo:'n'},
+      {t:'chart',x:0.55,y:4.55,w:12.23,h:1.50,tipo:'col',cats:d.anosSerie.map(String).concat([d.ano+'\n(parcial)']),
+        series:[{nome:'Faturamento (R$)',vals:d.fatAnos.concat([d.ytd]),cor:APRES_COR.escuro}],rotulo:'k'}
+    ],
+    nota:'Volume de eventos é estável e até declinante: '+_apNum(d.evAnos[0])+' ('+d.anosSerie[0]+') → '+_apNum(d.evAnos[3])+' ('+d.anoAnt+') — enquanto o faturamento saiu de '+_apMi(d.fatAnos[0])+' para '+_apMi(d.fatAnos[3])+' no mesmo período. O crescimento vem do porte dos contratos, não do volume.'
+  });
+
+  // ── 7 · Ticket médio ───────────────────────────────────────────────────
+  S.push({n:7, kicker:'TICKET MÉDIO POR EVENTO', titulo:'Eventos x faturamento x ticket médio',
+    blocos:[
+      kpi(kpi3[0],1.70,kpi3W,1.50,'EVENTOS '+faixaYTD.toUpperCase()+' ('+String(d.ano).slice(2)+' VS '+String(d.anoAnt).slice(2)+')',
+        d.evAntYTD>0?_apSin(d.varVolYTD):_apNum(d.evYTD),
+        d.evAntYTD>0?(_apNum(d.evAntYTD)+' → '+_apNum(d.evYTD)+' eventos'):'eventos no período (sem base do ano anterior)'),
+      kpi(kpi3[1],1.70,kpi3W,1.50,'FATURAMENTO '+faixaYTD.toUpperCase()+' ('+String(d.ano).slice(2)+' VS '+String(d.anoAnt).slice(2)+')', _apSin(d.crescYtd), _apMi(d.ytdAnt)+' → '+_apMi(d.ytd), d.crescYtd>=0?'red':'texto'),
+      kpi(kpi3[2],1.70,kpi3W,1.50,'TICKET MÉDIO ('+String(d.ano).slice(2)+' VS '+String(d.anosSerie[0]).slice(2)+')', _apSin(d.ticketVar), _apR(d.tickets[0].val)+' → '+_apR(d.ticketAtual), d.ticketVar>=0?'red':'texto'),
+      {t:'chart',x:0.55,y:3.45,w:12.23,h:2.55,tipo:'col',cats:d.tickets.map(function(t){return String(t.ano);}),
+        series:[{nome:'Ticket médio (R$)',vals:d.tickets.map(function(t){return t.val;}),
+          cores:d.tickets.map(function(t){return t.ano===d.ano?APRES_COR.red:APRES_COR.escuro;})}],rotulo:'R$'}
+    ],
+    nota:'Ticket médio saiu de '+_apR(d.tickets[0].val)+' em '+d.anosSerie[0]+' para '+_apR(d.ticketAtual)+' em '+d.ano+' — alta de '+_apPct(d.ticketVar,0)+'. Menos eventos, contratos maiores.'
+  });
+
+  // ── 8 · Acompanhamento de meta ─────────────────────────────────────────
+  S.push({n:8, kicker:'ACOMPANHAMENTO DE META', titulo:'Meta '+d.ano+': acumulado meta vs. realizado',
+    blocos:[
+      {t:'chart',x:0.55,y:1.65,w:8.10,h:4.00,tipo:'line',cats:catsM,
+        series:[{nome:'Meta acumulada',vals:d.metaAcum.slice(0,d.mes),cor:APRES_COR.cinza},
+                {nome:'Realizado acumulado',vals:d.acumSerie.slice(0,d.mes),cor:APRES_COR.red}],rotulo:'k'},
+      kpi(8.85,1.65,3.95,1.90,'META ACUMULADA ATINGIDA ('+d.mesCurto+')', _apPct(d.pctMetaAcum), (d.gapMeta>=0?'gap positivo de ':'gap negativo de ')+_apR(Math.abs(d.gapMeta)), d.pctMetaAcum>=100?'red':'texto'),
+      kpi(8.85,3.75,3.95,1.90,'AINDA FALTA PARA A META ANUAL', _apMi(d.falta), _apR(d.faltaPorMes)+'/mês em '+_apresRestoRot(d),'branco',true)
+    ],
+    nota:d.mesNome+(d.pctMetaAcum>=100?' manteve o acumulado acima da meta: ':' fechou o acumulado em ')+_apPct(d.pctMetaAcum)+'. Faltam '+_apR(d.falta)+' — '+(d.ritmoMedio>0?(d.faltaPorMes/d.ritmoMedio).toFixed(2).replace('.',','):'—')+'x o ritmo médio atual.'
+  });
+
+  // ── 9 · Projeção de fechamento ─────────────────────────────────────────
+  S.push({n:9, kicker:'CENÁRIO DE FECHAMENTO', titulo:'Projeção de fechamento '+d.ano,
+    blocos:[
+      kpi(kpi3[0],1.70,kpi3W,1.50,'PROJEÇÃO DE FECHAMENTO '+d.ano, _apMi(d.projAnual), 'realizado + projetado'),
+      kpi(kpi3[1],1.70,kpi3W,1.50,'VS. META ANUAL ('+_apMi(d.metaAnual)+')', _apSin(d.projVsMeta), d.projVsMeta>=0?'cenário acima da meta':'cenário abaixo da meta', d.projVsMeta>=0?'red':'texto'),
+      kpi(kpi3[2],1.70,kpi3W,1.50,'VS. FATURAMENTO '+d.anoAnt, _apSin(d.projVsAnt), d.projVsAnt>=0?'novo recorde no cenário atual':'abaixo do ano anterior', d.projVsAnt>=0?'red':'texto'),
+      {t:'chart',x:0.55,y:3.45,w:12.23,h:2.55,tipo:'stacked',cats:APRES_MESES,
+        series:[{nome:'Realizado',vals:d.fatMes.map(function(v,i){return i<d.mes?v:0;}),cor:APRES_COR.escuro},
+                {nome:'Projetado',vals:d.projMeses,cor:'E8E8E8'}],rotulo:'k'}
+    ],
+    nota:'Mantida a sazonalidade '+(d.projBase==='histórica'?('histórica ('+d.projAnosBase.join(', ')+')'):d.projBase)+', '+d.ano+' fecha em '+_apR(d.projAnual)+' — '+_apSin(d.projVsMeta)+' vs a meta e '+_apSin(d.projVsAnt)+' vs '+d.anoAnt+'.'
+  });
+
+  // ── 10 · Funil comercial ───────────────────────────────────────────────
+  var f=d.funil;
+  S.push({n:10, kicker:'FUNIL COMERCIAL · ORÇAMENTOS CRIADOS DESDE '+fD(f.desde).toUpperCase(), titulo:'Do orçamento à venda ganha',
+    blocos:[
+      kpi(kpiG[0],1.67,kpiW,1.55,'ORÇAMENTOS VALIDADOS', _apNum(f.qtd), _apR(f.val)+' em pipeline'),
+      kpi(kpiG[1],1.67,kpiW,1.55,'PROPOSTA ENVIADA', _apNum(f.envQtd), _apR(f.envVal)+' · '+(f.val>0?Math.round(f.envVal/f.val*100):0)+'% do valor'),
+      kpi(kpiG[2],1.67,kpiW,1.55,'VENDA GANHA', _apNum(f.ganhoQtd), _apR(f.ganhoVal)+' fechados','verde'),
+      kpi(kpiG[3],1.67,kpiW,1.55,'TAXA DE CONVERSÃO', _apPct(f.convQtd,0), _apPct(f.convVal,0)+' quando medida em R$','verde'),
+      {t:'painel',x:0.55,y:3.43,w:12.23,h:2.40,titulo:'TAXA DE CONVERSÃO EM R$ POR CONSULTOR',
+        cabDir:'CONVERSÃO = R$ GANHO ÷ R$ VALIDADO',
+        itens:f.consultores.map(function(c){
+          return {nome:c.nome, pct:c.conv, dir:_apPct(c.conv,0),
+            nota:c.ganhos+' de '+c.qtd+' orçamentos',
+            cor:c.conv>=50?APRES_COR.verde:(c.conv>=25?APRES_COR.laranja:APRES_COR.red)};
+        })}
+    ],
+    nota:(f.consultores.length?(f.consultores[0].nome+' lidera em eficiência ('+_apPct(f.consultores[0].conv,0)+' de conversão em R$). '):'')
+      +((f.maiorPipe && (f.maiorPipe.val-f.maiorPipe.ganhoVal)>0)
+         ? (f.maiorPipe.nome+' concentra o maior pipeline em aberto ('+_apR(f.maiorPipe.val-f.maiorPipe.ganhoVal)+') — é onde há mais valor a destravar.')
+         : 'Todo o valor validado no período já foi decidido — não há pipeline em aberto.')
+  });
+
+  // ── 11 · Pipeline e carteira vendida ───────────────────────────────────
+  var b=d.backlog;
+  var maxMes=b.meses.reduce(function(t,m){return Math.max(t,m.val);},1);
+  var maxTk=b.ticketCons.reduce(function(t,m){return Math.max(t,m.ticket);},1);
+  S.push({n:11, kicker:'PIPELINE E CARTEIRA VENDIDA', titulo:'O que já está vendido para os próximos meses',
+    blocos:[
+      kpi(kpi3[0],1.67,kpi3W,1.55,'BACKLOG JÁ VENDIDO', _apR(b.val), b.qtd+' eventos vendidos a realizar'),
+      kpi(kpi3[1],1.67,kpi3W,1.55,'VENDAS GANHAS NO PERÍODO', _apR(f.ganhoVal), f.ganhoQtd+' contratos fechados'),
+      kpi(kpi3[2],1.67,kpi3W,1.55,'TICKET MÉDIO DE VENDA — '+d.ano, _apR(b.ticketVenda), 'base: '+b.vendasQtd+' vendas ganhas'),
+      {t:'lista',x:0.55,y:3.43,w:6.00,h:2.40,titulo:'VENDAS GANHAS POR MÊS DE EVENTO',cabDir:'QTD · VALOR',
+        itens:b.meses.map(function(m){
+          return {nome:APRES_MESES_LONGO[m.m].slice(0,3)+'/'+d.ano, qtd:String(m.qtd), pct:m.val/maxMes*100, dir:_apR(m.val)};
+        })},
+      {t:'lista',x:6.78,y:3.43,w:6.00,h:2.40,titulo:'TICKET MÉDIO POR CONSULTOR — '+d.ano,cabDir:'QTD · VALOR',
+        itens:b.ticketCons.map(function(c){
+          return {nome:c.nome, qtd:String(c.qtd), pct:c.ticket/maxTk*100, dir:_apR(c.ticket)};
+        })}
+    ],
+    nota:'Os próximos meses já entram com '+_apR(b.val)+' contratados'
+      +(b.meses.length?(' — '+APRES_MESES_LONGO[b.meses[0].m]+' concentra o maior valor ('+_apR(b.meses[0].val)+' em '+b.meses[0].qtd+' evento'+(b.meses[0].qtd>1?'s':'')+').'):'.')
+  });
+
+  // ── 12 · Plano de meta por consultor ───────────────────────────────────
+  var catsResto=APRES_MESES.slice(d.mes);
+  var seriesCons=d.consMetas.slice(0,4).map(function(c,i){
+    return {nome:c.nome.split(' ')[0], vals:c.meses.slice(d.mes), cor:[APRES_COR.escuro,APRES_COR.red,APRES_COR.cinza,APRES_COR.laranja][i]};
+  });
+  var blocosCons=[{t:'chart',x:0.55,y:1.65,w:8.10,h:3.90,tipo:'stacked',cats:catsResto,series:seriesCons,rotulo:'k'},
+                  kpi(8.85,1.65,3.95,1.25,'META TOTAL '+d.ano, _apMi(d.metaAnual), 'Jan–Dez','texto',false)];
+  d.consMetas.slice(0,2).forEach(function(c,i){
+    blocosCons.push(kpi(8.85,3.05+i*1.40,3.95,1.25,'META '+c.nome.split(' ')[0].toUpperCase(), _apMi(c.anual), _apPct(c.pctDaMeta)+' da meta anual'));
+  });
+  S.push({n:12, kicker:'PLANO DE META POR CONSULTOR', titulo:'O que isso exige de '+(catsResto.length?APRES_MESES_LONGO[d.mes].toLowerCase()+' a dezembro':'aqui em diante'),
+    blocos:blocosCons,
+    nota:'Restam '+_apR(d.falta)+' em '+_apresRestoRot(d)
+      +(d.consMetas.length?(' — '+_apR(d.falta/d.consMetas.length)+' por consultor ativo.'):'.')
+  });
+
+  // ── 13 · Fechamento ────────────────────────────────────────────────────
+  S.push({n:13, kicker:'FECHAMENTO', titulo:'Conclusões e plano de ação',
+    blocos:[
+      {t:'concl',x:0.55,y:2.35,w:5.51,h:1.75,titulo:(d.crescYtd>=0?'Ano em crescimento.':'Ano em retração.'),
+        texto:_apMi(d.ytd)+' em '+faixaYTD+' ('+_apSin(d.crescYtd)+' vs '+d.anoAnt+') e acumulado '+_apPct(Math.abs(d.pctMetaAcum-100))+(d.pctMetaAcum>=100?' acima':' abaixo')+' da meta de '+d.mesNome.toLowerCase()+'.'},
+      {t:'concl',x:6.87,y:2.35,w:5.51,h:1.75,titulo:d.mesNome+(d.pctMetaMes>=100?' bateu a meta do mês.':' ficou abaixo da meta do mês.'),
+        texto:_apMi(d.mesValor)+' — '+_apPct(d.pctMetaMes)+' da meta sazonal e '+_apSin(d.crescMes)+' vs '+mesRotAnt+'.'},
+      {t:'concl',x:0.55,y:4.75,w:5.51,h:1.75,titulo:'A meta anual exige ritmo maior.',
+        texto:_apR(d.faltaPorMes)+'/mês em '+_apresRestoRot(d)+': '+(d.ritmoMedio>0?(d.faltaPorMes/d.ritmoMedio).toFixed(2).replace('.',','):'—')+'x o ritmo médio de '+d.ano+' ('+_apR(d.ritmoMedio)+'/mês).'},
+      {t:'concl',x:6.87,y:4.75,w:5.51,h:1.75,titulo:'O pipeline já sustenta parte disso.',
+        texto:_apR(d.backlog.val)+' vendidos a realizar e '+_apR(d.funil.val-d.funil.ganhoVal)+' em orçamentos ainda em aberto.'}
+    ]
+  });
+
+  S.forEach(function(s,i){ s.n=i+1; s.total=S.length; });
+  return S;
+}
+
+function _apresRestoRot(d){
+  if(d.mes>=12) return 'dezembro';
+  return APRES_MESES_LONGO[d.mes].slice(0,3)+'–Dez';
+}
+
+// ════════════════════════════════════════════════════════
+//  3a) RENDERIZADOR DE TELA — os slides como dashboard
+//      1 polegada = 96px, logo o slide 13,33x7,5" vira 1280x720px e é
+//      reduzido por transform:scale() pra caber na largura disponível.
+// ════════════════════════════════════════════════════════
+var APRES_PX = 96;
+function _apx(v){ return Math.round(v*APRES_PX*100)/100; }
+
+function _apresRotuloValor(v, rotulo){
+  if(rotulo==='k')   return _apK(v);
+  if(rotulo==='n')   return _apNum(Math.round(v));
+  if(rotulo==='R$')  return fmt(v);
+  return _apNum(Math.round(v));
+}
+
+// ── Gráfico em SVG (mesmo modelo que alimenta o PPTX) ────────────────────
+// Arredonda o topo do eixo pra um número "redondo" (1, 2, 2.5 ou 5 x 10^n),
+// senão a régua sai com valores quebrados tipo R$611k.
+function _apresEscalaNice(max){
+  if(!(max>0)) return 1;
+  var passo=max/5;
+  var mag=Math.pow(10,Math.floor(Math.log(passo)/Math.LN10));
+  var mult=[1,2,2.5,5,10].filter(function(m){return mag*m>=passo;})[0]||10;
+  return mag*mult*5;
+}
+
+function _apresChartSVG(b){
+  var W=_apx(b.w), H=_apx(b.h);
+  var mL=58, mR=14, mT=(b.series.length>1?26:20), mB=b.cats.some(function(c){return String(c).indexOf('\n')>=0;})?34:24;
+  var gW=W-mL-mR, gH=H-mT-mB;
+  var series=b.series, cats=b.cats;
+  var empilhado=(b.tipo==='stacked');
+  var maxV=0;
+  cats.forEach(function(c,i){
+    if(empilhado){ var s=0; series.forEach(function(se){ s+=parseFloat(se.vals[i])||0; }); maxV=Math.max(maxV,s); }
+    else series.forEach(function(se){ maxV=Math.max(maxV, parseFloat(se.vals[i])||0); });
+  });
+  if(maxV<=0) maxV=1;
+  var esc=_apresEscalaNice(maxV*1.10);
+  function y(v){ return mT+gH-(v/esc*gH); }
+  var out='<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" style="display:block">';
+
+  // grade
+  var linhas=5;
+  for(var g=0;g<=linhas;g++){
+    var vv=esc/linhas*g, yy=y(vv);
+    out+='<line x1="'+mL+'" y1="'+yy+'" x2="'+(W-mR)+'" y2="'+yy+'" stroke="#EDEDED" stroke-width="1"/>';
+    out+='<text x="'+(mL-6)+'" y="'+(yy+3)+'" text-anchor="end" font-size="8" fill="#9E9E9E" font-family="Calibri,Arial">'+_apresRotuloValor(vv,b.rotulo)+'</text>';
+  }
+  var passo=gW/cats.length;
+
+  if(b.tipo==='line'){
+    series.forEach(function(se){
+      var pts=[];
+      cats.forEach(function(c,i){
+        var v=parseFloat(se.vals[i]); if(isNaN(v)||se.vals[i]===null) return;
+        pts.push([mL+passo*(i+0.5), y(v)]);
+      });
+      if(pts.length>1) out+='<polyline points="'+pts.map(function(p){return p[0]+','+p[1];}).join(' ')+'" fill="none" stroke="#'+se.cor+'" stroke-width="2.2"/>';
+      pts.forEach(function(p){ out+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="3.2" fill="#'+se.cor+'"/>'; });
+    });
+  } else {
+    var nS=empilhado?1:series.length;
+    var larg=Math.min(46, passo*0.72/nS);
+    cats.forEach(function(c,i){
+      if(empilhado){
+        var base=mT+gH, x0=mL+passo*(i+0.5)-larg/2;
+        series.forEach(function(se){
+          var v=parseFloat(se.vals[i])||0; if(v<=0) return;
+          var alt=v/esc*gH;
+          out+='<rect x="'+x0+'" y="'+(base-alt)+'" width="'+larg+'" height="'+alt+'" fill="#'+se.cor+'"/>';
+          base-=alt;
+        });
+      } else {
+        var totalL=larg*series.length+2*(series.length-1);
+        series.forEach(function(se,si){
+          var v=parseFloat(se.vals[i])||0;
+          var cor=(se.cores&&se.cores[i])||se.cor||APRES_COR.escuro;
+          var xx=mL+passo*(i+0.5)-totalL/2+si*(larg+2);
+          var alt=Math.max(0,v/esc*gH);
+          out+='<rect x="'+xx+'" y="'+(mT+gH-alt)+'" width="'+larg+'" height="'+alt+'" fill="#'+cor+'"/>';
+          if(series.length<=2 && cats.length<=13 && v>0)
+            out+='<text x="'+(xx+larg/2)+'" y="'+(mT+gH-alt-4)+'" text-anchor="middle" font-size="7.5" font-weight="bold" fill="#6E6E6E" font-family="Calibri,Arial">'+_apresRotuloValor(v,b.rotulo)+'</text>';
+        });
+      }
+    });
+  }
+
+  // eixo x
+  out+='<line x1="'+mL+'" y1="'+(mT+gH)+'" x2="'+(W-mR)+'" y2="'+(mT+gH)+'" stroke="#D6D6D6" stroke-width="1"/>';
+  cats.forEach(function(c,i){
+    var partes=String(c).split('\n');
+    partes.forEach(function(p,pi){
+      out+='<text x="'+(mL+passo*(i+0.5))+'" y="'+(mT+gH+12+pi*9)+'" text-anchor="middle" font-size="8" fill="#6E6E6E" font-family="Calibri,Arial">'+eh(p)+'</text>';
+    });
+  });
+  // legenda
+  if(series.length>1){
+    var lx=mL+gW/2-(series.length*70)/2;
+    series.forEach(function(se,si){
+      out+='<rect x="'+(lx+si*70)+'" y="'+(mT-16)+'" width="8" height="8" fill="#'+se.cor+'"/>'
+        +'<text x="'+(lx+si*70+12)+'" y="'+(mT-9)+'" font-size="8" fill="#6E6E6E" font-family="Calibri,Arial">'+eh(se.nome)+'</text>';
+    });
+  }
+  return out+'</svg>';
+}
+
+function _apresBlocoHTML(b){
+  var pos='position:absolute;left:'+_apx(b.x)+'px;top:'+_apx(b.y)+'px;width:'+_apx(b.w)+'px;height:'+_apx(b.h)+'px;';
+  if(b.t==='txt'){
+    var est={
+      kicker:'font:700 11px Calibri,Arial;letter-spacing:2px;color:#C0392B;text-transform:uppercase',
+      capaTitulo:'font:700 54px Cambria,Georgia,serif;color:#404040',
+      capaSub:'font:400 32px Cambria,Georgia,serif;color:#C0392B',
+      capaRodape:'font:400 14px Calibri,Arial;color:#6E6E6E',
+      capaNota:'font:italic 400 10.5px Calibri,Arial;color:#9E9E9E'
+    }[b.estilo]||'font:400 13px Calibri,Arial;color:#404040';
+    return '<div style="'+pos+est+';display:flex;align-items:center">'+eh(b.txt)+'</div>';
+  }
+  if(b.t==='kpi'){
+    var fundo=b.escuro?'#404040':'#FFFFFF';
+    var borda=b.escuro?'#404040':'#E8E8E8';
+    var corLabel=b.escuro?'#D8D8D8':'#6E6E6E';
+    var corSub=b.escuro?'#C8C8C8':'#9E9E9E';
+    var corVal=b.escuro?'#FFFFFF':(b.cor==='red'?'#C0392B':(b.cor==='verde'?'#27AE60':'#404040'));
+    var tamVal=b.h>=1.7?34:(b.h>=1.45?28:24);
+    return '<div style="'+pos+'background:'+fundo+';border:1px solid '+borda+';border-radius:6px;padding:13px 19px;box-sizing:border-box;display:flex;flex-direction:column">'
+      +'<div style="font:700 9.5px Calibri,Arial;letter-spacing:1.1px;color:'+corLabel+';text-transform:uppercase;line-height:1.25">'+eh(b.label)+'</div>'
+      +'<div style="flex:1;display:flex;align-items:center"><span style="font:700 '+tamVal+'px Cambria,Georgia,serif;color:'+corVal+'">'+eh(b.valor)+'</span></div>'
+      +'<div style="font:italic 400 9.5px Calibri,Arial;color:'+corSub+'">'+eh(b.sub||'')+'</div>'
+      +'</div>';
+  }
+  if(b.t==='chart'){
+    return '<div style="'+pos+'">'+_apresChartSVG(b)+'</div>';
+  }
+  if(b.t==='painel'||b.t==='lista'){
+    var linhasH='';
+    var alturaLinha=_apx(0.35);
+    (b.itens||[]).forEach(function(it,i){
+      var topo=_apx(0.60)+i*alturaLinha;
+      if(b.t==='painel'){
+        linhasH+='<div style="position:absolute;left:'+_apx(0.22)+'px;top:'+topo+'px;width:'+_apx(1.75)+'px;font:600 11px Calibri,Arial;color:#404040;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(it.nome)+'</div>'
+          +'<div style="position:absolute;left:'+_apx(2.05)+'px;top:'+(topo+7)+'px;width:'+_apx(6.0)+'px;height:12px;background:#E3E3E3;border-radius:6px"></div>'
+          +'<div style="position:absolute;left:'+_apx(2.05)+'px;top:'+(topo+7)+'px;width:'+(_apx(6.0)*Math.max(0,Math.min(100,it.pct))/100)+'px;height:12px;background:#'+it.cor+';border-radius:6px"></div>'
+          +'<div style="position:absolute;left:'+_apx(8.2)+'px;top:'+topo+'px;width:'+_apx(0.8)+'px;font:700 11px Calibri,Arial;color:#'+it.cor+';text-align:right">'+eh(it.dir)+'</div>'
+          +'<div style="position:absolute;left:'+_apx(9.07)+'px;top:'+topo+'px;width:'+_apx(2.9)+'px;font:italic 400 10px Calibri,Arial;color:#9E9E9E">'+eh(it.nota||'')+'</div>';
+      } else {
+        linhasH+='<div style="position:absolute;left:'+_apx(0.22)+'px;top:'+topo+'px;width:'+_apx(1.45)+'px;font:600 11px Calibri,Arial;color:#404040;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+eh(it.nome)+'</div>'
+          +'<div style="position:absolute;left:'+_apx(1.72)+'px;top:'+topo+'px;width:'+_apx(0.35)+'px;font:600 11px Calibri,Arial;color:#6E6E6E;text-align:right">'+eh(it.qtd)+'</div>'
+          +'<div style="position:absolute;left:'+_apx(2.25)+'px;top:'+(topo+7)+'px;width:'+_apx(1.9)+'px;height:12px;background:#E3E3E3;border-radius:6px"></div>'
+          +'<div style="position:absolute;left:'+_apx(2.25)+'px;top:'+(topo+7)+'px;width:'+(_apx(1.9)*Math.max(0,Math.min(100,it.pct))/100)+'px;height:12px;background:#27AE60;border-radius:6px"></div>'
+          +'<div style="position:absolute;left:'+_apx(4.3)+'px;top:'+topo+'px;width:'+_apx(1.5)+'px;font:700 11px Calibri,Arial;color:#404040;text-align:right">'+eh(it.dir)+'</div>';
+      }
+    });
+    return '<div style="'+pos+'background:#FFFFFF;border:1px solid #E8E8E8;border-radius:6px">'
+      +'<div style="position:absolute;left:'+_apx(0.22)+'px;top:'+_apx(0.14)+'px;font:700 9.5px Calibri,Arial;letter-spacing:1.1px;color:#404040;text-transform:uppercase">'+eh(b.titulo)+'</div>'
+      +'<div style="position:absolute;right:'+_apx(0.22)+'px;top:'+_apx(0.14)+'px;font:italic 400 9px Calibri,Arial;color:#9E9E9E">'+eh(b.cabDir||'')+'</div>'
+      +linhasH+'</div>';
+  }
+  if(b.t==='concl'){
+    return '<div style="'+pos+'">'
+      +'<div style="position:absolute;left:-'+_apx(0.4)+'px;top:8px;width:9px;height:9px;background:#C0392B;border-radius:2px"></div>'
+      +'<div style="font:700 15px Cambria,Georgia,serif;color:#404040;margin-bottom:8px">'+eh(b.titulo)+'</div>'
+      +'<div style="font:400 12px Calibri,Arial;color:#6E6E6E;line-height:1.55">'+eh(b.texto)+'</div>'
+      +'</div>';
+  }
+  return '';
+}
+
+function _apresSlideHTML(s){
+  var h='<div class="apres-slide" style="width:1280px;height:720px;position:relative;background:#fff;overflow:hidden">';
+  if(!s.capa){
+    h+='<div style="position:absolute;left:'+_apx(0.55)+'px;top:'+_apx(0.42)+'px;font:700 11px Calibri,Arial;letter-spacing:2px;color:#C0392B;text-transform:uppercase">'+eh(s.kicker||'')+'</div>'
+      +'<div style="position:absolute;left:'+_apx(0.55)+'px;top:'+_apx(0.70)+'px;font:700 30px Cambria,Georgia,serif;color:#404040">'+eh(s.titulo||'')+'</div>';
+  } else {
+    h+='<div style="position:absolute;right:-70px;top:-150px;width:500px;height:500px;border-radius:50%;background:#FAFAFA"></div>'
+      +'<div style="position:absolute;right:-40px;top:-50px;width:250px;height:250px;border-radius:50%;background:#F0F0F0"></div>'
+      +'<div style="position:absolute;right:-10px;top:-14px;width:182px;height:182px;border-radius:50%;background:#C0392B"></div>';
+  }
+  (s.blocos||[]).forEach(function(b){ h+=_apresBlocoHTML(b); });
+  if(s.nota){
+    var ny=s.blocos.reduce(function(t,b){ return Math.max(t, (b.y||0)+(b.h||0)); },0);
+    ny=Math.min(6.0, Math.max(5.7, ny+0.18));
+    h+='<div style="position:absolute;left:'+_apx(0.55)+'px;top:'+_apx(ny)+'px;width:'+_apx(12.23)+'px;min-height:'+_apx(0.8)+'px;background:#F5F5F5;border-radius:6px;padding:12px 14px 12px 48px;box-sizing:border-box;font:400 11.5px Calibri,Arial;color:#404040;line-height:1.5;display:flex;align-items:center">'
+      +'<div style="position:absolute;left:21px;top:50%;transform:translateY(-50%);width:20px;height:20px;border-radius:50%;background:#C0392B;color:#fff;font:italic 700 12px Cambria,Georgia,serif;display:flex;align-items:center;justify-content:center">i</div>'
+      +eh(s.nota)+'</div>';
+  }
+  if(!s.capa){
+    h+='<div style="position:absolute;left:'+_apx(0.55)+'px;top:'+_apx(7.05)+'px;font:400 9px Calibri,Arial;letter-spacing:1.4px;color:#9E9E9E;text-transform:uppercase">CRAZY SOM AUDIOVISUAIS</div>'
+      +'<div style="position:absolute;right:'+_apx(0.55)+'px;top:'+_apx(7.05)+'px;font:400 9px Calibri,Arial;color:#9E9E9E">'+(s.n<10?'0':'')+s.n+' / '+s.total+'</div>';
+  }
+  return h+'</div>';
+}
+
+// ════════════════════════════════════════════════════════
+//  TELA DO MÓDULO — abertura, filtros, abas e conferência
+// ════════════════════════════════════════════════════════
+async function abrirApresentacao(){
+  if(_moduloBloqueado('dash-apres')) return;
+  document.getElementById('apres-ov').classList.add('open');
+  var hoje=new Date();
+  var selA=document.getElementById('apres-ano'), selM=document.getElementById('apres-mes');
+  if(!selA.options.length){
+    var aAtual=hoje.getFullYear();
+    selA.innerHTML=[aAtual-1,aAtual,aAtual+1].map(function(a){return '<option value="'+a+'"'+(a===aAtual?' selected':'')+'>'+a+'</option>';}).join('');
+    // Mês de fechamento: por padrão o mês anterior ao atual (é o que se apresenta)
+    var mFech=hoje.getMonth();               // 0..11 → mês anterior em base 1
+    if(mFech===0){ mFech=12; selA.value=String(aAtual-1); }
+    selM.innerHTML=APRES_MESES_LONGO.map(function(n,i){return '<option value="'+(i+1)+'"'+((i+1)===mFech?' selected':'')+'>'+n+'</option>';}).join('');
+  }
+  await apresAtualizar(false);
+}
+
+function fecharApresentacao(){
+  document.getElementById('apres-ov').classList.remove('open');
+  abrirHome();
+}
+
+async function apresAtualizar(forcar){
+  if(_apresCarregando) return;
+  _apresCarregando=true;
+  var corpo=document.getElementById('apres-corpo');
+  var sub=document.getElementById('apres-sub');
+  sub.textContent='Carregando dados...';
+  corpo.innerHTML='<div class="dash-loading">⏳ Buscando orçamentos, metas e base histórica...</div>';
+  try{
+    if(!_apresHist) await apresHistCarregar();
+    await metasCarregar();
+    await metasCarregarConsultoresNomes();
+    if(forcar || !_dashDados || !_dashDados.length) await dashAtualizar(true);
+    _apresDadosCache=null;
+  }catch(e){
+    console.warn('apresAtualizar:',e);
+  }
+  _apresCarregando=false;
+  apresRenderizar();
+}
+
+function apresAba(qual){
+  _apresAbaAtual=qual;
+  ['slides','hist'].forEach(function(a){
+    var bt=document.getElementById('apres-aba-'+a);
+    if(bt){ bt.style.background=(a===qual)?'var(--R)':'var(--surface-2)'; bt.style.color=(a===qual)?'#fff':'var(--text-muted)'; }
+  });
+  apresRenderizar();
+}
+
+function apresRenderizar(){
+  var corpo=document.getElementById('apres-corpo');
+  if(!corpo) return;
+  if(_apresAbaAtual==='hist'){ corpo.innerHTML=_apresHistHTML(); return; }
+
+  var ano=parseInt(document.getElementById('apres-ano').value,10);
+  var mes=parseInt(document.getElementById('apres-mes').value,10);
+  if(!_apresDadosCache || _apresDadosCache.ano!==ano || _apresDadosCache.mes!==mes){
+    _apresDadosCache=_apresDados(ano,mes);
+  }
+  var d=_apresDadosCache;
+  var slides=_apresModelo(d);
+  window._apresSlides=slides;
+
+  document.getElementById('apres-sub').textContent=
+    slides.length+' slides · fechamento de '+d.mesNome+'/'+d.ano+' · '+(_dashDados||[]).length+' orçamentos na base';
+
+  var avisos=[];
+  if(!d.metaAnual) avisos.push('Nenhuma meta cadastrada para '+ano+' — os slides de meta ficam zerados. Cadastre em <b>Metas</b>.');
+  if(!_apresTotFat(d.anoAnt)) avisos.push('A base histórica de '+d.anoAnt+' está vazia — as comparações com o ano anterior ficam zeradas. Preencha na aba <b>Base Histórica</b>.');
+  if(!d.evYTD) avisos.push('Nenhuma venda ganha com data de evento em '+ano+' — confira o filtro de vendas ganhas.');
+
+  var h='';
+  if(avisos.length){
+    h+='<div style="background:#4a3800;border:1px solid #aa8800;border-radius:6px;padding:9px 12px;margin-bottom:12px;font-size:11px;color:#ffcc66;line-height:1.6">'
+      +avisos.map(function(a){return '⚠️ '+a;}).join('<br>')+'</div>';
+  }
+  h+='<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Confira os slides abaixo. Quando estiver certo, clique em <b>📊 Gerar PowerPoint</b> — o arquivo sai exatamente com este conteúdo.</div>';
+  h+='<div id="apres-lista">'+slides.map(function(s){
+    return '<div class="apres-slide-wrap">'
+      +'<div class="apres-slide-cab"><span>Slide '+s.n+' · '+eh(s.capa?'Capa':(s.titulo||''))+'</span></div>'
+      +'<div class="apres-slide-palco"><div class="apres-slide-escala">'+_apresSlideHTML(s)+'</div></div>'
+      +'</div>';
+  }).join('')+'</div>';
+  corpo.innerHTML=h;
+  _apresAjustarEscala();
+}
+
+// Reduz cada slide (1280x720) pra caber na largura da janela, mantendo proporção.
+function _apresAjustarEscala(){
+  var palcos=document.querySelectorAll('#apres-corpo .apres-slide-palco');
+  if(!palcos.length) return;
+  var larg=palcos[0].clientWidth||1280;
+  var esc=Math.min(1, larg/1280);
+  palcos.forEach(function(p){
+    p.style.height=Math.round(720*esc)+'px';
+    var e=p.querySelector('.apres-slide-escala');
+    if(e){ e.style.transform='scale('+esc+')'; e.style.transformOrigin='top left'; }
+  });
+}
+window.addEventListener('resize',function(){
+  if(document.getElementById('apres-ov') && document.getElementById('apres-ov').classList.contains('open')) _apresAjustarEscala();
+});
+
+// ── Aba Base Histórica ───────────────────────────────────────────────────
+function _apresHistHTML(){
+  var anos=Object.keys(_apresHist).sort();
+  var hoje=new Date().getFullYear();
+  var h='<div style="font-size:11px;color:var(--text-muted);line-height:1.7;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:12px">'
+    +'Os anos já fechados não estão no sistema de orçamentos — ficam guardados aqui e alimentam os slides de evolução anual, comparativo mensal, volume e ticket médio.<br>'
+    +'Preencha o <b>faturamento mês a mês</b> de cada ano (é o que o comparativo com o ano anterior usa). Se você só tiver o total do ano, deixe os meses em branco e preencha a coluna <b>Total</b>.<br>'
+    +'<span style="color:var(--text-dim)">O ano corrente ('+hoje+') NÃO entra aqui — ele é calculado automaticamente pelas vendas ganhas do sistema, pela data do evento.</span></div>';
+
+  ['fat','ev'].forEach(function(tipo){
+    var rot=tipo==='fat'?'💰 Faturamento por mês (R$)':'🎪 Nº de eventos por mês';
+    h+='<div style="font-size:10px;color:var(--text-muted);font-weight:800;text-transform:uppercase;letter-spacing:1px;margin:14px 0 6px">'+rot+'</div>'
+      +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:900px">'
+      +'<thead><tr style="background:var(--surface-3)"><th style="padding:5px 7px;text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase">Ano</th>'
+      +APRES_MESES.map(function(m){return '<th style="padding:5px 4px;text-align:center;color:var(--text-muted);font-size:9px">'+m+'</th>';}).join('')
+      +'<th style="padding:5px 7px;text-align:right;color:var(--text-muted);font-size:9px;text-transform:uppercase">Total</th></tr></thead><tbody>';
+    anos.forEach(function(a){
+      var reg=_apresHistAno(a);
+      var somaM=reg[tipo].reduce(function(t,v){return t+v;},0);
+      h+='<tr style="border-bottom:1px solid var(--border-strong)"><td style="padding:4px 7px;font-weight:800;color:var(--text-dim)">'+a+'</td>';
+      for(var i=0;i<12;i++){
+        h+='<td style="padding:2px"><input class="apres-hist-inp" data-ano="'+a+'" data-tipo="'+tipo+'" data-mes="'+i+'" value="'+(reg[tipo][i]||'')+'" '
+          +'oninput="apresHistEditar(this)" style="width:100%;min-width:58px;padding:4px 3px;background:var(--surface);border:1px solid var(--border);border-radius:3px;color:var(--text);font-size:10px;text-align:right"></td>';
+      }
+      var totGrav=(tipo==='fat'?reg.fatTotal:reg.evTotal)||0;
+      h+='<td style="padding:2px"><input class="apres-hist-tot" data-ano="'+a+'" data-tipo="'+tipo+'" value="'+(totGrav>0?totGrav:(somaM>0?somaM:''))+'" '
+        +'oninput="apresHistEditar(this)" title="Vale mais que a soma dos meses. Deixe em branco para somar os meses lançados."'
+        +' style="width:100%;min-width:88px;padding:4px 5px;background:var(--surface);border:1px solid var(--border);border-radius:3px;color:var(--text);font-size:10px;text-align:right;font-weight:800"></td></tr>';
+    });
+    h+='</tbody></table></div>';
+  });
+
+  h+='<div class="rodape-acoes" style="margin-top:14px">'
+    +'<span id="apres-hist-status" style="font-size:10px;font-weight:700;margin-right:auto"></span>'
+    +'<button class="btn btn-o btn-sm" onclick="apresHistAdicionarAno()">➕ Adicionar ano</button>'
+    +'<button class="btn btn-g btn-sm" onclick="apresHistSalvar()">💾 Salvar Base Histórica</button>'
+    +'</div>';
+  return h;
+}
+
+function apresHistEditar(el){
+  var a=el.dataset.ano, tipo=el.dataset.tipo;
+  var reg=_apresHistAno(a);
+  var v=parseFloat(String(el.value).replace(/\./g,'').replace(',','.'))||0;
+  if(el.classList.contains('apres-hist-tot')){
+    if(tipo==='fat') reg.fatTotal=v; else reg.evTotal=v;
+  } else {
+    reg[tipo][parseInt(el.dataset.mes,10)]=v;
+    // Atualiza o total da linha na hora (sem re-renderizar a tabela inteira,
+    // pra não perder o foco do campo que o usuário está digitando).
+    var somaL=reg[tipo].reduce(function(t,x){return t+x;},0);
+    var tot=document.querySelector('.apres-hist-tot[data-ano="'+a+'"][data-tipo="'+tipo+'"]');
+    var totGravado=(tipo==='fat'?reg.fatTotal:reg.evTotal)||0;
+    if(tot && !totGravado && somaL>0) tot.value=somaL;
+  }
+  _apresDadosCache=null;
+  var st=document.getElementById('apres-hist-status');
+  if(st){ st.textContent='● alterações não salvas'; st.style.color='#ffcc00'; }
+}
+
+function apresHistAdicionarAno(){
+  var anos=Object.keys(_apresHist).map(Number).sort();
+  var novo=prompt('Qual ano você quer adicionar à base histórica?', String((anos[0]||new Date().getFullYear())-1));
+  if(!novo) return;
+  novo=String(parseInt(novo,10)||'');
+  if(!novo || novo.length!==4){ alert('Informe um ano com 4 dígitos.'); return; }
+  if(_apresHist[novo]){ alert('O ano '+novo+' já está na base.'); return; }
+  _apresHistAno(novo);
+  apresRenderizar();
+}
+
+// ════════════════════════════════════════════════════════
+//  3b) GERAÇÃO DO ARQUIVO .PPTX (PptxGenJS)
+//      Mesmo modelo da tela → mesmas posições, cores e textos.
+// ════════════════════════════════════════════════════════
+function _apresCarregarPptx(){
+  return new Promise(function(ok,falha){
+    if(window.PptxGenJS) return ok();
+    var s=document.createElement('script');
+    s.src=APRES_PPTX_URL;
+    s.onload=function(){ window.PptxGenJS ? ok() : falha(new Error('Biblioteca carregada mas indisponível.')); };
+    s.onerror=function(){ falha(new Error('Não foi possível baixar a biblioteca de PowerPoint. Verifique a conexão.')); };
+    document.head.appendChild(s);
+  });
+}
+
+async function apresGerarPPTX(){
+  var slides=window._apresSlides;
+  if(!slides||!slides.length){ alert('Abra a aba "Slides" e aguarde a montagem antes de gerar o arquivo.'); return; }
+  var bt=document.getElementById('apres-btn-ppt');
+  var txtOrig=bt?bt.innerHTML:'';
+  if(bt){ bt.disabled=true; bt.innerHTML='⏳ Gerando...'; }
+  try{
+    await _apresCarregarPptx();
+    var d=_apresDadosCache;
+    var pptx=new PptxGenJS();
+    pptx.defineLayout({name:'CS169',width:13.333,height:7.5});
+    pptx.layout='CS169';
+    pptx.author='Crazy Som Audiovisuais';
+    pptx.company='Crazy Som Audiovisuais';
+    pptx.title='Resultados '+d.ano+' — Fechamento de '+d.mesNome;
+
+    slides.forEach(function(s){ _apresSlidePPT(pptx,s); });
+
+    var nome='CrazySom_Resultados_'+d.mesCurto.charAt(0)+d.mesCurto.slice(1).toLowerCase()+d.ano+'.pptx';
+    await pptx.writeFile({fileName:nome});
+    var st=document.getElementById('apres-status');
+    if(st){ st.textContent='✅ '+nome+' gerado'; st.style.color='#66bb6a'; setTimeout(function(){st.textContent='';},6000); }
+  }catch(e){
+    console.warn('apresGerarPPTX:',e);
+    alert('Não foi possível gerar o PowerPoint: '+e.message);
+  }
+  if(bt){ bt.disabled=false; bt.innerHTML=txtOrig; }
+}
+
+function _apresSlidePPT(pptx,s){
+  var sl=pptx.addSlide();
+  sl.background={color:'FFFFFF'};
+  if(s.capa){
+    sl.addShape(pptx.ShapeType.ellipse,{x:10.3,y:-1.6,w:5.2,h:5.2,fill:{color:'FAFAFA'},line:{color:'FAFAFA'}});
+    sl.addShape(pptx.ShapeType.ellipse,{x:11.6,y:-0.5,w:2.6,h:2.6,fill:{color:'F0F0F0'},line:{color:'F0F0F0'}});
+    sl.addShape(pptx.ShapeType.ellipse,{x:11.95,y:-0.15,w:1.9,h:1.9,fill:{color:APRES_COR.red},line:{color:APRES_COR.red}});
+  } else {
+    sl.addText(s.kicker||'',{x:0.55,y:0.42,w:10,h:0.3,fontFace:'Calibri',fontSize:11,bold:true,charSpacing:2,color:APRES_COR.red,valign:'middle'});
+    sl.addText(s.titulo||'',{x:0.55,y:0.72,w:11.5,h:0.65,fontFace:'Cambria',fontSize:30,bold:true,color:APRES_COR.texto,valign:'middle'});
+  }
+
+  (s.blocos||[]).forEach(function(b){ _apresBlocoPPT(pptx,sl,b); });
+
+  if(s.nota){
+    var ny=s.blocos.reduce(function(t,b){return Math.max(t,(b.y||0)+(b.h||0));},0);
+    ny=Math.min(6.0, Math.max(5.7, ny+0.18));
+    sl.addShape(pptx.ShapeType.roundRect,{x:0.55,y:ny,w:12.23,h:0.95,fill:{color:APRES_COR.fundo},line:{color:APRES_COR.fundo},rectRadius:0.06});
+    sl.addShape(pptx.ShapeType.ellipse,{x:0.77,y:ny+0.33,w:0.28,h:0.28,fill:{color:APRES_COR.red},line:{color:APRES_COR.red}});
+    sl.addText('i',{x:0.77,y:ny+0.33,w:0.28,h:0.28,fontFace:'Cambria',fontSize:12,bold:true,italic:true,color:'FFFFFF',align:'center',valign:'middle'});
+    sl.addText(s.nota,{x:1.2,y:ny+0.1,w:11.33,h:0.75,fontFace:'Calibri',fontSize:11.5,color:APRES_COR.texto,valign:'middle',lineSpacingMultiple:1.15});
+  }
+  if(!s.capa){
+    sl.addText('CRAZY SOM AUDIOVISUAIS',{x:0.55,y:7.05,w:5,h:0.3,fontFace:'Calibri',fontSize:9,charSpacing:1.4,color:APRES_COR.claro,valign:'middle'});
+    sl.addText((s.n<10?'0':'')+s.n+' / '+s.total,{x:12.03,y:7.05,w:1,h:0.3,fontFace:'Calibri',fontSize:9,color:APRES_COR.claro,align:'right',valign:'middle'});
+  }
+}
+
+function _apresBlocoPPT(pptx,sl,b){
+  if(b.t==='txt'){
+    var e={kicker:{f:'Calibri',s:11,b:true,c:APRES_COR.red,cs:2},
+           capaTitulo:{f:'Cambria',s:54,b:true,c:APRES_COR.texto},
+           capaSub:{f:'Cambria',s:32,b:false,c:APRES_COR.red},
+           capaRodape:{f:'Calibri',s:14,b:false,c:APRES_COR.muted},
+           capaNota:{f:'Calibri',s:10.5,b:false,c:APRES_COR.claro,i:true}}[b.estilo]||{f:'Calibri',s:13,b:false,c:APRES_COR.texto};
+    sl.addText(b.txt,{x:b.x,y:b.y,w:b.w,h:b.h,fontFace:e.f,fontSize:e.s,bold:!!e.b,italic:!!e.i,color:e.c,charSpacing:e.cs||0,valign:'middle'});
+    return;
+  }
+  if(b.t==='kpi'){
+    var escuro=!!b.escuro;
+    sl.addShape(pptx.ShapeType.roundRect,{x:b.x,y:b.y,w:b.w,h:b.h,rectRadius:0.06,
+      fill:{color:escuro?APRES_COR.escuro:'FFFFFF'},
+      line:{color:escuro?APRES_COR.escuro:APRES_COR.borda,width:1}});
+    var corVal=escuro?'FFFFFF':(b.cor==='red'?APRES_COR.red:(b.cor==='verde'?APRES_COR.verde:APRES_COR.texto));
+    var tamVal=b.h>=1.7?34:(b.h>=1.45?28:24);
+    sl.addText(b.label,{x:b.x+0.20,y:b.y+0.14,w:b.w-0.40,h:0.40,fontFace:'Calibri',fontSize:9.5,bold:true,charSpacing:1.1,
+      color:escuro?'D8D8D8':APRES_COR.muted,valign:'top'});
+    sl.addText(b.valor,{x:b.x+0.20,y:b.y+0.50,w:b.w-0.40,h:b.h-0.90,fontFace:'Cambria',fontSize:tamVal,bold:true,color:corVal,valign:'middle'});
+    sl.addText(b.sub||'',{x:b.x+0.20,y:b.y+b.h-0.38,w:b.w-0.40,h:0.30,fontFace:'Calibri',fontSize:9.5,italic:true,
+      color:escuro?'C8C8C8':APRES_COR.claro,valign:'bottom'});
+    return;
+  }
+  if(b.t==='chart'){
+    var cats=b.cats.map(function(c){return String(c).replace(/\n/g,' ');});
+    var dados=b.series.map(function(se){
+      return {name:se.nome, labels:cats, values:se.vals.map(function(v){return parseFloat(v)||0;})};
+    });
+    var cores=b.series.map(function(se){return se.cor||APRES_COR.escuro;});
+    if(b.series.length===1 && b.series[0].cores) cores=b.series[0].cores;
+    var op={x:b.x,y:b.y,w:b.w,h:b.h,
+      chartColors:cores,
+      showLegend:b.series.length>1, legendPos:'t', legendFontFace:'Calibri', legendFontSize:9,
+      catAxisLabelFontFace:'Calibri', catAxisLabelFontSize:9, catAxisLabelColor:APRES_COR.muted,
+      valAxisLabelFontFace:'Calibri', valAxisLabelFontSize:9, valAxisLabelColor:APRES_COR.claro,
+      valGridLine:{color:'EDEDED',style:'solid',size:1},
+      catGridLine:{style:'none'},
+      border:{pt:0,color:'FFFFFF'}, fill:'FFFFFF'};
+    if(b.rotulo==='k'||b.rotulo==='R$') op.valAxisLabelFormatCode='R$#,##0,"k"';
+    if(b.tipo==='line'){
+      sl.addChart(pptx.ChartType.line,dados,Object.assign(op,{lineDataSymbol:'circle',lineDataSymbolSize:7,lineSize:2.5}));
+    } else if(b.tipo==='stacked'){
+      sl.addChart(pptx.ChartType.bar,dados,Object.assign(op,{barDir:'col',barGrouping:'stacked',barGapWidthPct:60}));
+    } else {
+      sl.addChart(pptx.ChartType.bar,dados,Object.assign(op,{barDir:'col',barGapWidthPct:60,
+        showValue:(b.series.length<=2 && cats.length<=13), dataLabelFontFace:'Calibri', dataLabelFontSize:8,
+        dataLabelColor:APRES_COR.muted, dataLabelPosition:'outEnd',
+        dataLabelFormatCode:(b.rotulo==='n'?'#,##0':'R$#,##0,"k"')}));
+    }
+    return;
+  }
+  if(b.t==='painel'||b.t==='lista'){
+    sl.addShape(pptx.ShapeType.roundRect,{x:b.x,y:b.y,w:b.w,h:b.h,rectRadius:0.06,fill:{color:'FFFFFF'},line:{color:APRES_COR.borda,width:1}});
+    sl.addText(b.titulo,{x:b.x+0.22,y:b.y+0.14,w:b.w*0.55,h:0.3,fontFace:'Calibri',fontSize:9.5,bold:true,charSpacing:1.1,color:APRES_COR.texto,valign:'middle'});
+    sl.addText(b.cabDir||'',{x:b.x+b.w*0.55,y:b.y+0.14,w:b.w*0.42,h:0.3,fontFace:'Calibri',fontSize:9,italic:true,color:APRES_COR.claro,align:'right',valign:'middle'});
+    (b.itens||[]).forEach(function(it,i){
+      var yy=b.y+0.60+i*0.35;
+      if(b.t==='painel'){
+        var lw=6.0;
+        sl.addText(it.nome,{x:b.x+0.22,y:yy,w:1.75,h:0.3,fontFace:'Calibri',fontSize:11,bold:true,color:APRES_COR.texto,valign:'middle'});
+        sl.addShape(pptx.ShapeType.roundRect,{x:b.x+2.05,y:yy+0.09,w:lw,h:0.13,rectRadius:0.065,fill:{color:APRES_COR.trilho},line:{color:APRES_COR.trilho}});
+        var larg=lw*Math.max(0,Math.min(100,it.pct))/100;
+        if(larg>0.02) sl.addShape(pptx.ShapeType.roundRect,{x:b.x+2.05,y:yy+0.09,w:larg,h:0.13,rectRadius:0.065,fill:{color:it.cor},line:{color:it.cor}});
+        sl.addText(it.dir,{x:b.x+8.2,y:yy,w:0.8,h:0.3,fontFace:'Calibri',fontSize:11,bold:true,color:it.cor,align:'right',valign:'middle'});
+        sl.addText(it.nota||'',{x:b.x+9.07,y:yy,w:2.9,h:0.3,fontFace:'Calibri',fontSize:10,italic:true,color:APRES_COR.claro,valign:'middle'});
+      } else {
+        var lw2=1.9;
+        sl.addText(it.nome,{x:b.x+0.22,y:yy,w:1.45,h:0.3,fontFace:'Calibri',fontSize:11,bold:true,color:APRES_COR.texto,valign:'middle'});
+        sl.addText(it.qtd,{x:b.x+1.72,y:yy,w:0.35,h:0.3,fontFace:'Calibri',fontSize:11,color:APRES_COR.muted,align:'right',valign:'middle'});
+        sl.addShape(pptx.ShapeType.roundRect,{x:b.x+2.25,y:yy+0.09,w:lw2,h:0.13,rectRadius:0.065,fill:{color:APRES_COR.trilho},line:{color:APRES_COR.trilho}});
+        var larg2=lw2*Math.max(0,Math.min(100,it.pct))/100;
+        if(larg2>0.02) sl.addShape(pptx.ShapeType.roundRect,{x:b.x+2.25,y:yy+0.09,w:larg2,h:0.13,rectRadius:0.065,fill:{color:APRES_COR.verde},line:{color:APRES_COR.verde}});
+        sl.addText(it.dir,{x:b.x+4.3,y:yy,w:1.5,h:0.3,fontFace:'Calibri',fontSize:11,bold:true,color:APRES_COR.texto,align:'right',valign:'middle'});
+      }
+    });
+    return;
+  }
+  if(b.t==='concl'){
+    sl.addShape(pptx.ShapeType.rect,{x:b.x-0.40,y:b.y+0.11,w:0.22,h:0.22,fill:{color:APRES_COR.red},line:{color:APRES_COR.red}});
+    sl.addText(b.titulo,{x:b.x,y:b.y,w:b.w,h:0.4,fontFace:'Cambria',fontSize:15,bold:true,color:APRES_COR.texto,valign:'middle'});
+    sl.addText(b.texto,{x:b.x,y:b.y+0.45,w:b.w,h:1.3,fontFace:'Calibri',fontSize:12,color:APRES_COR.muted,valign:'top',lineSpacingMultiple:1.25});
+  }
+}
+
 // ════════════════════════════════════════════════════════
 //  METAS COMERCIAIS — Firestore (config/metas). Meta Geral e Meta de
 //  Eventos usam % mensal (distribuição da empresa); cada consultor tem uma
@@ -17223,6 +18322,7 @@ var DASH_MODULOS = [
   {id:'dash-com',       card:'home-btn-com',        label:'📈 Dashboard Comercial',       grupo:'Gestão'},
   {id:'dash-metas',     card:'home-btn-metas',      label:'🎯 Metas',                     grupo:'Gestão'},
   {id:'dash-resultados',card:'home-btn-resultados', label:'🏆 Resultados Mensais',        grupo:'Gestão'},
+  {id:'dash-apres',     card:'home-btn-apres',      label:'🎤 Apresentação Gerencial',    grupo:'Gestão'},
   {id:'dash-conc',      card:'home-btn-conc',       label:'🔄 Conciliação de Agenda',     grupo:'Gestão'},
   {id:'dash-fin',       card:'home-btn-fin',        label:'💰 Financeiro',                grupo:'Gestão'},
   {id:'dash-ger',       card:'home-btn-ger',        label:'📊 Dashboard Gerencial',       grupo:'Gestão'},
