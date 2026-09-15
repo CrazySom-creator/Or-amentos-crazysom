@@ -118,6 +118,11 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .fk-drawer-foot{padding-bottom:20px;}
 body{padding-bottom:84px;}
 .rodape-acoes{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap;}
+/* Aviso da trava de condicao de pagamento (Venda Ganha) */
+.pgto-aviso{background:#4a0d0d;border:1px solid #c62828;border-left:4px solid #c62828;border-radius:5px;padding:9px 12px;margin:10px 0;font-size:11.5px;color:#ffb4b4;line-height:1.6;}
+.pgto-aviso b{color:#fff;}
+.pgto-aviso ul{margin:5px 0 0 16px;padding:0;}
+.pgto-aviso li{margin:2px 0;}
 /* ── Apresentacao Gerencial: conferencia dos slides na tela ── */
 .apres-slide-wrap{margin-bottom:18px;}
 .apres-slide-cab{font-size:10px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;}
@@ -2653,6 +2658,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
   <div class="modal-box fin-modal">
     <h2>💰 Financeiro da Venda</h2>
     <p class="sub" id="fin-sub">Orçamento — Cliente</p>
+    <div class="pgto-aviso" id="pgto-aviso-fin" style="display:none"></div>
 
     <div class="fin-resumo">
       <div class="fin-card">
@@ -3069,6 +3075,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
 
   <div class="fin-inline" id="fin-inline">
     <h4>💰 Acompanhamento Financeiro</h4>
+    <div class="pgto-aviso" id="pgto-aviso-inline" style="display:none"></div>
     <div class="fin-inline-resumo">
       <div class="fin-inline-card"><label>Total</label><span id="fi-total">R$ 0,00</span></div>
       <div class="fin-inline-card"><label>Pago</label><span class="verde" id="fi-pago">R$ 0,00</span></div>
@@ -5686,7 +5693,12 @@ async function _executarSave(num,cli,dt,opts){
     _naoSalvo=false;
     _versaoAtual=dados._versao; // atualizar versão local
     _driveCache[d.id]=null;
-    if(opts.mostrarStatus!==false) driveStatus('✅ Salvo: '+d.nome,'ok');
+    var _pgtoR=_pgtoCondicaoDefinida();
+    if(opts.mostrarStatus!==false){
+      if(_pgtoR.ok) driveStatus('✅ Salvo: '+d.nome,'ok');
+      else driveStatus('✅ Salvo — ⚠️ falta definir a CONDIÇÃO DE PAGAMENTO desta Venda Ganha (o contrato não será emitido sem ela)','err');
+    }
+    if(typeof _pgtoRenderAviso==='function') _pgtoRenderAviso();
     driveListarSilencioso();
     _eventoAutoRegistrar();
     if(_estoqueAtivo() && typeof estoqueRecalcularCompromissos==='function') estoqueRecalcularCompromissos(d.id);
@@ -8314,6 +8326,95 @@ async function _gaExcluirEvento(calendarId, eventId, token){
   }
 }
 
+// ── Venda Ganha desfeita: limpa a agenda ──────────────────────────────────
+// Pedido do usuário (set/2026): cliente que desistiu ou adiou volta de Venda
+// Ganha para Perdida/Standby, e os eventos precisam sair do Google Agenda —
+// senão a data continua ocupada na grade da equipe e a logística monta um
+// evento que não existe mais. Voltando para Venda Ganha depois (caso de
+// reagendamento), a automação recria tudo do zero, porque os IDs antigos são
+// apagados aqui.
+var _GA_ROTULO={montagemEventId:'Montagem', eventoEventId:'Evento', desmontagemEventId:'Desmontagem', preReservaEventId:'Pré-reserva'};
+
+async function _gaRemoverEventosDoOrcamento(driveId, ids, opts){
+  opts=opts||{};
+  var chaves=['montagemEventId','eventoEventId','desmontagemEventId'];
+  if(opts.incluirPreReserva) chaves.push('preReservaEventId');
+  var aRemover=chaves.filter(function(k){ return ids && ids[k]; });
+  if(!aRemover.length) return {removidos:0, erros:[], rotulos:[]};
+
+  if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
+  var cfg=(typeof GOOGLE_AGENDA_CONFIG!=='undefined'&&GOOGLE_AGENDA_CONFIG)||{};
+  if(!cfg.clientId||!cfg.calendarId) return {removidos:0, erros:['Google Agenda não configurado'], rotulos:[]};
+
+  var token=await googleAgendaObterToken();
+  var erros=[], removidos=0, rotulos=[];
+  for(var i=0;i<aRemover.length;i++){
+    var k=aRemover[i];
+    try{
+      await _gaExcluirEvento(cfg.calendarId, ids[k], token);
+      removidos++; rotulos.push(_GA_ROTULO[k]||k);
+    }catch(e){
+      erros.push((_GA_ROTULO[k]||k)+': '+_gaErroAmigavel(e.message));
+    }
+  }
+
+  // Apaga os IDs gravados — inclusive os que falharam ao excluir: o ID ficou
+  // apontando pra um evento que não é mais do sistema, e mantê-lo faria o
+  // próximo envio tentar ATUALIZAR aquele evento em vez de criar um novo.
+  if(driveId){
+    try{
+      var upd={};
+      aRemover.forEach(function(k){ upd['googleAgenda.'+k]=firebase.firestore.FieldValue.delete(); });
+      await fbDb.collection('orcamentos').doc(driveId).update(upd);
+    }catch(e){ console.warn('[Google Agenda] IDs não puderam ser limpos no Firestore:', e&&e.message); }
+    if(typeof _funilCache!=='undefined'&&_funilCache){
+      var orcCache=_funilCache.find(function(o){ return o.driveId===driveId; });
+      if(orcCache&&orcCache.dados&&orcCache.dados.googleAgenda){
+        aRemover.forEach(function(k){ delete orcCache.dados.googleAgenda[k]; });
+      }
+    }
+  }
+  return {removidos:removidos, erros:erros, rotulos:rotulos};
+}
+
+// Decide o que fazer com a agenda quando o status comercial muda.
+// • saindo de Venda Ganha  -> apaga Montagem/Evento/Desmontagem.
+//   (Venda Perdida apaga também a Pré-reserva: a data está liberada de vez.
+//    Standby/Negociação preservam a pré-reserva, que é justamente o "estou
+//    segurando a data" enquanto o cliente remarca.)
+// • entrando em Venda Ganha -> quem recria é _gaAutoEnviarSeGanha().
+function _gaAoMudarStatusComercial(statusAnterior, statusNovo, driveId, idsExternos){
+  if(statusAnterior!=='ganha' || statusNovo==='ganha') return;
+  var ids=Object.assign({}, idsExternos || (typeof orcAtualGoogleAgenda!=='undefined'&&orcAtualGoogleAgenda) || {});
+  var incluirPre=(statusNovo==='perdida');
+  var chaves=['montagemEventId','eventoEventId','desmontagemEventId'].concat(incluirPre?['preReservaEventId']:[]);
+  if(!chaves.some(function(k){ return ids[k]; })) return;
+
+  // Limpa o estado local ANTES da chamada assíncrona: o salvarNoDrive() que
+  // vem logo em seguida grava o orçamento inteiro, e se orcAtualGoogleAgenda
+  // ainda tivesse os IDs antigos eles voltariam pro documento.
+  if(typeof orcAtualGoogleAgenda!=='undefined' && (!idsExternos || driveId===driveIdAtual)){
+    chaves.forEach(function(k){ delete orcAtualGoogleAgenda[k]; });
+  }
+
+  var rotuloStatus=(statusNovo==='perdida')?'Venda Perdida':(statusNovo==='standby'?'Standby':'saída de Venda Ganha');
+  _toastMostrar('🗓️ Removendo os eventos do Google Agenda ('+rotuloStatus+')...','');
+  _gaRemoverEventosDoOrcamento(driveId, ids, {incluirPreReserva:incluirPre})
+    .then(function(r){
+      if(!r.removidos && r.erros.length){
+        _toastMostrar('⚠️ Não foi possível remover os eventos do Google Agenda: '+r.erros.join('; ')+'. Apague manualmente na agenda.','warn');
+        return;
+      }
+      var msg='🗓️ '+r.removidos+' evento(s) removido(s) do Google Agenda ('+r.rotulos.join(', ')+') — '+rotuloStatus+'.';
+      if(statusNovo!=='perdida') msg+=' Ao voltar para Venda Ganha, os eventos são recriados com as novas datas.';
+      if(r.erros.length) msg+=' Pendências: '+r.erros.join('; ');
+      _toastMostrar(msg, r.erros.length?'warn':'ok');
+    })
+    .catch(function(e){
+      _toastMostrar('⚠️ Falha ao remover os eventos do Google Agenda: '+_gaErroAmigavel(e&&e.message)+'. Apague manualmente na agenda.','warn');
+    });
+}
+
 async function _gaEnviarEventosParaOrcamento(driveId, form, dadosCompletos, eventosDisp){
   if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
   if(!GOOGLE_AGENDA_CONFIG.clientId||!GOOGLE_AGENDA_CONFIG.calendarId){
@@ -9014,14 +9115,24 @@ function salvarComercial(){
   }
 
   // CONFIRMAR o status agora — único ponto onde comercialStatus muda
+  var _statusAnterior=comercialStatus;
   comercialStatus=statusParaSalvar;
   _comercialStatusSelecionado='';
 
+  // Saindo de Venda Ganha (desistência/adiamento): limpa o Google Agenda.
+  _gaAoMudarStatusComercial(_statusAnterior, comercialStatus, driveIdAtual);
+
+  var _obsAgenda='';
+  if(_statusAnterior==='ganha' && comercialStatus!=='ganha'){
+    _obsAgenda=' [Eventos removidos do Google Agenda]';
+  } else if(_statusAnterior!=='ganha' && comercialStatus==='ganha' && _statusAnterior){
+    _obsAgenda=' [Eventos reenviados ao Google Agenda]';
+  }
   comercialHist.push({
     status:comercialStatus,
     motivo:motivo||'',
     usuario:usuarioAtual?usuarioAtual.nome:'—',
-    obs:obs,
+    obs:(obs||'')+_obsAgenda,
     data:new Date().toLocaleString('pt-BR'),
     dataISO:new Date().toISOString().split('T')[0]
   });
@@ -9200,6 +9311,69 @@ function _contratoAutoMarcarEnviadoAposGerar(){
 // (pagamento integral após a data do evento) | 'outra' (qualquer outra
 // condição — exige Análise de Crédito). Cai em 'padrao' quando o campo
 // ainda não existe (orçamentos salvos antes deste recurso).
+// ── TRAVA: Venda Ganha exige condição de pagamento definida ───────────────
+// Pedido do usuário (set/2026): "quando é dado venda ganha seja obrigatório
+// inserir a condição de pagamento para poder salvar e emitir contrato".
+// "Condição definida" = as PARCELAS do Financeiro completas: pelo menos uma,
+// cada uma com vencimento, valor e forma de pagamento, e a soma batendo com o
+// total da venda. É o que o Financeiro precisa pra cobrar e o que alimenta a
+// Liberação de Montagem — sem isso a venda entra no sistema sem previsão de
+// recebimento.
+// Retorna {ok:bool, faltando:[textos]}. Só vale para comercialStatus==='ganha'.
+var PGTO_TOLERANCIA=1.00;   // diferença em R$ aceita entre parcelas e total
+
+function _pgtoCondicaoDefinida(){
+  if(comercialStatus!=='ganha') return {ok:true, faltando:[]};
+  var faltando=[];
+  var lista=finParcelas||[];
+  if(!lista.length){
+    return {ok:false, faltando:['Nenhuma parcela cadastrada — informe como e quando o cliente vai pagar.']};
+  }
+  var semData=[], semValor=[], semForma=[];
+  lista.forEach(function(p,i){
+    var rot=(p&&p.desc?p.desc:('Parcela '+(i+1)));
+    if(!p || !p.data) semData.push(rot);
+    if(!p || !(parseFloat(p.valor)>0)) semValor.push(rot);
+    if(!p || !String(p.forma||'').trim()) semForma.push(rot);
+  });
+  if(semData.length)  faltando.push('Sem data de vencimento: '+semData.join(', '));
+  if(semValor.length) faltando.push('Sem valor: '+semValor.join(', '));
+  if(semForma.length) faltando.push('Sem forma de pagamento: '+semForma.join(', '));
+
+  var soma=lista.reduce(function(t,p){return t+(parseFloat(p&&p.valor)||0);},0);
+  var total=finGetTotal();
+  if(total>0 && Math.abs(soma-total)>PGTO_TOLERANCIA){
+    faltando.push('A soma das parcelas ('+fmt(soma)+') não fecha com o total da venda ('+fmt(total)+') — diferença de '+fmt(Math.abs(soma-total))+'.');
+  }
+  return {ok:faltando.length===0, faltando:faltando};
+}
+
+// Mensagem única, usada no Salvar Financeiro e na emissão do contrato.
+function _pgtoAlertaObrigatorio(acao){
+  var r=_pgtoCondicaoDefinida();
+  if(r.ok) return false;
+  alert('⛔ CONDIÇÃO DE PAGAMENTO OBRIGATÓRIA\n\n'
+    +'Esta venda está marcada como VENDA GANHA, então a condição de pagamento precisa estar definida '
+    +(acao||'para continuar')+'.\n\nO que falta:\n\n• '+r.faltando.join('\n• ')
+    +'\n\nAbra "Editar Financeiro", lance as parcelas com vencimento, valor e forma de pagamento, e confirme que a soma fecha com o total da venda.');
+  return true;
+}
+
+// Tarja permanente nas duas telas do Financeiro (popup e painel do
+// orçamento), pra pendência ficar visível antes de a pessoa tentar salvar.
+function _pgtoRenderAviso(){
+  var r=_pgtoCondicaoDefinida();
+  ['pgto-aviso-fin','pgto-aviso-inline'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(!el) return;
+    if(r.ok || comercialStatus!=='ganha'){ el.style.display='none'; el.innerHTML=''; return; }
+    el.style.display='block';
+    el.innerHTML='<b>⛔ Condição de pagamento obrigatória</b> — esta venda está marcada como <b>Venda Ganha</b>. '
+      +'Sem as parcelas definidas, o financeiro não salva e o contrato não é emitido.'
+      +'<ul>'+r.faltando.map(function(f){return '<li>'+eh(f)+'</li>';}).join('')+'</ul>';
+  });
+}
+
 function _pgtoTipo(){
   return gv('f-pgto-tipo')||'padrao';
 }
@@ -11263,7 +11437,16 @@ function _fkDropOrc(driveId, novaEtapa){
 }
 
 async function _fkMudarEtapaRapido(driveId, novaEtapa){
+  var _orcAntes = _funilCache.find(function(o){ return o.driveId === driveId; });
+  var _etapaAntes = (_orcAntes && _orcAntes.dados && _orcAntes.dados.comercialStatus) || '';
+  var _idsAgenda = Object.assign({}, (_orcAntes && _orcAntes.dados && _orcAntes.dados.googleAgenda) || {});
   var novoDados = await _funilPatchOrcamento(driveId, function(dados){
+    // Saindo de Venda Ganha: os IDs saem do documento junto (os eventos são
+    // apagados da agenda logo abaixo).
+    if(_etapaAntes==='ganha' && novaEtapa!=='ganha' && dados.googleAgenda){
+      ['montagemEventId','eventoEventId','desmontagemEventId'].forEach(function(k){ delete dados.googleAgenda[k]; });
+      if(novaEtapa==='perdida') delete dados.googleAgenda.preReservaEventId;
+    }
     dados.comercialStatus = novaEtapa;
     dados.comercialHist = (dados.comercialHist||[]).concat([{
       status: novaEtapa,
@@ -11274,7 +11457,10 @@ async function _fkMudarEtapaRapido(driveId, novaEtapa){
       dataISO: new Date().toISOString().split('T')[0]
     }]);
   });
-  if(novoDados){ funilFiltrarLista(); funilHomeFiltrarLista(); _fkAutoCriarTarefaEtapa(driveId, novaEtapa); }
+  if(novoDados){
+    _gaAoMudarStatusComercial(_etapaAntes, novaEtapa, driveId, _idsAgenda);
+    funilFiltrarLista(); funilHomeFiltrarLista(); _fkAutoCriarTarefaEtapa(driveId, novaEtapa);
+  }
 }
 
 // Salva uma alteração em um orçamento do cache do funil sem abrir o editor completo
@@ -11769,7 +11955,14 @@ async function fkMudarEtapaComSalvamento(etapa, motivo, obs){
   var origTxt = btn ? btn.textContent : '';
   if(btn){ btn.disabled = true; btn.textContent = '⏳ Salvando...'; }
   var driveIdAlvo = _fkDetDriveId;
+  var _orcAntesT = _funilCache.find(function(o){ return o.driveId === driveIdAlvo; });
+  var _etapaAntesT = (_orcAntesT && _orcAntesT.dados && _orcAntesT.dados.comercialStatus) || '';
+  var _idsAgendaT = Object.assign({}, (_orcAntesT && _orcAntesT.dados && _orcAntesT.dados.googleAgenda) || {});
   var novoDados = await _funilPatchOrcamento(driveIdAlvo, function(dados){
+    if(_etapaAntesT==='ganha' && etapa!=='ganha' && dados.googleAgenda){
+      ['montagemEventId','eventoEventId','desmontagemEventId'].forEach(function(k){ delete dados.googleAgenda[k]; });
+      if(etapa==='perdida') delete dados.googleAgenda.preReservaEventId;
+    }
     dados.comercialStatus = etapa;
     dados.comercialHist = (dados.comercialHist||[]).concat([{
       status: etapa,
@@ -11782,6 +11975,7 @@ async function fkMudarEtapaComSalvamento(etapa, motivo, obs){
   });
   if(btn){ btn.disabled = false; btn.textContent = origTxt; }
   if(novoDados){
+    _gaAoMudarStatusComercial(_etapaAntesT, etapa, driveIdAlvo, _idsAgendaT);
     funilFiltrarLista();
     funilHomeFiltrarLista();
     _fkAutoCriarTarefaEtapa(driveIdAlvo, etapa);
@@ -12381,6 +12575,7 @@ function finAtualizarResumo(){
 }
 
 function finRenderParcelas(){
+  if(typeof _pgtoRenderAviso==='function') _pgtoRenderAviso();
   var tbody=document.getElementById('fin-tbody');
   if(!tbody)return;
   if(!finParcelas.length){
@@ -12672,6 +12867,14 @@ function finPresetCustom(){
 }
 
 function salvarFinanceiro(){
+  // Trava: com Venda Ganha, não salva o financeiro sem a condição de
+  // pagamento definida (ver _pgtoCondicaoDefinida()).
+  if(_pgtoAlertaObrigatorio('para salvar o financeiro')){
+    var stB=document.getElementById('fin-save-status');
+    if(stB){ stB.textContent='⛔ Condição de pagamento obrigatória'; stB.style.color='#ef5350'; }
+    _pgtoRenderAviso();
+    return;
+  }
   finObs=document.getElementById('fin-obs').value||'';
   finNumVenda=(document.getElementById('fin-num-venda').value||'').trim();
   renderFinanceiroInline();
@@ -12690,6 +12893,7 @@ function salvarFinanceiro(){
 }
 
 function renderFinanceiroInline(){
+  if(typeof _pgtoRenderAviso==='function') _pgtoRenderAviso();
   var panel=document.getElementById('fin-inline');
   if(!panel)return;
   // Mostrar apenas se venda ganha e houver parcelas
@@ -23706,6 +23910,9 @@ function gerarContrato(){
     alert('⚠️ DADOS INCOMPLETOS PARA EMISSÃO DO CONTRATO\n\nOs seguintes campos precisam ser preenchidos:\n\n• ' + camposFaltando.join('\n• ') + '\n\nPreencha os dados e tente novamente.');
     return;
   }
+  // Trava: contrato de Venda Ganha só sai com a condição de pagamento
+  // definida — é ela que vira a cláusula de pagamento do contrato.
+  if(_pgtoAlertaObrigatorio('para emitir o contrato')) return;
 
   function _iniciarGeracao(){
     if(typeof window.jspdf === 'undefined' && typeof window.jsPDF === 'undefined'){
