@@ -4702,7 +4702,7 @@ async function aprovAcaoLista(idx,novo,ev){
 
 async function abrirOrcDrive(idx,ev){
   ev.stopPropagation();var orc=_listaAprov[idx];if(!orc)return;
-  document.getElementById('aprov-ov').classList.remove('open');
+  _fecharTudoParaAbrirOrc();
   _origemOrc=abrirAprovacoes;
   // Apenas fecha o painel de aprovações e abre o orçamento (sem ir para home)
   await driveCarregar(orc.driveId, orc.nome);
@@ -11287,8 +11287,7 @@ async function fkEtapaAbrirOrcamento(tipo,id){
   }
   if(!confirm('Abrir o orçamento "'+nome+'" para edição?')) return;
   _fkEtapaPendentes={};
-  document.getElementById('fk-etapa-ov').classList.remove('open');
-  if(typeof fecharFunilHome==='function') fecharFunilHome();
+  _fecharTudoParaAbrirOrc();
   if(typeof fecharHome==='function') fecharHome();
   _origemOrc=abrirFunilHome;
   window.scrollTo({top:0,behavior:'smooth'});
@@ -12111,6 +12110,7 @@ function fkAbrirOrcamentoCompleto(){
 async function funilAbrirOrcamento(driveId, nome){
   if(!driveId){ alert('ID do orçamento não encontrado.'); return; }
   if(!confirm('Abrir orçamento "'+nome+'"?\nDados não salvos do orçamento atual serão perdidos.')) return;
+  _fecharTudoParaAbrirOrc();
   // Rolar para o topo do formulário
   window.scrollTo({top:0, behavior:'smooth'});
   await driveCarregar(driveId, nome);
@@ -12548,7 +12548,7 @@ function funilHomeFiltrarLista(){
 async function funilHomeAbrirOrcamento(driveId, nome){
   if(!driveId){ alert('ID do orcamento nao encontrado.'); return; }
   if(!confirm('Abrir orcamento "'+nome+'"?')) return;
-  fecharFunilHome();
+  _fecharTudoParaAbrirOrc();
   fecharHome();
   _origemOrc=abrirFunilHome;
   window.scrollTo({top:0, behavior:'smooth'});
@@ -19500,7 +19500,7 @@ function clienteHistoricoAbrir(){
 }
 
 function clienteHistoricoAbrirOrcamento(id,nome){
-  document.getElementById('cliente-hist-ov').classList.remove('open');
+  _fecharTudoParaAbrirOrc();
   _origemOrc=abrirClientes;
   driveCarregar(id,nome);
 }
@@ -19734,8 +19734,7 @@ async function eventoHistoricoAbrir(idx){
   }
 }
 function eventoHistoricoAbrirOrcamento(id,nome){
-  document.getElementById('evento-hist-ov').classList.remove('open');
-  document.getElementById('eventos-ov').classList.remove('open');
+  _fecharTudoParaAbrirOrc();
   if(typeof fecharHome==='function') fecharHome();
   driveCarregar(id,nome);
 }
@@ -21358,7 +21357,7 @@ function _faltantesFmtDataBr(d){
   return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : d;
 }
 function faltantesAbrirOrcamento(orcamentoId, nomeExibido){
-  var ov=document.getElementById('faltantes-ov'); if(ov) ov.classList.remove('open');
+  _fecharTudoParaAbrirOrc();
   if(typeof fecharHome==='function') fecharHome();
   if(typeof driveCarregar==='function') driveCarregar(orcamentoId, nomeExibido);
 }
@@ -22366,16 +22365,49 @@ function dashDrill(key, tituloEnc){
 }
 
 
+// Módulos que podem ser a ORIGEM de uma abertura de orçamento — a ordem
+// importa só para o botão Voltar (o primeiro que estiver aberto é o destino
+// do retorno). Mantém o id do overlay junto da função que o reabre.
+var ORC_ORIGENS=[
+  ['dash-elab-ov', function(){return abrirDashElab();}],
+  ['dash-ov',      function(){return abrirDashboard();}],
+  ['log-ov',       function(){return abrirLogistica();}],
+  ['os-mod-ov',    function(){return abrirModuloOS();}],
+  ['conc-ov',      function(){return abrirConciliacao();}],
+  ['dashfin-ov',   function(){return abrirDashFin();}],
+  ['dash-ger-ov',  function(){return abrirDashGerencial();}],
+  ['rel-ov',       function(){return abrirRelatorios();}],
+  ['apres-ov',     function(){return abrirApresentacao();}]
+];
+
+// Fecha tudo que estiver por cima do editor antes de carregar um orçamento.
+// Sem isso o orçamento abre ATRÁS da tela do módulo (Logística, OS, Funil,
+// Financeiro…), que continua ocupando a tela inteira — e dá a impressão de
+// que o botão "Abrir Orçamento" não fez nada.
+function _fecharTudoParaAbrirOrc(){
+  document.querySelectorAll('.ov.open').forEach(function(o){ o.classList.remove('open'); });
+  document.querySelectorAll('.pov.open').forEach(function(o){ o.classList.remove('open'); });
+  if(typeof fecharFunilHome==='function'){ try{ fecharFunilHome(); }catch(e){} }
+  var homeOv=document.getElementById('home-ov');
+  if(homeOv) homeOv.classList.add('hidden');
+  if(typeof _atualizarBtnVoltarFloat==='function') _atualizarBtnVoltarFloat();
+}
+
 async function dashDrillAbrirOrc(driveId, nome){
   if(!driveId){alert('ID do orçamento não encontrado.');return;}
   if(!confirm('Abrir orçamento "'+nome+'"?\n\nDados não salvos do orçamento atual serão perdidos.'))return;
-  // Guarda de qual dos dois dashboards veio, antes de fechar os dois
-  var _veioDashElab=document.getElementById('dash-elab-ov').classList.contains('open');
-  var _veioDash=document.getElementById('dash-ov').classList.contains('open');
-  _origemOrc=_veioDashElab?abrirDashElab:(_veioDash?abrirDashboard:null);
-  // Fechar todos os modais abertos
-  document.getElementById('dash-ov').classList.remove('open');
-  document.getElementById('dash-elab-ov').classList.remove('open');
+  // De qual módulo veio (pro botão Voltar devolver pra tela certa).
+  _origemOrc=null;
+  for(var _i=0;_i<ORC_ORIGENS.length;_i++){
+    var _el=document.getElementById(ORC_ORIGENS[_i][0]);
+    if(_el && _el.classList.contains('open')){ _origemOrc=ORC_ORIGENS[_i][1]; break; }
+  }
+  // Fecha TUDO que estiver por cima — antes só os dois dashboards eram
+  // fechados, então ao abrir o orçamento a partir da Logística (ou da OS, da
+  // Conciliação, do Financeiro…) o orçamento carregava ATRÁS da tela do
+  // módulo, que continuava ocupando a tela inteira: parecia que o botão
+  // "Abrir Orçamento Completo" não fazia nada.
+  _fecharTudoParaAbrirOrc();
   window.scrollTo({top:0,behavior:'smooth'});
   await driveCarregar(driveId, nome);
   // Após carregar, rolar para o Acompanhamento Comercial
@@ -23111,7 +23143,7 @@ function dashFinDrill(key, titulo){
 async function dashFinAbrirOrc(driveId, nome){
   if(!driveId){alert('ID do orçamento não encontrado.');return;}
   if(!confirm('Abrir orçamento "'+nome+'"?\n\nDados não salvos do orçamento atual serão perdidos.'))return;
-  document.getElementById('dashfin-ov').classList.remove('open');
+  _fecharTudoParaAbrirOrc();
   _origemOrc=abrirDashFin;
   window.scrollTo({top:0,behavior:'smooth'});
   await driveCarregar(driveId, nome);
