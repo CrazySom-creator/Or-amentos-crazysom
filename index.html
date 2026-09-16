@@ -123,6 +123,8 @@ body{padding-bottom:84px;}
 .pgto-aviso b{color:#fff;}
 .pgto-aviso ul{margin:5px 0 0 16px;padding:0;}
 .pgto-aviso li{margin:2px 0;}
+/* Logistica: marcador de OS com Liberacao de Montagem pendente */
+.log-pend-chip{font-size:9px;font-weight:800;padding:2px 8px;border-radius:10px;background:#4a0d0d;color:#ff8a8a;border:1px solid #c62828;white-space:nowrap;}
 /* ── Apresentacao Gerencial: conferencia dos slides na tela ── */
 .apres-slide-wrap{margin-bottom:18px;}
 .apres-slide-cab{font-size:10px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;}
@@ -2272,7 +2274,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       </div>
     </div>
 
-    <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">🟢 Fechado &nbsp; 🟡 Pré-reservado (só entra aqui quem já tem uma pré-reserva criada de verdade no Google Agenda via 📌 Pré-Agenda — estar em negociação sozinho não segura a data) &nbsp; · &nbsp; cor da barra/chip = fase (<span style="color:#039BE5;font-weight:800">azul=Montagem</span>, <span style="color:#D50000;font-weight:800">vermelho=Evento</span>, <span style="color:#8E24AA;font-weight:800">roxo=Desmontagem</span>) — mesma separação por cor que usamos no Google Agenda &nbsp; · &nbsp; a barra cobre de Montagem a Desmontagem (ou só o dia do Evento, quando não há montagem/desmontagem configuradas)</div>
+    <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px"><span style="color:#ff8a8a;font-weight:800">⚠️ = Liberação de Montagem pendente</span> (passe o mouse para ver o que falta) &nbsp; · &nbsp; 🟢 Fechado &nbsp; 🟡 Pré-reservado (só entra aqui quem já tem uma pré-reserva criada de verdade no Google Agenda via 📌 Pré-Agenda — estar em negociação sozinho não segura a data) &nbsp; · &nbsp; cor da barra/chip = fase (<span style="color:#039BE5;font-weight:800">azul=Montagem</span>, <span style="color:#D50000;font-weight:800">vermelho=Evento</span>, <span style="color:#8E24AA;font-weight:800">roxo=Desmontagem</span>) — mesma separação por cor que usamos no Google Agenda &nbsp; · &nbsp; a barra cobre de Montagem a Desmontagem (ou só o dia do Evento, quando não há montagem/desmontagem configuradas)</div>
 
     <div id="log-corpo"><div class="dash-loading">⏳ Carregando dados...</div></div>
   </div>
@@ -5699,6 +5701,7 @@ async function _executarSave(num,cli,dt,opts){
       else driveStatus('✅ Salvo — ⚠️ falta definir a CONDIÇÃO DE PAGAMENTO desta Venda Ganha (o contrato não será emitido sem ela)','err');
     }
     if(typeof _pgtoRenderAviso==='function') _pgtoRenderAviso();
+    if(typeof _gaSincronizarLiberacaoAgenda==='function') setTimeout(_gaSincronizarLiberacaoAgenda,0);
     driveListarSilencioso();
     _eventoAutoRegistrar();
     if(_estoqueAtivo() && typeof estoqueRecalcularCompromissos==='function') estoqueRecalcularCompromissos(d.id);
@@ -8415,6 +8418,38 @@ function _gaAoMudarStatusComercial(statusAnterior, statusNovo, driveId, idsExter
     });
 }
 
+// ── Liberação de Montagem x Google Agenda ────────────────────────────────
+// Os títulos dos eventos levam o prefixo "⚠️ LIBERAÇÃO PENDENTE" enquanto a
+// OS não está liberada. Quando o que faltava é resolvido (contrato assinado,
+// entrada paga, nº do Conta Azul preenchido, liberação manual), os eventos
+// que já estão na agenda precisam ser REESCRITOS — senão a equipe continua
+// vendo "pendente" numa OS que já liberou. Roda depois de cada salvamento do
+// orçamento aberto; compara o estado atual com o gravado no último envio
+// (googleAgenda.liberadaNoEnvio) e só age quando realmente mudou.
+function _gaSincronizarLiberacaoAgenda(){
+  try{
+    if(typeof comercialStatus==='undefined' || comercialStatus!=='ganha') return;
+    if(!driveIdAtual) return;
+    var ids=(typeof orcAtualGoogleAgenda!=='undefined'&&orcAtualGoogleAgenda)||{};
+    if(!ids.montagemEventId && !ids.eventoEventId && !ids.desmontagemEventId) return;
+    var liberadaAgora=montagemLiberada();
+    if(ids.liberadaNoEnvio===liberadaAgora) return;      // a agenda já reflete
+    var eventosDisp=_gaEventosDisponiveis();
+    if(!eventosDisp.length) return;
+    var idAlvo=driveIdAtual;
+    _gaEnviarEventosParaOrcamento(idAlvo, getForm(), getDadosCompletos(), eventosDisp)
+      .then(function(){
+        _toastMostrar(liberadaAgora
+          ? '📅 Google Agenda atualizado: a tarja "LIBERAÇÃO PENDENTE" saiu dos eventos — OS liberada.'
+          : '📅 Google Agenda atualizado: os eventos voltaram a marcar LIBERAÇÃO PENDENTE.', liberadaAgora?'ok':'warn');
+      })
+      .catch(function(e){
+        console.warn('[Google Agenda] Não foi possível atualizar a tarja de liberação:', e&&e.message);
+        _toastMostrar('⚠️ A Liberação de Montagem mudou, mas não foi possível atualizar os eventos no Google Agenda. Use o botão 📅 Agenda para reenviar.','warn');
+      });
+  }catch(e){ console.warn('[Google Agenda] _gaSincronizarLiberacaoAgenda:', e&&e.message); }
+}
+
 async function _gaEnviarEventosParaOrcamento(driveId, form, dadosCompletos, eventosDisp){
   if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
   if(!GOOGLE_AGENDA_CONFIG.clientId||!GOOGLE_AGENDA_CONFIG.calendarId){
@@ -8427,6 +8462,10 @@ async function _gaEnviarEventosParaOrcamento(driveId, form, dadosCompletos, even
   var resultado=await _gaEnviarListaEventos(eventosDisp,descricao,enderecoEvento,idsExistentes,GOOGLE_AGENDA_CONFIG.calendarId,token);
   var novosIds=resultado.novosIds, erros=resultado.erros;
   var googleAgendaAtualizado=Object.assign({},idsExistentes,novosIds);
+  // Guarda em que estado de Liberação de Montagem a agenda foi escrita — é o
+  // que permite detectar depois "a OS foi liberada mas os eventos ainda estão
+  // com a tarja de pendente" e reescrever os títulos.
+  googleAgendaAtualizado.liberadaNoEnvio=_montagemLiberadaDe(form,dadosCompletos);
 
   // Venda Ganha substitui qualquer Pré-Reserva feita antes (negociação
   // avançada, "segurando a data") pelos eventos definitivos — apaga o evento
@@ -8666,6 +8705,7 @@ async function googleAgendaEnviarOS(){
   var erros=resultado.erros;
 
   var googleAgendaAtualizado=Object.assign({},idsExistentes,novosIds);
+  googleAgendaAtualizado.liberadaNoEnvio=montagemLiberada();
   if(driveIdAtual===idOrcamentoEnvio) orcAtualGoogleAgenda=googleAgendaAtualizado;
   try{
     // Merge imediato no Firestore — além de manter orcAtualGoogleAgenda em
@@ -9146,12 +9186,7 @@ function salvarComercial(){
   if(pendEl)pendEl.style.display='none';
 
   // Abrir financeiro se venda ganha
-  if(comercialStatus==='ganha'){
-    setTimeout(function(){abrirFinanceiro();},300);
-    // Envio automático para o Google Agenda ao fechar a venda — evita o
-    // esquecimento de adicionar os eventos; silencioso em caso de erro.
-    _gaAutoEnviarSeGanha(driveIdAtual, getDadosCompletos());
-  }
+  if(comercialStatus==='ganha') setTimeout(function(){abrirFinanceiro();},300);
 
   renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
 
@@ -9171,6 +9206,15 @@ function salvarComercial(){
       .then(function(){
         if(btnReg){btnReg.textContent='✅ Salvo!';btnReg.style.background='#2e7d32';}
         setTimeout(function(){if(btnReg){btnReg.textContent=origTxt;btnReg.style.background=origBg;btnReg.disabled=false;}},2000);
+        // Envio automático para o Google Agenda — DEPOIS que o orçamento já
+        // está salvo. Antes os dois rodavam em paralelo: a automação gravava
+        // os IDs dos eventos no Firestore e, logo atrás, o salvarNoDrive
+        // regravava o documento inteiro com o googleAgenda ANTIGO (vazio),
+        // apagando os IDs recém-criados. No envio seguinte o sistema não
+        // encontrava ID nenhum e criava tudo de novo — era daí que vinha o
+        // evento DUPLICADO na agenda (um com a tarja de liberação pendente,
+        // outro sem).
+        if(comercialStatus==='ganha') _gaAutoEnviarSeGanha(driveIdAtual, getDadosCompletos());
         funilRecarregar();
       })
       .catch(function(){
@@ -17950,7 +17994,13 @@ function logRenderizar(){
     if(cons && (o.form&&o.form['f-cons'])!==cons) return false;
     return !!_logRangeEvento(o);
   }).map(function(o){
-    return {o:o, range:_logRangeEvento(o), status:_logStatus(o)};
+    // Liberação de Montagem: mesma regra do gate do orçamento e da tarja que
+    // vai pro Google Agenda, calculada aqui a partir do cache do dashboard
+    // (o orçamento não está aberto). Só faz sentido em venda fechada.
+    var ehGanha=((o.dados&&o.dados.comercialStatus)||'')==='ganha';
+    var pend=ehGanha ? !_montagemLiberadaDe(o.form||{}, o.dados||{}) : false;
+    return {o:o, range:_logRangeEvento(o), status:_logStatus(o),
+            pendente:pend, pendTexto:pend?_montagemTarjaTextoDe(o.form||{}, o.dados||{}):''};
   });
 
   window._logItens=itens;
@@ -18028,9 +18078,11 @@ function _logCardDia(it,diaISO){
     +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
     +'<div style="font-size:12px;font-weight:800;color:var(--text)">'+(hora?hora+' — ':'')+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+'</div>'
     +'<div style="display:flex;gap:6px;align-items:center">'
+    +(it.pendente?'<span class="log-pend-chip" title="'+eh(it.pendTexto)+'">⚠️ OS PENDENTE</span>':'')
     +'<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:10px;background:'+st.cor+'22;color:'+st.cor+'">'+st.label+'</span>'
     +'<span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:'+corFase+'22;color:'+corFase+'">'+LOG_FASE_LABEL[fase]+'</span>'
     +'</div></div>'
+    +(it.pendente?'<div style="font-size:9.5px;color:#ffb4b4;margin-top:4px">⚠️ Liberação de Montagem pendente — '+eh(it.pendTexto)+'</div>':'')
     +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">'+eh(f['f-tipo']||'')+(f['f-local']?' · '+eh(f['f-local']):'')+(endereco?' · '+eh(endereco):'')+'</div>'
     +'<div style="font-size:10px;color:var(--text-dim);margin-top:2px">'+eh(f['f-num']||'')+(f['f-cons']?' · Consultor: '+eh(f['f-cons']):'')+'</div>'
     +'</div>';
@@ -18056,9 +18108,10 @@ function _logRenderizarSemana(){
       var fase=_logFaseNoDia(it.o,diaISO);
       var corFase=LOG_FASE_COR[fase]||'var(--text-muted)';
       var dot=it.status&&it.status.label==='Fechado'?'🟢':'🟡';
-      return '<div style="font-size:9px;padding:3px 5px;border-radius:4px;background:'+corFase+'22;color:'+corFase+';margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" '
+      var av=it.pendente?'⚠️ ':'';
+      return '<div style="font-size:9px;padding:3px 5px;border-radius:4px;background:'+corFase+'22;color:'+corFase+';margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer'+(it.pendente?';box-shadow:inset 2px 0 0 #ff5555':'')+'" '
         +(it.o.driveId?'onclick="logAbrirPreviewOS(\''+it.o.driveId+'\')"':'')
-        +' title="'+eh(f['f-cliente']||'')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+' — '+LOG_FASE_LABEL[fase]+'">'+dot+' '+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+'</div>';
+        +' title="'+eh(f['f-cliente']||'')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+' — '+LOG_FASE_LABEL[fase]+(it.pendente?' — ⚠️ LIBERAÇÃO DE MONTAGEM PENDENTE: '+eh(it.pendTexto):'')+'">'+av+dot+' '+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+'</div>';
     }).join('');
     return '<div style="flex:1;min-width:0;border:1px solid var(--border);border-radius:6px;overflow:hidden'+(ehHoje?';border-color:var(--R)':'')+'">'
       +'<div style="background:var(--surface-2);padding:5px;text-align:center;font-size:10px;font-weight:800;color:'+(ehHoje?'var(--R)':'var(--text-dim)')+';cursor:pointer" onclick="logIrParaDia(\''+diaISO+'\')">'+headerTxt+'</div>'
@@ -18096,10 +18149,10 @@ function _logRenderizarMes(){
         var f=it.o.form||{};
         var fase=_logFaseNoDia(it.o,dia.iso);
         var corFase=LOG_FASE_COR[fase]||'var(--text-muted)';
-        var dot=it.status&&it.status.label==='Fechado'?'🟢':'🟡';
-        return '<div style="font-size:8px;padding:1px 3px;border-radius:3px;background:'+corFase+'22;color:'+corFase+';margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" '
+        var dot=(it.pendente?'⚠️':'')+(it.status&&it.status.label==='Fechado'?'🟢':'🟡');
+        return '<div style="font-size:8px;padding:1px 3px;border-radius:3px;background:'+corFase+'22;color:'+corFase+';margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer'+(it.pendente?';box-shadow:inset 2px 0 0 #ff5555':'')+'" '
           +(it.o.driveId?'onclick="logAbrirPreviewOS(\''+it.o.driveId+'\')"':'')
-          +' title="'+eh(f['f-cliente']||'')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+' — '+LOG_FASE_LABEL[fase]+'">'+dot+' '+eh(f['f-cliente']||'—')+'</div>';
+          +' title="'+eh(f['f-cliente']||'')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+' — '+LOG_FASE_LABEL[fase]+(it.pendente?' — ⚠️ LIBERAÇÃO DE MONTAGEM PENDENTE: '+eh(it.pendTexto):'')+'">'+dot+' '+eh(f['f-cliente']||'—')+'</div>';
       }).join('');
       var maisHtml=doDia.length>maxChips?('<div style="font-size:8px;color:var(--text-dim);cursor:pointer;text-decoration:underline" onclick="logAbrirDiaPopup(\''+dia.iso+'\')">+'+(doDia.length-maxChips)+' mais</div>'):'';
       corpoHtml+='<div style="border:1px solid var(--border);border-radius:4px;min-height:64px;padding:3px;opacity:'+(dia.noMes?'1':'.4')+(ehHoje?';border-color:var(--R)':'')+'">'
@@ -18293,7 +18346,7 @@ function logExportarExcel(){
     'Logística de Eventos — Fechados e Pré-reservados','',
     'Período: '+_logRelPeriodoLabel(),
     'Ordenação: '+_logRelOrdemLabel(),'',
-    ['Nº','Cliente','Nome do Evento','Consultor','Status',
+    ['Nº','Cliente','Nome do Evento','Consultor','Status','Liberação de Montagem',
      'Montagem','Hora Montagem','Evento','Hora Evento','Desmontagem','Hora Desmontagem','Local'].map(csvEscape).join(';')
   ];
   itens.forEach(function(it){
@@ -18304,6 +18357,7 @@ function logExportarExcel(){
       csvEscape(f['f-nome-evento']||''),
       csvEscape(f['f-cons']||''),
       csvEscape(st.label),
+      csvEscape(it.pendente?('PENDENTE — '+(it.pendTexto||'')):'Liberada'),
       csvEscape(f['f-dm']?fD(f['f-dm']):''),
       csvEscape(f['f-dm']?(f['f-hm']||''):''),
       csvEscape(f['f-dia']?fD(f['f-dia']):''),
@@ -18334,7 +18388,7 @@ function logExportarPDF(){
       +'<td>'+eh(f['f-cliente']||'')+'</td>'
       +'<td>'+eh(f['f-nome-evento']||'')+'</td>'
       +'<td>'+eh(f['f-cons']||'')+'</td>'
-      +'<td>'+eh(st.label)+'</td>'
+      +'<td>'+eh(st.label)+(it.pendente?'<br><b style="color:#c62828;font-size:8.5px">⚠️ OS PENDENTE</b>':'')+'</td>'
       +'<td>'+(f['f-dm']?fD(f['f-dm']):'')+'</td>'
       +'<td class="h">'+eh(f['f-dm']?(f['f-hm']||''):'')+'</td>'
       +'<td>'+(f['f-dia']?fD(f['f-dia']):'')+'</td>'
