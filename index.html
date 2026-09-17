@@ -9739,9 +9739,20 @@ function _montagemTarjaTexto(){
   return 'Falta: '+faltando.join('; ')+'.';
 }
 
+// Quem pode liberar/revogar a montagem manualmente. Mesmo padrão "nega por
+// padrão, libera por exceção" das demais ações sensíveis: Gerência, Diretoria
+// e Admin sempre podem; qualquer outro cargo só com a permissão
+// "liberar-montagem" marcada em Admin > Permissões por Cargo.
+function _podeLiberarMontagem(){
+  if(!usuarioAtual) return false;
+  if(['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0) return true;
+  var cargo=typeof _cargoEfetivo==='function'?_cargoEfetivo(usuarioAtual):(usuarioAtual.cargo||'');
+  return !!(cargo && _permissoes[cargo] && _permissoes[cargo]['liberar-montagem']===true);
+}
+
 function montagemLiberarManual(){
-  if(!usuarioAtual || ['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)<0){
-    alert('⚠️ Apenas Gerente Comercial, Diretor ou Administrador podem liberar a montagem manualmente.');
+  if(!_podeLiberarMontagem()){
+    alert('⚠️ Você não tem permissão para liberar a montagem manualmente.\n\nGerente Comercial, Diretor e Administrador podem sempre. Outros cargos precisam da permissão "🔓 Pode Liberar Montagem Manualmente", em Administração > Permissões por Cargo.');
     return;
   }
   var justificativa=prompt('⚠️ LIBERAÇÃO MANUAL DA MONTAGEM\n\nIsso libera a Ordem de Serviço e o envio ao Google Agenda mesmo sem todos os requisitos (aprovação + contrato assinado + pagamento confirmado).\n\nDescreva o motivo (obrigatório):');
@@ -9756,8 +9767,8 @@ function montagemLiberarManual(){
 }
 
 function montagemRevogarLiberacaoManual(){
-  if(!usuarioAtual || ['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)<0){
-    alert('⚠️ Apenas Gerente Comercial, Diretor ou Administrador podem revogar a liberação manual.');
+  if(!_podeLiberarMontagem()){
+    alert('⚠️ Você não tem permissão para revogar a liberação manual da montagem.');
     return;
   }
   montagemLiberacaoManual=false;
@@ -9779,7 +9790,7 @@ function renderMontagemGate(){
 
   var liberada=montagemLiberada();
   var r=montagemRequisitos();
-  var podeGerenciar=usuarioAtual&&['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0;
+  var podeGerenciar=_podeLiberarMontagem();
 
   var sa=document.getElementById('montagem-status-atual');
   if(sa){
@@ -18754,6 +18765,8 @@ async function permSalvar(){
   if(finPagoEl) _permissoes[cargo]['fin-marcar-pago']=finPagoEl.checked;
   var cancAprovEl=document.getElementById('perm-cancelar-aprovacao');
   if(cancAprovEl) _permissoes[cargo]['cancelar-aprovacao']=cancAprovEl.checked;
+  var libMontEl=document.getElementById('perm-liberar-montagem');
+  if(libMontEl) _permissoes[cargo]['liberar-montagem']=libMontEl.checked;
   var inadEl=document.getElementById('perm-fin-inadimplente');
   if(inadEl) _permissoes[cargo]['fin-inadimplente']=inadEl.checked;
   try{ localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes)); }catch(e){}
@@ -19008,6 +19021,12 @@ function permRenderizar(){
     +'<input type="checkbox" id="perm-fin-inadimplente"'+(perm['fin-inadimplente']===true?' checked':'')+' style="width:14px;height:14px;cursor:pointer"> 🚫 Pode Declarar Inadimplência'
     +'</label>'
     +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px;margin-left:22px">Permite marcar uma parcela como INADIMPLENTE — cliente que parou de responder às cobranças. A dívida continua registrada (não é baixa de pagamento), mas a parcela sai da lista "Em Atraso" e passa a contar no card "Inadimplentes" do Dashboard Financeiro. Exige um motivo, gravado junto com a data e o autor. Vem DESMARCADA por padrão. Gerência, Diretoria e Administradores já podem sempre.</div>'
+    +'</div>'
+    +'<div style="background:#1b0f05;border:1px solid #e65100;border-radius:6px;padding:10px 12px;margin-bottom:10px">'
+    +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#ff9800;font-weight:800;text-transform:uppercase">'
+    +'<input type="checkbox" id="perm-liberar-montagem"'+(perm['liberar-montagem']===true?' checked':'')+' style="width:14px;height:14px;cursor:pointer"> 🔓 Pode Liberar Montagem Manualmente'
+    +'</label>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px;margin-left:22px">Permite liberar a Montagem mesmo sem todos os requisitos cumpridos (contrato assinado, entrada paga, nº da venda no Conta Azul) — e também revogar essa liberação. Use em casos como pagamento combinado por fora do sistema ou urgência do cliente. Exige uma justificativa, gravada com data e autor no histórico do orçamento. Vem DESMARCADA por padrão. Gerência, Diretoria e Administradores já podem sempre.</div>'
     +'</div>'
     +'<div style="background:#200b0b;border:1px solid #c62828;border-radius:6px;padding:10px 12px;margin-bottom:10px">'
     +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#ef5350;font-weight:800;text-transform:uppercase">'
