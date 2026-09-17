@@ -2166,6 +2166,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-r btn-sm" onclick="concAtualizar()" title="Rebusca os orçamentos do Drive antes de recalcular">🔄 Atualizar</button>
         <button class="btn btn-o btn-sm" onclick="concVerificarAoVivo()" title="Confere cada evento já enviado direto no Google Calendar (existe? a data bate?) — pode pedir login do Google">🔎 Verificar ao Vivo</button>
+        <button class="btn btn-o btn-sm" id="conc-btn-limpar" onclick="concLimparAgendaOrfaos()" title="Procura eventos que continuam no Google Agenda de orçamentos que NÃO estão mais em Venda Ganha (perdidos, standby, em negociação) e remove">🧹 Limpar Agenda</button>
         <button class="btn btn-o btn-sm" onclick="concExportarExcel()" title="Exporta esta listagem para Excel (.csv)">📊 Exportar Excel</button>
         <button class="btn btn-o btn-sm" onclick="document.getElementById('conc-ov').classList.remove('open');abrirHome()">✕</button>
       </div>
@@ -8138,7 +8139,7 @@ function _gaErroAmigavel(msg){
     return 'o calendário configurado não foi encontrado. Confira a configuração do Google Agenda na Administração.';
   if(/Forbidden|insufficient|permission/i.test(msg))
     return 'a conta conectada não tem permissão de escrita nesse calendário.';
-  if(/invalid_grant|Unauthorized|401/i.test(msg))
+  if(/Invalid Credentials|invalid_grant|Unauthorized|401/i.test(msg))
     return 'a autorização do Google expirou. Conecte a conta de novo na Administração.';
   return msg;
 }
@@ -8350,34 +8351,42 @@ async function _gaRemoverEventosDoOrcamento(driveId, ids, opts){
   if(!cfg.clientId||!cfg.calendarId) return {removidos:0, erros:['Google Agenda não configurado'], rotulos:[]};
 
   var token=await googleAgendaObterToken();
-  var erros=[], removidos=0, rotulos=[];
+  var erros=[], removidos=0, rotulos=[], saiu=[];
   for(var i=0;i<aRemover.length;i++){
     var k=aRemover[i];
     try{
       await _gaExcluirEvento(cfg.calendarId, ids[k], token);
-      removidos++; rotulos.push(_GA_ROTULO[k]||k);
+      removidos++; rotulos.push(_GA_ROTULO[k]||k); saiu.push(k);
     }catch(e){
       erros.push((_GA_ROTULO[k]||k)+': '+_gaErroAmigavel(e.message));
     }
   }
 
-  // Apaga os IDs gravados — inclusive os que falharam ao excluir: o ID ficou
-  // apontando pra um evento que não é mais do sistema, e mantê-lo faria o
-  // próximo envio tentar ATUALIZAR aquele evento em vez de criar um novo.
-  if(driveId){
+  // Só limpa o ID do evento que REALMENTE saiu da agenda. O que falhou
+  // (autorização expirada, internet, popup bloqueado) mantém o ID gravado —
+  // é ele que permite tentar de novo depois, pela Conciliação de Agenda.
+  // Descartar o ID aqui deixaria um evento órfão no Google que o sistema
+  // nunca mais saberia localizar.
+  if(driveId && saiu.length){
     try{
       var upd={};
-      aRemover.forEach(function(k){ upd['googleAgenda.'+k]=firebase.firestore.FieldValue.delete(); });
+      saiu.forEach(function(k){ upd['googleAgenda.'+k]=firebase.firestore.FieldValue.delete(); });
       await fbDb.collection('orcamentos').doc(driveId).update(upd);
     }catch(e){ console.warn('[Google Agenda] IDs não puderam ser limpos no Firestore:', e&&e.message); }
-    if(typeof _funilCache!=='undefined'&&_funilCache){
-      var orcCache=_funilCache.find(function(o){ return o.driveId===driveId; });
-      if(orcCache&&orcCache.dados&&orcCache.dados.googleAgenda){
-        aRemover.forEach(function(k){ delete orcCache.dados.googleAgenda[k]; });
-      }
+  }
+  if(typeof _funilCache!=='undefined'&&_funilCache){
+    var orcCache=_funilCache.find(function(o){ return o.driveId===driveId; });
+    if(orcCache&&orcCache.dados&&orcCache.dados.googleAgenda){
+      saiu.forEach(function(k){ delete orcCache.dados.googleAgenda[k]; });
     }
   }
-  return {removidos:removidos, erros:erros, rotulos:rotulos};
+  if(typeof _dashDados!=='undefined'&&_dashDados){
+    var orcDash=_dashDados.find(function(o){ return o.driveId===driveId; });
+    if(orcDash&&orcDash.dados&&orcDash.dados.googleAgenda){
+      saiu.forEach(function(k){ delete orcDash.dados.googleAgenda[k]; });
+    }
+  }
+  return {removidos:removidos, erros:erros, rotulos:rotulos, saiu:saiu, restaram:aRemover.filter(function(k){return saiu.indexOf(k)<0;})};
 }
 
 // Decide o que fazer com a agenda quando o status comercial muda.
@@ -8396,21 +8405,24 @@ function _gaAoMudarStatusComercial(statusAnterior, statusNovo, driveId, idsExter
   // Limpa o estado local ANTES da chamada assíncrona: o salvarNoDrive() que
   // vem logo em seguida grava o orçamento inteiro, e se orcAtualGoogleAgenda
   // ainda tivesse os IDs antigos eles voltariam pro documento.
-  if(typeof orcAtualGoogleAgenda!=='undefined' && (!idsExternos || driveId===driveIdAtual)){
-    chaves.forEach(function(k){ delete orcAtualGoogleAgenda[k]; });
-  }
+  // O estado local só perde os IDs depois de confirmada a exclusão (abaixo) —
+  // se o Google recusar, o ID precisa continuar gravado pra permitir a
+  // retentativa pela Conciliação de Agenda.
 
   var rotuloStatus=(statusNovo==='perdida')?'Venda Perdida':(statusNovo==='standby'?'Standby':'saída de Venda Ganha');
   _toastMostrar('🗓️ Removendo os eventos do Google Agenda ('+rotuloStatus+')...','');
   _gaRemoverEventosDoOrcamento(driveId, ids, {incluirPreReserva:incluirPre})
     .then(function(r){
+      if(typeof orcAtualGoogleAgenda!=='undefined' && (!idsExternos || driveId===driveIdAtual)){
+        (r.saiu||[]).forEach(function(k){ delete orcAtualGoogleAgenda[k]; });
+      }
       if(!r.removidos && r.erros.length){
-        _toastMostrar('⚠️ Não foi possível remover os eventos do Google Agenda: '+r.erros.join('; ')+'. Apague manualmente na agenda.','warn');
+        _toastMostrar('⚠️ Não foi possível remover os eventos do Google Agenda: '+r.erros.join('; ')+'. Use "🧹 Limpar Agenda" na Conciliação de Agenda para tentar de novo.','warn');
         return;
       }
       var msg='🗓️ '+r.removidos+' evento(s) removido(s) do Google Agenda ('+r.rotulos.join(', ')+') — '+rotuloStatus+'.';
       if(statusNovo!=='perdida') msg+=' Ao voltar para Venda Ganha, os eventos são recriados com as novas datas.';
-      if(r.erros.length) msg+=' Pendências: '+r.erros.join('; ');
+      if(r.erros.length) msg+=' Pendências (tente de novo em Conciliação de Agenda > 🧹 Limpar Agenda): '+r.erros.join('; ');
       _toastMostrar(msg, r.erros.length?'warn':'ok');
     })
     .catch(function(e){
@@ -17552,6 +17564,85 @@ function concRenderizar(){
   concRenderizarTabela();
 }
 
+// ── Eventos órfãos: orçamento não está mais em Venda Ganha, mas ainda tem
+// evento gravado no Google Agenda. Acontece quando a remoção automática (ao
+// registrar Venda Perdida/Standby) não chegou a rodar — versão antiga do
+// sistema, autorização do Google expirada, popup bloqueado, internet caindo.
+// Como o ID do evento continua gravado no orçamento, dá pra localizar e
+// apagar depois. É a rede de segurança do ciclo "saiu de Venda Ganha".
+function _concOrfaos(){
+  var CHAVES=['montagemEventId','eventoEventId','desmontagemEventId'];
+  return (_dashDados||[]).filter(function(o){
+    var cs=(o.dados&&o.dados.comercialStatus)||'';
+    if(cs==='ganha') return false;
+    var ga=(o.dados&&o.dados.googleAgenda)||{};
+    return CHAVES.some(function(k){ return !!ga[k]; });
+  }).map(function(o){
+    var ga=(o.dados&&o.dados.googleAgenda)||{};
+    return {
+      o:o,
+      status:(o.dados&&o.dados.comercialStatus)||'—',
+      chaves:CHAVES.filter(function(k){ return !!ga[k]; })
+    };
+  });
+}
+
+function _concCaixaOrfaos(){
+  var lista=_concOrfaos();
+  if(!lista.length) return '';
+  return '<div style="background:#4a0d0d;border:1px solid #c62828;border-left:4px solid #c62828;border-radius:6px;padding:10px 12px;margin-bottom:12px">'
+    +'<div style="font-size:11.5px;font-weight:800;color:#ff8a8a;margin-bottom:5px">🧹 '+lista.length+' orçamento(s) fora de Venda Ganha ainda com evento no Google Agenda</div>'
+    +'<div style="font-size:10.5px;color:#ffb4b4;line-height:1.6;margin-bottom:7px">A venda foi desfeita no sistema, mas os eventos continuam ocupando a data na agenda da equipe. Clique em <b>🧹 Limpar Agenda</b>, no topo, para removê-los.</div>'
+    +lista.slice(0,12).map(function(x){
+      var f=x.o.form||{};
+      return '<div style="font-size:10.5px;color:#ffd0d0;padding:2px 0">• '+eh(f['f-num']||'')+' — '+eh(f['f-cliente']||'')
+        +' <span style="color:#ff8a8a">('+eh(COM_LBL_CURTO[x.status]||x.status)+')</span>'
+        +' · '+x.chaves.map(function(k){return _GA_ROTULO[k];}).join(', ')+'</div>';
+    }).join('')
+    +(lista.length>12?'<div style="font-size:10px;color:#ff8a8a;margin-top:4px">… e mais '+(lista.length-12)+'</div>':'')
+    +'</div>';
+}
+
+var COM_LBL_CURTO={enviada:'Proposta Enviada',negociacao:'Em Negociação',standby:'Standby',perdida:'Venda Perdida',ganha:'Venda Ganha'};
+
+async function concLimparAgendaOrfaos(){
+  var lista=_concOrfaos();
+  if(!lista.length){
+    alert('✅ Nenhum evento órfão encontrado.\n\nTodo orçamento que saiu de Venda Ganha já está sem evento no Google Agenda.');
+    return;
+  }
+  var resumo=lista.slice(0,15).map(function(x){
+    var f=x.o.form||{};
+    return '• '+(f['f-num']||'')+' — '+(f['f-cliente']||'')+' ('+(COM_LBL_CURTO[x.status]||x.status)+')';
+  }).join('\n');
+  if(!confirm('🧹 LIMPAR EVENTOS DA AGENDA\n\n'+lista.length+' orçamento(s) que NÃO estão mais em Venda Ganha ainda têm eventos no Google Agenda:\n\n'+resumo
+    +(lista.length>15?'\n… e mais '+(lista.length-15):'')
+    +'\n\nOs eventos de Montagem, Evento e Desmontagem desses orçamentos serão APAGADOS da agenda. Continuar?')) return;
+
+  var btn=document.getElementById('conc-btn-limpar');
+  var txt=btn?btn.innerHTML:'';
+  if(btn){ btn.disabled=true; btn.innerHTML='⏳ Limpando...'; }
+  var st=document.getElementById('conc-status');
+  var okTotal=0, falhas=[];
+  for(var i=0;i<lista.length;i++){
+    var x=lista[i], f=x.o.form||{};
+    if(st) st.textContent='🧹 Limpando '+(i+1)+' de '+lista.length+': '+(f['f-cliente']||'');
+    try{
+      var r=await _gaRemoverEventosDoOrcamento(x.o.driveId, (x.o.dados&&x.o.dados.googleAgenda)||{},
+        {incluirPreReserva:(x.status==='perdida')});
+      okTotal+=r.removidos;
+      if(r.erros.length) falhas.push((f['f-num']||'')+' '+(f['f-cliente']||'')+': '+r.erros.join('; '));
+    }catch(e){
+      falhas.push((f['f-num']||'')+' '+(f['f-cliente']||'')+': '+_gaErroAmigavel(e&&e.message));
+    }
+  }
+  if(btn){ btn.disabled=false; btn.innerHTML=txt; }
+  if(st) st.textContent='';
+  concRenderizar();
+  alert(okTotal+' evento(s) removido(s) do Google Agenda.'
+    +(falhas.length?('\n\n⚠️ Não foi possível remover:\n\n• '+falhas.join('\n• ')+'\n\nOs IDs continuam gravados — dá pra tentar de novo depois.'):'\n\n✅ Nada ficou pendente.'));
+}
+
 function concAtualizarResumo(){
   var el=document.getElementById('conc-resumo');
   var itens=window._concLista||[];
@@ -17577,7 +17668,8 @@ function concAtualizarResumo(){
     +'<div style="background:var(--surface-2);border:1px solid #f9a825;border-radius:8px;padding:10px"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">⚠️ Parciais</div><div style="font-size:18px;font-weight:900;color:#ffa726">'+porStatus.parcial+'</div></div>'
     +'<div style="background:var(--surface-2);border:1px solid #c62828;border-radius:8px;padding:10px"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">❌ Sem nenhum evento</div><div style="font-size:18px;font-weight:900;color:#ef5350">'+porStatus.nenhum+'</div></div>'
     +(jaVerificou?('<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">🔎 Confirmados ao vivo</div><div style="font-size:18px;font-weight:900;color:'+(liveProblema>0?'#ffa726':'#66bb6a')+'">'+liveOk+'/'+liveTotal+'</div></div>'):'')
-    +'</div>';
+    +'</div>'
+    +_concCaixaOrfaos();
 }
 
 var CONC_LIVE_LABEL={confirmado:'✅ Confirmado',apagado:'❌ Apagado na Agenda',data_diverge:'⚠️ Data diverge',erro:'⚠️ Erro ao verificar'};
