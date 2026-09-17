@@ -134,6 +134,18 @@ body{padding-bottom:84px;}
    assim a barra de rolagem da direita passa a ser a da tela em uso. */
 body.fundo-travado{position:fixed!important;left:0;right:0;width:100%;overflow:hidden!important;}
 @media(max-width:600px){.btn-voltar-float{width:42px;height:42px;font-size:17px;left:10px;bottom:10px;}}
+/* Botao flutuante "Atualizar", ao lado do Voltar */
+.btn-atualizar-float{position:fixed;left:70px;bottom:16px;z-index:99999;width:46px;height:46px;border-radius:50%;background:#1565c0;color:#fff;border:none;font-size:19px;display:none;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.5);transition:transform .15s ease,filter .15s ease;}
+.btn-atualizar-float:hover{filter:brightness(1.15);transform:scale(1.06);}
+.btn-atualizar-float:active{transform:scale(.96);}
+.btn-atualizar-float.girando{animation:atualizarGira 1s linear infinite;}
+@keyframes atualizarGira{to{transform:rotate(360deg);}}
+.atualizar-menu{position:fixed;left:16px;bottom:74px;z-index:99999;background:var(--surface);border:1px solid var(--border-strong);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.45);padding:6px;display:none;min-width:260px;}
+.atualizar-menu.aberto{display:block;}
+.atualizar-menu button{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);font-size:12px;font-weight:700;padding:9px 11px;border-radius:6px;cursor:pointer;}
+.atualizar-menu button:hover{background:var(--surface-2);}
+.atualizar-menu small{display:block;font-weight:400;font-size:10px;color:var(--text-muted);margin-top:2px;line-height:1.4;}
+@media(max-width:600px){.btn-atualizar-float{width:42px;height:42px;font-size:17px;left:60px;bottom:10px;}.atualizar-menu{left:10px;right:10px;min-width:0;bottom:60px;}}
 .add-bar{display:flex;gap:6px;margin-top:7px;align-items:flex-end;flex-wrap:wrap;}
 .add-bar .f{flex:1;min-width:130px;}
 .stot{text-align:right;padding:6px 0 2px;font-size:11px;color:var(--text-dim);border-top:2px solid var(--border);margin-top:5px;}
@@ -771,6 +783,15 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
 <body>
 <div id="global-loading-ov"><span class="cs-spinner"></span><b id="global-loading-msg">⏳ Carregando...</b></div>
 <button class="btn-voltar-float" id="btn-voltar-float" onclick="voltarTelaAnterior()" title="Voltar">←</button>
+<button class="btn-atualizar-float" id="btn-atualizar-float" onclick="atualizarMenuAbrir(event)" title="Atualizar — buscar o que foi salvo pelos outros usuários">🔄</button>
+<div class="atualizar-menu" id="atualizar-menu">
+  <button onclick="atualizarDadosAgora()">🔄 Atualizar dados
+    <small>Rebusca orçamentos, cadastros, tarefas e permissões salvos por outras pessoas. Rápido e sem sair do lugar.</small>
+  </button>
+  <button onclick="atualizarSistemaAgora()">⟳ Atualizar o sistema (nova versão)
+    <small>Recarrega a página limpando o cache — usa quando uma atualização do sistema foi publicada. Você continua conectado.</small>
+  </button>
+</div>
 <div class="wrap">
 
 <!-- ═══════════════════════════════════════════════════════ -->
@@ -3207,6 +3228,16 @@ var fbAuth=null, fbDb=null;
     fbAuth=firebase.auth();
     fbDb=firebase.firestore();
     _firebaseOk=true;
+    // Reconecta sozinho quando a página foi recarregada pelo botão
+    // "⟳ Atualizar o sistema" (ver _tentarReloginAutomatico). Em qualquer
+    // outra abertura, a tela de login aparece normalmente.
+    (function(){
+      function tentar(){
+        if(typeof _tentarReloginAutomatico==='function') _tentarReloginAutomatico();
+      }
+      if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',tentar);
+      else setTimeout(tentar,0);
+    })();
   }catch(e){
     _firebaseOk=false;
     _mostrarErroConexao('Erro ao inicializar o servidor: '+(e&&e.message?e.message:e));
@@ -3977,8 +4008,19 @@ async function doLogin(){
     document.getElementById('l-pass').value='';
     return;
   }
+  await _entrarNoSistema(email, perfil);
+}
+
+// Miolo do login, separado do formulário: monta o usuário, resolve a sessão
+// única e monta a tela. Usado pelo doLogin() e pelo relogin automático do
+// botão "Atualizar Sistema" (que recarrega a página sem pedir senha de novo).
+// opts.semChecarSessao pula a checagem de sessão duplicada — no relogin é o
+// MESMO dispositivo que acabou de recarregar, então perguntar "já conectado
+// em outro dispositivo?" seria só um susto desnecessário.
+async function _entrarNoSistema(email, perfil, opts){
+  opts=opts||{};
   var u={id:email,nome:perfil.nome||email,nivel:perfil.nivel||'consultor',cargo:perfil.cargo||'',comissaoPercentual:perfil.comissaoPercentual||0,emailComercial:perfil.emailComercial||''};
-  try{
+  if(!opts.semChecarSessao) try{
     var _sR=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'lock',lockAction:'session-check',usuarioId:u.id,usuarioNome:u.nome,deviceId:_getDeviceId(),ttl:35*60*1000})});
     var _sD=await _sR.json();
     if(_sD&&_sD.ok===false&&_sD.sessao){
@@ -3999,11 +4041,18 @@ async function doLogin(){
   // Chrome nem sempre oferece "Salvar senha?" sozinho num login todo via JS
   // (sem um <form> submetido de verdade); isso força o prompt de forma
   // confiável, sem depender só da heurística do navegador.
-  if(window.PasswordCredential && navigator.credentials && navigator.credentials.store){
+  if(!opts.semChecarSessao && window.PasswordCredential && navigator.credentials && navigator.credentials.store){
     try{
-      navigator.credentials.store(new PasswordCredential({id:email,password:pwd,name:u.nome})).catch(function(){});
+      var _pwdEl=document.getElementById('l-pass');
+      if(_pwdEl && _pwdEl.value) navigator.credentials.store(new PasswordCredential({id:email,password:_pwdEl.value,name:u.nome})).catch(function(){});
     }catch(eCred){}
   }
+  // Entrar SEMPRE começa do zero: nenhum orçamento carregado e nenhuma tela
+  // sobreposta aberta. Sem isso, ao voltar de um logout (ou de uma queda de
+  // sessão) sobrava o último orçamento preenchido no formulário e às vezes a
+  // Logística/Financeiro abertos por cima da tela inicial.
+  try{ await _resetarEstadoOrcamento(); }catch(eReset){ console.warn('reset ao entrar:', eReset&&eReset.message); }
+  _fecharTudoParaAbrirOrc();
   usuarioAtual=u;aprovStatus='rascunho';aprovHist=[];
   idleAtivar(); // Iniciar contador de logout automático por inatividade
   permCarregar();
@@ -4096,6 +4145,11 @@ async function logout(forcado){
   try{await fbAuth.signOut();}catch(e7){}
   usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();driveIdAtual=null;driveNumAtual=null;
   _atualizarBtnClonar();
+  // Limpa o formulário e fecha qualquer tela sobreposta — senão o próximo
+  // login (ou a volta depois de uma queda de sessão) encontra o último
+  // orçamento ainda preenchido e módulos como a Logística abertos por cima.
+  try{ await _resetarEstadoOrcamento(); }catch(eR){}
+  _fecharTudoParaAbrirOrc();
   fecharHome();
   // Resetar funil
   _funilCache=[];_funilCarregado=false;_funilCarregando=false;
@@ -6625,12 +6679,163 @@ function _agendarTravaFundo(){
 
 function _atualizarBtnVoltarFloat(){
   var b = document.getElementById('btn-voltar-float');
-  if(!b) return;
   var loginEl = document.getElementById('login-ov');
   var homeEl = document.getElementById('home-ov');
   var loginVisivel = loginEl && loginEl.style.display !== 'none';
   var homeVisivel = homeEl && !homeEl.classList.contains('hidden');
-  b.style.display = (loginVisivel || homeVisivel) ? 'none' : 'flex';
+  if(b) b.style.display = (loginVisivel || homeVisivel) ? 'none' : 'flex';
+  // O "Atualizar" acompanha o Voltar, mas também aparece na tela inicial —
+  // é de lá que a pessoa costuma querer puxar o que os outros salvaram.
+  var a = document.getElementById('btn-atualizar-float');
+  if(a){
+    a.style.display = loginVisivel ? 'none' : 'flex';
+    a.style.left = (b && b.style.display!=='none') ? '' : '16px';
+  }
+  if(loginVisivel) atualizarMenuFechar();
+}
+
+// ════════════════════════════════════════════════════════
+//  BOTÃO FLUTUANTE "ATUALIZAR"
+//  Pedido do usuário: ver o que os outros salvaram sem ter que sair e
+//  logar de novo. Duas ações, porque são dois problemas diferentes:
+//   • Atualizar dados     → rebusca o conteúdo (orçamentos, cadastros…).
+//   • Atualizar o sistema → recarrega a página limpando o cache, pra pegar
+//                           uma versão nova do próprio sistema, sem perder
+//                           o login (ver _tentarReloginAutomatico()).
+// ════════════════════════════════════════════════════════
+function atualizarMenuAbrir(ev){
+  if(ev) ev.stopPropagation();
+  var m=document.getElementById('atualizar-menu');
+  if(!m) return;
+  m.classList.toggle('aberto');
+}
+function atualizarMenuFechar(){
+  var m=document.getElementById('atualizar-menu');
+  if(m) m.classList.remove('aberto');
+}
+document.addEventListener('click',function(ev){
+  var m=document.getElementById('atualizar-menu');
+  if(!m||!m.classList.contains('aberto')) return;
+  if(m.contains(ev.target)) return;
+  if(ev.target && ev.target.id==='btn-atualizar-float') return;
+  atualizarMenuFechar();
+});
+
+var _atualizandoDados=false;
+async function atualizarDadosAgora(){
+  atualizarMenuFechar();
+  if(_atualizandoDados) return;
+  if(!usuarioAtual){ alert('Entre no sistema antes de atualizar.'); return; }
+  _atualizandoDados=true;
+  var btn=document.getElementById('btn-atualizar-float');
+  if(btn) btn.classList.add('girando');
+  _toastMostrar('🔄 Buscando o que foi salvo pelas outras pessoas...','');
+  var falhas=[];
+  async function passo(nome, fn){
+    try{ if(typeof fn==='function') await fn(); }
+    catch(e){ falhas.push(nome); console.warn('[Atualizar] '+nome+':', e&&e.message); }
+  }
+  // Cadastros e configurações compartilhadas
+  await passo('permissões', function(){ return permCarregar(); });
+  await passo('usuários', function(){ return usuariosCarregarFirestore().then(popularConsultores); });
+  await passo('clientes', function(){ return clientesCarregarStorage(); });
+  await passo('eventos', function(){ return eventosCarregarStorage(); });
+  await passo('tipos de evento', function(){ return tiposEventoCarregar(); });
+  await passo('cargos', function(){ return cargosCarregar(); });
+  await passo('tarefas', function(){ return tarefasCarregarStorage().then(function(){ if(typeof atualizarBadgeTarefas==='function') atualizarBadgeTarefas(); }); });
+  await passo('metas', function(){ return typeof metasCarregar==='function'?metasCarregar():null; });
+  await passo('configuração da agenda', function(){ return typeof googleAgendaCarregarConfig==='function'?googleAgendaCarregarConfig():null; });
+  // Listas de orçamentos (é o que mais muda no dia a dia)
+  _driveCache={};
+  await passo('lista de orçamentos', function(){ return driveListarSilencioso(); });
+  if(typeof _funilCarregado!=='undefined' && _funilCarregado){
+    await passo('funil', function(){ return funilCarregarDados(true); });
+  }
+  // Se algum módulo de análise está aberto, recarrega os dados dele também
+  var dashAberto=['dash-ov','dash-elab-ov','dashfin-ov','log-ov','conc-ov','dash-ger-ov','apres-ov']
+    .some(function(id){ var e=document.getElementById(id); return e&&e.classList.contains('open'); });
+  if(dashAberto) await passo('painéis abertos', function(){ return dashAtualizar(true); });
+  var logOv=document.getElementById('log-ov');
+  if(logOv&&logOv.classList.contains('open')&&typeof logRenderizar==='function') logRenderizar();
+  var concOv=document.getElementById('conc-ov');
+  if(concOv&&concOv.classList.contains('open')&&typeof concRenderizar==='function') concRenderizar();
+  var apOv=document.getElementById('apres-ov');
+  if(apOv&&apOv.classList.contains('open')&&typeof apresRenderizar==='function') apresRenderizar();
+  var homeOv=document.getElementById('home-ov');
+  if(homeOv&&!homeOv.classList.contains('hidden')&&typeof _renderizarHome==='function') _renderizarHome();
+
+  if(btn) btn.classList.remove('girando');
+  _atualizandoDados=false;
+  _toastMostrar(falhas.length
+    ? ('🔄 Dados atualizados, com pendências em: '+falhas.join(', ')+'.')
+    : '✅ Dados atualizados — você já está vendo o que os outros salvaram.', falhas.length?'warn':'ok');
+}
+
+// Recarrega a página inteira (equivalente ao Ctrl+Shift+R) mantendo o login:
+// deixa uma marca de curta validade em sessionStorage e, ao subir de novo, o
+// _tentarReloginAutomatico() reaproveita a sessão que o Firebase já mantém no
+// navegador. A marca vive só nesta aba e expira em 2 minutos — em qualquer
+// outra situação a tela de login continua aparecendo normalmente.
+async function atualizarSistemaAgora(){
+  atualizarMenuFechar();
+  if(!usuarioAtual){ location.reload(); return; }
+  if(_naoSalvo){
+    var cli=gv('f-cliente')||'este orçamento';
+    if(!confirm('⚠️ "'+cli+'" tem alterações não salvas.\n\nRecarregar o sistema agora descarta essas alterações. Continuar?')) return;
+  }
+  try{
+    sessionStorage.setItem('crazySomRelogin', JSON.stringify({email:usuarioAtual.id, ts:Date.now()}));
+  }catch(e){}
+  // Libera o bloqueio do orçamento aberto antes de recarregar, pra ele não
+  // ficar "preso" com este usuário depois que a página cair.
+  try{ if(driveIdAtual && !_modoLeitura) await lockLiberar(driveIdAtual); }catch(e){}
+  _toastMostrar('⟳ Recarregando o sistema...','');
+  setTimeout(function(){ location.reload(true); }, 250);
+}
+
+// Volta a entrar sem pedir senha logo depois do "Atualizar o sistema".
+// Só aceita a marca desta aba, com menos de 2 minutos, e com a sessão do
+// Firebase ainda válida para o MESMO e-mail. Qualquer divergência cai na
+// tela de login normal.
+async function _tentarReloginAutomatico(){
+  var marca=null;
+  try{ marca=JSON.parse(sessionStorage.getItem('crazySomRelogin')||'null'); }catch(e){}
+  try{ sessionStorage.removeItem('crazySomRelogin'); }catch(e){}
+  if(!marca || !marca.email) return false;
+  if(Date.now()-(marca.ts||0) > 2*60*1000) return false;
+  if(!_firebaseOk || !fbAuth) return false;
+  var atual=fbAuth.currentUser;
+  if(!atual){
+    // A restauração da sessão do Firebase não é instantânea depois do reload.
+    atual=await new Promise(function(ok){
+      var un=null, pronto=false;
+      function resolver(user){
+        if(pronto) return;
+        pronto=true;
+        // O callback pode disparar de forma SÍNCRONA (sessão já em cache),
+        // antes de 'un' receber a função de cancelamento — por isso o guard.
+        if(typeof un==='function'){ try{ un(); }catch(e){} }
+        ok(user||null);
+      }
+      try{ un=fbAuth.onAuthStateChanged(function(user){ resolver(user); }); }
+      catch(e){ resolver(fbAuth.currentUser); }
+      if(pronto && typeof un==='function'){ try{ un(); }catch(e){} }
+      setTimeout(function(){ resolver(fbAuth.currentUser); }, 4000);
+    });
+  }
+  if(!atual || String(atual.email||'').toLowerCase()!==String(marca.email).toLowerCase()) return false;
+  try{
+    var snap=await fbDb.collection('usuarios').doc(marca.email).get();
+    if(!snap.exists || (snap.data()||{}).bloqueado) return false;
+    var el=document.getElementById('l-err');
+    if(el) el.textContent='⏳ Reconectando...';
+    await _entrarNoSistema(marca.email, snap.data(), {semChecarSessao:true});
+    _toastMostrar('✅ Sistema atualizado — você continua conectado.','ok');
+    return true;
+  }catch(e){
+    console.warn('[Relogin automático]', e&&e.message);
+    return false;
+  }
 }
 
 function _renderizarHome(){
