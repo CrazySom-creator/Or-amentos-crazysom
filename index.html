@@ -938,12 +938,6 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <div class="home-card-desc">Parcelas, recebimentos e controle financeiro</div>
       </div>
 
-      <div class="home-card purple" id="home-btn-ger" style="display:none" onclick="abrirDashGerencial();fecharHome()">
-        <div class="home-card-ico">📊</div>
-        <div class="home-card-title">Dashboard Gerencial</div>
-        <div class="home-card-desc">Análise de performance, margem e resultados gerenciais</div>
-      </div>
-
     </div>
 
     <!-- OPERACIONAL -->
@@ -2119,7 +2113,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
 <!--  diretoria: KPIs do mês, evolução do ano, ranking de consultores,    -->
 <!--  comparativo Meta Geral x Meta de Eventos, ticket médio e insights   -->
 <!--  automáticos. Exporta em PDF (mesmo padrão html2pdf.js usado em      -->
-<!--  Relatórios/Dashboard Gerencial).                                    -->
+<!--  Relatórios).                                                        -->
 <!-- ═══════════════════════════════════════════════════════ -->
 <div class="ov" id="resultados-ov">
   <div class="modal-box dash-modal" style="max-width:1000px">
@@ -2658,25 +2652,6 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
   </div>
 </div>
 
-<div class="ov" id="dash-ger-ov">
-  <div class="modal-box" style="max-width:1100px;padding:0">
-    <div class="mb-head-sticky" style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:var(--surface-3);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">
-      <div><h2 style="margin:0;font-size:16px;color:var(--text)">&#128202; Dashboard Gerencial</h2>
-      <p style="margin:2px 0 0;font-size:11px;color:var(--text-muted)" id="dash-ger-sub">Carregando...</p></div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <input type="date" id="dash-ger-de" style="padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px">
-        <span style="color:var(--text-dim);font-size:11px">ate</span>
-        <input type="date" id="dash-ger-ate" style="padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px">
-        <select id="dash-ger-cons" style="padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px"><option value="">Todos os Consultores</option></select>
-        <button onclick="dashGerAtualizar()" style="padding:6px 12px;background:var(--R);color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">&#128260; Atualizar</button>
-        <button onclick="document.getElementById('dash-ger-ov').classList.remove('open');abrirHome()" style="padding:6px 12px;background:var(--surface-3);color:var(--text-muted);border:none;border-radius:4px;font-size:11px;cursor:pointer">&times; Fechar</button>
-      </div>
-    </div>
-    <div id="dash-ger-corpo" style="padding:16px;overflow-y:auto;max-height:80vh">
-      <div class="dash-loading">&#9203; Carregando dados gerenciais...</div>
-    </div>
-  </div>
-</div>
 
 <div class="ov" id="fin-ov">
   <div class="modal-box fin-modal">
@@ -2793,7 +2768,6 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     <button style="display:none" onclick="abrirMetas()" id="btn-metas"></button>
     <button style="display:none" onclick="abrirDashFin()" id="btn-dash-fin"></button>
     <button style="display:none" onclick="abrirRelatorios()"></button>
-    <button style="display:none" onclick="abrirDashGerencial()" id="btn-dash-ger"></button>
     <button style="display:none" onclick="abrirModuloOS()" id="btn-mod-os"></button>
     <button style="display:none" id="btn-adm" onclick="abrirAdm()"></button>
     <!-- Botão principal do menu: sai do orçamento (perguntando se há alterações
@@ -4088,7 +4062,6 @@ async function _entrarNoSistema(email, perfil, opts){
   document.getElementById('user-nome').textContent=u.nome;
   document.getElementById('user-cargo').textContent=u.cargo||(NIVEIS[u.nivel]||u.nivel);
   document.getElementById('btn-adm').style.display=u.nivel==='adm'?'inline-block':'none';
-  var _bG=document.getElementById('btn-dash-ger');if(_bG)_bG.style.display=['adm','gerente','diretor'].includes(u.nivel)?'inline-block':'none';
   // Aplicar visibilidade dos botões de dashboard conforme cargo
   var dashMap={'btn-dash-elab':'dash-elab','btn-dash-com':'dash-com','btn-metas':'dash-metas','btn-dash-fin':'dash-fin','btn-mod-os':'mod-os'};
   Object.keys(dashMap).forEach(function(btnId){
@@ -6752,7 +6725,7 @@ async function atualizarDadosAgora(){
     await passo('funil', function(){ return funilCarregarDados(true); });
   }
   // Se algum módulo de análise está aberto, recarrega os dados dele também
-  var dashAberto=['dash-ov','dash-elab-ov','dashfin-ov','log-ov','conc-ov','dash-ger-ov','apres-ov']
+  var dashAberto=['dash-ov','dash-elab-ov','dashfin-ov','log-ov','conc-ov','apres-ov']
     .some(function(id){ var e=document.getElementById(id); return e&&e.classList.contains('open'); });
   if(dashAberto) await passo('painéis abertos', function(){ return dashAtualizar(true); });
   var logOv=document.getElementById('log-ov');
@@ -18986,7 +18959,6 @@ var DASH_MODULOS = [
   {id:'dash-apres',     card:'home-btn-apres',      label:'🎤 Apresentação Gerencial',    grupo:'Gestão'},
   {id:'dash-conc',      card:'home-btn-conc',       label:'🔄 Conciliação de Agenda',     grupo:'Gestão'},
   {id:'dash-fin',       card:'home-btn-fin',        label:'💰 Financeiro',                grupo:'Gestão'},
-  {id:'dash-ger',       card:'home-btn-ger',        label:'📊 Dashboard Gerencial',       grupo:'Gestão'},
   {id:'rel',            card:'home-btn-rel',        label:'📄 Relatórios',                grupo:'Gestão'},
   // ── Restritos por nível — aparecem na lista apenas como informação ──
   {id:'mod-transfer',   card:'home-btn-transfer',   label:'🔄 Transferência de Responsável', grupo:'Restrito', so:'gestao'},
@@ -22691,7 +22663,6 @@ var ORC_ORIGENS=[
   ['os-mod-ov',    function(){return abrirModuloOS();}],
   ['conc-ov',      function(){return abrirConciliacao();}],
   ['dashfin-ov',   function(){return abrirDashFin();}],
-  ['dash-ger-ov',  function(){return abrirDashGerencial();}],
   ['rel-ov',       function(){return abrirRelatorios();}],
   ['apres-ov',     function(){return abrirApresentacao();}]
 ];
@@ -23894,7 +23865,7 @@ document.getElementById('l-user').addEventListener('keydown',function(e){if(e.ke
 // fechar — igual ao botão "✕"/"Fechar" de cada uma. Sub-modais (formulários,
 // históricos, etc., abertos DENTRO de uma tela principal) apenas se fecham,
 // permanecendo na tela que os abriu.
-var _OV_TELAS_PRINCIPAIS={'adm-ov':1,'aprov-ov':1,'faltantes-ov':1,'dashfin-ov':1,'metas-ov':1,'dash-elab-ov':1,'dash-ov':1,'os-mod-ov':1,'rel-ov':1,'dash-ger-ov':1};
+var _OV_TELAS_PRINCIPAIS={'adm-ov':1,'aprov-ov':1,'faltantes-ov':1,'dashfin-ov':1,'metas-ov':1,'dash-elab-ov':1,'dash-ov':1,'os-mod-ov':1,'rel-ov':1};
 function _fecharOvVoltarHome(id){
   if(id==='clientes-ov'){ if(!_clienteBuscaModoSelecao&&typeof abrirHome==='function') abrirHome(); return; }
   if(id==='produtos-ov'){ if(!_produtoBuscaModoSelecao&&typeof abrirHome==='function') abrirHome(); return; }
@@ -23910,130 +23881,6 @@ document.querySelectorAll('.ov').forEach(function(ov){
   });
 });
 
-// DASHBOARD GERENCIAL
-async function abrirDashGerencial(){
-  if(_moduloBloqueado('dash-ger')) return;
-  document.getElementById('dash-ger-ov').classList.add('open');
-  var hoje=new Date();var ini=new Date(hoje.getFullYear(),hoje.getMonth(),1);
-  var deEl=document.getElementById('dash-ger-de'),ateEl=document.getElementById('dash-ger-ate');
-  if(deEl&&!deEl.value) deEl.value=ini.toISOString().split('T')[0];
-  if(ateEl&&!ateEl.value) ateEl.value=hoje.toISOString().split('T')[0];
-  if(!_dashDados.length) await dashAtualizar();
-  dashGerRenderizar();
-}
-async function dashGerAtualizar(){
-  _dashDados=[];
-  document.getElementById('dash-ger-corpo').innerHTML='<div class="dash-loading">Recarregando...</div>';
-  await dashAtualizar();
-  dashGerRenderizar();
-}
-function dashGerFiltrar(){
-  var de=(document.getElementById('dash-ger-de')||{}).value||'';
-  var ate=(document.getElementById('dash-ger-ate')||{}).value||'';
-  var cons=(document.getElementById('dash-ger-cons')||{}).value||'';
-  return _dashDados.filter(function(o){
-    var dt=o.form&&o.form['f-data']||'';
-    if(de||ate){if(!dt) return false;if(de&&dt<de) return false;if(ate&&dt>ate) return false;}
-    if(cons&&(o.form&&o.form['f-cons'])!==cons) return false;
-    return true;
-  });
-}
-function dashGerRenderizar(){
-  var corpo=document.getElementById('dash-ger-corpo');if(!corpo) return;
-  var dados=dashGerFiltrar();
-  var consSet={};
-  _dashDados.forEach(function(o){var c=o.form&&o.form['f-cons']||'';if(c)consSet[c]=1;});
-  var consEl=document.getElementById('dash-ger-cons');
-  if(consEl){var sv2=consEl.value;consEl.innerHTML='<option value="">Todos</option>'+Object.keys(consSet).sort().map(function(c){return'<option value="'+eh(c)+'">'+eh(c)+'</option>';}).join('');consEl.value=sv2;}
-  document.getElementById('dash-ger-sub').textContent=dados.length+' orcamentos';
-  var volTotal=0,volAprov=0,volGanho=0,volPerdido=0,cntAprov=0,cntGanho=0,cntPerdido=0;
-  var porCons={},margens=[];
-  dados.forEach(function(o){
-    var val=dashValOrc(o);var cs=(o.dados&&o.dados.comercialStatus)||'';
-    volTotal+=val;
-    if(o.st==='aprovado'){cntAprov++;volAprov+=val;}
-    if(cs==='ganha'){cntGanho++;volGanho+=val;}
-    if(cs==='perdida'){cntPerdido++;volPerdido+=val;}
-    var custo=0;
-    try{var ex=o.dados&&o.dados.state&&o.dados.state.extra;if(ex)Object.keys(ex.rows||{}).forEach(function(aid){(ex.rows[aid]||[]).forEach(function(r){custo+=r.qty*(r.val||0)*(r.diaria||1);});});}catch(e){}
-    var margPct=val>0?Math.round((val-custo)/val*100):0;
-    var c2=o.form&&o.form['f-cons']||'(sem consultor)';
-    if(!porCons[c2]) porCons[c2]={nome:c2,qtd:0,aprovados:0,ganhos:0,perdidos:0,vol:0,volGanho:0,margemSum:0,margemCnt:0};
-    porCons[c2].qtd++;porCons[c2].vol+=val;
-    if(o.st==='aprovado') porCons[c2].aprovados++;
-    if(cs==='ganha'){porCons[c2].ganhos++;porCons[c2].volGanho+=val;}
-    if(cs==='perdida') porCons[c2].perdidos++;
-    porCons[c2].margemSum+=margPct;porCons[c2].margemCnt++;
-    margens.push({num:o.form&&o.form['f-num']||'?',nome:o.form&&o.form['f-cliente']||'?',evento:o.form&&o.form['f-nome-evento']||'',cons:c2,val:val,marg:margPct,cs:cs});
-  });
-  var taxaConv=cntAprov>0?Math.round(cntGanho/cntAprov*100):0;
-  var ticketMedio=cntAprov>0?volAprov/cntAprov:0;
-  var margemMedia=margens.length>0?Math.round(margens.reduce(function(t,m){return t+m.marg;},0)/margens.length):0;
-  var semImp=dados.filter(function(o){return o.st==='aprovado'&&!(o.dados&&o.dados.finImposto);}).length;
-  var semEtapa=dados.filter(function(o){var cs=(o.dados&&o.dados.comercialStatus)||'';return o.st==='aprovado'&&!cs;}).length;
-  var consArr=Object.values(porCons).sort(function(a,b2){return b2.volGanho-a.volGanho;});
-  function kpi(lbl,v,sub,cor){return '<div style="background:var(--surface-3);border:1px solid var(--border);border-radius:8px;padding:12px 14px"><div style="font-size:17px;font-weight:900;color:'+(cor||'#fff')+'">'+v+'</div><div style="font-size:10px;color:var(--text-muted);margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">'+lbl+'</div>'+(sub?'<div style="font-size:9px;color:var(--text-dim);margin-top:1px">'+sub+'</div>':''  )+'</div>';}
-  function ins(ico,txt,cor){return '<div style="display:flex;gap:8px;padding:8px 10px;background:var(--surface-3);border-radius:6px;border-left:3px solid '+(cor||'var(--surface-3)')+'">'+ico+' <span style="font-size:11px;color:var(--text-dim);line-height:1.4">'+txt+'</span></div>';}
-  var html='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-bottom:18px">';
-  html+=kpi(dados.length+' orc. | Volume Total',fmt(volTotal),'periodo selecionado','#fff');
-  html+=kpi(cntAprov+' aprov. | Vol. Aprovado',fmt(volAprov),Math.round(dados.length>0?cntAprov/dados.length*100:0)+'% do total','#66bb6a');
-  html+=kpi(cntGanho+' ganhos | Vol. Vendido',fmt(volGanho),'conv: '+taxaConv+'% dos aprov.','#42a5f5');
-  html+=kpi(cntPerdido+' perdidos',fmt(volPerdido),'','#ef5350');
-  html+=kpi('Ticket Medio',fmt(ticketMedio),'','#ffa726');
-  html+=kpi('Margem Media',margemMedia+'%','todos os orc.',margemMedia>=40?'#66bb6a':margemMedia>=25?'#ffa726':'#ef5350');
-  html+='</div>';
-  html+='<div style="background:#0a0f0a;border:1px solid #1e3a1e;border-radius:8px;padding:14px;margin-bottom:18px"><div style="font-size:12px;font-weight:900;color:#66bb6a;margin-bottom:10px">Insights Gerenciais</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">';
-  if(taxaConv>=60) html+=ins('&#127942;','Excelente taxa de conversao: '+taxaConv+'%','#66bb6a');
-  else if(taxaConv>=40) html+=ins('&#128077;','Taxa de conversao: '+taxaConv+'% - ha espaco para crescer','#ffa726');
-  else if(cntAprov>0) html+=ins('&#9888;&#65039;','Taxa baixa: '+taxaConv+'% - revisar abordagem','#ef5350');
-  if(margemMedia>=45) html+=ins('&#128185;','Margem media saudavel: '+margemMedia+'%','#66bb6a');
-  else if(margemMedia>=30) html+=ins('&#128118;','Margem media '+margemMedia+'% - monitorar descontos','#ffa726');
-  else if(margens.length>0) html+=ins('&#128680;','Margem baixa: '+margemMedia+'% - revisar precificacao','#ef5350');
-  if(consArr.length>0&&consArr[0].ganhos>0) html+=ins('&#11088;','Top: <b style="color:var(--text)">'+eh(consArr[0].nome)+'</b> - '+consArr[0].ganhos+' vendas - '+fmt(consArr[0].volGanho),'#42a5f5');
-  if(semImp>0) html+=ins('&#9888;&#65039;',''+semImp+' orc. aprovado(s) sem tipo de imposto definido','#e65100');
-  if(semEtapa>0) html+=ins('&#128204;',''+semEtapa+' orc. aprovado(s) sem etapa do funil','#e65100');
-  html+='</div></div>';
-  html+='<div style="font-size:11px;font-weight:900;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Performance por Consultor</div>';
-  html+='<div style="overflow-x:auto;margin-bottom:18px"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:var(--surface-3);color:var(--text-muted);font-size:10px"><th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)">Consultor</th><th style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border)">Orc.</th><th style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border)">Aprov.</th><th style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border)">Ganhos</th><th style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border)">Conv.</th><th style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border)">Vol.Total</th><th style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border)">Vol.Ganho</th><th style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border)">Margem</th></tr></thead><tbody>';
-  consArr.forEach(function(c,i){
-    var conv=c.aprovados>0?Math.round(c.ganhos/c.aprovados*100):0;
-    var marg=c.margemCnt>0?Math.round(c.margemSum/c.margemCnt):0;
-    var mc=marg>=45?'#66bb6a':marg>=30?'#ffa726':'#ef5350';
-    var cc=conv>=60?'#66bb6a':conv>=40?'#ffa726':'#ef5350';
-    html+='<tr style="border-bottom:1px solid var(--border-strong);background:'+(i%2===0?'#080808':'#0a0a0a')+'">'
-      +'<td style="padding:8px 10px;font-weight:700;color:var(--text)">'+eh(c.nome)+'</td>'
-      +'<td style="padding:8px 10px;text-align:center;color:var(--text-muted)">'+c.qtd+'</td>'
-      +'<td style="padding:8px 10px;text-align:center;color:var(--text-muted)">'+c.aprovados+'</td>'
-      +'<td style="padding:8px 10px;text-align:center;color:#66bb6a;font-weight:800">'+c.ganhos+'</td>'
-      +'<td style="padding:8px 10px;text-align:center;font-weight:800;color:'+cc+'">'+conv+'%</td>'
-      +'<td style="padding:8px 10px;text-align:right;color:var(--text-dim)">'+fmt(c.vol)+'</td>'
-      +'<td style="padding:8px 10px;text-align:right;font-weight:800;color:#42a5f5">'+fmt(c.volGanho)+'</td>'
-      +'<td style="padding:8px 10px;text-align:center;font-weight:900;color:'+mc+'">'+marg+'%</td>'
-      +'</tr>';
-  });
-  html+='</tbody></table></div>';
-  var sortedMarg=margens.slice().sort(function(a,b2){return b2.marg-a.marg;});
-  if(sortedMarg.length){
-    html+='<div style="font-size:11px;font-weight:900;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Orcamentos por Margem (top 20)</div>';
-    html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:var(--surface-3);color:var(--text-muted);font-size:10px"><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)">N.</th><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)">Cliente</th><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)">Nome do Evento</th><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)">Consultor</th><th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)">Status</th><th style="padding:7px 10px;text-align:right;border-bottom:1px solid var(--border)">Valor Final</th><th style="padding:7px 10px;text-align:center;border-bottom:1px solid var(--border)">Margem</th></tr></thead><tbody>';
-    sortedMarg.slice(0,20).forEach(function(m,i){
-      var mc=m.marg>=45?'#66bb6a':m.marg>=30?'#ffa726':'#ef5350';
-      var csSI=typeof FUNIL_SI!=='undefined'&&FUNIL_SI[m.cs]||null;
-      var csL=csSI?'<span style="padding:1px 6px;border-radius:8px;background:'+csSI.bg+';color:'+csSI.tx+';font-size:9px;font-weight:800">'+csSI.label+'</span>':'<span style="color:var(--text-dim)">-</span>';
-      html+='<tr style="border-bottom:1px solid var(--border-strong);background:'+(i%2===0?'#080808':'#0a0a0a')+'">'
-        +'<td style="padding:7px 10px;color:var(--text-muted);font-size:10px">'+eh(m.num)+'</td>'
-        +'<td style="padding:7px 10px;font-weight:700;color:var(--text-dim)">'+eh(m.nome)+'</td>'
-        +'<td style="padding:7px 10px;color:var(--text-muted)">'+eh(m.evento||'—')+'</td>'
-        +'<td style="padding:7px 10px;color:var(--text-muted)">'+eh(m.cons)+'</td>'
-        +'<td style="padding:7px 10px">'+csL+'</td>'
-        +'<td style="padding:7px 10px;text-align:right;font-weight:800;color:var(--text)">'+fmt(m.val)+'</td>'
-        +'<td style="padding:7px 10px;text-align:center;font-weight:900;color:'+mc+'">'+m.marg+'%</td>'
-        +'</tr>';
-    });
-    html+='</tbody></table></div>';
-  }
-  corpo.innerHTML=html;
-}
 
 
 // Verificar número de orçamento duplicado em tempo real (ao sair do campo)
