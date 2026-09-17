@@ -958,7 +958,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
 
       <div class="home-card" style="border-color:#37474f;background:var(--surface-3)" id="home-btn-produtos" onclick="abrirProdutos();fecharHome()">
         <div class="home-card-ico">📦</div>
-        <div class="home-card-title">Estoque — Produtos</div>
+        <div class="home-card-title">Cadastro de Equipamentos</div>
         <div class="home-card-desc">Cadastro de equipamentos com ficha técnica e foto</div>
       </div>
 
@@ -6935,15 +6935,25 @@ function _moduloDesativado(id){
 // incompletos, e número errado é pior que número nenhum: o consultor fecharia
 // venda confiando numa disponibilidade que não existe. Por isso a sinaleira
 // também sai de cena enquanto o módulo estiver fora do ar.
+// Chave da "sinaleira" de disponibilidade na tela de orçamento (🟢 3 livres,
+// 🔴 ocupado…). Ficava amarrada ao cadastro de equipamentos, mas são coisas
+// diferentes: cadastrar equipamento é seguro, enquanto a sinaleira depende
+// das movimentações e reservas, que ainda não estão prontas — e número errado
+// é pior que número nenhum, porque o consultor fecharia venda confiando numa
+// disponibilidade que não existe. Para religar a sinaleira quando o restante
+// do Estoque estiver concluído, troque esta linha para true.
+var ESTOQUE_SINALEIRA_ATIVA=false;
+
 function _estoqueAtivo(){
-  return !_moduloDesativado('mod-produtos');
+  return ESTOQUE_SINALEIRA_ATIVA && !_moduloDesativado('mod-produtos');
 }
 
 function _moduloBloqueado(dashId){
   // Módulo desativado não abre para NINGUÉM — nem para o Administrador. É um
   // estado de "em desenvolvimento", não uma questão de permissão.
   if(_moduloDesativado(dashId)){
-    alert('🚧 Módulo em desenvolvimento\n\nO Estoque está temporariamente desativado enquanto as demais funções são finalizadas. Nenhum dado foi apagado — ele volta assim que estiver pronto.');
+    var _m=DASH_MODULOS.filter(function(x){return x.id===dashId;})[0];
+    alert('🚧 Módulo em desenvolvimento\n\n'+((_m&&_m.label)||'Este módulo')+' está temporariamente desativado enquanto as demais funções são finalizadas. Nenhum dado foi apagado — ele volta assim que estiver pronto.');
     return true;
   }
   if(!usuarioAtual) return true;
@@ -18949,7 +18959,11 @@ var DASH_MODULOS = [
   // demais funções dele ficarem prontas. Nada foi apagado — para religar,
   // basta remover "desativado:true" das duas linhas abaixo (e a sinaleira de
   // estoque na tela de orçamento volta junto, ver _estoqueAtivo()).
-  {id:'mod-produtos',   card:'home-btn-produtos',   label:'📦 Estoque — Produtos',        grupo:'Cadastros', desativado:true},
+  // Cadastro de equipamentos LIBERADO (set/2026, pedido do usuário: "tenho
+  // novos equipamentos para cadastrar"). O restante do Estoque — Itens
+  // Faltantes e a sinaleira de disponibilidade no orçamento — continua fora
+  // do ar até as funções serem concluídas (ver ESTOQUE_SINALEIRA_ATIVA).
+  {id:'mod-produtos',   card:'home-btn-produtos',   label:'📦 Cadastro de Equipamentos',  grupo:'Cadastros'},
   {id:'dash-faltantes', card:'home-btn-faltantes',  label:'⚠️ Itens Faltantes (Estoque)', grupo:'Cadastros', desativado:true},
   // ── Gestão e análise ──
   {id:'dash-elab',      card:'home-btn-elab',       label:'📐 Dashboard Elaboração',      grupo:'Gestão'},
