@@ -10810,35 +10810,104 @@ function _anxSubirStorage(blob, tipo, caminho, idOrc, nomeOriginal, onProgresso)
 }
 
 // Envio pelo Firestore: o arquivo vira pedaços de base64, um documento cada.
+// ── ONDE, DENTRO DO BANCO, OS PEDAÇOS SÃO GRAVADOS ──────────────────────
+// As regras de segurança do Firestore liberam coleção por coleção. Uma
+// coleção nova ("anexos") nasce BLOQUEADA até alguém alterar as regras no
+// console — foi o que aconteceu ("o servidor recusou a gravação"). Em vez de
+// depender disso, o sistema tenta os lugares na ordem abaixo e fica com o
+// primeiro que as regras já permitem. O lugar usado fica gravado em cada
+// anexo (campo `col`), então ler e apagar sempre sabem onde procurar.
+//   1. dentro do próprio orçamento (subcoleção) — o lugar mais correto;
+//   2. coleção 'anexos' — quando as regras já a liberarem;
+//   3. coleção 'config' — onde o sistema já grava configurações.
+var ANX_LOCAIS=['orcamento','anexos','config'];
+var ANX_COL=null;   // lugar que funcionou nesta sessão
+
+function _anxDoc(col, id, i, idOrc){
+  if(col==='orcamento') return fbDb.collection('orcamentos').doc(idOrc).collection('anexos').doc(id+'_'+i);
+  if(col==='config')    return fbDb.collection('config').doc('anx_'+id+'_'+i);
+  return fbDb.collection('anexos').doc(id+'_'+i);
+}
+
 async function _anxSubirFirestore(blob, id, idOrc, onProgresso){
   var b64=await _anxLerBase64(blob);
   var total=Math.ceil(b64.length/ANX_CHUNK_B64)||1;
-  for(var i=0;i<total;i++){
+  function pedaco(i){
+    return {anexoId:id, orcamento:idOrc, parte:i, total:total,
+            dados:b64.substr(i*ANX_CHUNK_B64, ANX_CHUNK_B64)};
+  }
+
+  // Descobre uma vez por sessão onde dá pra gravar, usando o 1º pedaço real.
+  if(!ANX_COL){
+    var recusas=[];
+    for(var t=0;t<ANX_LOCAIS.length;t++){
+      try{
+        await _anxDoc(ANX_LOCAIS[t], id, 0, idOrc).set(pedaco(0));
+        ANX_COL=ANX_LOCAIS[t];
+        break;
+      }catch(e){
+        recusas.push(ANX_LOCAIS[t]+': '+((e&&(e.code||e.message))||e));
+        console.warn('[Anexos] sem permissão em '+ANX_LOCAIS[t], e&&(e.code||e.message));
+      }
+    }
+    if(!ANX_COL){
+      var err=new Error('sem-lugar-para-gravar');
+      err.detalhe=recusas.join(' | ');
+      throw err;
+    }
+  } else {
+    await _anxDoc(ANX_COL, id, 0, idOrc).set(pedaco(0));
+  }
+  if(onProgresso) onProgresso(1/total);
+
+  for(var i=1;i<total;i++){
     if(_anxCancelar) throw new Error('cancelado');
-    await fbDb.collection('anexos').doc(id+'_'+i).set({
-      anexoId:id, orcamento:idOrc, parte:i, total:total,
-      dados:b64.substr(i*ANX_CHUNK_B64, ANX_CHUNK_B64)
-    });
+    await _anxDoc(ANX_COL, id, i, idOrc).set(pedaco(i));
     if(onProgresso) onProgresso((i+1)/total);
   }
-  return total;
+  return {partes:total, col:ANX_COL};
 }
 
 async function _anxBaixarFirestore(a){
-  var partes=[];
-  for(var i=0;i<(a.partes||1);i++){
-    var snap=await fbDb.collection('anexos').doc(a.id+'_'+i).get();
-    if(!snap.exists) throw new Error('o pedaço '+(i+1)+' do arquivo não foi encontrado no servidor');
-    partes.push((snap.data()||{}).dados||'');
+  // Anexos antigos (antes deste campo existir) foram gravados em 'anexos'.
+  var cols=a.col?[a.col]:ANX_LOCAIS;
+  var ultimoErro=null;
+  for(var c=0;c<cols.length;c++){
+    try{
+      var partes=[];
+      for(var i=0;i<(a.partes||1);i++){
+        var snap=await _anxDoc(cols[c], a.id, i, a.orcamento||driveIdAtual).get();
+        if(!snap.exists) throw new Error('o pedaço '+(i+1)+' do arquivo não foi encontrado no servidor');
+        partes.push((snap.data()||{}).dados||'');
+      }
+      return _anxBase64ParaBlob(partes.join(''), a.tipo);
+    }catch(e){ ultimoErro=e; }
   }
-  return _anxBase64ParaBlob(partes.join(''), a.tipo);
+  throw ultimoErro||new Error('arquivo não encontrado no servidor');
 }
 
 async function _anxApagarFirestore(a){
-  for(var i=0;i<(a.partes||1);i++){
-    try{ await fbDb.collection('anexos').doc(a.id+'_'+i).delete(); }catch(e){}
+  var cols=a.col?[a.col]:ANX_LOCAIS;
+  for(var c=0;c<cols.length;c++){
+    for(var i=0;i<(a.partes||1);i++){
+      try{ await _anxDoc(cols[c], a.id, i, a.orcamento||driveIdAtual).delete(); }catch(e){}
+    }
   }
 }
+
+// Texto de socorro quando NENHUM lugar aceita a gravação — mostra a regra
+// pronta pra colar no console, em vez de um "peça a um administrador".
+var ANX_REGRA_AJUDA=''
+  +'⚠️ O BANCO ESTÁ RECUSANDO A GRAVAÇÃO DOS ANEXOS\n\n'
+  +'As regras de segurança do Firebase ainda não permitem gravar os arquivos.\n\n'
+  +'COMO RESOLVER (leva 1 minuto, precisa ser um administrador):\n'
+  +'1. Abra console.firebase.google.com > projeto crazysom-sistema\n'
+  +'2. Firestore Database > aba "Regras" (Rules)\n'
+  +'3. Dentro de "match /databases/{database}/documents {", acrescente:\n\n'
+  +'   match /orcamentos/{orc}/anexos/{parte} {\n'
+  +'     allow read, write: if request.auth != null;\n'
+  +'   }\n\n'
+  +'4. Clique em Publicar e tente anexar de novo.';
 
 function anxCancelarEnvio(){
   _anxCancelar=true;
@@ -10899,8 +10968,8 @@ async function anxSelecionar(input){
       // Via 2 — Firestore em pedaços (sempre funciona)
       if(!foi){
         anxStatus('⏳ Enviando '+rotulo+'...','');
-        var partes=await _anxSubirFirestore(corpo, id, idOrc, prog);
-        registro.local='firestore'; registro.partes=partes;
+        var rFs=await _anxSubirFirestore(corpo, id, idOrc, prog);
+        registro.local='firestore'; registro.partes=rFs.partes; registro.col=rFs.col; registro.orcamento=idOrc;
       }
 
       anexosOrc.push(registro);
@@ -10922,7 +10991,11 @@ async function anxSelecionar(input){
   }
   if(falhas.length){
     anxStatus('⚠️ '+falhas.length+' arquivo(s) não foram anexados.','err');
-    alert('⚠️ NÃO FOI POSSÍVEL ANEXAR:\n\n• '+falhas.join('\n• '));
+    if(falhas.some(function(f){ return /sem-lugar-para-gravar|regras de seguran/i.test(f); })){
+      alert(ANX_REGRA_AJUDA);
+    }else{
+      alert('⚠️ NÃO FOI POSSÍVEL ANEXAR:\n\n• '+falhas.join('\n• '));
+    }
   }else{
     anxStatus('✅ '+enviados+' arquivo(s) anexado(s).','ok');
   }
@@ -10930,6 +11003,7 @@ async function anxSelecionar(input){
 
 function _anxErroAmigavel(e){
   var m=(e&&(e.code||e.message))||'';
+  if(/sem-lugar-para-gravar/i.test(m)) return 'o banco recusou a gravação em todos os lugares possíveis (regras de segurança).';
   if(/storage-timeout/i.test(m)) return 'o servidor de arquivos não respondeu a tempo.';
   if(/cancelado/i.test(m)) return 'envio cancelado por você.';
   if(/maximum|exceeds the maximum|invalid-argument/i.test(m)) return 'o arquivo é grande demais para o banco de dados. Reduza o arquivo (ou exporte o PDF em qualidade menor) e tente de novo.';
