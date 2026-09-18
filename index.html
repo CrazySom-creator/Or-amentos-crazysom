@@ -108,6 +108,12 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .btn-bloqueado-aprov::after{content:'🔒';margin-left:4px;font-size:10px;}
 .toolbar-sep{width:1px;align-self:stretch;background:#3a3a3a;margin:0 2px;min-height:22px;}
 /* Botão flutuante de voltar — acompanha a rolagem da tela */
+.autosave-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:12px;white-space:nowrap;color:var(--text-muted);background:var(--surface-2);border:1px solid var(--border);}
+.autosave-chip:empty{display:none;}
+.autosave-chip.as-ok{color:#2e7d32;border-color:#2e7d32;background:rgba(46,125,50,.10);}
+.autosave-chip.as-pend{color:#b26a00;border-color:#e6a700;background:rgba(230,167,0,.12);}
+.autosave-chip.as-salvando{color:#1565c0;border-color:#1565c0;background:rgba(21,101,192,.10);}
+.autosave-chip.as-erro{color:#c62828;border-color:#c62828;background:rgba(198,40,40,.12);}
 .btn-voltar-float{position:fixed;left:16px;bottom:16px;z-index:99999;width:46px;height:46px;border-radius:50%;background:var(--R);color:#fff;border:none;font-size:19px;display:none;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.5);transition:transform .15s ease,filter .15s ease;}
 .btn-voltar-float:hover{filter:brightness(.88);transform:scale(1.06);}
 .btn-voltar-float:active{transform:scale(.96);}
@@ -2181,6 +2187,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-r btn-sm" onclick="concAtualizar()" title="Rebusca os orçamentos do Drive antes de recalcular">🔄 Atualizar</button>
         <button class="btn btn-o btn-sm" onclick="concVerificarAoVivo()" title="Confere cada evento já enviado direto no Google Calendar (existe? a data bate?) — pode pedir login do Google">🔎 Verificar ao Vivo</button>
+        <button class="btn btn-b btn-sm" id="conc-btn-reenviar" onclick="concReenviarFaltantes()" title="Recria/corrige no Google Agenda os eventos que estão faltando, foram apagados na agenda, estão com a data divergente ou com a tarja de liberação errada">🔁 Reenviar Faltantes</button>
         <button class="btn btn-o btn-sm" id="conc-btn-limpar" onclick="concLimparAgendaOrfaos()" title="Procura eventos que continuam no Google Agenda de orçamentos que NÃO estão mais em Venda Ganha (perdidos, standby, em negociação) e remove">🧹 Limpar Agenda</button>
         <button class="btn btn-o btn-sm" onclick="concExportarExcel()" title="Exporta esta listagem para Excel (.csv)">📊 Exportar Excel</button>
         <button class="btn btn-o btn-sm" onclick="document.getElementById('conc-ov').classList.remove('open');abrirHome()">✕</button>
@@ -3065,6 +3072,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     <div id="montagem-status-atual" style="margin-bottom:10px"></div>
     <div id="montagem-requisitos" style="margin-bottom:10px"></div>
     <div id="montagem-manual-box" style="margin-bottom:8px"></div>
+    <div id="montagem-agenda-box" style="margin-bottom:8px"></div>
     <div class="com-hist" id="montagem-hist" style="display:none">
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);font-weight:700;margin-bottom:6px">📋 Histórico de Liberação Manual</div>
       <div id="montagem-hist-list"></div>
@@ -3100,6 +3108,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     <label class="btn btn-o" style="cursor:pointer" title="Carregar um orçamento salvo localmente (.json)">📂 Carregar Local<input type="file" accept=".json" style="display:none" onchange="carregar(this)"></label>
     <button class="btn btn-g" onclick="driveSalvar()" title="Salvar no servidor">💾 Salvar</button>
     <button class="btn btn-g" onclick="salvarESair()" title="Salva no servidor e volta para o Menu principal">💾 Salvar e Sair</button>
+    <span class="autosave-chip" id="autosave-chip" title="O orçamento é gravado sozinho durante a elaboração e uma cópia fica guardada neste computador"></span>
     <span class="toolbar-sep"></span>
     <button class="btn btn-o" onclick="homeSairSemSalvar()" title="Sair sem salvar — descarta alterações não salvas">✕ Sair sem salvar</button>
     <button class="btn btn-danger" onclick="homeExcluirOrcAtual()" title="Excluir este orçamento definitivamente">🗑️ Excluir Orçamento</button>
@@ -3436,6 +3445,59 @@ var SCRIPT_URL='https://script.google.com/macros/s/AKfycbwV251xtPwAUjSn-CJM88-iy
     return resultado;
   }
 
+  // ── RESERVA DE NÚMERO DE ORÇAMENTO (system/numeros) ───────────────────
+  // Mesmo mecanismo transacional dos locks, em documento próprio. Existe
+  // porque o próximo número era calculado APENAS a partir dos orçamentos já
+  // salvos: dois usuários que abrissem um orçamento novo ao mesmo tempo
+  // recebiam o MESMO número, e a duplicidade só aparecia na hora de salvar
+  // (quando um dos dois já tinha feito horas de trabalho). Agora o número é
+  // reservado no instante em que é gerado e volta a ficar livre quando o
+  // orçamento é salvo (vira um número real) ou quando é cancelado.
+  async function _shimNumero(body){
+    var numAction=body.numAction;
+    var numero=String(body.numero||'');
+    var usuarioId=body.usuarioId||'';
+    var ttl=body.ttl||(8*60*60*1000);
+    var ref=fbDb.collection('system').doc('numeros');
+
+    if(numAction==='listar'){
+      var snap=await ref.get();
+      var mapa=(snap.exists&&snap.data().dados)||{};
+      var agora0=Date.now(), vivos={};
+      Object.keys(mapa).forEach(function(k){ if(mapa[k]&&mapa[k].expira>agora0) vivos[k]=mapa[k]; });
+      return {ok:true, reservas:vivos};
+    }
+
+    var resultado={ok:false};
+    try{
+      await fbDb.runTransaction(async function(t){
+        var snap=await t.get(ref);
+        var mapa=(snap.exists&&snap.data().dados)||{};
+        var agora=Date.now();
+        Object.keys(mapa).forEach(function(k){ if(!mapa[k]||mapa[k].expira<agora) delete mapa[k]; });
+        if(numAction==='reservar'){
+          var atual=mapa[numero];
+          if(atual&&atual.expira>agora&&atual.usuarioId!==usuarioId){
+            resultado={ok:false, dono:atual};
+          }else{
+            mapa[numero]={usuarioId:usuarioId,usuarioNome:body.usuarioNome||'',desdeTs:agora,expira:agora+ttl};
+            resultado={ok:true};
+          }
+        }else if(numAction==='liberar'){
+          if(mapa[numero]&&(body.forcar||mapa[numero].usuarioId===usuarioId)) delete mapa[numero];
+          resultado={ok:true};
+        }else if(numAction==='renovar'){
+          if(mapa[numero]&&mapa[numero].usuarioId===usuarioId){ mapa[numero].expira=agora+ttl; resultado={ok:true}; }
+          else { resultado={ok:false}; }
+        }else{
+          resultado={ok:false,erro:'numAction inválido'};
+        }
+        t.set(ref,{dados:mapa});
+      });
+    }catch(e){ resultado={ok:false,erro:e.message}; }
+    return resultado;
+  }
+
   window.fetch=async function(url,opts){
     if(typeof url==='string' && url.indexOf(SCRIPT_URL)===0){
       try{
@@ -3454,6 +3516,7 @@ var SCRIPT_URL='https://script.google.com/macros/s/AKfycbwV251xtPwAUjSn-CJM88-iy
         else if(action==='save') resultado=await _shimSave(body||{});
         else if(action==='loadBatch') resultado=await _shimLoadBatch((body&&body.ids)||[]);
         else if(action==='lock') resultado=await _shimLock(body||{});
+        else if(action==='numero') resultado=await _shimNumero(body||{});
         else resultado={ok:false,erro:'Ação não implementada no Firestore: '+action};
         return _mkResponse(resultado);
       }catch(eShim){
@@ -3647,6 +3710,10 @@ function diffsRequeremAprovacao(diffs){
 function marcarAlterado(){
   if(_carregandoOrc)return;
   _naoSalvo = true;
+  // Duas redes de proteção contra perder o trabalho: cópia local imediata e
+  // gravação automática no servidor (ver o bloco SALVAMENTO AUTOMÁTICO).
+  if(typeof _rascunhoAgendar==='function') _rascunhoAgendar();
+  if(typeof _autoSaveAgendar==='function') _autoSaveAgendar();
   if(aprovStatus==='aprovado'){
     var atualSnap=tirarSnapshot();
     if(!snapshotAprovado){
@@ -4077,6 +4144,10 @@ async function _entrarNoSistema(email, perfil, opts){
   setTimeout(aplicarPermissoes, 150);
   // Pré-carregar lista de orçamentos no cache silenciosamente
   driveListarSilencioso();
+  // Se ficou um orçamento em elaboração guardado neste computador (aba
+  // fechada, sessão caindo, internet falhando), oferece retomar de onde
+  // parou. Roda depois do carregamento das listas pra não competir com elas.
+  setTimeout(function(){ try{ _rascunhoOferecerRecuperacao(); }catch(eRR){} }, 2000);
 }
 
 async function doEsqueciSenha(){
@@ -4096,9 +4167,17 @@ async function doEsqueciSenha(){
   }
 }
 async function logout(forcado){
+  // ÚLTIMA CHANCE: antes de sair (inclusive quando a saída é forçada por
+  // inatividade ou queda de sessão), tenta gravar o que está em elaboração.
+  // A cópia local é preservada de propósito — é ela que permite retomar o
+  // orçamento no próximo login se esta gravação não der certo.
+  if(_naoSalvo && usuarioAtual){
+    try{ _rascunhoGravar(); }catch(eRg){}
+    try{ if(_autoSavePodeSalvar()) await salvarNoDrive({mostrarStatus:false, auto:true}); }catch(eAs){}
+  }
   if(!forcado && _naoSalvo){
     var cli=gv('f-cliente')||'este orçamento';
-    var ir=confirm('⚠️ "'+cli+'" não foi salvo no Drive.\n\nDeseja descartar as alterações e sair?');
+    var ir=confirm('⚠️ "'+cli+'" não foi salvo no Drive.\n\nDeseja descartar as alterações e sair?\n\n(Uma cópia fica guardada neste computador e o sistema vai oferecer recuperá-la no próximo login.)');
     if(!ir)return;
   }
   idleDesativar();
@@ -5507,13 +5586,216 @@ function salvarNoDrive(opts){
   return _prox;
 }
 
+
+// ════════════════════════════════════════════════════════
+//  SALVAMENTO AUTOMÁTICO + CÓPIA LOCAL DE SEGURANÇA
+//  Problema que resolve (relatado pelo usuário): elaborações longas em que
+//  o usuário deixava para salvar só no final. Qualquer coisa no meio do
+//  caminho — queda de internet, sessão expirando, aba fechada sem querer,
+//  navegador travando — levava junto TODO o trabalho, porque até o clique
+//  em Salvar o orçamento existia apenas na memória da página.
+//  Duas camadas independentes:
+//   1) AUTO-SALVAMENTO no servidor, assim que o orçamento tem número,
+//      consultor e conteúdo de verdade. Grava sozinho após uma pausa na
+//      digitação e, no máximo, a cada 90 segundos de edição contínua.
+//   2) CÓPIA LOCAL no próprio navegador, gravada a cada ~1,5s. Sobrevive
+//      até quando o servidor está fora do ar — ao voltar, o sistema oferece
+//      recuperar o orçamento em elaboração.
+// ════════════════════════════════════════════════════════
+var AUTOSAVE_INATIVIDADE_MS = 15000;   // grava 15s depois da última digitação
+var AUTOSAVE_MAXIMO_MS      = 90000;   // e nunca passa de 90s editando sem gravar
+var _autoSaveTimer=null, _autoSaveRodando=false;
+var _autoSaveUltimoOk=0, _autoSavePrimeiraAlteracao=0, _autoSaveEstado='';
+var _autoSaveLigado=true;
+
+// A tela do orçamento é a que fica POR BAIXO de tudo: só está de fato em uso
+// quando o Menu (home) está escondido e nenhum módulo/overlay está aberto.
+function _orcVisivel(){
+  try{
+    var home=document.getElementById('home-ov');
+    if(home && !home.classList.contains('hidden')) return false;
+    var login=document.getElementById('login-ov');
+    if(login && login.style.display!=='none' && login.style.display!=='') return false;
+    return !document.querySelector('.ov.open');
+  }catch(e){ return true; }
+}
+
+function _orcTemItens(){
+  try{
+    return SECS.some(function(sec){
+      var rows=(state[sec]&&state[sec].rows)||{};
+      return Object.keys(rows).some(function(amb){ return (rows[amb]||[]).length>0; });
+    });
+  }catch(e){ return false; }
+}
+
+function _autoSavePodeSalvar(){
+  if(!_autoSaveLigado) return false;
+  if(!usuarioAtual||!_naoSalvo||_modoLeitura||_carregandoOrc) return false;
+  if(typeof _orcVisivel==='function' && !_orcVisivel()) return false;
+  if(!(gv('f-num')||'').trim()) return false;
+  if(!(gv('f-cons')||'').trim()) return false;
+  // Conteúdo de verdade: cliente informado OU algum item lançado. Evita
+  // criar orçamento no servidor a partir de um formulário praticamente vazio.
+  if(!(gv('f-cliente')||'').trim() && !_orcTemItens()) return false;
+  // Nunca auto-salvar com o número TROCADO: mudar o número de um orçamento
+  // já salvo cria um orçamento NOVO (é um clone informal) e exige decisão
+  // consciente do usuário — ver _salvarNoDriveInterno().
+  if(driveIdAtual&&driveNumAtual&&String(driveNumAtual).trim()!==String(gv('f-num')||'').trim()) return false;
+  return true;
+}
+
+var _numRenovadoEm=0;
+function _autoSaveAgendar(){
+  if(!_autoSavePrimeiraAlteracao) _autoSavePrimeiraAlteracao=Date.now();
+  // Elaboração muito longa: renova a reserva do número de meia em meia hora
+  // pra ela não vencer no meio do trabalho.
+  if(_numReservado && Date.now()-_numRenovadoEm>30*60*1000){
+    _numRenovadoEm=Date.now();
+    numeroOp('renovar', _numReservado);
+  }
+  _autoSaveChip();
+  if(_autoSaveTimer) clearTimeout(_autoSaveTimer);
+  // Se já faz muito tempo que o usuário edita sem pausa, não espera a pausa.
+  var espera=(Date.now()-_autoSavePrimeiraAlteracao>=AUTOSAVE_MAXIMO_MS)?800:AUTOSAVE_INATIVIDADE_MS;
+  _autoSaveTimer=setTimeout(_autoSaveExecutar, espera);
+}
+
+async function _autoSaveExecutar(){
+  if(_autoSaveRodando) return;
+  if(!_autoSavePodeSalvar()){ _autoSaveChip(); return; }
+  _autoSaveRodando=true;
+  _autoSaveEstado='salvando'; _autoSaveChip();
+  try{
+    var d=await salvarNoDrive({mostrarStatus:false, auto:true});
+    if(d){
+      _autoSaveUltimoOk=Date.now();
+      _autoSavePrimeiraAlteracao=0;
+      _autoSaveEstado='ok';
+      _rascunhoLimpar();
+    }else{
+      _autoSaveEstado='';        // não salvou (faltou algo) — segue só a cópia local
+    }
+  }catch(e){
+    _autoSaveEstado='erro';
+    console.warn('[Auto-salvamento]', e&&e.message);
+  }finally{
+    _autoSaveRodando=false;
+    _autoSaveChip();
+    // Se ainda há alterações pendentes (o usuário continuou digitando
+    // durante a gravação), reagenda.
+    if(_naoSalvo && _autoSaveEstado!=='salvando') _autoSaveAgendar();
+  }
+}
+
+function _autoSaveChip(){
+  var el=document.getElementById('autosave-chip');
+  if(!el) return;
+  if(!usuarioAtual || (typeof _orcVisivel==='function' && !_orcVisivel())){ el.textContent=''; el.className='autosave-chip'; return; }
+  var num=(gv('f-num')||'').trim();
+  if(_autoSaveEstado==='salvando'){ el.textContent='💾 salvando…'; el.className='autosave-chip as-salvando'; return; }
+  if(_autoSaveEstado==='erro'){ el.textContent='⚠️ falha ao salvar — clique em 💾 Salvar'; el.className='autosave-chip as-erro'; return; }
+  if(_naoSalvo){
+    el.textContent=_autoSavePodeSalvar()?'✏️ alterações não salvas — salvando sozinho':'✏️ alterações não salvas (cópia local guardada)';
+    el.className='autosave-chip as-pend'; return;
+  }
+  if(_autoSaveUltimoOk){
+    var hh=new Date(_autoSaveUltimoOk).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    el.textContent='✅ salvo automaticamente às '+hh; el.className='autosave-chip as-ok'; return;
+  }
+  el.textContent=(num&&_numReservado===num)?('🔒 nº '+num+' reservado para você'):'';
+  el.className='autosave-chip';
+}
+
+// ── CÓPIA LOCAL (localStorage) ───────────────────────────────────────────
+var RASCUNHO_KEY='crazySomRascunhoOrc';
+var RASCUNHO_VALIDADE_MS=7*24*60*60*1000;
+var _rascunhoTimer=null;
+
+function _rascunhoAgendar(){
+  if(_rascunhoTimer) clearTimeout(_rascunhoTimer);
+  _rascunhoTimer=setTimeout(_rascunhoGravar, 1500);
+}
+
+function _rascunhoGravar(){
+  try{
+    if(!usuarioAtual||!_naoSalvo||_carregandoOrc) return;
+    if(!(gv('f-num')||'').trim()) return;
+    localStorage.setItem(RASCUNHO_KEY, JSON.stringify({
+      ts:Date.now(),
+      usuarioId:usuarioAtual.id, usuarioNome:usuarioAtual.nome,
+      driveId:driveIdAtual||null,
+      num:gv('f-num'), cliente:gv('f-cliente')||'',
+      dados:getDadosCompletos()
+    }));
+  }catch(e){
+    // Cota cheia / navegação privada: a cópia local é uma rede extra, nunca
+    // pode derrubar a edição.
+  }
+}
+
+function _rascunhoLimpar(){ try{ localStorage.removeItem(RASCUNHO_KEY); }catch(e){} }
+
+function _rascunhoDisponivel(){
+  try{
+    var raw=localStorage.getItem(RASCUNHO_KEY);
+    if(!raw) return null;
+    var r=JSON.parse(raw);
+    if(!r||!r.dados||!r.ts) return null;
+    if(Date.now()-r.ts>RASCUNHO_VALIDADE_MS){ _rascunhoLimpar(); return null; }
+    if(usuarioAtual && r.usuarioId && r.usuarioId!==usuarioAtual.id) return null;
+    return r;
+  }catch(e){ return null; }
+}
+
+// Oferecida logo depois do login. É a rede que pega o caso extremo: a aba
+// fechou (ou a internet caiu) antes de qualquer gravação no servidor.
+async function _rascunhoOferecerRecuperacao(){
+  var r=_rascunhoDisponivel();
+  if(!r) return;
+  var quando=new Date(r.ts).toLocaleString('pt-BR');
+  var ok=confirm('💾 ORÇAMENTO EM ELABORAÇÃO RECUPERADO\n\n'
+    +'Nº '+(r.num||'—')+(r.cliente?(' — '+r.cliente):'')+'\n'
+    +'Última alteração: '+quando+'\n\n'
+    +'Este orçamento estava sendo elaborado e não chegou a ser salvo no servidor (a aba foi fechada, a sessão caiu ou a internet falhou).\n\n'
+    +'Deseja abrir e continuar de onde parou?\n\n'
+    +'(Se responder Não, esta cópia é descartada.)');
+  if(!ok){ _rascunhoLimpar(); return; }
+  try{
+    _carregandoOrc=true;
+    _aplicarDadosOrcamento(r.dados);
+    driveIdAtual=r.driveId||null;
+    driveNumAtual=r.driveId?((r.dados.form&&r.dados.form['f-num'])||null):null;
+    _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
+    buildTabs();setDS();setDSFim();calcDiariasAuto();calc();
+    renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+    setTimeout(function(){selImpVenda(finImposto||'cimp');_preencherValLiqCalculado();},50);
+    setTimeout(aplicarPermissoes, 150);
+    _carregandoOrc=false;
+    _naoSalvo=true;
+    // O número do rascunho volta a ser reservado — ele continua "meu".
+    if(r.num) _reservarNumero(r.num);
+    _fecharTudoParaAbrirOrc();
+    _autoSaveChip();
+    driveStatus('💾 Orçamento recuperado da cópia local — confira e salve.','ok');
+    _autoSaveAgendar();
+  }catch(e){
+    _carregandoOrc=false;
+    alert('⚠️ Não foi possível recuperar a cópia local: '+e.message);
+  }
+}
+
 async function _salvarNoDriveInterno(opts){
   opts=opts||{};
   // Retorna null (e não undefined) para que quem chama consiga distinguir
   // "não salvou" de "salvou" — salvarESair() testava `!== null` e, com
   // undefined, saía da tela e limpava o orçamento como se tivesse salvado,
   // descartando o trabalho do usuário sem aviso.
+  // O auto-salvamento nunca interrompe quem está trabalhando: qualquer
+  // condição que normalmente vira aviso/pergunta faz ele apenas desistir
+  // desta rodada (a cópia local continua guardando tudo).
   if(_modoLeitura){
+    if(opts.auto) return null;
     driveStatus('⛔ Modo somente leitura — salvar bloqueado','err');
     alert('⛔ Este orçamento está aberto em SOMENTE LEITURA porque outra pessoa está editando.\n\nNada foi salvo. Use "🔄 Tentar Editar" no aviso laranja do topo para assumir a edição e então salvar.');
     return null;
@@ -5521,6 +5803,7 @@ async function _salvarNoDriveInterno(opts){
   // Validar número do orçamento obrigatório
   var _num=gv('f-num')||'';
   if(!_num.trim()){
+    if(opts.auto) return null;
     driveStatus('⚠️ Informe o Número do Orçamento antes de salvar.','err');
     var _elNum0=document.getElementById('f-num');
     if(_elNum0){
@@ -5535,6 +5818,7 @@ async function _salvarNoDriveInterno(opts){
   }
   var _cons=gv('f-cons')||'';
   if(!_cons.trim()){
+    if(opts.auto) return null;
     driveStatus('⚠️ Selecione o Consultor Responsável antes de salvar.','err');
     var _elCons=document.getElementById('f-cons');
     if(_elCons){_elCons.style.borderColor='#d63447';_elCons.style.boxShadow='0 0 0 3px rgba(192,0,26,.4)';_elCons.focus();setTimeout(function(){_elCons.style.borderColor='';_elCons.style.boxShadow='';},3000);var _card=_elCons.closest('.card');if(_card)_card.scrollIntoView({behavior:'smooth',block:'center'});}
@@ -5550,6 +5834,8 @@ async function _salvarNoDriveInterno(opts){
   var _numAtualTrim=(num||'').toString().trim();
   var _driveNumAtualTrim=(driveNumAtual||'').toString().trim();
   if(driveIdAtual&&driveNumAtual&&_driveNumAtualTrim!==_numAtualTrim&&!opts.forcarNovoId){
+    // Trocar o número cria um orçamento NOVO — decisão consciente, nunca automática.
+    if(opts.auto) return null;
     // Mudar manualmente o número de um orçamento já carregado (sem usar o botão
     // "Clonar") também cria um arquivo novo no Drive — é um "clone" informal.
     // Se as Aprovações/histórico comercial não forem zerados aqui também, esse
@@ -5690,6 +5976,7 @@ async function _executarSave(num,cli,dt,opts){
   opts=opts||{};
   // Bloquear save em modo somente leitura
   if(_modoLeitura){
+    if(opts.auto) return null;
     driveStatus('⛔ Modo somente leitura — salvar bloqueado','err');
     alert('⛔ Este orçamento está em modo somente leitura.\n\nAguarde o outro usuário terminar ou clique em "🔄 Tentar Editar".');
     return null;
@@ -5723,6 +6010,13 @@ async function _executarSave(num,cli,dt,opts){
     _naoSalvo=false;
     _versaoAtual=dados._versao; // atualizar versão local
     _driveCache[d.id]=null;
+    // O número agora EXISTE de verdade na listagem — a reserva cumpriu o
+    // papel dela e volta para o estoque (não fica ocupando o registro).
+    if(_numReservado && String(_numReservado)===String(num)) _liberarNumeroReservado();
+    _rascunhoLimpar();
+    _autoSaveUltimoOk=Date.now(); _autoSavePrimeiraAlteracao=0;
+    if(_autoSaveEstado!=='salvando') _autoSaveEstado='ok';
+    if(typeof _autoSaveChip==='function') _autoSaveChip();
     var _pgtoR=_pgtoCondicaoDefinida();
     if(opts.mostrarStatus!==false){
       if(_pgtoR.ok) driveStatus('✅ Salvo: '+d.nome,'ok');
@@ -5730,8 +6024,13 @@ async function _executarSave(num,cli,dt,opts){
     }
     if(typeof _pgtoRenderAviso==='function') _pgtoRenderAviso();
     if(typeof _gaSincronizarLiberacaoAgenda==='function') setTimeout(_gaSincronizarLiberacaoAgenda,0);
-    driveListarSilencioso();
-    _eventoAutoRegistrar();
+    // A releitura da lista e o registro do evento são pesados; num
+    // auto-salvamento só valem a pena na primeira gravação (quando o
+    // orçamento passa a existir). Nos salvamentos manuais, sempre.
+    if(!opts.auto || _eraNovo){
+      driveListarSilencioso();
+      _eventoAutoRegistrar();
+    }
     if(_estoqueAtivo() && typeof estoqueRecalcularCompromissos==='function') estoqueRecalcularCompromissos(d.id);
     if(opts.onSucesso) opts.onSucesso(d);
     if(_eraNovo) _verificarColisaoPosSave(num,d.id);
@@ -6185,6 +6484,10 @@ async function driveCarregar(id,nome){
     if(!confirm('⚠️ Este orçamento não foi salvo no Drive.\n\nDeseja descartar as alterações e carregar "'+nome+'"?')) return;
   }
 
+  // Abrindo OUTRO orçamento: o número que eu tinha reservado (e não usei)
+  // volta a ficar disponível para a equipe.
+  if(_numReservado) await _liberarNumeroReservado();
+
   // Liberar lock anterior
   if(driveIdAtual && !_modoLeitura) await lockLiberar(driveIdAtual);
   lockPararHeartbeat();
@@ -6215,6 +6518,27 @@ async function driveCarregar(id,nome){
 // isso, a resposta que chegasse por último (não necessariamente a do
 // último clique) vencia e podia aplicar os dados de UM orçamento em cima
 // da tela que já mostrava OUTRO — exatamente o tipo de "mistura" relatado.
+// Aplica um conjunto de dados de orçamento (getDadosCompletos()-like) no
+// formulário e nas variáveis do editor. Extraído de _driveCarregarDados()
+// para ser reaproveitado pela recuperação da cópia local (ver
+// _rascunhoOferecerRecuperacao) — antes, esta lógica existia só dentro do
+// carregamento vindo do servidor.
+function _aplicarDadosOrcamento(dados){
+  dados=dados||{};
+  SECS.forEach(function(s){
+    var ds=(dados.state&&dados.state[s])||null;
+    state[s].ambientes=(ds&&ds.ambientes)||[{id:'default',nome:'Geral'}];
+    state[s].ambAtiva=(ds&&ds.ambAtiva)||'default';
+    state[s].rows=(ds&&ds.rows)||{default:[]};
+    if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];
+  });
+  if(dados.form)setForm(dados.form);else setForm({});
+  aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();contratoStatus=dados.contratoStatus||'';contratoHist=(dados.contratoHist||[]).slice();creditoStatus=dados.creditoStatus||'';creditoHist=(dados.creditoHist||[]).slice();montagemLiberacaoManual=!!dados.montagemLiberacaoManual;montagemLiberacaoManualHist=(dados.montagemLiberacaoManualHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcAtualGoogleAgenda=Object.assign({},dados.googleAgenda||{});orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
+  descDiscriminarPDF=(dados.descDiscriminarPDF!==undefined)?!!dados.descDiscriminarPDF:true;
+  var _chkDescDiscr=document.getElementById('chk-desc-discriminar');if(_chkDescDiscr)_chkDescDiscr.checked=descDiscriminarPDF;
+  _limparCamposComercialDOM();
+}
+
 var _driveCarregarSeq=0;
 async function _driveCarregarDados(id,nome,somenteLeitura){
   var _seqDesta=++_driveCarregarSeq;
@@ -6238,18 +6562,7 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     // orçamento diferente aparecendo em outro). Agora cada seção é sempre
     // resetada primeiro (like limpar()/clonarOrcamento() já fazem) e só
     // depois preenchida com o que realmente existe em dados.state.
-    SECS.forEach(function(s){
-      var ds=(dados.state&&dados.state[s])||null;
-      state[s].ambientes=(ds&&ds.ambientes)||[{id:'default',nome:'Geral'}];
-      state[s].ambAtiva=(ds&&ds.ambAtiva)||'default';
-      state[s].rows=(ds&&ds.rows)||{default:[]};
-      if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];
-    });
-    if(dados.form)setForm(dados.form);else setForm({});
-    aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();contratoStatus=dados.contratoStatus||'';contratoHist=(dados.contratoHist||[]).slice();creditoStatus=dados.creditoStatus||'';creditoHist=(dados.creditoHist||[]).slice();montagemLiberacaoManual=!!dados.montagemLiberacaoManual;montagemLiberacaoManualHist=(dados.montagemLiberacaoManualHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcAtualGoogleAgenda=Object.assign({},dados.googleAgenda||{});orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
-    descDiscriminarPDF=(dados.descDiscriminarPDF!==undefined)?!!dados.descDiscriminarPDF:true;
-    var _chkDescDiscr=document.getElementById('chk-desc-discriminar');if(_chkDescDiscr)_chkDescDiscr.checked=descDiscriminarPDF;
-    _limparCamposComercialDOM(); // limpar campos DOM ao carregar novo orçamento
+    _aplicarDadosOrcamento(dados);
     driveIdAtual=id;driveNumAtual=dados.form&&dados.form['f-num']?dados.form['f-num']:null;
     _naoSalvo=false;
     // Resetar cache de diárias automáticas para forçar aplicação correta ao carregar
@@ -6435,6 +6748,12 @@ async function limpar(){
     if(!confirm('Iniciar Novo Orçamento? Todos os dados serão limpos.'))return;
   }
   _origemOrc=null; // orçamento em branco não tem tela de origem — "voltar" cai no Menu
+  // Orçamento cancelado devolve o número reservado — pedido do usuário:
+  // "se for cancelado o número volta a ficar disponível no sistema".
+  if(_numReservado) await _liberarNumeroReservado();
+  _rascunhoLimpar();
+  _autoSaveUltimoOk=0; _autoSavePrimeiraAlteracao=0; _autoSaveEstado='';
+  if(_autoSaveTimer){ clearTimeout(_autoSaveTimer); _autoSaveTimer=null; }
   var _idLimpar=driveIdAtual;
   lockPararHeartbeat();
   // Não parar sessionHeartbeat no limpar (usuário ainda está logado)
@@ -8263,56 +8582,81 @@ async function _gaEnviarListaEventos(eventosDisp, descricao, enderecoEvento, ids
   var novosIds={};
   var erros=[];
   var ajustes=[];
+  var detalhe=[];   // um item por evento — alimenta o painel de diagnóstico
   for(var i=0;i<eventosDisp.length;i++){
     var ev=_gaCorrigirIntervalo(eventosDisp[i]);
     if(ev.ajuste) ajustes.push(ev.summary+': '+ev.ajuste);
-    // Preferimos o label (eventLabelId) sempre que o admin configurou um —
-    // é o mecanismo novo (GA jul/2026) que suporta as cores nomeadas
-    // (ex. "Chocolate"). Exige o parâmetro ?eventLabelVersion=1 na URL, e
-    // quando presente o Google ignora o colorId — por isso só mandamos um
-    // dos dois campos no corpo do evento.
-    var usaLabel=!!ev.eventLabelId;
-    var body={
+    var chaveId=ev.tipo+'EventId';
+    var rotulo=_GA_ROTULO[chaveId]||ev.tipo;
+    var idExistente=idsExistentes[chaveId];
+    var baseUrl='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calendarId)+'/events';
+    var corpoBase={
       summary:ev.summary,
       description:descricao,
       location:enderecoEvento||''
     };
-    if(usaLabel){ body.eventLabelId=ev.eventLabelId; } else { body.colorId=ev.colorId; }
     if(ev.fim){
-      body.start={dateTime:ev.inicio,timeZone:'America/Sao_Paulo'};
-      body.end={dateTime:ev.fim,timeZone:'America/Sao_Paulo'};
+      corpoBase.start={dateTime:ev.inicio,timeZone:'America/Sao_Paulo'};
+      corpoBase.end={dateTime:ev.fim,timeZone:'America/Sao_Paulo'};
     } else {
       var inicioDt=new Date(ev.inicio);
       var fimDt=new Date(inicioDt.getTime()+(ev.duracaoHoras||1)*3600*1000);
-      body.start={dateTime:ev.inicio,timeZone:'America/Sao_Paulo'};
-      body.end={dateTime:_gaDataHoraLocal(fimDt),timeZone:'America/Sao_Paulo'};
+      corpoBase.start={dateTime:ev.inicio,timeZone:'America/Sao_Paulo'};
+      corpoBase.end={dateTime:_gaDataHoraLocal(fimDt),timeZone:'America/Sao_Paulo'};
     }
-    var chaveId=ev.tipo+'EventId';
-    var idExistente=idsExistentes[chaveId];
-    try{
-      var baseUrl='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calendarId)+'/events';
+    // DUAS TENTATIVAS POR EVENTO — corrige a falha silenciosa relatada pelo
+    // usuário ("o evento só foi com a montagem; evento e desmontagem não
+    // apareceram na agenda").
+    // Preferimos eventLabelId (cores nomeadas, recurso novo do Google Agenda,
+    // exige ?eventLabelVersion=1). O problema: se o label configurado em
+    // Admin > Google Agenda não existir mais no calendário — ou se a conta
+    // perder o recurso — o Google RECUSA O EVENTO INTEIRO, e antes disso
+    // significava um evento que simplesmente nunca chegou na agenda. Agora,
+    // quando a tentativa com label falha, o mesmo evento é reenviado com a
+    // cor clássica (colorId). Perde-se o nome da cor; nunca o evento.
+    var tentativas=[];
+    if(ev.eventLabelId) tentativas.push(true);
+    tentativas.push(false);
+    var ultimoErro='', okEste=false, usouFallback=false;
+    for(var t=0;t<tentativas.length;t++){
+      var usaLabel=tentativas[t];
+      var body=Object.assign({},corpoBase);
+      if(usaLabel){ body.eventLabelId=ev.eventLabelId; } else { body.colorId=ev.colorId||'8'; }
       var sufixo=usaLabel?'?eventLabelVersion=1':'';
-      var url=(idExistente?(baseUrl+'/'+idExistente):baseUrl)+sufixo;
-      var metodo=idExistente?'PUT':'POST';
-      var r=await fetch(url,{method:metodo,headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body)});
-      var d=await r.json();
-      if(!r.ok){
+      try{
+        var url=(idExistente?(baseUrl+'/'+idExistente):baseUrl)+sufixo;
+        var metodo=idExistente?'PUT':'POST';
+        var r=await fetch(url,{method:metodo,headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body)});
+        var d={};
+        try{ d=await r.json(); }catch(eJson){ d={}; }
         // Evento apagado manualmente na agenda depois de criado: cria de novo
-        if(idExistente&&r.status===404){
+        if(!r.ok && idExistente && (r.status===404||r.status===410)){
           var r2=await fetch(baseUrl+sufixo,{method:'POST',headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body)});
-          var d2=await r2.json();
+          var d2={};
+          try{ d2=await r2.json(); }catch(eJson2){ d2={}; }
           if(!r2.ok) throw new Error((d2.error&&d2.error.message)||('HTTP '+r2.status));
-          novosIds[chaveId]=d2.id;
-          continue;
+          novosIds[chaveId]=d2.id; okEste=true;
+          usouFallback=(!usaLabel&&!!ev.eventLabelId);
+          detalhe.push({tipo:ev.tipo,rotulo:rotulo,ok:true,id:d2.id,recriado:true,fallbackCor:usouFallback});
+          break;
         }
-        throw new Error((d.error&&d.error.message)||('HTTP '+r.status));
+        if(!r.ok) throw new Error((d.error&&d.error.message)||('HTTP '+r.status));
+        novosIds[chaveId]=d.id; okEste=true;
+        usouFallback=(!usaLabel&&!!ev.eventLabelId);
+        detalhe.push({tipo:ev.tipo,rotulo:rotulo,ok:true,id:d.id,fallbackCor:usouFallback});
+        break;
+      }catch(e){
+        ultimoErro=e.message;
       }
-      novosIds[chaveId]=d.id;
-    }catch(e){
-      erros.push(ev.summary+': '+_gaErroAmigavel(e.message));
+    }
+    if(!okEste){
+      erros.push(rotulo+': '+_gaErroAmigavel(ultimoErro));
+      detalhe.push({tipo:ev.tipo,rotulo:rotulo,ok:false,erro:_gaErroAmigavel(ultimoErro)});
+    } else if(usouFallback){
+      ajustes.push(rotulo+': a cor nomeada configurada foi recusada pelo Google — enviei com a cor clássica. Reconfigure as cores em Admin > Google Agenda.');
     }
   }
-  return {novosIds:novosIds, erros:erros, ajustes:ajustes};
+  return {novosIds:novosIds, erros:erros, ajustes:ajustes, detalhe:detalhe};
 }
 
 // Traduz as recusas mais comuns do Google Agenda pra linguagem de quem está
@@ -8330,6 +8674,23 @@ function _gaErroAmigavel(msg){
   if(/Invalid Credentials|invalid_grant|Unauthorized|401/i.test(msg))
     return 'a autorização do Google expirou. Conecte a conta de novo na Administração.';
   return msg;
+}
+
+// ── FILA SERIAL DAS OPERAÇÕES NA AGENDA ──────────────────────────────────
+// Envio automático de Venda Ganha, sincronização da tarja de liberação,
+// botão 📅 Agenda, 📌 Pré-Agenda e a limpeza de eventos podem disparar
+// praticamente ao mesmo tempo — um único salvamento dispara dois deles
+// (a sincronização da tarja sai de dentro do save; o envio automático sai do
+// .then() logo depois). Rodando em paralelo, cada um lê os IDs dos eventos
+// ANTES de o outro gravar os seus, e os dois criam eventos NOVOS: é daí que
+// vem o evento duplicado na agenda (um com a tarja de liberação pendente e
+// outro sem). Aqui elas entram numa fila: uma operação só começa depois que
+// a anterior terminou e gravou os IDs.
+var _gaFila=Promise.resolve();
+function _gaEnfileirar(fn){
+  var prox=_gaFila.then(function(){ return fn(); }, function(){ return fn(); });
+  _gaFila=prox.then(function(){},function(){});
+  return prox;
 }
 
 // Twins parametrizados de _pgtoTipo()/montagemRequisitos()/montagemLiberada()/
@@ -8527,7 +8888,10 @@ async function _gaExcluirEvento(calendarId, eventId, token){
 // apagados aqui.
 var _GA_ROTULO={montagemEventId:'Montagem', eventoEventId:'Evento', desmontagemEventId:'Desmontagem', preReservaEventId:'Pré-reserva'};
 
-async function _gaRemoverEventosDoOrcamento(driveId, ids, opts){
+function _gaRemoverEventosDoOrcamento(driveId, ids, opts){
+  return _gaEnfileirar(function(){ return _gaRemoverEventosDoOrcamentoInterno(driveId, ids, opts); });
+}
+async function _gaRemoverEventosDoOrcamentoInterno(driveId, ids, opts){
   opts=opts||{};
   var chaves=['montagemEventId','eventoEventId','desmontagemEventId'];
   if(opts.incluirPreReserva) chaves.push('preReservaEventId');
@@ -8630,10 +8994,29 @@ function _gaSincronizarLiberacaoAgenda(){
   try{
     if(typeof comercialStatus==='undefined' || comercialStatus!=='ganha') return;
     if(!driveIdAtual) return;
+    // Trava de segurança: só sincroniza se os dados em memória são MESMO do
+    // orçamento salvo. Sem isso, um save disparado enquanto o editor já foi
+    // trocado/limpo reescrevia os títulos dos eventos com o estado de
+    // liberação de OUTRO orçamento.
+    if(driveNumAtual && (gv('f-num')||'').toString().trim()!==String(driveNumAtual).trim()) return;
     var ids=(typeof orcAtualGoogleAgenda!=='undefined'&&orcAtualGoogleAgenda)||{};
     if(!ids.montagemEventId && !ids.eventoEventId && !ids.desmontagemEventId) return;
     var liberadaAgora=montagemLiberada();
     if(ids.liberadaNoEnvio===liberadaAgora) return;      // a agenda já reflete
+    // ESTADO DESCONHECIDO (eventos criados antes deste controle existir):
+    // liberadaNoEnvio vem undefined, e `undefined!==false` fazia o sistema
+    // concluir "a agenda está diferente" e REESCREVER os eventos COM a tarja
+    // de LIBERAÇÃO PENDENTE — foi isso que fez eventos já liberados voltarem
+    // a aparecer como não liberados na agenda. Reescrever só é seguro na
+    // direção de TIRAR a tarja; colocar a tarja de volta sem saber o estado
+    // real da agenda é o pior dos dois erros. Então, quando não sabemos e a
+    // OS ainda não está liberada, apenas anotamos o estado e não tocamos na
+    // agenda: na hora em que a OS liberar de fato, a comparação passa a ser
+    // confiável e o título é corrigido.
+    if(typeof ids.liberadaNoEnvio==='undefined' && !liberadaAgora){
+      _gaRegistrarLiberadaNoEnvio(driveIdAtual, false);
+      return;
+    }
     var eventosDisp=_gaEventosDisponiveis();
     if(!eventosDisp.length) return;
     var idAlvo=driveIdAtual;
@@ -8650,13 +9033,42 @@ function _gaSincronizarLiberacaoAgenda(){
   }catch(e){ console.warn('[Google Agenda] _gaSincronizarLiberacaoAgenda:', e&&e.message); }
 }
 
-async function _gaEnviarEventosParaOrcamento(driveId, form, dadosCompletos, eventosDisp){
+// Anota no orçamento em que estado de liberação a agenda está, SEM tocar na
+// agenda. Serve para os eventos antigos, criados antes deste controle existir
+// (ver comentário em _gaSincronizarLiberacaoAgenda).
+function _gaRegistrarLiberadaNoEnvio(driveId, valor){
+  try{
+    if(typeof orcAtualGoogleAgenda!=='undefined' && driveId===driveIdAtual){
+      orcAtualGoogleAgenda.liberadaNoEnvio=valor;
+    }
+    fbDb.collection('orcamentos').doc(driveId)
+      .set({googleAgenda:{liberadaNoEnvio:valor}},{merge:true})
+      .catch(function(e){ console.warn('[Google Agenda] liberadaNoEnvio não gravado:', e&&e.message); });
+  }catch(e){ console.warn('[Google Agenda] _gaRegistrarLiberadaNoEnvio:', e&&e.message); }
+}
+
+function _gaEnviarEventosParaOrcamento(driveId, form, dadosCompletos, eventosDisp){
+  return _gaEnfileirar(function(){ return _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompletos, eventosDisp); });
+}
+async function _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompletos, eventosDisp){
   if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
   if(!GOOGLE_AGENDA_CONFIG.clientId||!GOOGLE_AGENDA_CONFIG.calendarId){
     throw new Error('Google Agenda não configurado');
   }
   var token=await googleAgendaObterToken();
   var idsExistentes=Object.assign({},(dadosCompletos&&dadosCompletos.googleAgenda)||{});
+  // Relê os IDs gravados no orçamento IMEDIATAMENTE antes de enviar. O
+  // `dadosCompletos` pode ter sido montado segundos atrás (ou vir do cache do
+  // Funil/Dashboard) e não conhecer um evento criado nesse meio-tempo — e um
+  // ID que o sistema não conhece é exatamente um evento duplicado na agenda,
+  // porque o envio cria outro em vez de atualizar o que existe.
+  try{
+    var _snapGa=await fbDb.collection('orcamentos').doc(driveId).get();
+    var _gravadoGa=(_snapGa&&_snapGa.exists)?((_snapGa.data()||{}).googleAgenda||null):null;
+    if(_gravadoGa) idsExistentes=Object.assign(idsExistentes,_gravadoGa);
+  }catch(e){
+    console.warn('[Google Agenda] Não foi possível reler os IDs gravados antes do envio:', e&&e.message);
+  }
   var descricao=_gaMontarDescricaoDe(form,(dadosCompletos&&dadosCompletos.state)||{});
   var enderecoEvento=[form['f-end-ev'],form['f-num-ev'],form['f-bairro-ev'],form['f-cid-ev']].filter(Boolean).join(', ');
   var resultado=await _gaEnviarListaEventos(eventosDisp,descricao,enderecoEvento,idsExistentes,GOOGLE_AGENDA_CONFIG.calendarId,token);
@@ -8666,6 +9078,16 @@ async function _gaEnviarEventosParaOrcamento(driveId, form, dadosCompletos, even
   // que permite detectar depois "a OS foi liberada mas os eventos ainda estão
   // com a tarja de pendente" e reescrever os títulos.
   googleAgendaAtualizado.liberadaNoEnvio=_montagemLiberadaDe(form,dadosCompletos);
+  // Erro por evento fica GRAVADO no orçamento. Antes, uma falha parcial
+  // (ex.: montagem foi, evento e desmontagem não) só aparecia num toast que
+  // desaparece em segundos — e ninguém mais no sistema sabia que faltava
+  // evento na agenda. Agora o pendente fica visível no painel de Liberação
+  // de Montagem e na Conciliação de Agenda até ser resolvido.
+  if(erros.length){
+    googleAgendaAtualizado.ultimoErro={quando:new Date().toISOString(), itens:erros.slice(0,6)};
+  } else {
+    googleAgendaAtualizado.ultimoErro=null;
+  }
 
   // Venda Ganha substitui qualquer Pré-Reserva feita antes (negociação
   // avançada, "segurando a data") pelos eventos definitivos — apaga o evento
@@ -8713,7 +9135,7 @@ async function _gaEnviarEventosParaOrcamento(driveId, form, dadosCompletos, even
 // aberto), este elemento é fixo na tela e serve pra avisos que podem ser
 // disparados a partir do Funil (Kanban) sem nenhum orçamento aberto no
 // editor. Não bloqueia a interação (não é um alert() nativo) e some sozinho.
-function _toastMostrar(msg, tipo){
+function _toastMostrar(msg, tipo, ms){
   var cont=document.getElementById('app-toast-container');
   if(!cont){
     cont=document.createElement('div');
@@ -8730,7 +9152,7 @@ function _toastMostrar(msg, tipo){
   setTimeout(function(){
     el.style.opacity='0'; el.style.transform='translateY(8px)';
     setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); },300);
-  }, 4500);
+  }, ms||4500);
 }
 
 // Ponto de entrada da automação: chamado ao confirmar "Venda Ganha", seja
@@ -8773,10 +9195,17 @@ async function _gaAutoEnviarSeGanha(driveId, dadosCompletos){
         if(resultadoEnvio&&resultadoEnvio.preReservaRemovida) msg+=' A pré-reserva foi substituída pelos eventos definitivos.';
         if(_tarjaGanha) msg+=' ⚠️ Enviado com LIBERAÇÃO DE MONTAGEM PENDENTE — '+_tarjaGanha;
         _toastMostrar(msg,_tarjaGanha?'warn':'ok');
+        if(typeof renderMontagemGate==='function' && driveId===driveIdAtual) renderMontagemGate();
       })
       .catch(function(e){
         console.warn('[Google Agenda] Falha no envio automático (Venda Ganha):',e&&e.message);
-        _toastMostrar('⚠️ Não foi possível enviar automaticamente para o Google Agenda ('+cliente+'). Use o botão 📅 Agenda para enviar manualmente.','warn');
+        // O motivo POR EVENTO vem na mensagem do erro (ex. "Evento: ...;
+        // Desmontagem: ...") — mostrar isso é o que permite ver que o envio
+        // foi PARCIAL. Antes o aviso era genérico e uma falha em 2 dos 3
+        // eventos passava batida, deixando a agenda incompleta em silêncio.
+        _toastMostrar('⚠️ Google Agenda incompleto ('+cliente+'): '+(e&&e.message?e.message:'falha no envio')
+          +' — abra o orçamento e use "🔍 Conferir na Agenda" / "🔁 Reenviar à Agenda".','warn',12000);
+        if(typeof renderMontagemGate==='function' && driveId===driveIdAtual) renderMontagemGate();
       });
   }catch(e){
     console.warn('[Google Agenda] Erro inesperado no envio automático:',e&&e.message);
@@ -8837,10 +9266,16 @@ async function googleAgendaEnviarPreReserva(){
 
   var descricao=_gaMontarDescricao();
   var enderecoEvento=[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
-  var idsExistentes=Object.assign({},orcAtualGoogleAgenda||{});
   driveStatus('📌 Criando pré-reserva no Google Agenda...','');
 
-  var resultado=await _gaEnviarListaEventos([_gaEventoPreReserva()],descricao,enderecoEvento,idsExistentes,GOOGLE_AGENDA_CONFIG.calendarId,token);
+  // Entra na mesma fila dos outros envios (ver _gaEnfileirar) e só lê os IDs
+  // já gravados quando chega a vez dele — assim uma pré-reserva criada em
+  // paralelo com o envio automático de Venda Ganha não vira evento duplicado.
+  var idsExistentes={};
+  var resultado=await _gaEnfileirar(function(){
+    idsExistentes=Object.assign({},orcAtualGoogleAgenda||{});
+    return _gaEnviarListaEventos([_gaEventoPreReserva()],descricao,enderecoEvento,idsExistentes,GOOGLE_AGENDA_CONFIG.calendarId,token);
+  });
   var novosIds=resultado.novosIds, erros=resultado.erros;
 
   var googleAgendaAtualizado=Object.assign({},idsExistentes,novosIds);
@@ -8896,16 +9331,23 @@ async function googleAgendaEnviarOS(){
 
   var descricao=_gaMontarDescricao();
   var eventosDisp=_gaEventosDisponiveis();
-  var idsExistentes=Object.assign({},orcAtualGoogleAgenda||{});
   var enderecoEvento=[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
   driveStatus('📅 Enviando '+eventosDisp.length+' evento(s) para o Google Agenda...','');
 
-  var resultado=await _gaEnviarListaEventos(eventosDisp,descricao,enderecoEvento,idsExistentes,GOOGLE_AGENDA_CONFIG.calendarId,token);
+  // Fila + leitura dos IDs no último instante (ver _gaEnfileirar): o envio
+  // manual não pode atropelar o envio automático de Venda Ganha que esteja
+  // acontecendo no mesmo momento, senão os dois criam eventos separados.
+  var idsExistentes={};
+  var resultado=await _gaEnfileirar(function(){
+    idsExistentes=Object.assign({},orcAtualGoogleAgenda||{});
+    return _gaEnviarListaEventos(eventosDisp,descricao,enderecoEvento,idsExistentes,GOOGLE_AGENDA_CONFIG.calendarId,token);
+  });
   var novosIds=resultado.novosIds;
   var erros=resultado.erros;
 
   var googleAgendaAtualizado=Object.assign({},idsExistentes,novosIds);
   googleAgendaAtualizado.liberadaNoEnvio=montagemLiberada();
+  googleAgendaAtualizado.ultimoErro=erros.length?{quando:new Date().toISOString(), itens:erros.slice(0,6)}:null;
   if(driveIdAtual===idOrcamentoEnvio) orcAtualGoogleAgenda=googleAgendaAtualizado;
   try{
     // Merge imediato no Firestore — além de manter orcAtualGoogleAgenda em
@@ -8935,6 +9377,7 @@ async function googleAgendaEnviarOS(){
       ? '⚠️ '+eventosDisp.length+' evento(s) enviado(s) com LIBERAÇÃO DE MONTAGEM PENDENTE — '+_tarjaOS
       : '✅ '+eventosDisp.length+' evento(s) enviado(s) para o Google Agenda!', _tarjaOS?'err':'ok');
   }
+  if(typeof renderMontagemGate==='function') renderMontagemGate();
 }
 
 function tirarSnapshot(){
@@ -10034,6 +10477,9 @@ function renderMontagemGate(){
     }
   }
 
+  var agBox=document.getElementById('montagem-agenda-box');
+  if(agBox) agBox.innerHTML=_gaPainelHTML();
+
   var hist=document.getElementById('montagem-hist');
   var histList=document.getElementById('montagem-hist-list');
   if(hist&&histList){
@@ -10054,6 +10500,104 @@ function renderMontagemGate(){
       hist.style.display='none';
     }
   }
+}
+
+
+// ── PAINEL "ESTADO NA AGENDA" (dentro de 🔧 Liberação de Montagem) ────────
+// Mostra, sem sair do orçamento, exatamente quais dos três eventos
+// (Montagem / Evento / Desmontagem) estão registrados na agenda, se o último
+// envio deixou alguma pendência e se a tarja de LIBERAÇÃO PENDENTE que está
+// nos títulos ainda corresponde à realidade. Nasceu de dois problemas
+// relatados pelo usuário: um evento que foi só com a montagem (as outras duas
+// falhas ficaram invisíveis) e eventos que voltaram a aparecer como não
+// liberados na agenda.
+var _GA_TIPOS_PAINEL=[
+  {chave:'montagemEventId',    rotulo:'Montagem',    campo:'f-dm'},
+  {chave:'eventoEventId',      rotulo:'Evento',      campo:'f-dia'},
+  {chave:'desmontagemEventId', rotulo:'Desmontagem', campo:'f-dd'}
+];
+
+function _gaPainelHTML(){
+  var ga=(typeof orcAtualGoogleAgenda!=='undefined'&&orcAtualGoogleAgenda)||{};
+  var temData=_GA_TIPOS_PAINEL.some(function(t){ return !!gv(t.campo); });
+  if(!temData) return '';
+  var linhas=_GA_TIPOS_PAINEL.map(function(t){
+    var data=gv(t.campo);
+    if(!data) return '<div style="font-size:10.5px;color:var(--text-dim);padding:2px 0;opacity:.7">— '+t.rotulo+': sem data no orçamento</div>';
+    var ok=!!ga[t.chave];
+    return '<div style="font-size:10.5px;padding:2px 0;color:'+(ok?'var(--text-dim)':'#ef5350')+'">'
+      +(ok?'✅':'❌')+' '+t.rotulo+' — '+fD(data)+(ok?'':' <b>não está na agenda</b>')+'</div>';
+  }).join('');
+  var faltando=_GA_TIPOS_PAINEL.filter(function(t){ return gv(t.campo) && !ga[t.chave]; }).length;
+  var enviado=_GA_TIPOS_PAINEL.some(function(t){ return !!ga[t.chave]; });
+  var erro=ga.ultimoErro;
+  var corBorda=(faltando||erro)?'#c62828':'var(--border)';
+  var html='<div style="border:1px solid '+corBorda+';border-left:4px solid '+corBorda+';border-radius:6px;padding:8px 10px;background:rgba(127,127,127,.08)">'
+    +'<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);font-weight:700;margin-bottom:5px">🗓️ Estado no Google Agenda</div>'
+    +linhas;
+  if(!enviado){
+    html+='<div style="font-size:10.5px;color:var(--text-dim);margin-top:5px">Nenhum evento enviado ainda — use <b>📅 Agenda</b>.</div>';
+  }
+  if(erro&&erro.itens&&erro.itens.length){
+    html+='<div style="margin-top:6px;font-size:10.5px;color:#ff8a8a;line-height:1.5"><b>⚠️ O último envio deixou pendência:</b><br>• '
+      +erro.itens.map(function(x){return eh(String(x));}).join('<br>• ')+'</div>';
+  }
+  if(enviado){
+    var tarjaAgora=!!_montagemTarjaTexto();
+    if(typeof ga.liberadaNoEnvio==='boolean'){
+      var tarjaNaAgenda=!ga.liberadaNoEnvio;
+      html+='<div style="margin-top:6px;font-size:10.5px;color:'+(tarjaNaAgenda===tarjaAgora?'var(--text-dim)':'#ffa726')+'">'
+        +(tarjaNaAgenda?'⚠️ Os títulos na agenda estão com a tarja "LIBERAÇÃO PENDENTE".':'✅ Os títulos na agenda estão sem tarja (OS liberada).')
+        +(tarjaNaAgenda===tarjaAgora?'':' <b>Diferente do estado atual da OS — clique em 🔁 Reenviar à Agenda.</b>')
+        +'</div>';
+    }
+    html+='<div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">'
+      +'<button class="com-btn" style="background:#37474f;color:#fff" onclick="_gaConferirAgenda()">🔍 Conferir na Agenda</button>'
+      +'<button class="com-btn" style="background:#1565c0;color:#fff" onclick="googleAgendaEnviarOS()">🔁 Reenviar à Agenda</button>'
+      +'</div>';
+  }
+  return html+'</div>';
+}
+
+// Confere AO VIVO, no Google Agenda, os eventos deste orçamento: existem?
+// a data bate? o título ainda tem a tarja de liberação pendente? É o
+// diagnóstico que faltava para descobrir um evento que nunca chegou lá.
+async function _gaConferirAgenda(){
+  var ga=(typeof orcAtualGoogleAgenda!=='undefined'&&orcAtualGoogleAgenda)||{};
+  if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
+  if(!GOOGLE_AGENDA_CONFIG.calendarId){
+    alert('⚠️ O Google Agenda ainda não foi configurado (Admin > Google Agenda).');
+    return;
+  }
+  var token;
+  driveStatus('🔍 Conferindo os eventos no Google Agenda...','');
+  try{ token=await googleAgendaObterToken(); }
+  catch(e){ driveStatus('⚠️ '+_gaErroAmigavel(e.message),'err'); alert('⚠️ '+_gaErroAmigavel(e.message)); return; }
+
+  var tarjaEsperada=!!_montagemTarjaTexto();
+  var relatorio=[], problemas=0;
+  for(var i=0;i<_GA_TIPOS_PAINEL.length;i++){
+    var t=_GA_TIPOS_PAINEL[i], data=gv(t.campo);
+    if(!data){ relatorio.push('— '+t.rotulo+': sem data no orçamento (não vai pra agenda).'); continue; }
+    if(!ga[t.chave]){ relatorio.push('❌ '+t.rotulo+' ('+fD(data)+'): NUNCA foi criado na agenda.'); problemas++; continue; }
+    var r=await _concChecarEventoAoVivo(ga[t.chave], data, token);
+    if(r.motivo==='apagado'){ relatorio.push('❌ '+t.rotulo+' ('+fD(data)+'): foi apagado direto na agenda.'); problemas++; continue; }
+    if(r.motivo==='erro'){ relatorio.push('⚠️ '+t.rotulo+': não foi possível conferir — '+_gaErroAmigavel(r.msg||'')); problemas++; continue; }
+    var txt=(r.motivo==='data_diverge')
+      ? '⚠️ '+t.rotulo+': está na agenda em '+(r.dataNoCalendar||'?')+', mas o orçamento diz '+fD(data)+'.'
+      : '✅ '+t.rotulo+' ('+fD(data)+'): confirmado na agenda.';
+    if(r.motivo==='data_diverge') problemas++;
+    if(typeof r.tarja==='boolean' && r.tarja!==tarjaEsperada){
+      txt+=r.tarja
+        ? '\n     ⚠️ O título ainda está com "LIBERAÇÃO PENDENTE", mas esta OS já está liberada.'
+        : '\n     ⚠️ O título está sem a tarja, mas esta OS ainda NÃO está liberada.';
+      problemas++;
+    }
+    relatorio.push(txt);
+  }
+  driveStatus(problemas?('⚠️ '+problemas+' pendência(s) na agenda.'):'✅ Agenda conferida — tudo certo.', problemas?'err':'ok');
+  alert('🔍 CONFERÊNCIA NO GOOGLE AGENDA — OS '+(gv('f-num')||'')+'\n\n'+relatorio.join('\n')
+    +(problemas?'\n\n➡️ Clique em "🔁 Reenviar à Agenda" para o sistema recriar/corrigir o que está apontado acima. Ele atualiza o que já existe em vez de duplicar.':''));
 }
 
 // ════════════════════════════════════════════════════════
@@ -17831,6 +18375,77 @@ async function concLimparAgendaOrfaos(){
     +(falhas.length?('\n\n⚠️ Não foi possível remover:\n\n• '+falhas.join('\n• ')+'\n\nOs IDs continuam gravados — dá pra tentar de novo depois.'):'\n\n✅ Nada ficou pendente.'));
 }
 
+
+// ── REENVIO EM LOTE: recria/corrige o que está faltando na agenda ────────
+// Rede de segurança para a falha parcial (relatada pelo usuário: "o evento
+// RMED está só com a montagem na agenda"). Pega, entre as vendas ganhas
+// filtradas, todas que têm data sem evento criado — ou, se a verificação ao
+// vivo já rodou, evento apagado na agenda, data divergente ou tarja de
+// liberação errada — e reenvia. O envio atualiza o que já existe em vez de
+// duplicar, então é seguro rodar quantas vezes precisar.
+function _concFaltantes(){
+  var itens=window._concLista||[];
+  return itens.filter(function(it){
+    if(!it.o||!it.o.driveId) return false;
+    var falta=(it.status.esperados||[]).some(function(t){ return !t.criado; });
+    if(falta) return true;
+    var live=it.live||{};
+    return Object.keys(live).some(function(k){ return live[k] && !live[k].ok; });
+  }).map(function(it){
+    var live=it.live||{};
+    var motivos=[];
+    (it.status.esperados||[]).forEach(function(t){ if(!t.criado) motivos.push(_GA_ROTULO[t.tipo+'EventId']+' sem evento'); });
+    Object.keys(live).forEach(function(k){
+      if(live[k]&&!live[k].ok) motivos.push((_GA_ROTULO[k+'EventId']||k)+': '+(CONC_LIVE_LABEL[live[k].motivo]||live[k].motivo));
+    });
+    return {it:it, motivos:motivos};
+  });
+}
+
+async function concReenviarFaltantes(){
+  var lista=_concFaltantes();
+  if(!lista.length){
+    alert('✅ Nada a reenviar.\n\nTodas as vendas ganhas filtradas já têm os eventos registrados na agenda.\n\nDica: rode antes "🔎 Verificar ao Vivo" — ele confere na agenda de verdade se o evento existe, se a data bate e se a tarja de liberação está correta, e aí este botão também corrige esses casos.');
+    return;
+  }
+  var resumo=lista.slice(0,15).map(function(x){
+    var f=x.it.o.form||{};
+    return '• '+(f['f-num']||'')+' — '+(f['f-cliente']||'')+'\n     '+x.motivos.join(' | ');
+  }).join('\n');
+  if(!confirm('🔁 REENVIAR PARA O GOOGLE AGENDA\n\n'+lista.length+' venda(s) ganha(s) com pendência na agenda:\n\n'+resumo
+    +(lista.length>15?'\n… e mais '+(lista.length-15):'')
+    +'\n\nO sistema vai criar o que falta e atualizar o que já existe (não duplica). Continuar?')) return;
+
+  if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
+  if(!GOOGLE_AGENDA_CONFIG.clientId||!GOOGLE_AGENDA_CONFIG.calendarId){
+    alert('⚠️ O Google Agenda ainda não foi configurado (Admin > Google Agenda).');
+    return;
+  }
+  var btn=document.getElementById('conc-btn-reenviar');
+  var txt=btn?btn.innerHTML:'';
+  if(btn){ btn.disabled=true; btn.innerHTML='⏳ Reenviando...'; }
+  var st=document.getElementById('conc-status');
+  var ok=0, falhas=[];
+  for(var i=0;i<lista.length;i++){
+    var o=lista[i].it.o, f=o.form||{};
+    if(st) st.textContent='🔁 Reenviando '+(i+1)+' de '+lista.length+': '+(f['f-cliente']||'');
+    try{
+      var evs=_gaEventosDisponiveisDe(o.form||{}, o.dados||{});
+      if(!evs.length){ falhas.push((f['f-num']||'')+' '+(f['f-cliente']||'')+': sem nenhuma data preenchida'); continue; }
+      await _gaEnviarEventosParaOrcamento(o.driveId, o.form||{}, o.dados||{}, evs);
+      ok++;
+    }catch(e){
+      falhas.push((f['f-num']||'')+' '+(f['f-cliente']||'')+': '+_gaErroAmigavel(e&&e.message));
+    }
+  }
+  if(btn){ btn.disabled=false; btn.innerHTML=txt; }
+  if(st) st.textContent='';
+  await concAtualizar();
+  alert('🔁 REENVIO CONCLUÍDO\n\n✅ '+ok+' venda(s) com os eventos em ordem na agenda.'
+    +(falhas.length?('\n\n⚠️ Não foi possível resolver:\n\n• '+falhas.join('\n• ')):'')
+    +'\n\nRode "🔎 Verificar ao Vivo" para confirmar na agenda.');
+}
+
 function concAtualizarResumo(){
   var el=document.getElementById('conc-resumo');
   var itens=window._concLista||[];
@@ -17860,7 +18475,7 @@ function concAtualizarResumo(){
     +_concCaixaOrfaos();
 }
 
-var CONC_LIVE_LABEL={confirmado:'✅ Confirmado',apagado:'❌ Apagado na Agenda',data_diverge:'⚠️ Data diverge',erro:'⚠️ Erro ao verificar'};
+var CONC_LIVE_LABEL={confirmado:'✅ Confirmado',apagado:'❌ Apagado na Agenda',data_diverge:'⚠️ Data diverge',tarja_diverge:'⚠️ Tarja de liberação divergente',erro:'⚠️ Erro ao verificar'};
 
 function concRenderizarTabela(){
   var corpo=document.getElementById('conc-corpo');
@@ -17924,7 +18539,14 @@ async function _concChecarEventoAoVivo(eventId, dataEsperada, token){
     if(d.status==='cancelled') return {ok:false, motivo:'apagado'};
     var dataEvento=(d.start&&(d.start.dateTime||d.start.date))||'';
     var bateData = dataEsperada ? dataEvento.substring(0,10)===dataEsperada : true;
-    return {ok:bateData, motivo: bateData?'confirmado':'data_diverge', dataNoCalendar:dataEvento.substring(0,10)};
+    // O título também é lido: é nele que mora a tarja "⚠️ LIBERAÇÃO PENDENTE",
+    // e é comparando essa tarja com o estado real da OS que se descobre um
+    // evento que ficou marcado como não liberado na agenda depois de liberado
+    // no sistema (ou o contrário).
+    var titulo=d.summary||'';
+    return {ok:bateData, motivo: bateData?'confirmado':'data_diverge',
+      dataNoCalendar:dataEvento.substring(0,10),
+      titulo:titulo, tarja:/LIBERA(Ç|C)(Ã|A)O PENDENTE/i.test(titulo)};
   }catch(e){
     return {ok:false, motivo:'erro', msg:e.message};
   }
@@ -17968,6 +18590,15 @@ async function concVerificarAoVivo(){
     if(st) st.textContent='⏳ Verificando '+(i+1)+'/'+checagens.length+' no Google Agenda...';
     var resultado=await _concChecarEventoAoVivo(c.eventId, c.dataEsperada, token);
     var item=itens[c.idx];
+    // A tarja de liberação no título tem que bater com o estado da OS.
+    if(resultado.ok && typeof resultado.tarja==='boolean'){
+      var esperaTarja=!!_montagemTarjaTextoDe(item.o.form||{}, item.o.dados||{});
+      if(resultado.tarja!==esperaTarja){
+        resultado.ok=false;
+        resultado.motivo='tarja_diverge';
+        resultado.tarjaEsperada=esperaTarja;
+      }
+    }
     if(!item.live) item.live={};
     item.live[c.tipo]=resultado;
   }
@@ -23904,6 +24535,58 @@ document.querySelectorAll('.ov').forEach(function(ov){
 // ════════════════════════════════════════════════════════
 var _numAutoCache = null; // cache do último número gerado nesta sessão
 
+
+// ════════════════════════════════════════════════════════
+//  RESERVA DE NÚMERO DO ORÇAMENTO
+//  Problema que resolve (relatado pelo usuário): o próximo número era
+//  calculado só a partir dos orçamentos JÁ SALVOS. Enquanto alguém passava
+//  uma ou duas horas elaborando sem salvar, o número dele não existia para
+//  ninguém — outro usuário abria um orçamento novo e recebia o MESMO número.
+//  A colisão só aparecia na hora de salvar, quando já havia muito trabalho
+//  feito. Agora, no instante em que o número é gerado ele é RESERVADO no
+//  servidor; volta a ficar livre quando o orçamento é salvo (aí o número
+//  passa a existir de verdade na listagem), quando o usuário cancela/abre
+//  outro orçamento, ou sozinho depois do prazo abaixo.
+// ════════════════════════════════════════════════════════
+var NUM_RESERVA_TTL = 8*60*60*1000;   // 8h — cobre uma elaboração longa
+var _numReservado = null;             // número que EU tenho reservado agora
+
+async function numeroOp(numAction, numero, extra){
+  try{
+    var body={action:'numero', numAction:numAction, numero:numero?String(numero):'',
+      usuarioId:usuarioAtual?usuarioAtual.id:'',
+      usuarioNome:usuarioAtual?usuarioAtual.nome:'',
+      ttl:NUM_RESERVA_TTL};
+    if(extra) Object.assign(body,extra);
+    var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify(body)});
+    return await r.json();
+  }catch(e){
+    // Best-effort: sem rede, o sistema continua funcionando como antes.
+    console.warn('[Número] '+numAction+':', e&&e.message);
+    return {ok:false, erro:e&&e.message};
+  }
+}
+
+async function _numerosReservadosLista(){
+  var d=await numeroOp('listar');
+  return (d&&d.reservas)||{};
+}
+
+async function _reservarNumero(num){
+  var d=await numeroOp('reservar', num);
+  if(d&&d.ok) _numReservado=String(num);
+  return d;
+}
+
+// Devolve o número para o "estoque". Chamado ao cancelar/limpar, ao abrir
+// outro orçamento e depois de salvar (quando o número já existe de verdade).
+async function _liberarNumeroReservado(){
+  if(!_numReservado) return;
+  var n=_numReservado;
+  _numReservado=null;
+  await numeroOp('liberar', n);
+}
+
 async function gerarNumeroAuto(){
   var btn = document.getElementById('btn-autonum');
   if(btn){ btn.textContent='⏳'; btn.disabled=true; }
@@ -23944,6 +24627,21 @@ async function gerarNumeroAuto(){
       numerosValidos.push(_numAutoCache);
     }
 
+    // Números RESERVADOS por outros usuários que estão elaborando AGORA e
+    // ainda não salvaram. Era exatamente esta lista que faltava: sem ela,
+    // duas pessoas abrindo um orçamento ao mesmo tempo recebiam o mesmo
+    // número. A minha própria reserva não conta (senão eu pularia número a
+    // cada clique em 🔢 Auto).
+    var _meuId=usuarioAtual?usuarioAtual.id:'';
+    try{
+      var reservas=await _numerosReservadosLista();
+      Object.keys(reservas).forEach(function(k){
+        if(reservas[k] && reservas[k].usuarioId===_meuId) return;
+        var nRes=parseInt(k,10);
+        if(!isNaN(nRes) && String(nRes).length===8 && String(nRes).startsWith(prefixoAno)) numerosValidos.push(nRes);
+      });
+    }catch(eRes){ console.warn('[Número] reservas não consultadas:', eRes&&eRes.message); }
+
     var proximo;
     if(numerosValidos.length > 0){
       var maior = Math.max.apply(null, numerosValidos);
@@ -23970,6 +24668,21 @@ async function gerarNumeroAuto(){
     // Última verificação de formato
     if(String(proximo).length !== 8) proximo = minAbsoluto;
 
+    // RESERVAR o número no servidor. A reserva é transacional: se duas
+    // pessoas chegarem no mesmo número no mesmo instante, só uma consegue —
+    // a outra recebe "ocupado" e avança para o próximo. É isso que garante
+    // que ninguém elabore horas de orçamento em cima de um número que já é
+    // de outro.
+    if(_numReservado && String(_numReservado)!==String(proximo)) await _liberarNumeroReservado();
+    var reservaOk=false, tentReserva=0;
+    while(tentReserva<25){
+      var rr=await _reservarNumero(proximo);
+      if(rr&&rr.ok){ reservaOk=true; break; }
+      if(rr&&rr.erro && !rr.dono) break;   // servidor indisponível: não adianta insistir
+      proximo++; tentReserva++;
+      if(String(proximo).length!==8){ proximo=minAbsoluto; break; }
+    }
+
     // Aplicar no campo
     var elNum = document.getElementById('f-num');
     if(elNum){
@@ -23983,7 +24696,11 @@ async function gerarNumeroAuto(){
     sv('orc-disp', String(proximo));
     marcarAlterado();
     _numAutoCache = proximo;
-    driveStatus('✅ Número gerado: '+proximo,'ok');
+    driveStatus(reservaOk
+      ? '✅ Número '+proximo+' gerado e RESERVADO para você.'
+      : '✅ Número gerado: '+proximo+' — ⚠️ não foi possível reservá-lo no servidor; salve o quanto antes.',
+      reservaOk?'ok':'err');
+    _autoSaveChip();
     setTimeout(function(){ verificarNumDuplicado(String(proximo)); }, 500);
 
   }catch(e){
@@ -24029,10 +24746,27 @@ async function verificarNumDuplicado(num){
     _aviso.style.color='#ef5350';
     _aviso.textContent='⚠️ Número já usado por: '+_cli;
     if(_el){_el.style.borderColor='#d63447';_el.style.boxShadow='0 0 0 2px rgba(192,0,26,.3)';}
-  } else {
-    _aviso.style.display='none';
-    if(_el){_el.style.borderColor='';_el.style.boxShadow='';}
+    return;
   }
+
+  // Número ainda não existe salvo, mas pode estar RESERVADO por alguém que
+  // está elaborando agora. Sem este aviso, quem digita o número na mão volta
+  // a cair na duplicidade que a reserva automática evita.
+  try{
+    var _res=await _numerosReservadosLista();
+    var _dono=_res[String(num).trim()];
+    var _meu=usuarioAtual?usuarioAtual.id:'';
+    if(_dono && _dono.usuarioId && _dono.usuarioId!==_meu){
+      _aviso.style.display='block';
+      _aviso.style.color='#e6a700';
+      _aviso.textContent='⚠️ Número reservado agora por '+(_dono.usuarioNome||'outro usuário')+' — escolha outro.';
+      if(_el){_el.style.borderColor='#e6a700';_el.style.boxShadow='0 0 0 2px rgba(230,167,0,.3)';}
+      return;
+    }
+  }catch(eRes){}
+
+  _aviso.style.display='none';
+  if(_el){_el.style.borderColor='';_el.style.boxShadow='';}
 }
 
 
