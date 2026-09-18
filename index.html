@@ -2914,6 +2914,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
   <div class="st" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
     <span>📎 Anexos <span id="anx-contador" style="font-size:11px;color:rgba(255,255,255,.85);font-weight:600"></span></span>
     <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button type="button" class="btn btn-o btn-sm" id="anx-btn-verificar" style="font-weight:700" onclick="anxVerificar()" title="Confere no servidor se cada anexo está íntegro e abre de verdade">🔍 Verificar</button>
       <label class="btn btn-b btn-sm" id="anx-btn-add" style="cursor:pointer;font-weight:700" title="Plantas, descritivos técnicos, fotos do local, croquis — PDF, imagem, Word, Excel, DWG…">➕ Anexar arquivos<input type="file" id="anx-input" multiple style="display:none" onchange="anxSelecionar(this)"></label>
     </span>
   </div>
@@ -10750,7 +10751,10 @@ function _anxReduzirImagem(file){
 // for ativado um dia, o sistema passa a usá-lo sozinho.
 var ANX_VIA_STORAGE = null;          // null = ainda não testado
 var ANX_STORAGE_TIMEOUT_MS = 12000;  // teste rápido: não trava o usuário
-var ANX_CHUNK_B64 = 600000;          // ~440 KB de arquivo por documento
+var ANX_CHUNK_B64 = 300000;          // ~220 KB de arquivo por documento
+                                     // (limite do Firestore é 1 MB por
+                                     // documento; a folga evita recusa e
+                                     // deixa cada gravação mais rápida)
 var _anxCancelar = false;
 
 function _anxLerBase64(blob){
@@ -10895,6 +10899,47 @@ async function _anxApagarFirestore(a){
   }
 }
 
+// Relê o que foi gravado e compara com o arquivo original — é a garantia de
+// que nenhum anexo entra na lista sem estar íntegro no servidor.
+async function _anxConferir(a, tamanhoEsperado){
+  try{
+    var blob=await _anxBaixarFirestore(a);
+    if(!blob || !blob.size) return {ok:false, erro:'o arquivo foi gravado vazio no servidor. Tente de novo.'};
+    if(tamanhoEsperado && Math.abs(blob.size-tamanhoEsperado)>2){
+      return {ok:false, erro:'a gravação ficou incompleta ('+_anxTamanho(blob.size)+' de '+_anxTamanho(tamanhoEsperado)+'). Tente de novo — pode ter sido queda de internet.'};
+    }
+    return {ok:true, bytes:blob.size};
+  }catch(e){
+    return {ok:false, erro:_anxErroAmigavel(e)};
+  }
+}
+
+// Diagnóstico de todos os anexos do orçamento: onde estão, quantos pedaços
+// foram encontrados e quantos bytes voltam de verdade.
+async function anxVerificar(){
+  if(!anexosOrc.length){ alert('Este orçamento não tem anexos.'); return; }
+  anxStatus('🔍 Verificando '+anexosOrc.length+' anexo(s)...','');
+  var linhas=[], problemas=0;
+  for(var i=0;i<anexosOrc.length;i++){
+    var a=anexosOrc[i];
+    var onde = a.local==='storage' ? 'link direto (Storage)' : ('banco de dados / '+(a.col||'?')+' · '+(a.partes||1)+' pedaço(s)');
+    if(a.local==='storage' && a.url){
+      linhas.push('✅ '+a.nome+'\n     '+onde);
+      continue;
+    }
+    var r=await _anxConferir(a, a.tamanho);
+    if(r.ok){
+      linhas.push('✅ '+a.nome+'\n     '+onde+' · '+_anxTamanho(r.bytes)+' recuperados');
+    }else{
+      problemas++;
+      linhas.push('❌ '+a.nome+'\n     '+onde+'\n     '+r.erro);
+    }
+  }
+  anxStatus(problemas?('⚠️ '+problemas+' anexo(s) com problema.'):'✅ Todos os anexos estão íntegros.', problemas?'err':'ok');
+  alert('🔍 VERIFICAÇÃO DOS ANEXOS — OS '+(gv('f-num')||'')+'\n\n'+linhas.join('\n\n')
+    +(problemas?'\n\n➡️ Os anexos marcados com ❌ não vão abrir. Exclua e anexe de novo.':''));
+}
+
 // Texto de socorro quando NENHUM lugar aceita a gravação — mostra a regra
 // pronta pra colar no console, em vez de um "peça a um administrador".
 var ANX_REGRA_AJUDA=''
@@ -10916,17 +10961,20 @@ function anxCancelarEnvio(){
 
 async function anxSelecionar(input){
   var arquivos=[].slice.call(input.files||[]);
-  input.value='';
-  if(!arquivos.length) return;
+  // O input só é limpo DEPOIS de tudo lido. Limpar antes já derrubou a
+  // leitura do arquivo em alguns navegadores (anexo entrando com 0 B).
+  if(!arquivos.length){ input.value=''; return; }
   if(!_anxPodeAnexar()){
+    input.value='';
     alert('🔒 SEM PERMISSÃO PARA ANEXAR\n\nSeu cargo não está autorizado a anexar arquivos.\n\nUm Administrador pode liberar em Administração > Permissões por Cargo > "📎 Pode Anexar Arquivos".');
     return;
   }
   if(!driveIdAtual){
+    input.value='';
     alert('⚠️ Salve o orçamento antes de anexar arquivos.\n\nAssim o sistema sabe a qual orçamento o anexo pertence.');
     return;
   }
-  if(_anxOcupado){ anxStatus('⏳ Aguarde o envio anterior terminar.','err'); return; }
+  if(_anxOcupado){ input.value=''; anxStatus('⏳ Aguarde o envio anterior terminar.','err'); return; }
   _anxOcupado=true; _anxCancelar=false;
   var idOrc=driveIdAtual;
   var enviados=0, falhas=[];
@@ -10937,8 +10985,21 @@ async function anxSelecionar(input){
     var rotulo=(arquivos.length>1?((i+1)+' de '+arquivos.length+': '):'')+f.name;
     try{
       anxStatus('⏳ Preparando '+rotulo+'...','');
+      // Arquivo com 0 byte NUNCA pode virar anexo: foi o que deixou um
+      // "Planta SBAM.pdf — 0 B" na lista, impossível de abrir. Acontece com
+      // arquivo que só existe na nuvem (OneDrive/Google Drive "sob demanda"),
+      // em rede caída, ou quando o arquivo foi movido/renomeado depois de
+      // escolhido.
+      if(!f.size){
+        falhas.push(f.name+': o navegador leu 0 byte neste arquivo. Se ele estiver no OneDrive/Google Drive apenas "na nuvem", abra a pasta e baixe o arquivo para o computador antes de anexar.');
+        continue;
+      }
       var corpo=f;
       if(_anxEhImagem(f.type,f.name)) corpo=await _anxReduzirImagem(f);
+      if(!corpo || !corpo.size){
+        falhas.push(f.name+': o arquivo ficou vazio ao ser preparado. Tente de novo.');
+        continue;
+      }
       if(corpo.size > ANX_MAX_MB*1024*1024){
         falhas.push(f.name+' ('+_anxTamanho(corpo.size)+' — limite de '+ANX_MAX_MB+' MB por arquivo)');
         continue;
@@ -10970,6 +11031,16 @@ async function anxSelecionar(input){
         anxStatus('⏳ Enviando '+rotulo+'...','');
         var rFs=await _anxSubirFirestore(corpo, id, idOrc, prog);
         registro.local='firestore'; registro.partes=rFs.partes; registro.col=rFs.col; registro.orcamento=idOrc;
+        // CONFERÊNCIA: relê tudo o que acabou de ser gravado e compara com o
+        // arquivo original. Sem isso, uma gravação que falha pela metade vira
+        // um anexo "fantasma" na lista — que existe no orçamento mas não abre.
+        anxStatus('🔍 Conferindo '+rotulo+'...','');
+        var conf=await _anxConferir(registro, corpo.size);
+        if(!conf.ok){
+          await _anxApagarFirestore(registro);
+          falhas.push(f.name+': '+conf.erro);
+          continue;
+        }
       }
 
       anexosOrc.push(registro);
@@ -10982,6 +11053,7 @@ async function anxSelecionar(input){
   }
 
   _anxOcupado=false; _anxCancelar=false;
+  input.value='';
   anxRenderizar();
   if(enviados){
     marcarAlterado();
@@ -11023,6 +11095,8 @@ function anxRenderizar(){
   var naOS=anexosOrc.filter(function(a){ return a.naOS; }).length;
   if(cont) cont.textContent=anexosOrc.length ? ('— '+anexosOrc.length+' arquivo(s), '+naOS+' na OS') : '';
   if(btnAdd) btnAdd.style.display=_anxPodeAnexar()?'':'none';
+  var btnVer=document.getElementById('anx-btn-verificar');
+  if(btnVer) btnVer.style.display=anexosOrc.length?'':'none';
 
   if(!anexosOrc.length){
     lista.innerHTML='<div class="anx-vazio">'+(_anxPodeAnexar()
@@ -11040,7 +11114,8 @@ function anxRenderizar(){
       +visual
       +'<div class="anx-corpo">'
       +'<div class="anx-nome">'+_anxIcone(a.tipo,a.nome)+' '+eh(a.nome)+'</div>'
-      +'<div class="anx-meta">'+_anxTamanho(a.tamanho)+(a.usuarioNome?(' · '+eh(a.usuarioNome)):'')+(quando?(' · '+quando):'')+'</div>'
+      +'<div class="anx-meta">'+_anxTamanho(a.tamanho)+(a.usuarioNome?(' · '+eh(a.usuarioNome)):'')+(quando?(' · '+quando):'')
+        +(a.local==='firestore'?(' · '+(a.partes||1)+' pedaço(s)'):'')+'</div>'
       +'<input class="anx-legenda" type="text" maxlength="120" placeholder="Legenda (ex.: Planta baixa do salão principal)" value="'+eh(a.legenda||'')+'" oninput="anxLegenda('+i+',this.value)">'
       +'<div class="anx-acoes">'
       +'<label class="anx-chk" title="Quando marcado, a OS avisa que este orçamento tem anexos e lista o nome deste arquivo"><input type="checkbox" '+(a.naOS?'checked':'')+' onchange="anxAlternarOS('+i+',this.checked)" style="width:13px;height:13px;cursor:pointer"> Mostrar na OS</label>'
