@@ -10645,7 +10645,7 @@ async function _gaConferirAgenda(){
 //  ou imprimir o que precisar (decisão do usuário).
 // ════════════════════════════════════════════════════════
 var anexosOrc = [];
-var ANX_MAX_MB = 20;                       // por arquivo
+var ANX_MAX_MB = 12;                       // por arquivo (já depois de reduzir imagens)
 var ANX_IMG_MAX_PX = 1800;                 // fotos são reduzidas antes de subir
 var ANX_IMG_QUALIDADE = 0.85;
 var _anxOcupado = false;
@@ -10698,9 +10698,12 @@ function _anxPodeExcluir(){
 function anxStatus(msg, tipo){
   var el=document.getElementById('anx-status');
   if(!el) return;
-  el.textContent=msg||'';
-  el.style.color = tipo==='err' ? '#ef5350' : (tipo==='ok' ? '#66bb6a' : 'var(--text-muted)');
-  if(msg && tipo==='ok') setTimeout(function(){ if(el.textContent===msg) el.textContent=''; }, 5000);
+  var cor = tipo==='err' ? '#ef5350' : (tipo==='ok' ? '#66bb6a' : 'var(--text-muted)');
+  // Durante o envio sempre existe um botão Cancelar: nenhuma espera na tela
+  // pode ficar sem saída (foi o que aconteceu com o Storage travado).
+  el.innerHTML='<span style="color:'+cor+'">'+eh(msg||'')+'</span>'
+    +(_anxOcupado?' <button type="button" class="anx-mini" style="color:#ef5350;border-color:#c62828;margin-left:6px" onclick="anxCancelarEnvio()">⏹️ Cancelar envio</button>':'');
+  if(msg && tipo==='ok') setTimeout(function(){ if(el.textContent.indexOf(msg)>=0) el.innerHTML=''; }, 5000);
 }
 
 // Fotos de local costumam sair de celular com 4–8 MB. Reduzir antes de subir
@@ -10732,6 +10735,116 @@ function _anxReduzirImagem(file){
   });
 }
 
+// ── ONDE O ARQUIVO É GUARDADO ───────────────────────────────────────────
+// Duas vias, nesta ordem:
+//  1) Firebase Storage — ideal (arquivo grande, link direto), mas exige que
+//     o Storage esteja ATIVADO no projeto. No projeto da Crazy Som ele ainda
+//     não está: o bucket não existe, e o SDK do Firebase fica REPETINDO a
+//     tentativa por até 10 minutos antes de desistir — foi exatamente isso
+//     que o usuário viu ("fica a mensagem enviando e não finaliza").
+//  2) Firestore — o mesmo banco onde já vive todo o sistema. O arquivo é
+//     partido em pedaços (um documento do Firestore aceita no máximo 1 MB) e
+//     remontado na hora de abrir. Funciona hoje, sem mexer em nada no
+//     console do Firebase.
+// A via 1 é testada UMA vez por sessão, com tempo limite curto. Se o Storage
+// for ativado um dia, o sistema passa a usá-lo sozinho.
+var ANX_VIA_STORAGE = null;          // null = ainda não testado
+var ANX_STORAGE_TIMEOUT_MS = 12000;  // teste rápido: não trava o usuário
+var ANX_CHUNK_B64 = 600000;          // ~440 KB de arquivo por documento
+var _anxCancelar = false;
+
+function _anxLerBase64(blob){
+  return new Promise(function(resolve,reject){
+    var fr=new FileReader();
+    fr.onload=function(){
+      var r=String(fr.result||'');
+      var v=r.indexOf(',');
+      resolve(v>=0?r.slice(v+1):r);
+    };
+    fr.onerror=function(){ reject(new Error('não foi possível ler o arquivo no computador')); };
+    fr.readAsDataURL(blob);
+  });
+}
+function _anxBase64ParaBlob(b64, tipo){
+  var bin=atob(b64), n=bin.length, arr=new Uint8Array(n);
+  for(var i=0;i<n;i++) arr[i]=bin.charCodeAt(i);
+  return new Blob([arr], {type:tipo||'application/octet-stream'});
+}
+
+// Envio pelo Storage COM TEMPO LIMITE e progresso. Sem o tempo limite, uma
+// falha de bucket/regras vira uma espera infinita na tela.
+function _anxSubirStorage(blob, tipo, caminho, idOrc, nomeOriginal, onProgresso){
+  return new Promise(function(resolve,reject){
+    var terminou=false;
+    var tarefa;
+    var relogio=setTimeout(function(){
+      if(terminou) return;
+      terminou=true;
+      try{ if(tarefa&&tarefa.cancel) tarefa.cancel(); }catch(e){}
+      reject(new Error('storage-timeout'));
+    }, ANX_STORAGE_TIMEOUT_MS);
+    try{
+      if(fbStorage.setMaxUploadRetryTime) fbStorage.setMaxUploadRetryTime(ANX_STORAGE_TIMEOUT_MS);
+      var ref=fbStorage.ref().child(caminho);
+      tarefa=ref.put(blob, {contentType:tipo||'application/octet-stream', customMetadata:{orcamento:idOrc, nomeOriginal:nomeOriginal}});
+      if(tarefa && tarefa.on){
+        tarefa.on('state_changed',
+          function(snap){ if(onProgresso&&snap.totalBytes) onProgresso(snap.bytesTransferred/snap.totalBytes); },
+          function(err){ if(terminou) return; terminou=true; clearTimeout(relogio); reject(err); },
+          function(){
+            if(terminou) return;
+            ref.getDownloadURL().then(function(url){
+              if(terminou) return; terminou=true; clearTimeout(relogio); resolve(url);
+            }, function(err){ if(terminou) return; terminou=true; clearTimeout(relogio); reject(err); });
+          });
+      } else {
+        // Ambientes/stubs sem uploadTask: trata como promessa simples.
+        Promise.resolve(tarefa).then(function(){ return ref.getDownloadURL(); })
+          .then(function(url){ if(terminou) return; terminou=true; clearTimeout(relogio); resolve(url); })
+          .catch(function(err){ if(terminou) return; terminou=true; clearTimeout(relogio); reject(err); });
+      }
+    }catch(e){
+      if(terminou) return; terminou=true; clearTimeout(relogio); reject(e);
+    }
+  });
+}
+
+// Envio pelo Firestore: o arquivo vira pedaços de base64, um documento cada.
+async function _anxSubirFirestore(blob, id, idOrc, onProgresso){
+  var b64=await _anxLerBase64(blob);
+  var total=Math.ceil(b64.length/ANX_CHUNK_B64)||1;
+  for(var i=0;i<total;i++){
+    if(_anxCancelar) throw new Error('cancelado');
+    await fbDb.collection('anexos').doc(id+'_'+i).set({
+      anexoId:id, orcamento:idOrc, parte:i, total:total,
+      dados:b64.substr(i*ANX_CHUNK_B64, ANX_CHUNK_B64)
+    });
+    if(onProgresso) onProgresso((i+1)/total);
+  }
+  return total;
+}
+
+async function _anxBaixarFirestore(a){
+  var partes=[];
+  for(var i=0;i<(a.partes||1);i++){
+    var snap=await fbDb.collection('anexos').doc(a.id+'_'+i).get();
+    if(!snap.exists) throw new Error('o pedaço '+(i+1)+' do arquivo não foi encontrado no servidor');
+    partes.push((snap.data()||{}).dados||'');
+  }
+  return _anxBase64ParaBlob(partes.join(''), a.tipo);
+}
+
+async function _anxApagarFirestore(a){
+  for(var i=0;i<(a.partes||1);i++){
+    try{ await fbDb.collection('anexos').doc(a.id+'_'+i).delete(); }catch(e){}
+  }
+}
+
+function anxCancelarEnvio(){
+  _anxCancelar=true;
+  anxStatus('⏹️ Cancelando...','err');
+}
+
 async function anxSelecionar(input){
   var arquivos=[].slice.call(input.files||[]);
   input.value='';
@@ -10744,18 +10857,17 @@ async function anxSelecionar(input){
     alert('⚠️ Salve o orçamento antes de anexar arquivos.\n\nAssim o sistema sabe a qual orçamento o anexo pertence.');
     return;
   }
-  if(!fbStorage){
-    alert('⚠️ O armazenamento de arquivos não está disponível nesta sessão.\n\nRecarregue a página (⟳ Atualizar o sistema). Se continuar, peça a um administrador para verificar o Firebase Storage do projeto.');
-    return;
-  }
   if(_anxOcupado){ anxStatus('⏳ Aguarde o envio anterior terminar.','err'); return; }
-  _anxOcupado=true;
+  _anxOcupado=true; _anxCancelar=false;
   var idOrc=driveIdAtual;
   var enviados=0, falhas=[];
+
   for(var i=0;i<arquivos.length;i++){
+    if(_anxCancelar){ falhas.push('Envio cancelado por você — '+(arquivos.length-i)+' arquivo(s) não subiram.'); break; }
     var f=arquivos[i];
+    var rotulo=(arquivos.length>1?((i+1)+' de '+arquivos.length+': '):'')+f.name;
     try{
-      anxStatus('⏳ Enviando '+(i+1)+' de '+arquivos.length+': '+f.name+'...','');
+      anxStatus('⏳ Preparando '+rotulo+'...','');
       var corpo=f;
       if(_anxEhImagem(f.type,f.name)) corpo=await _anxReduzirImagem(f);
       if(corpo.size > ANX_MAX_MB*1024*1024){
@@ -10763,27 +10875,49 @@ async function anxSelecionar(input){
         continue;
       }
       var id='anx_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);
-      var caminho='anexos/'+idOrc+'/'+id+'-'+_anxNomeSeguro(f.name);
-      var ref=fbStorage.ref().child(caminho);
-      await ref.put(corpo, {contentType:f.type||'application/octet-stream', customMetadata:{orcamento:idOrc, nomeOriginal:f.name}});
-      var url=await ref.getDownloadURL();
-      anexosOrc.push({
+      var prog=function(fr){ anxStatus('⏳ Enviando '+rotulo+' — '+Math.round(fr*100)+'%','', true); };
+      var registro={
         id:id, nome:f.name, tipo:f.type||'', tamanho:corpo.size,
-        url:url, path:caminho, naOS:true, legenda:'',
+        naOS:true, legenda:'',
         usuarioId:usuarioAtual?usuarioAtual.id:'', usuarioNome:usuarioAtual?usuarioAtual.nome:'',
         dataISO:new Date().toISOString()
-      });
+      };
+
+      // Via 1 — Storage, quando disponível (testado uma vez por sessão)
+      var foi=false;
+      if(fbStorage && ANX_VIA_STORAGE!==false){
+        var caminho='anexos/'+idOrc+'/'+id+'-'+_anxNomeSeguro(f.name);
+        try{
+          var url=await _anxSubirStorage(corpo, f.type, caminho, idOrc, f.name, prog);
+          registro.local='storage'; registro.url=url; registro.path=caminho;
+          ANX_VIA_STORAGE=true; foi=true;
+        }catch(eSt){
+          ANX_VIA_STORAGE=false;
+          console.warn('[Anexos] Storage indisponível, usando o banco de dados:', (eSt&&(eSt.code||eSt.message))||eSt);
+        }
+      }
+      // Via 2 — Firestore em pedaços (sempre funciona)
+      if(!foi){
+        anxStatus('⏳ Enviando '+rotulo+'...','');
+        var partes=await _anxSubirFirestore(corpo, id, idOrc, prog);
+        registro.local='firestore'; registro.partes=partes;
+      }
+
+      anexosOrc.push(registro);
       enviados++;
+      anxRenderizar();
     }catch(e){
+      if(/cancelado/i.test((e&&e.message)||'')){ falhas.push('Envio cancelado por você.'); break; }
       falhas.push(f.name+': '+_anxErroAmigavel(e));
     }
   }
-  _anxOcupado=false;
+
+  _anxOcupado=false; _anxCancelar=false;
   anxRenderizar();
   if(enviados){
     marcarAlterado();
     // Grava já — um anexo enviado e não salvo sumiria da lista no próximo
-    // carregamento, com o arquivo órfão lá no armazenamento.
+    // carregamento, com o arquivo órfão lá no servidor.
     try{ await salvarNoDrive({mostrarStatus:false}); }catch(eS){}
   }
   if(falhas.length){
@@ -10796,10 +10930,13 @@ async function anxSelecionar(input){
 
 function _anxErroAmigavel(e){
   var m=(e&&(e.code||e.message))||'';
-  if(/unauthorized|permission/i.test(m)) return 'o armazenamento recusou o envio (regras do Firebase Storage). Peça a um administrador para liberar a gravação em "anexos/" para usuários autenticados.';
-  if(/quota/i.test(m)) return 'a cota de armazenamento do projeto acabou.';
-  if(/retry-limit|network/i.test(m)) return 'a internet caiu durante o envio. Tente de novo.';
-  if(/object-not-found/i.test(m)) return 'o arquivo não foi encontrado no armazenamento (pode já ter sido excluído).';
+  if(/storage-timeout/i.test(m)) return 'o servidor de arquivos não respondeu a tempo.';
+  if(/cancelado/i.test(m)) return 'envio cancelado por você.';
+  if(/maximum|exceeds the maximum|invalid-argument/i.test(m)) return 'o arquivo é grande demais para o banco de dados. Reduza o arquivo (ou exporte o PDF em qualidade menor) e tente de novo.';
+  if(/unauthorized|permission-denied|permission/i.test(m)) return 'o servidor recusou a gravação (regras de segurança). Peça a um administrador para conferir as regras do Firestore/Storage.';
+  if(/quota|resource-exhausted/i.test(m)) return 'a cota de armazenamento do projeto acabou por hoje.';
+  if(/retry-limit|network|unavailable|failed to fetch/i.test(m)) return 'a internet caiu durante o envio. Tente de novo.';
+  if(/object-not-found|não foi encontrado/i.test(m)) return 'o arquivo não foi encontrado no servidor (pode já ter sido excluído).';
   return (e&&e.message)||String(e);
 }
 
@@ -10851,9 +10988,28 @@ function anxAlternarOS(i, valor){
   var cont=document.getElementById('anx-contador');
   if(cont) cont.textContent=anexosOrc.length ? ('— '+anexosOrc.length+' arquivo(s), '+anexosOrc.filter(function(a){return a.naOS;}).length+' na OS') : '';
 }
-function anxAbrir(i){
-  if(!anexosOrc[i]) return;
-  window.open(anexosOrc[i].url,'_blank','noopener');
+async function anxAbrir(i){
+  var a=anexosOrc[i];
+  if(!a) return;
+  if(a.url){ window.open(a.url,'_blank','noopener'); return; }
+  // Guardado no banco em pedaços: remonta o arquivo aqui e abre numa aba.
+  anxStatus('⏳ Abrindo '+a.nome+'...','');
+  try{
+    var blob=await _anxBaixarFirestore(a);
+    var url=URL.createObjectURL(blob);
+    var w=window.open(url,'_blank','noopener');
+    if(!w){
+      // Popup bloqueado: cai pro download, que o navegador sempre permite.
+      var link=document.createElement('a');
+      link.href=url; link.download=a.nome;
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    }
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+    anxStatus('','');
+  }catch(e){
+    anxStatus('⚠️ '+_anxErroAmigavel(e),'err');
+    alert('⚠️ Não foi possível abrir o anexo:\n\n'+_anxErroAmigavel(e));
+  }
 }
 
 async function anxExcluir(i){
@@ -10866,7 +11022,8 @@ async function anxExcluir(i){
   if(!confirm('🗑️ EXCLUIR ANEXO\n\n"'+a.nome+'"\n\nO arquivo é apagado do servidor e não tem como voltar. Continuar?')) return;
   anxStatus('⏳ Excluindo...','');
   try{
-    if(fbStorage && a.path) await fbStorage.ref().child(a.path).delete();
+    if(a.local==='firestore' || (!a.path && a.partes)) await _anxApagarFirestore(a);
+    else if(fbStorage && a.path) await fbStorage.ref().child(a.path).delete();
   }catch(e){
     // 'object-not-found' = o arquivo já não existe: seguimos e tiramos da
     // lista assim mesmo, senão o registro ficaria preso pra sempre.
