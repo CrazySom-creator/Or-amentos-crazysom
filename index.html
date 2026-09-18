@@ -4326,7 +4326,10 @@ function renderStatusOrc(){
     if(aprovHist&&aprovHist.length){
       sh.style.display='block';
       var hhtml='';
-      for(var i=0;i<aprovHist.length;i++){var h=aprovHist[i];var diffHtml=(h.diffs&&h.diffs.length)?renderDiffNoHistorico(h.diffs,'cur-'+i):'';hhtml+='<div class="hist-evt"><div class="hist-ico">'+(h.ico||'•')+'</div><div class="hist-info"><div class="hist-acao">'+h.acao+' — <span style="color:var(--R)">'+_nomeUsuario(h.usuario)+'</span></div><div class="hist-det">'+h.cargo+' · '+h.data+(h.obs?' · "'+h.obs+'"':'')+'</div>'+diffHtml+'</div></div>';}
+      // Retrato do orçamento AGORA, usado pra comparar com cada valor
+      // aprovado do histórico (tirado uma vez só, não por evento).
+      var _snapAgora=null; try{ _snapAgora=tirarSnapshot(); }catch(eSn){}
+      for(var i=0;i<aprovHist.length;i++){var h=aprovHist[i];var diffHtml=(h.diffs&&h.diffs.length)?renderDiffNoHistorico(h.diffs,'cur-'+i):'';var valHtml=_aprovValoresDoEvento(h,i,aprovHist,_snapAgora,snapshotAprovado,'cur-');hhtml+='<div class="hist-evt"><div class="hist-ico">'+(h.ico||'•')+'</div><div class="hist-info"><div class="hist-acao">'+h.acao+' — <span style="color:var(--R)">'+_nomeUsuario(h.usuario)+'</span></div><div class="hist-det">'+h.cargo+' · '+h.data+(h.obs?' · "'+h.obs+'"':'')+'</div>'+valHtml+diffHtml+'</div></div>';}
       hl.innerHTML=hhtml;
     }else{sh.style.display='none';}
   }
@@ -4368,7 +4371,11 @@ async function aprovAcao(novo){
   if(novo==='analise'&&snapshotAnterior){diffs=compararSnapshots(snapshotAnterior,tirarSnapshot());}
   if(novo==='analise'){snapshotAnterior=tirarSnapshot();}
   if(novo==='aprovado'){snapshotAprovado=tirarSnapshot();}
-  aprovHist.push({ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),obs:obs,diffs:diffs});
+  var _evt={ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),obs:obs,diffs:diffs};
+  // Aprovação guarda os valores finais daquele momento — é o que foi enviado
+  // ao cliente e serve de referência pra comparar depois.
+  if(novo==='aprovado') _evt.valores=_aprovValoresDe(snapshotAprovado);
+  aprovHist.push(_evt);
   aprovStatus=novo;renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   if(novo==='analise'){
     driveStatus('⏳ Salvando automaticamente...','');
@@ -4419,7 +4426,11 @@ async function aprovAcaoInline(novo){
   if(novo==='analise'&&snapshotAnterior){diffs=compararSnapshots(snapshotAnterior,tirarSnapshot());}
   if(novo==='analise'){snapshotAnterior=tirarSnapshot();}
   if(novo==='aprovado'){snapshotAprovado=tirarSnapshot();}
-  aprovHist.push({ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),obs:obs,diffs:diffs});
+  var _evt={ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),obs:obs,diffs:diffs};
+  // Aprovação guarda os valores finais daquele momento — é o que foi enviado
+  // ao cliente e serve de referência pra comparar depois.
+  if(novo==='aprovado') _evt.valores=_aprovValoresDe(snapshotAprovado);
+  aprovHist.push(_evt);
   aprovStatus=novo;document.getElementById('aprov-inline-obs').value='';
   renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   if(novo==='analise'){
@@ -4751,7 +4762,12 @@ function buildOrcCard(orc,idx){
   var minhaVez=(nivel==='tecnico'&&orc.st==='analise')||(nivel==='gerente'&&orc.st==='gerencial')||(nivel==='diretor'&&orc.st==='diretoria')||(['adm','gerente','diretor'].includes(nivel)&&orc.st!=='aprovado'&&orc.st!=='rascunho')||(nivel==='consultor'&&orc.st==='revisao');
   var botoesAcao=getBotoesAcaoLista(orc,idx);var temAcao=botoesAcao.length>0;
   var histHtml='';
-  if(orc.hist.length){histHtml='<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:8px">📜 Histórico</div>';for(var i=0;i<orc.hist.length;i++){var h=orc.hist[i];var diffHtml=(h.diffs&&h.diffs.length)?renderDiffNoHistorico(h.diffs,'card'+idx+'-'+i):'';histHtml+='<div class="hist-evt"><div class="hist-ico">'+(h.ico||'•')+'</div><div class="hist-info"><div class="hist-acao">'+h.acao+' — <span style="color:var(--R)">'+_nomeUsuario(h.usuario)+'</span></div><div class="hist-det">'+h.cargo+' · '+h.data+(h.obs?' · "'+h.obs+'"':'')+'</div>'+diffHtml+'</div></div>';}}
+  if(orc.hist.length){
+    histHtml='<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:8px">📜 Histórico</div>';
+    // Na lista de Aprovações o "hoje" é o próprio orçamento do card.
+    var _snapCard=null; try{ _snapCard=_tirarSnapshotDeDados(orc.dados||{}); }catch(eSc){}
+    for(var i=0;i<orc.hist.length;i++){var h=orc.hist[i];var diffHtml=(h.diffs&&h.diffs.length)?renderDiffNoHistorico(h.diffs,'card'+idx+'-'+i):'';var valHtml=_aprovValoresDoEvento(h,i,orc.hist,_snapCard,(orc.dados&&orc.dados.snapshotAprovado)||null,'card'+idx+'-');histHtml+='<div class="hist-evt"><div class="hist-ico">'+(h.ico||'•')+'</div><div class="hist-info"><div class="hist-acao">'+h.acao+' — <span style="color:var(--R)">'+_nomeUsuario(h.usuario)+'</span></div><div class="hist-det">'+h.cargo+' · '+h.data+(h.obs?' · "'+h.obs+'"':'')+'</div>'+valHtml+diffHtml+'</div></div>';}
+  }
   else{histHtml='<div style="color:var(--text-muted);font-size:11px;margin-bottom:8px">Sem histórico.</div>';}
   var infoAgd=orc.st!=='aprovado'?'<b>Aguardando:</b> '+(aguardando[orc.st]||'—')+(minhaVez?' <b style="color:#ff9800">← SUA VEZ</b>':'')+'<br>':'';
   var infoEv=orc.form['f-dia']?new Date(orc.form['f-dia']+'T12:00:00').toLocaleDateString('pt-BR'):'';
@@ -4845,14 +4861,21 @@ async function aprovAcaoLista(idx,novo,ev){
   var obs=(document.getElementById('obs-'+idx)||{}).value||'';
   var icos={analise:'📤',gerencial:'📊',diretoria:'🏆',aprovado:'✅',revisao:'🔄'};
   var atos={analise:'Enviado p/ Análise Técnica',gerencial:'Encaminhado ao Gerente',diretoria:'Encaminhado à Diretoria',aprovado:'Aprovado',revisao:'Revisão Solicitada'};
-  var novoHist=orc.hist.concat([{ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel],data:new Date().toLocaleString('pt-BR'),obs:obs}]);
+  var _evtL={ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel],data:new Date().toLocaleString('pt-BR'),obs:obs};
+  var novoHist=orc.hist.concat([_evtL]);
   try{
     var btn=ev.target;btn.disabled=true;btn.textContent='⏳ Salvando...';
     var novoDados=JSON.parse(JSON.stringify(orc.dados));novoDados.aprovStatus=novo;novoDados.aprovHist=novoHist;
     // Aprovação rápida direto da lista (sem abrir o orçamento): grava o
     // snapshot de baseline igual à aprovação feita dentro do editor, senão
     // futuras alterações não derrubam mais o status pra nova análise.
-    if(novo==='aprovado'){ novoDados.snapshotAprovado=_tirarSnapshotDeDados(novoDados); }
+    if(novo==='aprovado'){
+      novoDados.snapshotAprovado=_tirarSnapshotDeDados(novoDados);
+      // Mesmos valores finais gravados na aprovação feita dentro do editor.
+      _evtL.valores=_aprovValoresDe(novoDados.snapshotAprovado);
+      if(_evtL.valores) _evtL.valores.imposto=(novoDados.finImposto==='simp')?'simp':'cimp';
+      novoDados.aprovHist=novoHist;
+    }
     var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:orc.driveId,numero:orc.form['f-num']||'SN',cliente:orc.form['f-cliente']||'SemCliente',data:orc.form['f-data']||new Date().toISOString().split('T')[0],dados:novoDados})});
     var d=await r.json();if(!d.ok)throw new Error(d.erro||'Erro ao salvar');
     if(typeof _driveCache!=='undefined') delete _driveCache[orc.driveId];
@@ -9499,6 +9522,113 @@ function tirarSnapshot(){
     totaisSec:totais,
     itens:itens
   };
+}
+
+
+// ════════════════════════════════════════════════════════
+//  VALORES APROVADOS NO HISTÓRICO
+//  Pedido do usuário: "no histórico fique registrado todos os valores finais
+//  aprovados, para que quando haja uma alteração eu possa comparar qual
+//  valor havia sido enviado ao cliente". Cada aprovação passa a carregar um
+//  retrato compacto dos valores daquele momento — o que o cliente recebeu —
+//  e o histórico compara automaticamente com o valor de HOJE, mostrando a
+//  diferença em reais e em porcentagem.
+//  Guardamos só os TOTAIS (não a lista de itens, que já vive em
+//  snapshotAprovado) pra não inflar o documento do orçamento a cada
+//  aprovação.
+// ════════════════════════════════════════════════════════
+var APROV_SECS=['som','video','luz','estrutura','servico','logistica'];
+
+function _aprovValoresDe(snap, impostoDe){
+  if(!snap) return null;
+  var itens={};
+  APROV_SECS.forEach(function(sec){ itens[sec]=((snap.itens&&snap.itens[sec])||[]).length; });
+  return {
+    bruto:snap.totalBruto||0,
+    total:snap.totalFinal||0,
+    secoes:Object.assign({}, snap.totaisSec||{}),
+    itens:itens,
+    descPct:snap.descPct||'0',
+    descRs:snap.descRs||'0',
+    arredRs:snap.arredRs||'0',
+    valLiq:snap.valLiq||'',
+    imposto:(impostoDe||(typeof impAtual!=='undefined'?impAtual:'')),
+    pgto:snap.pgto||'',
+    cliente:snap.cliente||'',
+    dia:snap.dia||''
+  };
+}
+
+// Caixa "valores aprovados" de um evento do histórico, já comparada com a
+// situação atual do orçamento.
+function _aprovValoresHTML(v, idx, atualSnap){
+  if(!v) return '';
+  var id='aprovval-'+(idx||0);
+  var atual=atualSnap?_aprovValoresDe(atualSnap):null;
+  var dif = atual ? (atual.total-v.total) : 0;
+  var mudou = atual && Math.abs(dif)>0.005;
+  var pct = (mudou && v.total) ? (dif/v.total*100) : 0;
+
+  function linha(rot, aprovado, hoje, forte){
+    var difL = (hoje!==null && hoje!==undefined && Math.abs(hoje-aprovado)>0.005);
+    return '<div class="diff-item'+(forte?'':'')+'" style="'+(forte?'font-weight:900;font-size:11.5px':'')+'">'
+      +'<span class="diff-campo">'+rot+':</span> '
+      +'<span style="font-weight:700">'+fmt(aprovado)+'</span>'
+      +(difL?(' &rarr; <span style="color:var(--R);font-weight:800">hoje '+fmt(hoje)+'</span>'
+              +' <span style="color:var(--R);opacity:.8">('+(hoje-aprovado>0?'+':'')+fmt(hoje-aprovado)+')</span>'):'')
+      +'</div>';
+  }
+
+  var linhas='';
+  APROV_SECS.forEach(function(sec){
+    var ap=v.secoes[sec]||0;
+    var ho=atual?(atual.secoes[sec]||0):null;
+    if(!ap && !ho) return;
+    var qt=v.itens&&v.itens[sec];
+    linhas+=linha((SEC_LBL[sec]||sec)+(qt?(' ('+qt+(qt>1?' itens':' item')+')'):''), ap, ho, false);
+  });
+  linhas+=linha('Subtotal bruto', v.bruto, atual?atual.bruto:null, false);
+  var temDesc=(parseFloat(v.descRs)||0)>0||(parseFloat(v.descPct)||0)>0;
+  if(temDesc){
+    linhas+='<div class="diff-item"><span class="diff-campo">Desconto aplicado:</span> '
+      +((parseFloat(v.descRs)||0)>0 ? fmt(parseFloat(v.descRs)) : (fmtN(parseFloat(v.descPct))+'%'))+'</div>';
+  }
+  if((parseFloat(v.arredRs)||0)!==0){
+    linhas+='<div class="diff-item"><span class="diff-campo">Arredondamento:</span> '+fmt(parseFloat(v.arredRs))+'</div>';
+  }
+  linhas+=linha('💰 VALOR FINAL APROVADO', v.total, atual?atual.total:null, true);
+  linhas+='<div class="diff-item" style="border-bottom:none"><span class="diff-campo">Imposto:</span> '
+    +(v.imposto==='simp'?'valores SEM imposto':'valores COM imposto')+'</div>';
+  if(v.pgto){
+    linhas+='<div class="diff-item" style="border-bottom:none"><span class="diff-campo">Pagamento:</span> '
+      +'<span style="white-space:pre-wrap">'+eh(String(v.pgto))+'</span></div>';
+  }
+
+  var titulo = mudou
+    ? '&#128176; Valor aprovado (enviado ao cliente): '+fmt(v.total)+' &mdash; HOJE: '+fmt(atual.total)+' ('+(dif>0?'+':'')+fmtN(pct)+'%)'
+    : '&#128176; Valores aprovados (enviados ao cliente): '+fmt(v.total);
+
+  return '<div class="diff-box" style="'+(mudou?'border-color:var(--R)':'')+'">'
+    +'<div class="diff-title" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px'+(mudou?';color:var(--R)':'')+'" onclick="diffToggle(\''+id+'\')" title="Clique para ver os valores aprovados e comparar com o orçamento de hoje">'
+    +'<span>'+titulo+'</span><span id="'+id+'-ic">&#9660;</span>'
+    +'</div>'
+    +'<div id="'+id+'" style="display:none">'+linhas+'</div>'
+    +'</div>';
+}
+
+// Monta o bloco pra um evento do histórico. Aprovações antigas (anteriores a
+// este recurso) não têm os valores gravados — nesse caso, se for a última
+// aprovação, aproveitamos o snapshotAprovado que já existia, pra elas não
+// ficarem sem informação nenhuma.
+function _aprovValoresDoEvento(h, idx, lista, atualSnap, snapFallback, prefixo){
+  if(!h || !/aprovad/i.test(h.acao||'')) return '';
+  var v=h.valores;
+  if(!v && snapFallback){
+    var ultimaAprov=-1;
+    for(var i=0;i<(lista||[]).length;i++){ if(/aprovad/i.test((lista[i].acao)||'')) ultimaAprov=i; }
+    if(idx===ultimaAprov) v=_aprovValoresDe(snapFallback);
+  }
+  return _aprovValoresHTML(v, (prefixo||'')+idx, atualSnap);
 }
 
 function compararSnapshots(ant,atual){
