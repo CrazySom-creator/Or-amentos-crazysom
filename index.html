@@ -2722,7 +2722,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       </thead>
       <tbody id="fin-tbody"></tbody>
     </table>
-    <input type="file" id="fin-comp-input" accept="image/*" style="display:none" onchange="_finComprovanteSelecionado(this)">
+    <input type="file" id="fin-comp-input" accept="image/*,application/pdf,.pdf" style="display:none" onchange="_finComprovanteSelecionado(this)">
 
     <div class="fin-add-row">
       <div style="font-size:10px;color:var(--text-muted);font-weight:700;margin-bottom:7px">➕ Adicionar Parcela</div>
@@ -14185,8 +14185,8 @@ function finRenderParcelas(){
       +'<td><span class="'+statusCls+'" onclick="finToggleStatus('+i+')" title="Clique para alternar">'+statusLabel+'</span></td>'
       +'<td style="text-align:center"><button onclick="finMarcarInadimplente('+i+')" title="'+(inad?'Retirar a marcação de inadimplência':'Declarar inadimplência — o cliente parou de responder às cobranças')+'" style="background:none;border:none;color:'+(inad?'#c62828':'var(--text-muted)')+';cursor:pointer;font-size:13px">🚫</button></td>'
       +'<td style="text-align:center">'+(p.comprovanteId
-          ?'<button onclick="finVerComprovante(\''+p.comprovanteId+'\','+i+')" title="Ver comprovante anexado" style="background:none;border:none;color:#66bb6a;cursor:pointer;font-size:14px">📄</button>'
-          :'<button onclick="finAnexarComprovante('+i+')" title="Anexar comprovante de pagamento" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px">📎</button>')+'</td>'
+          ?'<button onclick="finVerComprovante(\''+p.comprovanteId+'\','+i+')" title="Ver comprovante anexado'+(/pdf/i.test(p.comprovanteTipo||'')?' (PDF)':'')+'" style="background:none;border:none;color:#66bb6a;cursor:pointer;font-size:14px">'+(/pdf/i.test(p.comprovanteTipo||'')?'📕':'🖼️')+'</button>'
+          :'<button onclick="finAnexarComprovante('+i+')" title="Anexar comprovante de pagamento — imagem (foto/print) ou PDF do banco" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px">📎</button>')+'</td>'
       +'<td><button onclick="finRemoveParcela('+i+')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:13px;padding:2px 4px" title="Remover">✕</button></td>'
       +'</tr>';
   }).join('');
@@ -14516,7 +14516,7 @@ function renderFinanceiroInline(){
     var statusLabel=inad?'🚫 Inadimplente':(p.status==='pago'?'✅ Pago':(atrasado?'⚠️ Atrasado':'⏳ Pendente'));
     var dataFmt=p.data?new Date(p.data+'T12:00:00').toLocaleDateString('pt-BR'):'—';
     var formaLabel=p.forma?('<span style="color:var(--text-muted);font-size:9px;margin-left:4px">['+finFormaLabel(p.forma)+']</span>'):'';
-    var compBadge=p.comprovanteId?('<span onclick="event.stopPropagation();finVerComprovante(\''+p.comprovanteId+'\','+i+')" title="Ver comprovante de pagamento" style="cursor:pointer;margin-left:6px" role="button">📄</span>'):'';
+    var compBadge=p.comprovanteId?('<span onclick="event.stopPropagation();finVerComprovante(\''+p.comprovanteId+'\','+i+')" title="Ver comprovante de pagamento'+(/pdf/i.test(p.comprovanteTipo||'')?' (PDF)':'')+'" style="cursor:pointer;margin-left:6px" role="button">'+(/pdf/i.test(p.comprovanteTipo||'')?'📕':'🖼️')+'</span>'):'';
     return '<div class="fin-parc-row">'
       +'<span style="color:var(--text-muted);font-weight:700;min-width:18px">'+(i+1)+'.</span>'
       +'<span style="flex:1;color:var(--text-dim)">'+eh(p.desc||'Parcela')+formaLabel+compBadge+'</span>'
@@ -14560,6 +14560,74 @@ function _comprimirImagem(file, cb){
   reader.readAsDataURL(file);
 }
 
+// ── PDF como comprovante ────────────────────────────────────────────────
+// Comprovante de banco costuma vir em PDF (PIX/TED/boleto pago). Imagem
+// continua sendo comprimida; PDF vai como está, porque não dá pra "reduzir"
+// um PDF no navegador sem perder o conteúdo. Como um documento do Firestore
+// aceita no máximo 1 MB, um PDF maior que isso é PARTIDO em pedaços na mesma
+// coleção 'comprovantes' (id_1, id_2, ...) e remontado na hora de abrir.
+var COMP_LIMITE_MB=10;
+var COMP_CHUNK=700000;   // caracteres de base64 por documento
+
+function _compEhPDF(d){
+  return /pdf/i.test((d&&(d.tipo||''))||'') || /^data:application\/pdf/i.test((d&&(d.data||''))||'') || /\.pdf$/i.test((d&&(d.nome||''))||'');
+}
+function _compLerDataURL(file, cb){
+  var fr=new FileReader();
+  fr.onload=function(e){ cb(String(e.target.result||'')); };
+  fr.onerror=function(){ cb(null); };
+  fr.readAsDataURL(file);
+}
+function _compDataURLParaBlob(dataUrl){
+  var v=String(dataUrl||'').indexOf(',');
+  var meta=String(dataUrl||'').slice(5,v);            // ex. application/pdf;base64
+  var tipo=meta.split(';')[0]||'application/octet-stream';
+  var bin=atob(String(dataUrl).slice(v+1));
+  var arr=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return new Blob([arr],{type:tipo});
+}
+// Grava o comprovante, partindo em pedaços se não couber num documento.
+async function _compGravar(id, dados, dataUrl){
+  if(dataUrl.length<=COMP_CHUNK){
+    dados.data=dataUrl; dados.partes=1;
+    await fbDb.collection('comprovantes').doc(id).set(dados);
+    return;
+  }
+  var total=Math.ceil(dataUrl.length/COMP_CHUNK);
+  dados.data=dataUrl.substr(0,COMP_CHUNK); dados.partes=total;
+  await fbDb.collection('comprovantes').doc(id).set(dados);
+  for(var i=1;i<total;i++){
+    await fbDb.collection('comprovantes').doc(id+'_'+i).set({
+      comprovanteDe:id, parte:i, total:total,
+      data:dataUrl.substr(i*COMP_CHUNK, COMP_CHUNK)
+    });
+  }
+}
+async function _compLerCompleto(id){
+  var snap=await fbDb.collection('comprovantes').doc(id).get();
+  if(!snap.exists) return null;
+  var d=snap.data()||{};
+  var total=d.partes||1;
+  if(total>1){
+    var partes=[d.data||''];
+    for(var i=1;i<total;i++){
+      var s2=await fbDb.collection('comprovantes').doc(id+'_'+i).get();
+      if(!s2.exists) throw new Error('o pedaço '+(i+1)+' do comprovante não foi encontrado');
+      partes.push((s2.data()||{}).data||'');
+    }
+    d=Object.assign({},d,{data:partes.join('')});
+  }
+  return d;
+}
+async function _compApagar(id, partes){
+  var total=partes||1;
+  try{ await fbDb.collection('comprovantes').doc(id).delete(); }catch(e){}
+  for(var i=1;i<total;i++){
+    try{ await fbDb.collection('comprovantes').doc(id+'_'+i).delete(); }catch(e){}
+  }
+}
+
 function finAnexarComprovante(i){
   _finComprovanteIdx=i;
   var inp=document.getElementById('fin-comp-input');
@@ -14570,22 +14638,41 @@ function _finComprovanteSelecionado(inp){
   var i=_finComprovanteIdx;
   if(i==null||!inp.files||!inp.files[0])return;
   var file=inp.files[0];
-  if(!/^image\//.test(file.type)){alert('Selecione uma imagem (foto ou print do comprovante).');return;}
+  var ehPDF=/pdf/i.test(file.type||'')||/\.pdf$/i.test(file.name||'');
+  if(!/^image\//.test(file.type) && !ehPDF){
+    alert('⚠️ FORMATO NÃO ACEITO\n\nO comprovante pode ser uma IMAGEM (foto ou print) ou um PDF — é o formato que os bancos costumam gerar.\n\nArquivo escolhido: '+(file.name||'')+(file.type?(' ('+file.type+')'):''));
+    return;
+  }
+  if(!file.size){
+    alert('⚠️ O navegador leu 0 byte neste arquivo.\n\nSe ele estiver no OneDrive/Google Drive apenas "na nuvem", baixe para o computador antes de anexar.');
+    return;
+  }
+  if(file.size>COMP_LIMITE_MB*1024*1024){
+    alert('⚠️ Arquivo muito grande ('+(file.size/1024/1024).toFixed(1)+' MB).\n\nO limite é '+COMP_LIMITE_MB+' MB por comprovante.');
+    return;
+  }
   if(!fbDb){alert('Sem conexão com o servidor. Verifique a internet e tente novamente.');return;}
   var st=document.getElementById('fin-save-status');
   if(st){st.textContent='⏳ Enviando comprovante...';st.style.color='#ffa726';}
-  _comprimirImagem(file,function(dataUrl){
-    if(!dataUrl){if(st){st.textContent='⚠️ Não foi possível ler a imagem';st.style.color='#ef5350';}return;}
+
+  // Imagem é comprimida; PDF vai íntegro (não dá pra recomprimir sem perder
+  // o conteúdo do documento).
+  var preparar = ehPDF ? _compLerDataURL : _comprimirImagem;
+  preparar(file,function(dataUrl){
+    if(!dataUrl){if(st){st.textContent=ehPDF?'⚠️ Não foi possível ler o PDF':'⚠️ Não foi possível ler a imagem';st.style.color='#ef5350';}return;}
     var p=finParcelas[i];if(!p)return;
     var id=('cmp_'+(driveNumAtual||gv('f-num')||'orc')+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)).replace(/[^a-zA-Z0-9_]/g,'');
     var dados={
-      data:dataUrl, nome:(file.name||'comprovante.jpg'), tipo:'image/jpeg', tamanho:dataUrl.length,
+      nome:(file.name||(ehPDF?'comprovante.pdf':'comprovante.jpg')),
+      tipo:(ehPDF?'application/pdf':'image/jpeg'),
+      tamanho:dataUrl.length,
       orcId:(driveIdAtual||''), orcNum:(driveNumAtual||gv('f-num')||''),
       parcelaDesc:(p.desc||('Parcela '+(i+1))), enviadoPor:(usuarioAtual?usuarioAtual.nome:''),
       enviadoEm:new Date().toISOString()
     };
-    fbDb.collection('comprovantes').doc(id).set(dados).then(function(){
+    _compGravar(id, dados, dataUrl).then(function(){
       p.comprovanteId=id; p.comprovanteNome=dados.nome; p.comprovanteEm=dados.enviadoEm;
+      p.comprovanteTipo=dados.tipo; p.comprovantePartes=dados.partes||1;
       finRenderParcelas(); renderFinanceiroInline();
       if(driveIdAtual){
         salvarNoDrive({mostrarStatus:false})
@@ -14595,7 +14682,9 @@ function _finComprovanteSelecionado(inp){
         if(st){st.textContent='✅ Comprovante anexado! Clique em Salvar Financeiro.';st.style.color='#66bb6a';}
       }
     }).catch(function(e){
-      if(st){st.textContent='⚠️ Erro ao enviar: '+((e&&e.message)||e);st.style.color='#ef5350';}
+      var m=(e&&(e.code||e.message))||e;
+      if(/invalid-argument|longer than/i.test(String(m))) m='o arquivo é grande demais para o banco de dados. Exporte o PDF em qualidade menor e tente de novo.';
+      if(st){st.textContent='⚠️ Erro ao enviar: '+m;st.style.color='#ef5350';}
     });
   });
 }
@@ -14611,20 +14700,45 @@ async function finVerComprovante(id,i){
   ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
   document.body.appendChild(ov);
   try{
-    var snap=await fbDb.collection('comprovantes').doc(id).get();
-    if(!snap.exists){ov.innerHTML='<div style="background:var(--surface-2);border-radius:8px;padding:20px;color:var(--text)">Comprovante não encontrado (pode ter sido removido).</div>';return;}
-    var d=snap.data();
+    var d=await _compLerCompleto(id);
+    if(!d){ov.innerHTML='<div style="background:var(--surface-2);border-radius:8px;padding:20px;color:var(--text)">Comprovante não encontrado (pode ter sido removido).</div>';return;}
     var envEm=d.enviadoEm?new Date(d.enviadoEm).toLocaleString('pt-BR'):'';
     var btnRemover=(i!=null)?'<button onclick="finRemoverComprovante('+i+')" style="background:#7a1616;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;margin-left:8px">🗑 Remover</button>':'';
-    ov.innerHTML='<div style="background:var(--surface-2);border-radius:10px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:16px;box-shadow:0 16px 50px rgba(0,0,0,.6)">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
-      +'<div style="color:var(--text);font-size:13px;font-weight:700">📎 '+eh(d.parcelaDesc||'Comprovante de pagamento')+'</div>'
+    var ehPDF=_compEhPDF(d);
+    // PDF em <img> não renderiza, e o Chrome bloqueia data: em iframe/aba —
+    // por isso o arquivo é convertido em blob e exibido a partir dele.
+    var urlBlob='';
+    try{ urlBlob=URL.createObjectURL(_compDataURLParaBlob(d.data)); }catch(eB){}
+    if(urlBlob){
+      ov.addEventListener('click',function(e){ if(e.target===ov){ try{ URL.revokeObjectURL(urlBlob); }catch(e2){} } });
+    }
+    // No celular o navegador quase nunca desenha PDF dentro de um quadro na
+    // página — em vez de mostrar um retângulo branco, oferecemos o botão
+    // grande pra abrir no leitor do próprio aparelho.
+    var telaPequena=(window.innerWidth||0)<760;
+    var visual;
+    if(!ehPDF){
+      visual='<img src="'+d.data+'" alt="comprovante" style="width:100%;border-radius:6px;display:block;background:var(--surface)">';
+    }else if(telaPequena){
+      visual='<a href="'+(urlBlob||d.data)+'" target="_blank" rel="noopener" style="display:block;text-align:center;background:#c62828;color:#fff;text-decoration:none;padding:18px;border-radius:8px;font-size:14px;font-weight:800">📕 ABRIR O COMPROVANTE (PDF)</a>'
+        +'<div style="color:var(--text-muted);font-size:10.5px;margin-top:6px;text-align:center">'+eh(d.nome||'')+(d.partes>1?(' · '+d.partes+' pedaços'):'')+'</div>';
+    }else{
+      visual='<iframe src="'+(urlBlob||d.data)+'" title="comprovante em PDF" style="width:100%;height:62vh;border:1px solid var(--border);border-radius:6px;background:#fff;display:block"></iframe>'
+        +'<div style="color:var(--text-muted);font-size:10px;margin-top:5px">📕 PDF'+(d.partes>1?(' · '+d.partes+' pedaços'):'')+' — se aparecer em branco, use "Abrir em nova aba".</div>';
+    }
+    var btnAba = urlBlob
+      ? ('<a href="'+urlBlob+'" target="_blank" rel="noopener" style="display:inline-block;background:var(--surface-3);color:var(--text);text-decoration:none;padding:8px 14px;border-radius:6px;font-size:12px;font-weight:700">↗️ Abrir em nova aba</a>')
+      : '';
+    ov.innerHTML='<div style="background:var(--surface-2);border-radius:10px;max-width:'+(ehPDF?'820px':'560px')+';width:100%;max-height:90vh;overflow:auto;padding:16px;box-shadow:0 16px 50px rgba(0,0,0,.6)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px">'
+      +'<div style="color:var(--text);font-size:13px;font-weight:700">'+(ehPDF?'📕':'🖼️')+' '+eh(d.parcelaDesc||'Comprovante de pagamento')+'</div>'
       +'<button onclick="document.getElementById(\'comp-view-ov\').remove()" style="background:var(--surface-3);color:var(--text);border:none;border-radius:5px;padding:5px 11px;cursor:pointer;font-size:13px">✕</button>'
       +'</div>'
-      +'<img src="'+d.data+'" alt="comprovante" style="width:100%;border-radius:6px;display:block;background:var(--surface)">'
-      +'<div style="color:var(--text-muted);font-size:10px;margin-top:8px">Enviado por '+eh(d.enviadoPor||'—')+(envEm?(' em '+envEm):'')+'</div>'
+      +visual
+      +'<div style="color:var(--text-muted);font-size:10px;margin-top:8px">'+eh(d.nome||'')+' · enviado por '+eh(d.enviadoPor||'—')+(envEm?(' em '+envEm):'')+'</div>'
       +'<div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:4px">'
-      +'<a href="'+d.data+'" download="'+eh(d.nome||'comprovante.jpg')+'" style="display:inline-block;background:#1565c0;color:#fff;text-decoration:none;padding:8px 14px;border-radius:6px;font-size:12px;font-weight:700">⬇️ Baixar</a>'
+      +'<a href="'+(urlBlob||d.data)+'" download="'+eh(d.nome||(ehPDF?'comprovante.pdf':'comprovante.jpg'))+'" style="display:inline-block;background:#1565c0;color:#fff;text-decoration:none;padding:8px 14px;border-radius:6px;font-size:12px;font-weight:700">⬇️ Baixar</a>'
+      +btnAba
       +btnRemover
       +'</div>'
       +'</div>';
@@ -14634,11 +14748,11 @@ async function finVerComprovante(id,i){
 function finRemoverComprovante(i){
   var p=finParcelas[i];if(!p||!p.comprovanteId)return;
   if(!confirm('Remover o comprovante desta parcela?'))return;
-  var id=p.comprovanteId;
-  p.comprovanteId=''; p.comprovanteNome=''; p.comprovanteEm='';
+  var id=p.comprovanteId, partes=p.comprovantePartes||1;
+  p.comprovanteId=''; p.comprovanteNome=''; p.comprovanteEm=''; p.comprovanteTipo=''; p.comprovantePartes=0;
   var ov=document.getElementById('comp-view-ov');if(ov)ov.remove();
   finRenderParcelas(); renderFinanceiroInline();
-  if(fbDb){ fbDb.collection('comprovantes').doc(id).delete().catch(function(){}); }
+  if(fbDb){ _compApagar(id, partes).catch(function(){}); }
   var st=document.getElementById('fin-save-status');
   if(driveIdAtual){
     salvarNoDrive({mostrarStatus:false})
