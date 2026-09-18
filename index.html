@@ -3738,6 +3738,29 @@ function diffsRequeremAprovacao(diffs){
   });
 }
 
+// Marca o orçamento como alterado SEM mexer na aprovação. Para mudanças que
+// não alteram nada do que foi aprovado — anexar/excluir arquivo, escrever a
+// legenda de um anexo, marcar "Mostrar na OS". Pedido do usuário: "quando
+// anexado qualquer arquivo não deve sair do status aprovação se já estiver
+// aprovado". Continua salvando e guardando a cópia local normalmente.
+function marcarAlteradoSemAprovacao(){
+  if(_carregandoOrc)return;
+  _naoSalvo = true;
+  if(typeof _rascunhoAgendar==='function') _rascunhoAgendar();
+  if(typeof _autoSaveAgendar==='function') _autoSaveAgendar();
+  // A referência da aprovação é atualizada junto: sem isso, a PRÓXIMA edição
+  // de verdade compararia o orçamento com um retrato anterior ao anexo e
+  // poderia derrubar a aprovação por causa dele.
+  if(aprovStatus==='aprovado' && snapshotAprovado){
+    try{
+      var snapAgora=tirarSnapshot();
+      // Só atualiza a referência se REALMENTE nada relevante mudou — assim
+      // uma alteração de verdade que esteja pendente nunca é encoberta.
+      if(!diffsRequeremAprovacao(compararSnapshots(snapshotAprovado,snapAgora))) snapshotAprovado=snapAgora;
+    }catch(e){}
+  }
+}
+
 function marcarAlterado(){
   if(_carregandoOrc)return;
   _naoSalvo = true;
@@ -11056,7 +11079,7 @@ async function anxSelecionar(input){
   input.value='';
   anxRenderizar();
   if(enviados){
-    marcarAlterado();
+    marcarAlteradoSemAprovacao();
     // Grava já — um anexo enviado e não salvo sumiria da lista no próximo
     // carregamento, com o arquivo órfão lá no servidor.
     try{ await salvarNoDrive({mostrarStatus:false}); }catch(eS){}
@@ -11128,12 +11151,12 @@ function anxRenderizar(){
 function anxLegenda(i, valor){
   if(!anexosOrc[i]) return;
   anexosOrc[i].legenda=valor;
-  marcarAlterado();
+  marcarAlteradoSemAprovacao();
 }
 function anxAlternarOS(i, valor){
   if(!anexosOrc[i]) return;
   anexosOrc[i].naOS=!!valor;
-  marcarAlterado();
+  marcarAlteradoSemAprovacao();
   var cont=document.getElementById('anx-contador');
   if(cont) cont.textContent=anexosOrc.length ? ('— '+anexosOrc.length+' arquivo(s), '+anexosOrc.filter(function(a){return a.naOS;}).length+' na OS') : '';
 }
@@ -11184,7 +11207,7 @@ async function anxExcluir(i){
   }
   anexosOrc.splice(i,1);
   anxRenderizar();
-  marcarAlterado();
+  marcarAlteradoSemAprovacao();
   try{ await salvarNoDrive({mostrarStatus:false}); }catch(eS){}
   anxStatus('✅ Anexo excluído.','ok');
 }
