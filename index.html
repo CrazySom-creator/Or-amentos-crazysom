@@ -438,6 +438,9 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 .pgto-pdf{border:1px solid var(--border);border-radius:3px;padding:7px 11px;font-size:11px;color:var(--text);line-height:1.8;}
 .pgto-pdf .pt{font-weight:800;font-size:11px;text-transform:uppercase;margin-bottom:2px;}
 .pgto-pdf .ob{margin-top:5px;color:var(--text-muted);font-style:italic;border-top:1px dashed var(--border);padding-top:4px;}
+.obs-pdf{border:1px solid var(--border);border-left:3px solid var(--R);border-radius:3px;padding:7px 11px;font-size:11px;color:var(--text);line-height:1.7;margin-top:8px;}
+.obs-pdf .pt{font-weight:800;font-size:11px;text-transform:uppercase;margin-bottom:3px;}
+.obs-pdf .ob-corpo{white-space:pre-wrap;}
 .pfooter{display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:3px;margin-top:14px;}
 .pfooter span{font-size:11px;color:var(--text-muted);}
 .subtot-amb-pdf{background:var(--surface-2);border:1px solid var(--border);border-radius:3px;padding:6px 10px;margin:6px 0 12px;font-size:11px;}
@@ -2905,7 +2908,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
   </div>
   <div class="g3">
     <div><label>Público Estimado</label><input type="number" id="f-pub" placeholder="500" oninput="marcarAlterado()"></div>
-    <div style="grid-column:span 2"><label>Observações Gerais</label><textarea id="f-obs" style="background:#fffde7;border-color:#ffe082;min-height:52px;color:#000" placeholder="Detalhes, restrições, motivo de revisão..." oninput="marcarAlterado()"></textarea></div>
+    <div style="grid-column:span 2"><label style="display:flex;align-items:center;gap:6px">Observações Gerais <span style="background:#1565c0;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;letter-spacing:.5px">SAI NO ORÇAMENTO DO CLIENTE</span></label><textarea id="f-obs" style="background:#fffde7;border-color:#ffe082;min-height:52px;color:#000" placeholder="Detalhes e condições que o cliente precisa ler: restrições do local, itens não inclusos, prazos, validade de condições..." oninput="marcarAlterado()"></textarea><span style="font-size:10px;color:var(--text-muted);margin-top:2px;display:block">📄 Este texto aparece no PDF do orçamento enviado ao cliente. Recado interno para a montagem vai em <b>🔧 Observações da OS</b>, abaixo.</span></div>
     <div style="grid-column:span 2"><label style="display:flex;align-items:center;gap:6px">🔧 Observações da OS <span style="background:var(--R);color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;letter-spacing:.5px">SOMENTE PARA MONTAGEM</span></label><textarea id="f-obs-os" style="background:var(--surface-3);border:1px solid var(--border-strong);color:var(--text);min-height:60px;margin-top:3px" placeholder="Informações internas para o time de montagem: particularidades do local, contato no evento, cuidados especiais com equipamentos, sequência de montagem..." oninput="marcarAlterado()"></textarea><span style="font-size:10px;color:var(--text-muted);margin-top:2px;display:block">⚠️ Este campo aparece apenas na OS — não é exibido no orçamento do cliente.</span></div>
   </div>
 </div>
@@ -7953,6 +7956,17 @@ function buildPDF(tipo){
     +(gv('f-pgto')?'<div class="pt">Forma de Pagamento</div>'+gv('f-pgto').split('\n').join('<br>'):'')
     +'</div>';
 
+  // Observações Gerais (campo f-obs) no PDF que vai para o cliente — pedido
+  // do usuário. Até aqui o campo era só gravado no orçamento e não saía em
+  // nenhum documento. Fica num bloco próprio, depois da forma de pagamento,
+  // e simplesmente não aparece quando está vazio.
+  // ATENÇÃO: este é o campo do CLIENTE. Recado interno para a montagem
+  // continua em "🔧 Observações da OS" (f-obs-os), que sai só na OS.
+  var obsCli=(gv('f-obs')||'').trim();
+  var obsBloco=obsCli
+    ? '<div class="obs-pdf"><div class="pt">Observações</div><div class="ob-corpo">'+eh(obsCli).split('\n').join('<br>')+'</div></div>'
+    : '';
+
   var foot='<div class="pfooter"><span>Crazy Som – CNPJ: 10.909.827/0001-76</span><span>Pág. 1</span></div>';
 
   // Enquanto o orçamento não estiver aprovado, o PDF sai com um carimbo
@@ -7961,7 +7975,7 @@ function buildPDF(tipo){
   // este documento ainda não pode ser enviado ao cliente.
   var carimbo=(aprovStatus!=='aprovado')?'<div class="pdf-carimbo-rascunho"><span>Rascunho – Aguardando Aprovação</span></div>':'';
 
-  return '<div id="pdf-wrap"><div class="pdf-page">'+carimbo+hdr(true)+blocos+corpo+res+pgto+foot+'</div></div>';
+  return '<div id="pdf-wrap"><div class="pdf-page">'+carimbo+hdr(true)+blocos+corpo+res+pgto+obsBloco+foot+'</div></div>';
 }
 
 function getCSSImpressao(){
@@ -8010,6 +8024,9 @@ function getCSSImpressao(){
     +'.pgto-pdf{border:1px solid #ddd;border-radius:3px;padding:7px 11px;font-size:11px;color:#333;line-height:1.8;page-break-inside:avoid}'
     +'.pgto-pdf .pt{font-weight:800;font-size:11px;text-transform:uppercase;margin-bottom:2px}'
     +'.pgto-pdf .ob{margin-top:5px;color:#666;font-style:italic;border-top:1px dashed #ddd;padding-top:4px}'
+    +'.obs-pdf{border:1px solid #ddd;border-left:3px solid #c0001a;border-radius:3px;padding:7px 11px;font-size:11px;color:#333;line-height:1.7;margin-top:8px;page-break-inside:avoid}'
+    +'.obs-pdf .pt{font-weight:800;font-size:11px;text-transform:uppercase;margin-bottom:3px}'
+    +'.obs-pdf .ob-corpo{white-space:pre-wrap}'
     +'.pfooter{display:flex;justify-content:space-between;border-top:1px solid #e0e0e0;padding-top:3px;margin-top:14px}'
     +'.pfooter span{font-size:11px;color:#aaa}';
 }
