@@ -108,6 +108,18 @@ table.it input,table.it select{padding:2px 5px;font-size:11px;}
 .btn-bloqueado-aprov::after{content:'🔒';margin-left:4px;font-size:10px;}
 .toolbar-sep{width:1px;align-self:stretch;background:#3a3a3a;margin:0 2px;min-height:22px;}
 /* Botão flutuante de voltar — acompanha a rolagem da tela */
+.anx-item{display:flex;gap:10px;align-items:flex-start;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);margin-bottom:7px;}
+.anx-thumb{width:56px;height:56px;border-radius:6px;flex-shrink:0;object-fit:cover;background:var(--surface-3);border:1px solid var(--border);}
+.anx-ico{width:56px;height:56px;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:24px;background:var(--surface-3);border:1px solid var(--border);}
+.anx-corpo{flex:1;min-width:0;}
+.anx-nome{font-size:12px;font-weight:700;color:var(--text);word-break:break-all;}
+.anx-meta{font-size:10px;color:var(--text-muted);margin-top:2px;}
+.anx-legenda{width:100%;margin-top:5px;font-size:11px;padding:4px 7px;border-radius:5px;border:1px solid var(--border-strong);background:var(--surface-3);color:var(--text);}
+.anx-acoes{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;}
+.anx-chk{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#e65100;cursor:pointer;background:rgba(230,81,0,.10);border:1px solid #e65100;border-radius:12px;padding:3px 9px;}
+.anx-mini{font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:12px;border:1px solid var(--border-strong);background:var(--surface-3);color:var(--text);cursor:pointer;}
+.anx-mini:hover{filter:brightness(1.15);}
+.anx-vazio{font-size:11.5px;color:var(--text-muted);padding:10px;border:1px dashed var(--border-strong);border-radius:8px;text-align:center;}
 .autosave-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:12px;white-space:nowrap;color:var(--text-muted);background:var(--surface-2);border:1px solid var(--border);}
 .autosave-chip:empty{display:none;}
 .autosave-chip.as-ok{color:#2e7d32;border-color:#2e7d32;background:rgba(46,125,50,.10);}
@@ -2898,6 +2910,18 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
   </div>
 </div>
 
+<div class="card" id="anexos-card">
+  <div class="st" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+    <span>📎 Anexos <span id="anx-contador" style="font-size:11px;color:rgba(255,255,255,.85);font-weight:600"></span></span>
+    <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <label class="btn btn-b btn-sm" id="anx-btn-add" style="cursor:pointer;font-weight:700" title="Plantas, descritivos técnicos, fotos do local, croquis — PDF, imagem, Word, Excel, DWG…">➕ Anexar arquivos<input type="file" id="anx-input" multiple style="display:none" onchange="anxSelecionar(this)"></label>
+    </span>
+  </div>
+  <div style="font-size:11px;color:var(--text-muted);margin:2px 0 8px">Plantas, descritivos e fotos dos locais. Marque <b>“Mostrar na OS”</b> para o arquivo ser avisado e listado na Ordem de Serviço — a equipe abre a OS no sistema para visualizar ou imprimir o anexo.</div>
+  <div id="anx-status" style="font-size:11px;min-height:15px;margin-bottom:6px"></div>
+  <div id="anx-lista"></div>
+</div>
+
 <div class="card">
   <div class="st" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
     <span>🎛️ Itens do Orçamento</span>
@@ -3181,13 +3205,18 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<!-- Storage: guarda os ARQUIVOS anexados aos orçamentos (plantas, descritivos,
+     fotos dos locais). Só os metadados (nome, tamanho, link) ficam no
+     documento do orçamento — um PDF ou uma foto jamais caberia lá, porque um
+     documento do Firestore tem limite de 1 MB. -->
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-storage-compat.js"></script>
 <!-- Google Identity Services — usado apenas para autorizar o envio de eventos
      da OS (Montagem/Evento/Desmontagem) para o Google Agenda da empresa.
      Não interfere no login do sistema (que continua via Firebase Auth). -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 var _firebaseOk=false;
-var fbAuth=null, fbDb=null;
+var fbAuth=null, fbDb=null, fbStorage=null;
 (function(){
   var firebaseConfig={
     apiKey:"AIzaSyANrm4_JIeQQoGthAtzaOU42jNIb7Cm_3M",
@@ -3210,6 +3239,7 @@ var fbAuth=null, fbDb=null;
     firebase.initializeApp(firebaseConfig);
     fbAuth=firebase.auth();
     fbDb=firebase.firestore();
+    try{ fbStorage=(firebase.storage?firebase.storage():null); }catch(eSt){ fbStorage=null; }
     _firebaseOk=true;
     // Reconecta sozinho quando a página foi recarregada pelo botão
     // "⟳ Atualizar o sistema" (ver _tentarReloginAutomatico). Em qualquer
@@ -4135,7 +4165,7 @@ async function _entrarNoSistema(email, perfil, opts){
     var el=document.getElementById(btnId);
     if(el) el.style.display=dashTemAcesso(dashMap[btnId])?'':'none';
   });
-  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   // Mostrar funil ANTES de aplicar permissões
   var nivelTemFunil=['adm','gerente','diretor','consultor','assistente'].includes(u.nivel)||dashTemAcesso('funil-card');
   if(nivelTemFunil){funilMostrarCard();setTimeout(function(){funilCarregarDados();},800);}
@@ -4195,7 +4225,7 @@ async function logout(forcado){
     }catch(e4){}
   }
   try{await fbAuth.signOut();}catch(e7){}
-  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();driveIdAtual=null;driveNumAtual=null;
+  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();driveIdAtual=null;driveNumAtual=null;
   _atualizarBtnClonar();
   // Limpa o formulário e fecha qualquer tela sobreposta — senão o próximo
   // login (ou a volta depois de uma queda de sessão) encontra o último
@@ -4211,7 +4241,7 @@ async function logout(forcado){
   document.getElementById('user-badge').style.display='none';
   document.getElementById('l-user').value='';document.getElementById('l-pass').value='';
   document.getElementById('l-err').textContent='';
-  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
 }
 
 // ── Trava de aprovação: download, contrato, OS e agenda só funcionam depois
@@ -4315,7 +4345,7 @@ async function aprovAcao(novo){
   if(novo==='analise'){snapshotAnterior=tirarSnapshot();}
   if(novo==='aprovado'){snapshotAprovado=tirarSnapshot();}
   aprovHist.push({ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),obs:obs,diffs:diffs});
-  aprovStatus=novo;renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+  aprovStatus=novo;renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   if(novo==='analise'){
     driveStatus('⏳ Salvando automaticamente...','');
     try{
@@ -4367,7 +4397,7 @@ async function aprovAcaoInline(novo){
   if(novo==='aprovado'){snapshotAprovado=tirarSnapshot();}
   aprovHist.push({ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),obs:obs,diffs:diffs});
   aprovStatus=novo;document.getElementById('aprov-inline-obs').value='';
-  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   if(novo==='analise'){
     driveStatus('⏳ Salvando automaticamente...','');
     try{
@@ -4395,7 +4425,7 @@ async function enviarNegociacao(){
   aprovStatus='gerencial';
   document.getElementById('negociacao-obs').value='';
   document.getElementById('negociacao-box').style.display='none';
-  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   if(driveIdAtual){
     driveStatus('⏳ Enviando solicitação ao gerente...','');
     try{await salvarNoDrive({mostrarStatus:true});}catch(e){alert('⚠️ Erro ao salvar: '+e.message);}
@@ -4802,7 +4832,7 @@ async function aprovAcaoLista(idx,novo,ev){
     var r=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'save',id:orc.driveId,numero:orc.form['f-num']||'SN',cliente:orc.form['f-cliente']||'SemCliente',data:orc.form['f-data']||new Date().toISOString().split('T')[0],dados:novoDados})});
     var d=await r.json();if(!d.ok)throw new Error(d.erro||'Erro ao salvar');
     if(typeof _driveCache!=='undefined') delete _driveCache[orc.driveId];
-    if(driveIdAtual===orc.driveId){aprovStatus=novo;aprovHist=novoHist;if(novo==='aprovado')snapshotAprovado=novoDados.snapshotAprovado;renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();}
+    if(driveIdAtual===orc.driveId){aprovStatus=novo;aprovHist=novoHist;if(novo==='aprovado')snapshotAprovado=novoDados.snapshotAprovado;renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();}
     carregarListaAprov(abaAprovAtual);
   }catch(e){alert('⚠️ Erro: '+e.message);}
 }
@@ -5349,7 +5379,7 @@ function calc(){
       subGeral.innerHTML=shtml;subGeral.style.display='block';
     }else{subGeral.style.display='none';}
   }
-  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   _preencherValLiqCalculado();
 }
 
@@ -5543,6 +5573,7 @@ function getDadosCompletos(){
     atividades:atividades,
     followupData:followupData,
     googleAgenda:orcAtualGoogleAgenda,
+    anexos:anexosOrc,
     criadoEmISO:orcCriadoEmISO,
     snapshotAnterior:snapshotAnterior,
     snapshotAprovado:snapshotAprovado,
@@ -5768,7 +5799,7 @@ async function _rascunhoOferecerRecuperacao(){
     driveNumAtual=r.driveId?((r.dados.form&&r.dados.form['f-num'])||null):null;
     _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
     buildTabs();setDS();setDSFim();calcDiariasAuto();calc();
-    renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+    renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
     setTimeout(function(){selImpVenda(finImposto||'cimp');_preencherValLiqCalculado();},50);
     setTimeout(aplicarPermissoes, 150);
     _carregandoOrc=false;
@@ -5849,7 +5880,7 @@ async function _salvarNoDriveInterno(opts){
         return null;
       }
       aprovStatus='rascunho';aprovHist=[];
-      comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';
+      comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';
       snapshotAnterior=null;snapshotAprovado=null;
       if(typeof _limparCamposComercialDOM==='function') _limparCamposComercialDOM();
       if(typeof renderStatusOrc==='function') renderStatusOrc();
@@ -6533,7 +6564,7 @@ function _aplicarDadosOrcamento(dados){
     if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];
   });
   if(dados.form)setForm(dados.form);else setForm({});
-  aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();contratoStatus=dados.contratoStatus||'';contratoHist=(dados.contratoHist||[]).slice();creditoStatus=dados.creditoStatus||'';creditoHist=(dados.creditoHist||[]).slice();montagemLiberacaoManual=!!dados.montagemLiberacaoManual;montagemLiberacaoManualHist=(dados.montagemLiberacaoManualHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcAtualGoogleAgenda=Object.assign({},dados.googleAgenda||{});orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
+  aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();contratoStatus=dados.contratoStatus||'';contratoHist=(dados.contratoHist||[]).slice();creditoStatus=dados.creditoStatus||'';creditoHist=(dados.creditoHist||[]).slice();montagemLiberacaoManual=!!dados.montagemLiberacaoManual;montagemLiberacaoManualHist=(dados.montagemLiberacaoManualHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcAtualGoogleAgenda=Object.assign({},dados.googleAgenda||{});anexosOrc=(dados.anexos||[]).map(function(a){return Object.assign({},a);});orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
   descDiscriminarPDF=(dados.descDiscriminarPDF!==undefined)?!!dados.descDiscriminarPDF:true;
   var _chkDescDiscr=document.getElementById('chk-desc-discriminar');if(_chkDescDiscr)_chkDescDiscr.checked=descDiscriminarPDF;
   _limparCamposComercialDOM();
@@ -6567,7 +6598,7 @@ async function _driveCarregarDados(id,nome,somenteLeitura){
     _naoSalvo=false;
     // Resetar cache de diárias automáticas para forçar aplicação correta ao carregar
     _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
-    buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+    buildTabs();setDS();setDSFim();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
     setTimeout(function(){selImpVenda(finImposto||'cimp');_preencherValLiqCalculado();},50);
     setTimeout(aplicarPermissoes, 150);
     if(dados.form&&dados.form['f-doc'])clienteHistoricoBuscar(_clienteSoDigitos(dados.form['f-doc']),dados.form['f-doc']);
@@ -6716,7 +6747,7 @@ function carregar(input){
         if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];
       });
       setForm(data.form||{});
-      aprovStatus=data.aprovStatus||'rascunho';aprovHist=data.aprovHist||[];comercialStatus=data.comercialStatus||'';comercialHist=data.comercialHist||[];contratoStatus=data.contratoStatus||'';contratoHist=data.contratoHist||[];creditoStatus=data.creditoStatus||'';creditoHist=data.creditoHist||[];montagemLiberacaoManual=!!data.montagemLiberacaoManual;montagemLiberacaoManualHist=data.montagemLiberacaoManualHist||[];equipReservadoManual=!!data.equipReservadoManual;atividades=data.atividades||[];followupData=data.followupData||'';orcAtualGoogleAgenda=Object.assign({},data.googleAgenda||{});orcCriadoEmISO=data.criadoEmISO||'';snapshotAnterior=data.snapshotAnterior||null;snapshotAprovado=data.snapshotAprovado||null;finParcelas=data.finParcelas||[];finObs=data.finObs||'';finImposto=data.finImposto||'cimp';finNumVenda=data.finNumVenda||'';
+      aprovStatus=data.aprovStatus||'rascunho';aprovHist=data.aprovHist||[];comercialStatus=data.comercialStatus||'';comercialHist=data.comercialHist||[];contratoStatus=data.contratoStatus||'';contratoHist=data.contratoHist||[];creditoStatus=data.creditoStatus||'';creditoHist=data.creditoHist||[];montagemLiberacaoManual=!!data.montagemLiberacaoManual;montagemLiberacaoManualHist=data.montagemLiberacaoManualHist||[];equipReservadoManual=!!data.equipReservadoManual;atividades=data.atividades||[];followupData=data.followupData||'';orcAtualGoogleAgenda=Object.assign({},data.googleAgenda||{});anexosOrc=(data.anexos||[]).map(function(a){return Object.assign({},a);});orcCriadoEmISO=data.criadoEmISO||'';snapshotAnterior=data.snapshotAnterior||null;snapshotAprovado=data.snapshotAprovado||null;finParcelas=data.finParcelas||[];finObs=data.finObs||'';finImposto=data.finImposto||'cimp';finNumVenda=data.finNumVenda||'';
       descDiscriminarPDF=(data.descDiscriminarPDF!==undefined)?!!data.descDiscriminarPDF:true;
       var _chkDescDiscrLocal=document.getElementById('chk-desc-discriminar');if(_chkDescDiscrLocal)_chkDescDiscrLocal.checked=descDiscriminarPDF;
       _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
@@ -6733,7 +6764,7 @@ function carregar(input){
       });
     });
   }catch(e){}
-  calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();alert('✅ Carregado!');
+  calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();alert('✅ Carregado!');
     }catch(err){alert('⚠️ Arquivo inválido: '+err.message);}
     finally{setTimeout(function(){_carregandoOrc=false;},400);}
   };
@@ -6775,13 +6806,13 @@ async function limpar(){
   driveIdAtual=null;driveNumAtual=null;
   _naoSalvo=false;
   aprovStatus='rascunho';aprovHist=[];
-  comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';
+  comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';
   _limparCamposComercialDOM();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
   snapshotAprovado=null;
   finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();
-  buildTabs();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+  buildTabs();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   _atualizarBtnClonar();
   // Gerar número automático para o novo orçamento
   if(usuarioAtual) setTimeout(gerarNumeroAuto, 300);
@@ -6860,7 +6891,7 @@ async function clonarOrcamento(){
 
   // ── Zerar aprovações, funil e financeiro
   aprovStatus='rascunho';aprovHist=[];
-  comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';
+  comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';
   _limparCamposComercialDOM();
   snapshotAnterior=null;
   snapshotAprovado=null;
@@ -6870,7 +6901,7 @@ async function clonarOrcamento(){
   // ── Manter forma de pagamento padrão se não havia (campo f-pgto já copiado do form original)
   // ── Renderizar tudo
   buildTabs();setDS();setDSFim();calcDiariasAuto();calc();
-  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   setTimeout(function(){selImpVenda('cimp');_preencherValLiqCalculado();},50);
   setTimeout(aplicarPermissoes,150);
 
@@ -7520,13 +7551,13 @@ async function _resetarEstadoOrcamento(){
   sv('orc-disp','—');
   driveIdAtual=null;driveNumAtual=null;_naoSalvo=false;_versaoAtual=null;
   aprovStatus='rascunho';aprovHist=[];
-  comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};orcCriadoEmISO='';
+  comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';
   _limparCamposComercialDOM();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
   snapshotAprovado=null;
   finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();
-  buildTabs();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+  buildTabs();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   _atualizarBtnClonar();
 }
 
@@ -8089,7 +8120,7 @@ function _montarOSHtml(form, dadosCompletos){
     });
   }
   var extras=Array(15).fill('<tr><td colspan="3" style="height:23px;border-bottom:1px solid var(--border)">&nbsp;</td></tr>').join('');
-  return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><style>*{box-sizing:border-box;margin:0;padding:0;font-family:Calibri,Arial,sans-serif}body{background:#eee;padding:18px}.bar{background:#111;padding:9px 14px;border-radius:5px;display:flex;gap:9px;align-items:center;margin-bottom:14px}.bar span{color:#aaa;font-size:12px;flex:1}.bar button{padding:7px 15px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700}.br{background:#c0001a;color:#fff}.bd{background:#444;color:#fff}.page{background:#fff;width:210mm;margin:0 auto;padding:13mm 13mm 17mm;box-shadow:0 4px 18px rgba(0,0,0,.2)}.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:9px;border-bottom:3px solid #c0001a;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.hdr h1{font-size:21px;font-weight:900;color:#c0001a}.hr{text-align:right}.hr .os{font-size:17px;font-weight:900}.hr .osn{font-size:14px;font-weight:bold;color:#c0001a}.hr .osd{font-size:11px;color:#888}.info{background:#f7f7f7;border:1px solid #ddd;border-radius:3px;padding:7px 11px;margin-bottom:11px}.info table{width:100%;border-collapse:collapse}.info td{padding:2px 5px;font-size:11px;vertical-align:top}.info .lbl{font-weight:bold;color:#555;width:125px;white-space:nowrap}table.eq{width:100%;border-collapse:collapse;margin-bottom:3px}table.eq th{background:#111;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.qtd{width:46px;padding:3px 7px;border:1px solid #e0e0e0;font-weight:bold;text-align:center;font-size:12px;vertical-align:top}.item{padding:3px 7px;border:1px solid #e0e0e0;font-size:11px}.chk{width:30px;padding:3px 7px;border:1px solid #e0e0e0;text-align:center;font-size:13px}.xt{font-size:12px;font-weight:bold;color:#c0001a;border-bottom:2px solid #c0001a;padding-bottom:3px;margin:16px 0 4px;text-transform:uppercase}.obs-os{background:#fff8e1;border:2px solid #ff6f00;border-radius:5px;padding:9px 13px;margin:12px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.obs-os .obs-os-title{font-size:10px;font-weight:900;color:#ff6f00;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;display:flex;align-items:center;gap:5px}.obs-os .obs-os-body{font-size:11px;color:#3e2000;white-space:pre-wrap;line-height:1.6}.xh{font-size:11px;color:#888;margin-bottom:5px}table.ext{width:100%;border-collapse:collapse}table.ext th{background:#555;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.assin{display:flex;gap:18px;margin-top:26px}.assin-box{flex:1;text-align:center}.aline{border-top:1px solid #444;padding-top:4px;font-size:11px;color:#555;margin-top:30px}.foot{margin-top:14px;border-top:1px solid #ddd;padding-top:5px;font-size:11px;color:#aaa;text-align:center}.tarja-montagem-pendente{background:#ff6f00;color:#fff;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:.5px;text-align:center;padding:8px 12px;border-radius:4px;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{body{background:#fff;padding:0}.bar{display:none}.page{box-shadow:none;margin:0;padding:11mm 11mm 14mm;width:100%}.tarja-montagem-pendente{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>'
+  return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><style>*{box-sizing:border-box;margin:0;padding:0;font-family:Calibri,Arial,sans-serif}body{background:#eee;padding:18px}.bar{background:#111;padding:9px 14px;border-radius:5px;display:flex;gap:9px;align-items:center;margin-bottom:14px}.bar span{color:#aaa;font-size:12px;flex:1}.bar button{padding:7px 15px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700}.br{background:#c0001a;color:#fff}.bd{background:#444;color:#fff}.page{background:#fff;width:210mm;margin:0 auto;padding:13mm 13mm 17mm;box-shadow:0 4px 18px rgba(0,0,0,.2)}.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:9px;border-bottom:3px solid #c0001a;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.hdr h1{font-size:21px;font-weight:900;color:#c0001a}.hr{text-align:right}.hr .os{font-size:17px;font-weight:900}.hr .osn{font-size:14px;font-weight:bold;color:#c0001a}.hr .osd{font-size:11px;color:#888}.info{background:#f7f7f7;border:1px solid #ddd;border-radius:3px;padding:7px 11px;margin-bottom:11px}.info table{width:100%;border-collapse:collapse}.info td{padding:2px 5px;font-size:11px;vertical-align:top}.info .lbl{font-weight:bold;color:#555;width:125px;white-space:nowrap}table.eq{width:100%;border-collapse:collapse;margin-bottom:3px}table.eq th{background:#111;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.qtd{width:46px;padding:3px 7px;border:1px solid #e0e0e0;font-weight:bold;text-align:center;font-size:12px;vertical-align:top}.item{padding:3px 7px;border:1px solid #e0e0e0;font-size:11px}.chk{width:30px;padding:3px 7px;border:1px solid #e0e0e0;text-align:center;font-size:13px}.xt{font-size:12px;font-weight:bold;color:#c0001a;border-bottom:2px solid #c0001a;padding-bottom:3px;margin:16px 0 4px;text-transform:uppercase}.obs-os{background:#fff8e1;border:2px solid #ff6f00;border-radius:5px;padding:9px 13px;margin:12px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.obs-os .obs-os-title{font-size:10px;font-weight:900;color:#ff6f00;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;display:flex;align-items:center;gap:5px}.obs-os .obs-os-body{font-size:11px;color:#3e2000;white-space:pre-wrap;line-height:1.6}.xh{font-size:11px;color:#888;margin-bottom:5px}table.ext{width:100%;border-collapse:collapse}table.ext th{background:#555;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.assin{display:flex;gap:18px;margin-top:26px}.assin-box{flex:1;text-align:center}.aline{border-top:1px solid #444;padding-top:4px;font-size:11px;color:#555;margin-top:30px}.foot{margin-top:14px;border-top:1px solid #ddd;padding-top:5px;font-size:11px;color:#aaa;text-align:center}.tarja-montagem-pendente{background:#ff6f00;color:#fff;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:.5px;text-align:center;padding:8px 12px;border-radius:4px;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{body{background:#fff;padding:0}.bar{display:none}.page{box-shadow:none;margin:0;padding:11mm 11mm 14mm;width:100%}.tarja-montagem-pendente{-webkit-print-color-adjust:exact;print-color-adjust:exact}}'+ANX_OS_CSS+'</style></head><body>'
     +'<div class="bar"><span>📋 OS – Crazy Som</span><button class="br" onclick="window.print()">🖨️ Imprimir</button><button class="bd" onclick="window.close()">✕</button></div>'
     +'<div class="page">'
     +(_montagemTarjaTextoDe(form,dadosCompletos)?'<div class="tarja-montagem-pendente">⚠️ LIBERAÇÃO DE MONTAGEM PENDENTE — '+eh(_montagemTarjaTextoDe(form,dadosCompletos))+'</div>':'')
@@ -8107,6 +8138,7 @@ function _montarOSHtml(form, dadosCompletos){
     +'<div class="xt">📝 MATERIAIS EXTRAS</div><div class="xh">Cabos, adaptadores, consumíveis e demais itens:</div>'
     +'<table class="ext"><thead><tr><th style="width:48px">QTD</th><th>DESCRIÇÃO</th><th style="width:30px;text-align:center">✓</th></tr></thead><tbody>'+extras+'</tbody></table>'
     +(form['f-obs-os']?'<div class="obs-os">'+'<div class="obs-os-title">🔧 OBSERVAÇÕES PARA MONTAGEM</div>'+'<div class="obs-os-body">'+eh(form['f-obs-os'])+'</div>'+'</div>':'')
+    +_anxBlocoOS(anexosOrc)
     +'<div class="assin"><div class="assin-box"><div class="aline">Responsável Técnico</div></div><div class="assin-box"><div class="aline">Conferência</div></div><div class="assin-box"><div class="aline">Carregamento</div></div></div>'
     +'<div class="foot">Crazy Som – OSVALDO CRUZ, 36 - NITEROI - Canoas - RS | (51) 3428-5053 | CNPJ: 10.909.827/0001-76</div>'
     +'</div></body></html>';
@@ -9831,7 +9863,7 @@ function salvarComercial(){
   // Abrir financeiro se venda ganha
   if(comercialStatus==='ganha') setTimeout(function(){abrirFinanceiro();},300);
 
-  renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+  renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
 
   // Feedback visual no botão de registrar (sem alert bloqueante)
   var btnReg=document.querySelector('button[onclick="salvarComercial()"]');
@@ -10599,6 +10631,283 @@ async function _gaConferirAgenda(){
   alert('🔍 CONFERÊNCIA NO GOOGLE AGENDA — OS '+(gv('f-num')||'')+'\n\n'+relatorio.join('\n')
     +(problemas?'\n\n➡️ Clique em "🔁 Reenviar à Agenda" para o sistema recriar/corrigir o que está apontado acima. Ele atualiza o que já existe em vez de duplicar.':''));
 }
+
+
+// ════════════════════════════════════════════════════════
+//  ANEXOS DO ORÇAMENTO
+//  Plantas, descritivos técnicos e fotos dos locais dos eventos. Os ARQUIVOS
+//  ficam no Firebase Storage (um documento do Firestore tem limite de 1 MB —
+//  um PDF ou uma foto nunca caberia dentro do orçamento); no orçamento ficam
+//  só os metadados (nome, tipo, tamanho, link, legenda e se vai pra OS), que
+//  viajam junto com o resto em getDadosCompletos()/_aplicarDadosOrcamento().
+//  Na OS impressa NÃO vão os arquivos em si: vai um aviso de que existem
+//  anexos e a lista dos nomes, pra equipe abrir a OS no sistema e visualizar
+//  ou imprimir o que precisar (decisão do usuário).
+// ════════════════════════════════════════════════════════
+var anexosOrc = [];
+var ANX_MAX_MB = 20;                       // por arquivo
+var ANX_IMG_MAX_PX = 1800;                 // fotos são reduzidas antes de subir
+var ANX_IMG_QUALIDADE = 0.85;
+var _anxOcupado = false;
+
+function _anxEhImagem(tipo, nome){
+  if(tipo && tipo.indexOf('image/')===0) return true;
+  return /\.(jpe?g|png|gif|webp|bmp|heic)$/i.test(nome||'');
+}
+function _anxIcone(tipo, nome){
+  var n=(nome||'').toLowerCase();
+  if(_anxEhImagem(tipo,nome)) return '🖼️';
+  if(/\.pdf$/.test(n)) return '📕';
+  if(/\.(docx?|odt|rtf)$/.test(n)) return '📘';
+  if(/\.(xlsx?|csv|ods)$/.test(n)) return '📗';
+  if(/\.(pptx?|odp)$/.test(n)) return '📙';
+  if(/\.(dwg|dxf|skp|rvt)$/.test(n)) return '📐';
+  if(/\.(zip|rar|7z)$/.test(n)) return '🗜️';
+  return '📄';
+}
+function _anxTamanho(bytes){
+  bytes=Number(bytes)||0;
+  if(bytes<1024) return bytes+' B';
+  if(bytes<1024*1024) return (bytes/1024).toFixed(0)+' KB';
+  return (bytes/1024/1024).toFixed(1)+' MB';
+}
+function _anxNomeSeguro(nome){
+  return String(nome||'arquivo').normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^A-Za-z0-9._-]/g,'_').slice(0,80);
+}
+
+// ── Permissões (Admin > Permissões por Cargo) ───────────────────────────
+// Mesmo padrão "nega por padrão, libera por exceção" das demais ações
+// sensíveis: Gerência, Diretoria e Admin sempre podem; qualquer outro cargo
+// só com a caixa marcada.
+function _anxPodeAnexar(){
+  if(!usuarioAtual) return false;
+  if(typeof _modoLeitura!=='undefined' && _modoLeitura) return false;
+  if(['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0) return true;
+  var cargo=typeof _cargoEfetivo==='function'?_cargoEfetivo(usuarioAtual):(usuarioAtual.cargo||'');
+  return !!(cargo && _permissoes[cargo] && _permissoes[cargo]['anexar-arquivo']===true);
+}
+function _anxPodeExcluir(){
+  if(!usuarioAtual) return false;
+  if(typeof _modoLeitura!=='undefined' && _modoLeitura) return false;
+  if(['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0) return true;
+  var cargo=typeof _cargoEfetivo==='function'?_cargoEfetivo(usuarioAtual):(usuarioAtual.cargo||'');
+  return !!(cargo && _permissoes[cargo] && _permissoes[cargo]['excluir-anexo']===true);
+}
+
+function anxStatus(msg, tipo){
+  var el=document.getElementById('anx-status');
+  if(!el) return;
+  el.textContent=msg||'';
+  el.style.color = tipo==='err' ? '#ef5350' : (tipo==='ok' ? '#66bb6a' : 'var(--text-muted)');
+  if(msg && tipo==='ok') setTimeout(function(){ if(el.textContent===msg) el.textContent=''; }, 5000);
+}
+
+// Fotos de local costumam sair de celular com 4–8 MB. Reduzir antes de subir
+// deixa o anexo leve pra equipe abrir no celular em campo, sem perder a
+// leitura da planta/foto.
+function _anxReduzirImagem(file){
+  return new Promise(function(resolve){
+    try{
+      var url=URL.createObjectURL(file);
+      var img=new Image();
+      img.onload=function(){
+        try{
+          var w=img.naturalWidth, h=img.naturalHeight;
+          var maior=Math.max(w,h);
+          if(maior<=ANX_IMG_MAX_PX && file.size<=1.5*1024*1024){ URL.revokeObjectURL(url); resolve(file); return; }
+          var esc=Math.min(1, ANX_IMG_MAX_PX/maior);
+          var cv=document.createElement('canvas');
+          cv.width=Math.round(w*esc); cv.height=Math.round(h*esc);
+          cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+          cv.toBlob(function(blob){
+            URL.revokeObjectURL(url);
+            if(blob && blob.size<file.size) resolve(blob); else resolve(file);
+          }, 'image/jpeg', ANX_IMG_QUALIDADE);
+        }catch(e){ URL.revokeObjectURL(url); resolve(file); }
+      };
+      img.onerror=function(){ URL.revokeObjectURL(url); resolve(file); };
+      img.src=url;
+    }catch(e){ resolve(file); }
+  });
+}
+
+async function anxSelecionar(input){
+  var arquivos=[].slice.call(input.files||[]);
+  input.value='';
+  if(!arquivos.length) return;
+  if(!_anxPodeAnexar()){
+    alert('🔒 SEM PERMISSÃO PARA ANEXAR\n\nSeu cargo não está autorizado a anexar arquivos.\n\nUm Administrador pode liberar em Administração > Permissões por Cargo > "📎 Pode Anexar Arquivos".');
+    return;
+  }
+  if(!driveIdAtual){
+    alert('⚠️ Salve o orçamento antes de anexar arquivos.\n\nAssim o sistema sabe a qual orçamento o anexo pertence.');
+    return;
+  }
+  if(!fbStorage){
+    alert('⚠️ O armazenamento de arquivos não está disponível nesta sessão.\n\nRecarregue a página (⟳ Atualizar o sistema). Se continuar, peça a um administrador para verificar o Firebase Storage do projeto.');
+    return;
+  }
+  if(_anxOcupado){ anxStatus('⏳ Aguarde o envio anterior terminar.','err'); return; }
+  _anxOcupado=true;
+  var idOrc=driveIdAtual;
+  var enviados=0, falhas=[];
+  for(var i=0;i<arquivos.length;i++){
+    var f=arquivos[i];
+    try{
+      anxStatus('⏳ Enviando '+(i+1)+' de '+arquivos.length+': '+f.name+'...','');
+      var corpo=f;
+      if(_anxEhImagem(f.type,f.name)) corpo=await _anxReduzirImagem(f);
+      if(corpo.size > ANX_MAX_MB*1024*1024){
+        falhas.push(f.name+' ('+_anxTamanho(corpo.size)+' — limite de '+ANX_MAX_MB+' MB por arquivo)');
+        continue;
+      }
+      var id='anx_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);
+      var caminho='anexos/'+idOrc+'/'+id+'-'+_anxNomeSeguro(f.name);
+      var ref=fbStorage.ref().child(caminho);
+      await ref.put(corpo, {contentType:f.type||'application/octet-stream', customMetadata:{orcamento:idOrc, nomeOriginal:f.name}});
+      var url=await ref.getDownloadURL();
+      anexosOrc.push({
+        id:id, nome:f.name, tipo:f.type||'', tamanho:corpo.size,
+        url:url, path:caminho, naOS:true, legenda:'',
+        usuarioId:usuarioAtual?usuarioAtual.id:'', usuarioNome:usuarioAtual?usuarioAtual.nome:'',
+        dataISO:new Date().toISOString()
+      });
+      enviados++;
+    }catch(e){
+      falhas.push(f.name+': '+_anxErroAmigavel(e));
+    }
+  }
+  _anxOcupado=false;
+  anxRenderizar();
+  if(enviados){
+    marcarAlterado();
+    // Grava já — um anexo enviado e não salvo sumiria da lista no próximo
+    // carregamento, com o arquivo órfão lá no armazenamento.
+    try{ await salvarNoDrive({mostrarStatus:false}); }catch(eS){}
+  }
+  if(falhas.length){
+    anxStatus('⚠️ '+falhas.length+' arquivo(s) não foram anexados.','err');
+    alert('⚠️ NÃO FOI POSSÍVEL ANEXAR:\n\n• '+falhas.join('\n• '));
+  }else{
+    anxStatus('✅ '+enviados+' arquivo(s) anexado(s).','ok');
+  }
+}
+
+function _anxErroAmigavel(e){
+  var m=(e&&(e.code||e.message))||'';
+  if(/unauthorized|permission/i.test(m)) return 'o armazenamento recusou o envio (regras do Firebase Storage). Peça a um administrador para liberar a gravação em "anexos/" para usuários autenticados.';
+  if(/quota/i.test(m)) return 'a cota de armazenamento do projeto acabou.';
+  if(/retry-limit|network/i.test(m)) return 'a internet caiu durante o envio. Tente de novo.';
+  if(/object-not-found/i.test(m)) return 'o arquivo não foi encontrado no armazenamento (pode já ter sido excluído).';
+  return (e&&e.message)||String(e);
+}
+
+function anxRenderizar(){
+  var lista=document.getElementById('anx-lista');
+  var cont=document.getElementById('anx-contador');
+  var btnAdd=document.getElementById('anx-btn-add');
+  if(!lista) return;
+  if(!anexosOrc) anexosOrc=[];
+  var naOS=anexosOrc.filter(function(a){ return a.naOS; }).length;
+  if(cont) cont.textContent=anexosOrc.length ? ('— '+anexosOrc.length+' arquivo(s), '+naOS+' na OS') : '';
+  if(btnAdd) btnAdd.style.display=_anxPodeAnexar()?'':'none';
+
+  if(!anexosOrc.length){
+    lista.innerHTML='<div class="anx-vazio">'+(_anxPodeAnexar()
+      ? 'Nenhum arquivo anexado. Use <b>➕ Anexar arquivos</b> para subir plantas, descritivos e fotos do local.'
+      : 'Nenhum arquivo anexado. Seu cargo não está autorizado a anexar — fale com um Administrador.')+'</div>';
+    return;
+  }
+  var podeExcluir=_anxPodeExcluir();
+  lista.innerHTML=anexosOrc.map(function(a,i){
+    var visual=_anxEhImagem(a.tipo,a.nome)
+      ? '<img class="anx-thumb" src="'+eh(a.url)+'" alt="'+eh(a.nome)+'" loading="lazy">'
+      : '<div class="anx-ico">'+_anxIcone(a.tipo,a.nome)+'</div>';
+    var quando=a.dataISO?new Date(a.dataISO).toLocaleString('pt-BR'):'';
+    return '<div class="anx-item">'
+      +visual
+      +'<div class="anx-corpo">'
+      +'<div class="anx-nome">'+_anxIcone(a.tipo,a.nome)+' '+eh(a.nome)+'</div>'
+      +'<div class="anx-meta">'+_anxTamanho(a.tamanho)+(a.usuarioNome?(' · '+eh(a.usuarioNome)):'')+(quando?(' · '+quando):'')+'</div>'
+      +'<input class="anx-legenda" type="text" maxlength="120" placeholder="Legenda (ex.: Planta baixa do salão principal)" value="'+eh(a.legenda||'')+'" oninput="anxLegenda('+i+',this.value)">'
+      +'<div class="anx-acoes">'
+      +'<label class="anx-chk" title="Quando marcado, a OS avisa que este orçamento tem anexos e lista o nome deste arquivo"><input type="checkbox" '+(a.naOS?'checked':'')+' onchange="anxAlternarOS('+i+',this.checked)" style="width:13px;height:13px;cursor:pointer"> Mostrar na OS</label>'
+      +'<button type="button" class="anx-mini" onclick="anxAbrir('+i+')">👁️ Abrir</button>'
+      +(podeExcluir?('<button type="button" class="anx-mini" style="color:#ef5350;border-color:#c62828" onclick="anxExcluir('+i+')">🗑️ Excluir</button>'):'')
+      +'</div></div></div>';
+  }).join('');
+}
+
+function anxLegenda(i, valor){
+  if(!anexosOrc[i]) return;
+  anexosOrc[i].legenda=valor;
+  marcarAlterado();
+}
+function anxAlternarOS(i, valor){
+  if(!anexosOrc[i]) return;
+  anexosOrc[i].naOS=!!valor;
+  marcarAlterado();
+  var cont=document.getElementById('anx-contador');
+  if(cont) cont.textContent=anexosOrc.length ? ('— '+anexosOrc.length+' arquivo(s), '+anexosOrc.filter(function(a){return a.naOS;}).length+' na OS') : '';
+}
+function anxAbrir(i){
+  if(!anexosOrc[i]) return;
+  window.open(anexosOrc[i].url,'_blank','noopener');
+}
+
+async function anxExcluir(i){
+  var a=anexosOrc[i];
+  if(!a) return;
+  if(!_anxPodeExcluir()){
+    alert('🔒 SEM PERMISSÃO PARA EXCLUIR ANEXOS\n\nUm Administrador pode liberar em Administração > Permissões por Cargo > "🗑️ Pode Excluir Anexos".');
+    return;
+  }
+  if(!confirm('🗑️ EXCLUIR ANEXO\n\n"'+a.nome+'"\n\nO arquivo é apagado do servidor e não tem como voltar. Continuar?')) return;
+  anxStatus('⏳ Excluindo...','');
+  try{
+    if(fbStorage && a.path) await fbStorage.ref().child(a.path).delete();
+  }catch(e){
+    // 'object-not-found' = o arquivo já não existe: seguimos e tiramos da
+    // lista assim mesmo, senão o registro ficaria preso pra sempre.
+    if(!/object-not-found/i.test((e&&(e.code||e.message))||'')){
+      anxStatus('⚠️ '+_anxErroAmigavel(e),'err');
+      alert('⚠️ Não foi possível excluir o arquivo:\n\n'+_anxErroAmigavel(e));
+      return;
+    }
+  }
+  anexosOrc.splice(i,1);
+  anxRenderizar();
+  marcarAlterado();
+  try{ await salvarNoDrive({mostrarStatus:false}); }catch(eS){}
+  anxStatus('✅ Anexo excluído.','ok');
+}
+
+// ── Bloco que entra na OS impressa ──────────────────────────────────────
+// Só o AVISO e a LISTA DE NOMES (decisão do usuário): quem estiver com a OS
+// na mão abre o orçamento no sistema pra visualizar ou imprimir o anexo.
+function _anxBlocoOS(lista){
+  var anx=(lista||[]).filter(function(a){ return a && a.naOS; });
+  if(!anx.length) return '';
+  return '<div class="anx-os">'
+    +'<div class="anx-os-title">📎 ESTE ORÇAMENTO TEM '+anx.length+' ANEXO'+(anx.length>1?'S':'')+'</div>'
+    +'<div class="anx-os-sub">Plantas, descritivos e fotos do local. Abra este orçamento no sistema (card 📎 Anexos) para visualizar ou imprimir:</div>'
+    +'<ol class="anx-os-lista">'
+    +anx.map(function(a){
+      return '<li>'+eh(a.nome)+(a.legenda?(' — <i>'+eh(a.legenda)+'</i>'):'')+' <span class="anx-os-tam">('+_anxTamanho(a.tamanho)+')</span></li>';
+    }).join('')
+    +'</ol></div>';
+}
+
+// Estilo do bloco de anexos dentro do HTML da OS (documento à parte, não
+// herda o CSS do sistema).
+var ANX_OS_CSS=''
+  +'.anx-os{border:2px solid #c0001a;border-radius:6px;padding:8px 10px;margin-top:10px;background:#fff5f5;print-color-adjust:exact;-webkit-print-color-adjust:exact;}'
+  +'.anx-os-title{font-size:12px;font-weight:900;color:#c0001a;letter-spacing:.5px;}'
+  +'.anx-os-sub{font-size:10px;color:#444;margin:3px 0 5px;}'
+  +'.anx-os-lista{margin:0;padding-left:18px;}'
+  +'.anx-os-lista li{font-size:11px;color:#111;padding:1px 0;}'
+  +'.anx-os-tam{color:#666;font-size:9.5px;}';
 
 // ════════════════════════════════════════════════════════
 //  FUNIL DE VENDAS — CARD FIXO PERMANENTE
@@ -13487,7 +13796,7 @@ async function cancelarAprovacao(){
   // existe mais e registrar anulações duplicadas no histórico.
   snapshotAprovado=null;
 
-  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+  renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   driveStatus('↩️ Aprovação cancelada — orçamento voltou para Análise Técnica','ok');
   if(driveIdAtual){
     try{ await salvarNoDrive({mostrarStatus:false}); }catch(e){}
@@ -19683,6 +19992,10 @@ async function permSalvar(){
   if(libMontEl) _permissoes[cargo]['liberar-montagem']=libMontEl.checked;
   var inadEl=document.getElementById('perm-fin-inadimplente');
   if(inadEl) _permissoes[cargo]['fin-inadimplente']=inadEl.checked;
+  var anxAddEl=document.getElementById('perm-anexar-arquivo');
+  if(anxAddEl) _permissoes[cargo]['anexar-arquivo']=anxAddEl.checked;
+  var anxDelEl=document.getElementById('perm-excluir-anexo');
+  if(anxDelEl) _permissoes[cargo]['excluir-anexo']=anxDelEl.checked;
   try{ localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes)); }catch(e){}
   var btn=document.querySelector('#admpane-permissoes button[onclick="permSalvar()"]');
   if(btn){btn.textContent='⏳ Salvando...';btn.disabled=true;}
@@ -19941,6 +20254,18 @@ function permRenderizar(){
     +'<input type="checkbox" id="perm-liberar-montagem"'+(perm['liberar-montagem']===true?' checked':'')+' style="width:14px;height:14px;cursor:pointer"> 🔓 Pode Liberar Montagem Manualmente'
     +'</label>'
     +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px;margin-left:22px">Permite liberar a Montagem mesmo sem todos os requisitos cumpridos (contrato assinado, entrada paga, nº da venda no Conta Azul) — e também revogar essa liberação. Use em casos como pagamento combinado por fora do sistema ou urgência do cliente. Exige uma justificativa, gravada com data e autor no histórico do orçamento. Vem DESMARCADA por padrão. Gerência, Diretoria e Administradores já podem sempre.</div>'
+    +'</div>'
+    +'<div style="background:#0a1622;border:1px solid #1565c0;border-radius:6px;padding:10px 12px;margin-bottom:10px">'
+    +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#64b5f6;font-weight:800;text-transform:uppercase">'
+    +'<input type="checkbox" id="perm-anexar-arquivo"'+(perm['anexar-arquivo']===true?' checked':'')+' style="width:14px;height:14px;cursor:pointer"> 📎 Pode Anexar Arquivos'
+    +'</label>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px;margin-left:22px">Permite anexar plantas, descritivos técnicos e fotos do local ao orçamento (card 📎 Anexos), e marcar quais deles a Ordem de Serviço deve avisar e listar. Todos com acesso ao orçamento continuam podendo VER e abrir os anexos — esta caixa controla apenas quem SOBE arquivos novos. Vem DESMARCADA por padrão. Gerência, Diretoria e Administradores já podem sempre.</div>'
+    +'</div>'
+    +'<div style="background:#1a0a0a;border:1px solid #8e24aa;border-radius:6px;padding:10px 12px;margin-bottom:10px">'
+    +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#ce93d8;font-weight:800;text-transform:uppercase">'
+    +'<input type="checkbox" id="perm-excluir-anexo"'+(perm['excluir-anexo']===true?' checked':'')+' style="width:14px;height:14px;cursor:pointer"> 🗑️ Pode Excluir Anexos'
+    +'</label>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px;margin-left:22px">Permite apagar um arquivo anexado ao orçamento. A exclusão é DEFINITIVA — o arquivo sai do servidor e não tem como recuperar. Vem DESMARCADA por padrão. Gerência, Diretoria e Administradores já podem sempre.</div>'
     +'</div>'
     +'<div style="background:#200b0b;border:1px solid #c62828;border-radius:6px;padding:10px 12px;margin-bottom:10px">'
     +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#ef5350;font-weight:800;text-transform:uppercase">'
@@ -23642,6 +23967,9 @@ function osModGerarOS(lista){
 
     var extras=Array(10).fill('<tr><td colspan="3" style="height:23px;border-bottom:1px solid var(--border)">&nbsp;</td></tr>').join('');
     var obsOS=f['f-obs-os']?'<div class="obs-os"><div class="obs-os-title">🔧 OBSERVAÇÕES PARA MONTAGEM</div><div class="obs-os-body">'+eh(f['f-obs-os'])+'</div></div>':'';
+    // Aviso + lista de anexos: a OS em lote lê do orçamento em cache, não das
+    // variáveis do editor (pode gerar a OS de vários orçamentos de uma vez).
+    var anxOS=_anxBlocoOS((o.dados&&o.dados.anexos)||[]);
     var pageBreak=idx<lista.length-1?'page-break-after:always;':'';
 
     return '<div class="page" style="'+pageBreak+'">'
@@ -23660,6 +23988,7 @@ function osModGerarOS(lista){
       +'<div class="xt">📝 MATERIAIS EXTRAS</div><div class="xh">Cabos, adaptadores, consumíveis e demais itens:</div>'
       +'<table class="ext"><thead><tr><th style="width:48px">QTD</th><th>DESCRIÇÃO</th><th style="width:30px;text-align:center">✓</th></tr></thead><tbody>'+extras+'</tbody></table>'
       +obsOS
+      +anxOS
       +'<div class="assin"><div class="assin-box"><div class="aline">Responsável Técnico</div></div><div class="assin-box"><div class="aline">Conferência</div></div><div class="assin-box"><div class="aline">Carregamento</div></div></div>'
       +'<div class="foot">Crazy Som – OSVALDO CRUZ, 36 - NITEROI - Canoas - RS | (51) 3428-5053 | CNPJ: 10.909.827/0001-76</div>'
       +'</div>';
@@ -23694,6 +24023,7 @@ function osModGerarOS(lista){
     +'.obs-os{background:#fff8e1;border:2px solid #ff6f00;border-radius:5px;padding:9px 13px;margin:12px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
     +'.obs-os-title{font-size:10px;font-weight:900;color:#ff6f00;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}'
     +'.obs-os-body{font-size:11px;color:#3e2000;white-space:pre-wrap;line-height:1.6}'
+    +ANX_OS_CSS
     +'.assin{display:flex;gap:18px;margin-top:26px}.assin-box{flex:1;text-align:center}'
     +'.aline{border-top:1px solid #444;padding-top:4px;font-size:11px;color:#555;margin-top:30px}'
     +'.foot{margin-top:14px;border-top:1px solid #ddd;padding-top:5px;font-size:11px;color:#aaa;text-align:center}'
@@ -24489,7 +24819,7 @@ document.getElementById('f-data').value=new Date().toISOString().split('T')[0];
 // Ou seja: todo carregamento inicial estava rodando 2x (1 tentativa inútil
 // aqui + 1 real no login), dobrando à toa o tempo de carregamento de dados
 // a cada login. Ver a lista completa dessas chamadas dentro de doLogin().
-calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();
+calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
 // Auto-save a cada 3 minutos se houver alterações não salvas e orçamento já tiver ID no Drive
 setInterval(function(){
   if(_naoSalvo && driveIdAtual && usuarioAtual){
