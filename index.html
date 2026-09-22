@@ -9865,6 +9865,20 @@ function tirarSnapshot(){
 // ════════════════════════════════════════════════════════
 var APROV_SECS=['som','video','luz','estrutura','servico','logistica'];
 
+// Lista ENXUTA dos itens de cada seção — id, nome, quantidade, total e
+// ambiente. É o que permite abrir a linha "Vídeo (6 itens)" no histórico e
+// ver os 6 itens com antes e depois, mesmo anos depois. Guardar só isso (e
+// não o retrato inteiro) mantém o orçamento leve.
+function _aprovItensCompactos(snap){
+  var out={};
+  APROV_SECS.forEach(function(sec){
+    out[sec]=((snap&&snap.itens&&snap.itens[sec])||[]).map(function(r){
+      return {i:r.id||'', n:r.name||'', q:r.qty, t:rowTot(r), a:r.amb||''};
+    });
+  });
+  return out;
+}
+
 function _aprovValoresDe(snap, impostoDe){
   if(!snap) return null;
   var itens={};
@@ -9874,6 +9888,7 @@ function _aprovValoresDe(snap, impostoDe){
     total:snap.totalFinal||0,
     secoes:Object.assign({}, snap.totaisSec||{}),
     itens:itens,
+    itensDet:_aprovItensCompactos(snap),
     descPct:snap.descPct||'0',
     descRs:snap.descRs||'0',
     arredRs:snap.arredRs||'0',
@@ -9883,6 +9898,61 @@ function _aprovValoresDe(snap, impostoDe){
     cliente:snap.cliente||'',
     dia:snap.dia||''
   };
+}
+
+// Detalhe item a item de UMA seção: o que estava na versão aprovada e o que
+// está hoje, lado a lado. Aberto ao clicar na linha da seção (ex.: "Vídeo
+// (6 itens)") — pedido do usuário para avaliar o orçamento sem sair da tela.
+function _aprovDetalheSecaoHTML(sec, listaAnt, listaAtual){
+  listaAnt=listaAnt||[]; listaAtual=listaAtual||[];
+  if(!listaAnt.length && !listaAtual.length) return '';
+  // Casa por id (estável) e, na falta dele, por nome.
+  var usados={}, pares=[];
+  listaAnt.forEach(function(a){
+    var alvo=null;
+    if(a.i) alvo=listaAtual.find(function(b){ return !usados[b.i||b.n] && b.i===a.i; });
+    if(!alvo) alvo=listaAtual.find(function(b){ return !usados[b.i||b.n] && b.n===a.n; });
+    if(alvo) usados[alvo.i||alvo.n]=1;
+    pares.push({a:a,b:alvo||null});
+  });
+  listaAtual.forEach(function(b){ if(!usados[b.i||b.n]) pares.push({a:null,b:b}); });
+
+  function cel(x){
+    if(!x) return '<span style="color:var(--text-muted)">—</span>';
+    return '<b>'+x.q+'x</b> '+fmt(x.t||0);
+  }
+  var linhas=pares.map(function(par){
+    var a=par.a, b=par.b, ico, cor, nota='';
+    if(a&&!b){ ico='➖'; cor='#c62828'; }
+    else if(!a&&b){ ico='➕'; cor='#2e7d32'; }
+    else{
+      var mudouNome=String(a.n||'')!==String(b.n||'');
+      var mudouQtd=a.q!==b.q;
+      var mudouTot=Math.abs((a.t||0)-(b.t||0))>0.01;
+      if(mudouNome||mudouQtd||mudouTot){
+        ico='🔄'; cor='#e65100';
+        if(mudouNome) nota=eh(a.n)+' → '+eh(b.n);
+      } else { ico='='; cor='var(--text-muted)'; }
+    }
+    var nome=(a&&!b)?a.n:(b?b.n:'');
+    var amb=(a&&!b)?(a.a||''):((b&&b.a)||'');
+    var difV=(a&&b)?((b.t||0)-(a.t||0)):((b?(b.t||0):-(a?a.t:0)));
+    return '<div style="display:grid;grid-template-columns:1fr 104px 104px 96px;gap:6px;align-items:start;padding:3px 0;border-bottom:1px dotted var(--border)">'
+      +'<div style="min-width:0;font-size:10.5px;color:'+(ico==='='?'var(--text-dim)':'var(--text)')+'">'
+        +'<span style="color:'+cor+';font-weight:900;margin-right:4px">'+ico+'</span>'+eh(nome||'—')
+        +(amb?('<span style="color:var(--text-muted)"> · '+eh(amb)+'</span>'):'')
+        +(nota?('<div style="font-size:9.5px;color:'+cor+';margin-left:14px">'+nota+'</div>'):'')
+      +'</div>'
+      +'<div style="font-size:10.5px;text-align:right;color:var(--text-dim)">'+cel(a)+'</div>'
+      +'<div style="font-size:10.5px;text-align:right;color:'+(ico==='='?'var(--text-dim)':cor)+';font-weight:'+(ico==='='?'400':'700')+'">'+cel(b)+'</div>'
+      +'<div style="font-size:10px;text-align:right;color:'+(Math.abs(difV)>0.01?cor:'var(--text-muted)')+'">'+(Math.abs(difV)>0.01?((difV>0?'+':'')+fmt(difV)):'')+'</div>'
+      +'</div>';
+  }).join('');
+
+  return '<div style="margin:4px 0 8px 14px;padding:6px 8px;background:var(--surface-2);border-radius:6px;border-left:3px solid var(--R)">'
+    +'<div style="display:grid;grid-template-columns:1fr 104px 104px 96px;gap:6px;font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:800;padding-bottom:3px;border-bottom:1px solid var(--border)">'
+      +'<div>Item</div><div style="text-align:right">Aprovado</div><div style="text-align:right">Hoje</div><div style="text-align:right">Dif.</div>'
+    +'</div>'+linhas+'</div>';
 }
 
 // Caixa "valores aprovados" de um evento do histórico, já comparada com a
@@ -9911,7 +9981,28 @@ function _aprovValoresHTML(v, idx, atualSnap){
     var ho=atual?(atual.secoes[sec]||0):null;
     if(!ap && !ho) return;
     var qt=v.itens&&v.itens[sec];
-    linhas+=linha((SEC_LBL[sec]||sec)+(qt?(' ('+qt+(qt>1?' itens':' item')+')'):''), ap, ho, false);
+    var rot=(SEC_LBL[sec]||sec)+(qt?(' ('+qt+(qt>1?' itens':' item')+')'):'');
+
+    // Lista de itens da seção: da versão aprovada (gravada junto) e de hoje.
+    // Aprovações registradas ANTES deste recurso não têm a lista gravada —
+    // nesse caso a linha não abre, e o texto explica o porquê.
+    var detAnt=(v.itensDet&&v.itensDet[sec])||null;
+    var detAtual=atualSnap?(_aprovItensCompactos(atualSnap)[sec]||[]):null;
+    var podeAbrir=!!(detAnt && detAtual);
+    var idSec=id+'-'+sec;
+
+    if(!podeAbrir){ linhas+=linha(rot, ap, ho, false); return; }
+
+    var difL=(ho!==null&&ho!==undefined&&Math.abs(ho-ap)>0.005);
+    linhas+='<div class="diff-item" style="cursor:pointer" onclick="diffToggle(\''+idSec+'\')" title="Clique para ver os itens desta seção, antes e depois">'
+      +'<span class="diff-campo">'+rot+':</span> '
+      +'<span style="font-weight:700">'+fmt(ap)+'</span>'
+      +(difL?(' &rarr; <span style="color:var(--R);font-weight:800">hoje '+fmt(ho)+'</span>'
+              +' <span style="color:var(--R);opacity:.8">('+(ho-ap>0?'+':'')+fmt(ho-ap)+')</span>'):'')
+      +' <span id="'+idSec+'-ic" style="color:var(--text-muted);font-size:10px">&#9660;</span>'
+      +' <span style="color:var(--text-muted);font-size:9.5px">ver itens</span>'
+      +'</div>'
+      +'<div id="'+idSec+'" style="display:none">'+_aprovDetalheSecaoHTML(sec, detAnt, detAtual)+'</div>';
   });
   linhas+=linha('Subtotal bruto', v.bruto, atual?atual.bruto:null, false);
   var temDesc=(parseFloat(v.descRs)||0)>0||(parseFloat(v.descPct)||0)>0;
