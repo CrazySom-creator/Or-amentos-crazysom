@@ -3771,9 +3771,212 @@ function _aprovDiffsDoEvento(h, snapAtual){
   if(h.base && snapAtual){
     var d=[];
     try{ d=compararSnapshots(h.base, snapAtual); }catch(e){ d=h.diffs||[]; }
-    return {diffs:d, aberto:true, rotulo:'alteração(ões) desde a '+(h.baseRotulo||'versão aprovada')+' — ATUALIZADO ATÉ AGORA'};
+    return {diffs:d, aberto:true, comparativo:true, rotulo:'alteração(ões) desde a '+(h.baseRotulo||'versão aprovada')+' — ATUALIZADO ATÉ AGORA'};
   }
   return {diffs:h.diffs||[], aberto:false, rotulo:''};
+}
+
+
+// ════════════════════════════════════════════════════════
+//  COMPARATIVO DE EQUIPAMENTOS — SEMPRE DISPONÍVEL
+//  Pedido do usuário: "preciso entender de forma detalhada o que foi
+//  alterado para avaliar o orçamento". A lista de alterações do histórico
+//  responde "quantas" e "quais campos", mas quem avalia um orçamento pensa
+//  em LISTA DE EQUIPAMENTO: o que entrou, o que saiu, o que trocou e o que
+//  continua igual, lado a lado. E precisa disso a qualquer momento, não só
+//  dentro de um evento do histórico.
+// ════════════════════════════════════════════════════════
+var COMP_SECS=['som','video','luz','estrutura','servico','logistica'];
+var COMP_ICO={som:'🔊',video:'📹',luz:'💡',estrutura:'🏗️',servico:'🛠️',logistica:'🚚'};
+var _compMostrarIguais=false;
+
+// Casa os itens das duas versões por id (estável, gravado junto com o
+// orçamento) e, na falta dele, por nome.
+function _compPares(itAnt, itAtual){
+  var usados={}, pares=[];
+  (itAnt||[]).forEach(function(a){
+    var alvo=null;
+    if(a.id) alvo=(itAtual||[]).find(function(b){ return !usados[b.id||b.name] && b.id===a.id; });
+    if(!alvo) alvo=(itAtual||[]).find(function(b){ return !usados[b.id||b.name] && b.name===a.name; });
+    if(alvo) usados[alvo.id||alvo.name]=1;
+    pares.push({ant:a, atual:alvo||null});
+  });
+  (itAtual||[]).forEach(function(b){
+    if(!usados[b.id||b.name]) pares.push({ant:null, atual:b});
+  });
+  return pares;
+}
+
+function _compDetalhes(a,b){
+  var d=[];
+  if(!a||!b) return d;
+  if(String(a.name||'')!==String(b.name||'')) d.push('equipamento: '+(a.name||'—')+' → '+(b.name||'—'));
+  if(a.qty!==b.qty) d.push('quantidade: '+a.qty+' → '+b.qty);
+  if(Math.abs((a.val||0)-(b.val||0))>0.01) d.push('valor unitário: '+fmt(a.val||0)+' → '+fmt(b.val||0));
+  var dA=parseFloat(a.diaria)||1, dB=parseFloat(b.diaria)||1;
+  if(dA!==dB) d.push('diárias: '+dA+' → '+dB);
+  if(b.painel&&((a.larg||0)!==(b.larg||0)||(a.alt||0)!==(b.alt||0)))
+    d.push('dimensão: '+(a.larg||0)+'×'+(a.alt||0)+'m → '+(b.larg||0)+'×'+(b.alt||0)+'m');
+  if(b.palco&&((a.larg||0)!==(b.larg||0)||(a.prof||0)!==(b.prof||0)))
+    d.push('dimensão: '+(a.larg||0)+'×'+(a.prof||0)+'m → '+(b.larg||0)+'×'+(b.prof||0)+'m');
+  var eA=(a.elObj&&(a.elObj.l||a.elObj.v)), eB=(b.elObj&&(b.elObj.l||b.elObj.v));
+  if(String(eA||'')!==String(eB||'')) d.push('elevação: '+(eA||'—')+' → '+(eB||'—'));
+  if(!!a.carp!==!!b.carp||String(a.carpT||'')!==String(b.carpT||''))
+    d.push('carpete: '+(a.carp?('sim'+(a.carpT?' '+a.carpT:'')):'não')+' → '+(b.carp?('sim'+(b.carpT?' '+b.carpT:'')):'não'));
+  if(String(a.amb||'')!==String(b.amb||'')&&(a.amb||b.amb))
+    d.push('ambiente: '+(a.amb||'—')+' → '+(b.amb||'—'));
+  return d;
+}
+
+function _compLinhaHTML(tipo, a, b, detalhes){
+  var C={novo:{ico:'➕',rot:'INCLUÍDO',cor:'#2e7d32'},
+         removido:{ico:'➖',rot:'RETIRADO',cor:'#c62828'},
+         alterado:{ico:'🔄',rot:'ALTERADO',cor:'#e65100'},
+         igual:{ico:'=',rot:'',cor:'var(--text-muted)'}}[tipo];
+  function lado(r){
+    if(!r) return '<span style="color:var(--text-muted)">—</span>';
+    return '<b>'+r.qty+'x</b> '+fmt(rowTot(r));
+  }
+  var nome = (tipo==='removido') ? (a&&a.name) : (b&&b.name);
+  var amb  = (tipo==='removido') ? (a&&a.amb) : (b&&b.amb);
+  return '<div style="display:grid;grid-template-columns:1fr 130px 130px;gap:8px;align-items:start;padding:6px 8px;border-bottom:1px solid var(--border);'
+    +(tipo==='igual'?'opacity:.62':'')+'">'
+    +'<div style="min-width:0">'
+      +'<span style="font-size:9px;font-weight:900;color:'+C.cor+';margin-right:5px">'+C.ico+(C.rot?(' '+C.rot):'')+'</span>'
+      +'<span style="font-size:11.5px;font-weight:700;color:var(--text)">'+eh(nome||'—')+'</span>'
+      +(amb?('<span style="font-size:9.5px;color:var(--text-muted)"> · '+eh(amb)+'</span>'):'')
+      +((detalhes&&detalhes.length)?('<div style="font-size:10px;color:'+C.cor+';margin-top:2px;line-height:1.5">• '+detalhes.map(eh).join('<br>• ')+'</div>'):'')
+    +'</div>'
+    +'<div style="font-size:11px;text-align:right;color:var(--text-dim)">'+lado(a)+'</div>'
+    +'<div style="font-size:11px;text-align:right;color:'+(tipo==='igual'?'var(--text-dim)':C.cor)+';font-weight:'+(tipo==='igual'?'400':'700')+'">'+lado(b)+'</div>'
+    +'</div>';
+}
+
+function _orcComparativoHTML(base, atual, rotuloBase){
+  if(!base) return '<div style="padding:16px;color:var(--text-muted);font-size:12px">Este orçamento ainda não tem uma versão aprovada para comparar.</div>';
+  var html='';
+  var totalMudancas=0;
+
+  COMP_SECS.forEach(function(sec){
+    var pares=_compPares((base.itens&&base.itens[sec])||[], (atual.itens&&atual.itens[sec])||[]);
+    if(!pares.length) return;
+    var linhas='', mudou=0, iguais=0;
+    pares.forEach(function(par){
+      var a=par.ant, b=par.atual;
+      if(a&&!b){ linhas+=_compLinhaHTML('removido',a,null,[]); mudou++; return; }
+      if(!a&&b){ linhas+=_compLinhaHTML('novo',null,b,[]); mudou++; return; }
+      var det=_compDetalhes(a,b);
+      if(det.length){ linhas+=_compLinhaHTML('alterado',a,b,det); mudou++; }
+      else { iguais++; if(_compMostrarIguais) linhas+=_compLinhaHTML('igual',a,b,[]); }
+    });
+    if(!mudou && !_compMostrarIguais) return;
+    totalMudancas+=mudou;
+    var tAnt=(base.totaisSec&&base.totaisSec[sec])||0, tAtual=(atual.totaisSec&&atual.totaisSec[sec])||0;
+    var difSec=Math.abs(tAnt-tAtual)>0.01;
+    html+='<div style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">'
+      +'<div style="display:grid;grid-template-columns:1fr 130px 130px;gap:8px;background:var(--R);color:#fff;padding:6px 8px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px">'
+        +'<div>'+COMP_ICO[sec]+' '+(SEC_LBL[sec]||sec)+(mudou?(' — '+mudou+(mudou>1?' alterações':' alteração')):' — sem alterações')+'</div>'
+        +'<div style="text-align:right">Aprovado</div><div style="text-align:right">Agora</div>'
+      +'</div>'
+      +linhas
+      +'<div style="display:grid;grid-template-columns:1fr 130px 130px;gap:8px;padding:6px 8px;background:var(--surface-2);font-size:11px;font-weight:800">'
+        +'<div style="color:var(--text-dim)">TOTAL '+(SEC_LBL[sec]||sec).toUpperCase()+'</div>'
+        +'<div style="text-align:right;color:var(--text-dim)">'+fmt(tAnt)+'</div>'
+        +'<div style="text-align:right;color:'+(difSec?'var(--R)':'var(--text-dim)')+'">'+fmt(tAtual)+'</div>'
+      +'</div>'
+      +'</div>';
+  });
+
+  // Campos gerais que também mudam a proposta
+  var geraisDiff=[];
+  [['dia','Data do Evento'],['diasFim','Data Fim'],['local','Local'],['cliente','Cliente'],
+   ['descPct','Desconto %'],['descRs','Desconto R$'],['arredRs','Arredondamento'],
+   ['pgto','Forma de Pagamento'],['obs','Observações (PDF do cliente)'],['svinc','Serviços inclusos (PDF)']].forEach(function(par){
+    var a=String(base[par[0]]||'').trim(), b=String(atual[par[0]]||'').trim();
+    if(a!==b) geraisDiff.push('<div style="font-size:11px;padding:4px 8px;border-bottom:1px solid var(--border)"><b>'+par[1]+':</b> '
+      +'<span style="color:var(--text-dim);text-decoration:line-through">'+eh(a||'(vazio)')+'</span> → <span style="color:var(--R);font-weight:700">'+eh(b||'(vazio)')+'</span></div>');
+  });
+  if(geraisDiff.length){
+    html+='<div style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">'
+      +'<div style="background:#37474f;color:#fff;padding:6px 8px;font-size:10.5px;font-weight:800;text-transform:uppercase">📋 Dados do orçamento — '+geraisDiff.length+' alteração(ões)</div>'
+      +geraisDiff.join('')+'</div>';
+    totalMudancas+=geraisDiff.length;
+  }
+
+  var tA=base.totalFinal||0, tB=atual.totalFinal||0, dif=tB-tA;
+  var cab='<div style="background:var(--surface-2);border:2px solid '+(Math.abs(dif)>0.01?'var(--R)':'var(--border)')+';border-radius:8px;padding:10px 12px;margin-bottom:12px">'
+    +'<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);font-weight:800;margin-bottom:5px">Comparando com a '+(rotuloBase||'versão aprovada')+'</div>'
+    +'<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;font-weight:900;color:var(--text)">'
+      +'<span>'+(rotuloBase||'Aprovado')+': '+fmt(tA)+'</span>'
+      +'<span style="color:var(--R)">Agora: '+fmt(tB)+'</span>'
+      +'<span style="color:'+(dif>0?'var(--R)':'#2e7d32')+'">'+(dif>0?'+':'')+fmt(dif)+(tA?(' ('+(dif>0?'+':'')+fmtN(dif/tA*100)+'%)'):'')+'</span>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-top:5px">'+totalMudancas+' alteração(ões) encontrada(s) no total.</div>'
+    +'</div>';
+
+  if(!totalMudancas && !_compMostrarIguais)
+    html='<div style="padding:16px;color:var(--text-muted);font-size:12px;text-align:center">✅ Nenhuma alteração em relação à '+(rotuloBase||'versão aprovada')+'.</div>';
+
+  return cab+html;
+}
+
+// Qual retrato usar como referência, e como chamá-lo na tela.
+function _compBaseAtual(){
+  if(typeof snapshotAprovado!=='undefined'&&snapshotAprovado) return {base:snapshotAprovado, rotulo:'versão aprovada'};
+  if(typeof snapshotAnterior!=='undefined'&&snapshotAnterior) return {base:snapshotAnterior, rotulo:'última versão enviada'};
+  return {base:null, rotulo:''};
+}
+
+function abrirComparativoAprovado(){
+  var ref=_compBaseAtual();
+  if(!ref.base){
+    alert('ℹ️ SEM VERSÃO DE REFERÊNCIA\n\nEste orçamento ainda não foi aprovado nem enviado para aprovação, então não há uma versão anterior para comparar.');
+    return;
+  }
+  var ov=document.getElementById('comp-orc-ov');
+  if(ov) ov.remove();
+  ov=document.createElement('div');
+  ov.id='comp-orc-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1000000;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow:auto';
+  ov.addEventListener('click',function(e){ if(e.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
+  compRenderizar();
+}
+
+function compRenderizar(){
+  var ov=document.getElementById('comp-orc-ov');
+  if(!ov) return;
+  var ref=_compBaseAtual();
+  var atual=tirarSnapshot();
+  ov.innerHTML='<div style="background:var(--surface);border-radius:10px;max-width:920px;width:100%;padding:16px;box-shadow:0 16px 50px rgba(0,0,0,.6);margin:auto">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">'
+      +'<div style="font-size:14px;font-weight:900;color:var(--text)">🔍 O que mudou no orçamento '+eh(gv("f-num")||"")+'</div>'
+      +'<div style="display:flex;gap:8px;align-items:center">'
+        +'<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-dim);cursor:pointer">'
+          +'<input type="checkbox" id="comp-iguais" '+(_compMostrarIguais?'checked':'')+' onchange="_compMostrarIguais=this.checked;compRenderizar()" style="width:13px;height:13px;cursor:pointer"> mostrar itens sem alteração</label>'
+        +'<button onclick="compImprimir()" class="btn btn-o btn-sm" style="font-weight:700">🖨️ Imprimir</button>'
+        +'<button onclick="document.getElementById(\'comp-orc-ov\').remove()" style="background:var(--surface-3);color:var(--text);border:none;border-radius:5px;padding:6px 12px;cursor:pointer;font-size:13px">✕</button>'
+      +'</div>'
+    +'</div>'
+    +'<div id="comp-orc-corpo">'+_orcComparativoHTML(ref.base, atual, ref.rotulo)+'</div>'
+    +'</div>';
+}
+
+function compImprimir(){
+  var corpo=document.getElementById('comp-orc-corpo');
+  if(!corpo) return;
+  var w=window.open('','_blank');
+  if(!w){ alert('⚠️ O navegador bloqueou a janela de impressão. Libere os pop-ups para este site.'); return; }
+  w.document.write('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Alterações — Orçamento '+(gv('f-num')||'')+'</title>'
+    +'<style>body{font-family:Segoe UI,Arial,sans-serif;padding:18px;background:#fff;color:#111}'
+    +'h1{font-size:16px;color:#c0001a;margin:0 0 4px}h2{font-size:11px;color:#666;margin:0 0 14px;font-weight:400}'
+    +':root{--text:#111;--text-dim:#555;--text-muted:#888;--border:#ddd;--surface:#fff;--surface-2:#f5f5f5;--R:#c0001a}'
+    +'@media print{@page{size:A4 portrait;margin:10mm}}</style></head><body>'
+    +'<h1>Alterações do Orçamento '+(gv('f-num')||'')+'</h1>'
+    +'<h2>'+(gv('f-cliente')||'')+' · gerado em '+new Date().toLocaleString('pt-BR')+'</h2>'
+    +corpo.innerHTML+'</body></html>');
+  w.document.close();
+  setTimeout(function(){ try{ w.print(); }catch(e){} }, 400);
 }
 
 function diffsRequeremAprovacao(diffs){
@@ -4390,7 +4593,7 @@ function renderStatusOrc(){
       var _snapAgora=null; try{ _snapAgora=tirarSnapshot(); }catch(eSn){}
       for(var i=0;i<aprovHist.length;i++){var h=aprovHist[i];
         var _dv=_aprovDiffsDoEvento(h,_snapAgora);
-        var diffHtml=(_dv.diffs&&_dv.diffs.length)?renderDiffNoHistorico(_dv.diffs,'cur-'+i,{aberto:_dv.aberto,rotulo:_dv.rotulo}):'';
+        var diffHtml=(_dv.diffs&&_dv.diffs.length)?renderDiffNoHistorico(_dv.diffs,'cur-'+i,{aberto:_dv.aberto,rotulo:_dv.rotulo,comparativo:_dv.comparativo}):'';
         var valHtml=_aprovValoresDoEvento(h,i,aprovHist,_snapAgora,snapshotAprovado,'cur-');hhtml+='<div class="hist-evt"><div class="hist-ico">'+(h.ico||'•')+'</div><div class="hist-info"><div class="hist-acao">'+h.acao+' — <span style="color:var(--R)">'+_nomeUsuario(h.usuario)+'</span></div><div class="hist-det">'+h.cargo+' · '+h.data+(h.obs?' · "'+h.obs+'"':'')+'</div>'+valHtml+diffHtml+'</div></div>';}
       hl.innerHTML=hhtml;
     }else{sh.style.display='none';}
@@ -4422,6 +4625,12 @@ function renderStatusOrc(){
     acoes+='<div style="margin-top:6px"><button onclick="cancelarAprovacao()" title="Desfaz a aprovação e devolve o orçamento para Análise Técnica — exige motivo e fica registrado no histórico" style="padding:7px 14px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;color:#fff;background:#c62828;margin:3px">↩️ Cancelar Aprovação</button></div>';
   }
   if(nivel==='consultor'&&driveIdAtual&&aprovStatus!=='rascunho'){acoes+='<div style="margin-top:6px"><button onclick="toggleNegociacaoBox()" style="padding:7px 14px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;color:#fff;background:#e65100;margin:3px">🤝 Negociação / Desconto</button></div>';}
+  // Comparativo completo — disponível SEMPRE que existir uma versão de
+  // referência, em qualquer status. É o que responde "o que exatamente mudou
+  // nos equipamentos" sem depender de um evento do histórico.
+  if(_compBaseAtual().base){
+    acoes+='<div style="margin-top:6px"><button onclick="abrirComparativoAprovado()" title="Lista lado a lado: o que foi incluído, retirado, trocado ou alterado em relação à versão aprovada" style="padding:7px 14px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;color:#fff;background:#1565c0;margin:3px">🔍 O que mudou no orçamento</button></div>';
+  }
   sa.innerHTML=acoes;
 }
 
@@ -9968,6 +10177,10 @@ function renderDiffNoHistorico(diffs,idx,opts){
   var rotulo=opts.rotulo
     ? ('&#128221; '+n+' '+opts.rotulo)
     : ('&#128221; '+n+' alteracao(oes) nesta versao &mdash; clique para ver');
+  // Atalho pro comparativo item a item, do lado de onde a pessoa está lendo.
+  if(opts.comparativo){
+    itens+='<div style="padding:8px 2px 2px"><button type="button" onclick="abrirComparativoAprovado()" style="background:#1565c0;color:#fff;border:none;border-radius:6px;padding:7px 13px;font-size:11px;font-weight:800;cursor:pointer">🔍 Ver comparativo de equipamentos item a item</button></div>';
+  }
   return '<div class="diff-box"'+(aberto?' style="border-color:var(--R)"':'')+'>'
     +'<div class="diff-title" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px" onclick="diffToggle(\''+id+'\')" title="Clique para mostrar/ocultar as alteracoes">'
     +'<span>'+rotulo+'</span>'
