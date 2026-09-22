@@ -3733,11 +3733,61 @@ function fmtDoc(el){var v=el.value.replace(/\D/g,'');if(v.length<=11){if(v.lengt
 
 var _naoSalvo = false; // flag: orçamento tem alterações não salvas no Drive
 
+// ════════════════════════════════════════════════════════
+//  ALTERAÇÕES PENDENTES — SEMPRE ATUALIZADAS
+//  Bug relatado pelo usuário (orçamento 20266389): o histórico listou 3
+//  alterações, mas o orçamento tinha MUITO mais — painel trocado, itens
+//  novos, técnico incluído. Motivo: a lista era calculada UMA ÚNICA VEZ, no
+//  instante em que a aprovação caiu. Tudo que o consultor editasse depois
+//  disso não era registrado em lugar nenhum, porque o orçamento já não
+//  estava mais "aprovado" e o gatilho não rodava de novo.
+//  Correção: o evento de anulação guarda o RETRATO DE REFERÊNCIA (a versão
+//  aprovada) em vez de uma lista pronta, e a comparação é refeita na hora de
+//  exibir. Assim a lista mostra sempre TUDO que mudou desde a aprovação, até
+//  o momento em que o orçamento é reenviado — aí ela é congelada.
+// ════════════════════════════════════════════════════════
+
+// Congela as alterações dos eventos que ainda estão "abertos": troca o
+// retrato de referência por uma lista pronta. Chamado quando o orçamento é
+// reenviado/aprovado (a versão pendente vira história) e antes de abrir uma
+// nova pendência, pra nunca existir mais de um retrato guardado.
+function _aprovCongelarPendentes(snapAtual){
+  try{
+    if(!aprovHist||!aprovHist.length) return;
+    var snap=snapAtual||tirarSnapshot();
+    aprovHist.forEach(function(h){
+      if(h && h.base){
+        try{ h.diffs=compararSnapshots(h.base, snap); }catch(e){}
+        delete h.base; delete h.baseRotulo;
+      }
+    });
+  }catch(e){}
+}
+
+// Retrato de referência de um evento do histórico, quando ele ainda está
+// aberto — é o que permite recalcular a comparação na hora de exibir.
+function _aprovDiffsDoEvento(h, snapAtual){
+  if(!h) return {diffs:[], aberto:false, rotulo:''};
+  if(h.base && snapAtual){
+    var d=[];
+    try{ d=compararSnapshots(h.base, snapAtual); }catch(e){ d=h.diffs||[]; }
+    return {diffs:d, aberto:true, rotulo:'alteração(ões) desde a '+(h.baseRotulo||'versão aprovada')+' — ATUALIZADO ATÉ AGORA'};
+  }
+  return {diffs:h.diffs||[], aberto:false, rotulo:''};
+}
+
 function diffsRequeremAprovacao(diffs){
   if(!diffs||!diffs.length)return false;
   return diffs.some(function(d){
     var c=d.campo||'';
-    return c==='Data do Evento'||c==='Data Fim'||c.indexOf('Qtd ')===0||c.indexOf('Valor unit. ')===0||c.indexOf('Removido de ')===0||c.indexOf('Adicionado em ')===0;
+    // Tudo que muda o EQUIPAMENTO ou o valor do que foi aprovado exige nova
+    // aprovação. "Item trocado", "Dimensão" e "Diária(s)" faltavam aqui e
+    // mexem direto no preço (um painel maior custa mais m²; mais diárias
+    // multiplicam o item) — davam pra passar sem ninguém revisar.
+    return c==='Data do Evento'||c==='Data Fim'
+      ||c.indexOf('Qtd ')===0||c.indexOf('Valor unit. ')===0
+      ||c.indexOf('Removido de ')===0||c.indexOf('Adicionado em ')===0
+      ||c.indexOf('Item trocado em ')===0||c.indexOf('Dimensão ')===0||c.indexOf('Diária(s) ')===0;
   });
 }
 
@@ -3783,7 +3833,9 @@ function marcarAlterado(){
       // nessas condições já derruba pra nova análise, em vez de não fazer
       // nada (bug relatado: itens adicionados depois de aprovado sem voltar
       // pra aprovação — orçamento 20266322).
-      aprovHist.push({ico:'⚠️',acao:'Aprovação anulada por alteração',usuario:usuarioAtual?usuarioAtual.nome:'Sistema',cargo:usuarioAtual?(NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel):'',data:new Date().toLocaleString('pt-BR'),obs:'Alteração feita em orçamento já aprovado (sem snapshot de referência salvo para comparar). Necessita nova aprovação.',diffs:[]});
+      _aprovCongelarPendentes(atualSnap);
+      aprovHist.push({ico:'⚠️',acao:'Aprovação anulada por alteração',usuario:usuarioAtual?usuarioAtual.nome:'Sistema',cargo:usuarioAtual?(NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel):'',data:new Date().toLocaleString('pt-BR'),obs:'Alteração feita em orçamento já aprovado (sem retrato de referência salvo para comparar). Necessita nova aprovação.',diffs:[],
+        base:(snapshotAnterior||null), baseRotulo:'última versão enviada'});
       aprovStatus='analise';
       snapshotAnterior=atualSnap;
       renderStatusOrc();
@@ -3792,7 +3844,11 @@ function marcarAlterado(){
     }
     var diffs=compararSnapshots(snapshotAprovado,atualSnap);
     if(diffsRequeremAprovacao(diffs)){
-      aprovHist.push({ico:'⚠️',acao:'Aprovação anulada por alteração',usuario:usuarioAtual?usuarioAtual.nome:'Sistema',cargo:usuarioAtual?(NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel):'',data:new Date().toLocaleString('pt-BR'),obs:'Alteração em valores/quantidades de itens ou na data do evento. Necessita nova aprovação.',diffs:diffs});
+      _aprovCongelarPendentes(atualSnap);
+      // Guarda o RETRATO da versão aprovada, não a lista pronta: a partir
+      // daqui toda edição seguinte entra na conta automaticamente.
+      aprovHist.push({ico:'⚠️',acao:'Aprovação anulada por alteração',usuario:usuarioAtual?usuarioAtual.nome:'Sistema',cargo:usuarioAtual?(NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel):'',data:new Date().toLocaleString('pt-BR'),obs:'Alteração em valores/quantidades de itens ou na data do evento. Necessita nova aprovação.',diffs:diffs,
+        base:(snapshotAprovado||null), baseRotulo:'versão aprovada'});
       aprovStatus='analise';
       snapshotAnterior=atualSnap;
       renderStatusOrc();
@@ -4332,7 +4388,10 @@ function renderStatusOrc(){
       // Retrato do orçamento AGORA, usado pra comparar com cada valor
       // aprovado do histórico (tirado uma vez só, não por evento).
       var _snapAgora=null; try{ _snapAgora=tirarSnapshot(); }catch(eSn){}
-      for(var i=0;i<aprovHist.length;i++){var h=aprovHist[i];var diffHtml=(h.diffs&&h.diffs.length)?renderDiffNoHistorico(h.diffs,'cur-'+i):'';var valHtml=_aprovValoresDoEvento(h,i,aprovHist,_snapAgora,snapshotAprovado,'cur-');hhtml+='<div class="hist-evt"><div class="hist-ico">'+(h.ico||'•')+'</div><div class="hist-info"><div class="hist-acao">'+h.acao+' — <span style="color:var(--R)">'+_nomeUsuario(h.usuario)+'</span></div><div class="hist-det">'+h.cargo+' · '+h.data+(h.obs?' · "'+h.obs+'"':'')+'</div>'+valHtml+diffHtml+'</div></div>';}
+      for(var i=0;i<aprovHist.length;i++){var h=aprovHist[i];
+        var _dv=_aprovDiffsDoEvento(h,_snapAgora);
+        var diffHtml=(_dv.diffs&&_dv.diffs.length)?renderDiffNoHistorico(_dv.diffs,'cur-'+i,{aberto:_dv.aberto,rotulo:_dv.rotulo}):'';
+        var valHtml=_aprovValoresDoEvento(h,i,aprovHist,_snapAgora,snapshotAprovado,'cur-');hhtml+='<div class="hist-evt"><div class="hist-ico">'+(h.ico||'•')+'</div><div class="hist-info"><div class="hist-acao">'+h.acao+' — <span style="color:var(--R)">'+_nomeUsuario(h.usuario)+'</span></div><div class="hist-det">'+h.cargo+' · '+h.data+(h.obs?' · "'+h.obs+'"':'')+'</div>'+valHtml+diffHtml+'</div></div>';}
       hl.innerHTML=hhtml;
     }else{sh.style.display='none';}
   }
@@ -4370,10 +4429,21 @@ async function aprovAcao(novo){
   var obs=(document.getElementById('aprov-obs')||{}).value||'';
   var icos={analise:'📤',gerencial:'📊',diretoria:'🏆',aprovado:'✅',revisao:'🔄'};
   var atos={analise:'Enviado p/ Análise Técnica',gerencial:'Encaminhado ao Gerente',diretoria:'Encaminhado à Diretoria',aprovado:'Aprovado',revisao:'Revisão Solicitada'};
+  var _snapEnvio=tirarSnapshot();
   var diffs=[];
-  if(novo==='analise'&&snapshotAnterior){diffs=compararSnapshots(snapshotAnterior,tirarSnapshot());}
-  if(novo==='analise'){snapshotAnterior=tirarSnapshot();}
-  if(novo==='aprovado'){snapshotAprovado=tirarSnapshot();}
+  // Ao reenviar, a comparação é com a VERSÃO APROVADA (o que o cliente
+  // recebeu) sempre que ela existir — é isso que o aprovador precisa ver.
+  // Só na falta dela caímos na última versão enviada. Vale para os três
+  // destinos de reenvio: antes, só "Análise Técnica" gerava a lista, e quem
+  // recebia o orçamento na Gerência ou na Diretoria não via nada.
+  if(novo==='analise'||novo==='gerencial'||novo==='diretoria'){
+    var _base=snapshotAprovado||snapshotAnterior;
+    if(_base) diffs=compararSnapshots(_base,_snapEnvio);
+  }
+  // A pendência aberta (se houver) vira história agora, com a lista fechada.
+  _aprovCongelarPendentes(_snapEnvio);
+  if(novo==='analise'){snapshotAnterior=_snapEnvio;}
+  if(novo==='aprovado'){snapshotAprovado=_snapEnvio;}
   var _evt={ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),obs:obs,diffs:diffs};
   // Aprovação guarda os valores finais daquele momento — é o que foi enviado
   // ao cliente e serve de referência pra comparar depois.
@@ -4425,10 +4495,21 @@ async function aprovAcaoInline(novo){
   var obs=(document.getElementById('aprov-inline-obs')||{}).value||'';
   var icos={analise:'📤',gerencial:'📊',diretoria:'🏆',aprovado:'✅',revisao:'🔄'};
   var atos={analise:'Enviado p/ Análise Técnica',gerencial:'Encaminhado ao Gerente',diretoria:'Encaminhado à Diretoria',aprovado:'Aprovado',revisao:'Revisão Solicitada'};
+  var _snapEnvio=tirarSnapshot();
   var diffs=[];
-  if(novo==='analise'&&snapshotAnterior){diffs=compararSnapshots(snapshotAnterior,tirarSnapshot());}
-  if(novo==='analise'){snapshotAnterior=tirarSnapshot();}
-  if(novo==='aprovado'){snapshotAprovado=tirarSnapshot();}
+  // Ao reenviar, a comparação é com a VERSÃO APROVADA (o que o cliente
+  // recebeu) sempre que ela existir — é isso que o aprovador precisa ver.
+  // Só na falta dela caímos na última versão enviada. Vale para os três
+  // destinos de reenvio: antes, só "Análise Técnica" gerava a lista, e quem
+  // recebia o orçamento na Gerência ou na Diretoria não via nada.
+  if(novo==='analise'||novo==='gerencial'||novo==='diretoria'){
+    var _base=snapshotAprovado||snapshotAnterior;
+    if(_base) diffs=compararSnapshots(_base,_snapEnvio);
+  }
+  // A pendência aberta (se houver) vira história agora, com a lista fechada.
+  _aprovCongelarPendentes(_snapEnvio);
+  if(novo==='analise'){snapshotAnterior=_snapEnvio;}
+  if(novo==='aprovado'){snapshotAprovado=_snapEnvio;}
   var _evt={ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),obs:obs,diffs:diffs};
   // Aprovação guarda os valores finais daquele momento — é o que foi enviado
   // ao cliente e serve de referência pra comparar depois.
@@ -4769,7 +4850,10 @@ function buildOrcCard(orc,idx){
     histHtml='<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:8px">📜 Histórico</div>';
     // Na lista de Aprovações o "hoje" é o próprio orçamento do card.
     var _snapCard=null; try{ _snapCard=_tirarSnapshotDeDados(orc.dados||{}); }catch(eSc){}
-    for(var i=0;i<orc.hist.length;i++){var h=orc.hist[i];var diffHtml=(h.diffs&&h.diffs.length)?renderDiffNoHistorico(h.diffs,'card'+idx+'-'+i):'';var valHtml=_aprovValoresDoEvento(h,i,orc.hist,_snapCard,(orc.dados&&orc.dados.snapshotAprovado)||null,'card'+idx+'-');histHtml+='<div class="hist-evt"><div class="hist-ico">'+(h.ico||'•')+'</div><div class="hist-info"><div class="hist-acao">'+h.acao+' — <span style="color:var(--R)">'+_nomeUsuario(h.usuario)+'</span></div><div class="hist-det">'+h.cargo+' · '+h.data+(h.obs?' · "'+h.obs+'"':'')+'</div>'+valHtml+diffHtml+'</div></div>';}
+    for(var i=0;i<orc.hist.length;i++){var h=orc.hist[i];
+      var _dvC=_aprovDiffsDoEvento(h,_snapCard);
+      var diffHtml=(_dvC.diffs&&_dvC.diffs.length)?renderDiffNoHistorico(_dvC.diffs,'card'+idx+'-'+i,{aberto:_dvC.aberto,rotulo:_dvC.rotulo}):'';
+      var valHtml=_aprovValoresDoEvento(h,i,orc.hist,_snapCard,(orc.dados&&orc.dados.snapshotAprovado)||null,'card'+idx+'-');histHtml+='<div class="hist-evt"><div class="hist-ico">'+(h.ico||'•')+'</div><div class="hist-info"><div class="hist-acao">'+h.acao+' — <span style="color:var(--R)">'+_nomeUsuario(h.usuario)+'</span></div><div class="hist-det">'+h.cargo+' · '+h.data+(h.obs?' · "'+h.obs+'"':'')+'</div>'+valHtml+diffHtml+'</div></div>';}
   }
   else{histHtml='<div style="color:var(--text-muted);font-size:11px;margin-bottom:8px">Sem histórico.</div>';}
   var infoAgd=orc.st!=='aprovado'?'<b>Aguardando:</b> '+(aguardando[orc.st]||'—')+(minhaVez?' <b style="color:#ff9800">← SUA VEZ</b>':'')+'<br>':'';
@@ -4811,8 +4895,15 @@ function _tirarSnapshotDeDados(dadosObj){
   function rowsDe(s){
     var secSt=st[s];
     if(!secSt||!secSt.rows) return [];
+    var nomeAmb={};
+    (secSt.ambientes||[]).forEach(function(a){ nomeAmb[a.id]=a.nome||a.id||''; });
     var out=[];
-    Object.keys(secSt.rows).forEach(function(aid){(secSt.rows[aid]||[]).forEach(function(r){out.push(r);});});
+    Object.keys(secSt.rows).forEach(function(aid){
+      (secSt.rows[aid]||[]).forEach(function(r){
+        // Anota o ambiente sem alterar o objeto original do orçamento.
+        out.push(Object.assign({}, r, {_amb:(nomeAmb[aid]||aid||'')}));
+      });
+    });
     return out;
   }
   function baseSec(s){return rowsDe(s).reduce(function(t,r){return t+rowTot(r);},0);}
@@ -4847,7 +4938,7 @@ function _tirarSnapshotDeDados(dadosObj){
   var itens={};
   SECS6.forEach(function(s){
     itens[s]=rowsDe(s).map(function(r){
-      return {id:r.id,name:r.name,qty:r.qty,val:r.val,diaria:r.diaria,painel:!!r.painel,palco:!!r.palco,larg:r.larg,alt:r.alt,prof:r.prof,carp:r.carp,carpT:r.carpT,elObj:r.elObj?{v:r.elObj.v}:null};
+      return {id:r.id,name:r.name,qty:r.qty,val:r.val,diaria:r.diaria,painel:!!r.painel,palco:!!r.palco,larg:r.larg,alt:r.alt,prof:r.prof,carp:r.carp,carpT:r.carpT,carpC:r.carpC,elObj:r.elObj?{v:r.elObj.v,l:r.elObj.l}:null,amb:r._amb||''};
     });
   });
   return {
@@ -4855,6 +4946,7 @@ function _tirarSnapshotDeDados(dadosObj){
     dia:form['f-dia']||'',diasFim:form['f-dia-fim']||'',publico:form['f-pub']||'',
     descPct:form['desc-pct']||'0',descRs:form['desc-rs']||'0',arredRs:form['arred-rs']||'0',
     valLiq:form['val-liq']||'',pgto:form['f-pgto']||'',
+    obs:form['f-obs']||'',svinc:form['f-svinc']||'',
     totalBruto:bruto,totalFinal:total,totaisSec:totais,itens:itens
   };
 }
@@ -9515,8 +9607,12 @@ function tirarSnapshot(){
           id:r.id,name:r.name,qty:r.qty,val:r.val,diaria:r.diaria,
           painel:!!r.painel,palco:!!r.palco,
           larg:r.larg,alt:r.alt,prof:r.prof,
-          carp:r.carp,carpT:r.carpT,
-          elObj:r.elObj?{v:r.elObj.v}:null
+          carp:r.carp,carpT:r.carpT,carpC:r.carpC,
+          elObj:r.elObj?{v:r.elObj.v,l:r.elObj.l}:null,
+          // AMBIENTE do item: sem isso, mover um equipamento do "Salão
+          // Leopoldina" para o "Salão Imperatriz" não aparecia em lugar
+          // nenhum no histórico.
+          amb:(a.nome||a.id||'')
         });
       });
     });
@@ -9534,6 +9630,10 @@ function tirarSnapshot(){
     arredRs:form['arred-rs']||'0',
     valLiq:form['val-liq']||'',
     pgto:form['f-pgto']||'',
+    // Textos que o CLIENTE lê no PDF — mudaram de importância quando as
+    // Observações Gerais passaram a sair no orçamento.
+    obs:form['f-obs']||'',
+    svinc:form['f-svinc']||'',
     totalBruto:bruto,
     totalFinal:total,
     totaisSec:totais,
@@ -9654,7 +9754,9 @@ function compararSnapshots(ant,atual){
   var LABELS={
     cliente:'Cliente',local:'Local',tipo:'Tipo de Evento',dia:'Data do Evento',
     diasFim:'Data Fim',publico:'Público Estimado',descPct:'Desconto %',
-    descRs:'Desconto R$',arredRs:'Arredondamento (R$)',pgto:'Forma de Pagamento'
+    descRs:'Desconto R$',arredRs:'Arredondamento (R$)',pgto:'Forma de Pagamento',
+    // Textos que vão no PDF do cliente — mudar um deles muda a proposta.
+    obs:'Observações Gerais (PDF do cliente)',svinc:'Serviços inclusos (PDF)'
   };
   // OBS: "Valor Líquido" (campo do formulário) saiu daqui de propósito — ele é,
   // na prática, o mesmo número de "Valor Total do Orçamento" (abaixo, sempre
@@ -9743,14 +9845,22 @@ function compararSnapshots(ant,atual){
     // Itens removidos — mostra qty+nome E o valor (R$) que saiu do
     // orçamento, sempre antes/depois (pedido do usuário: itens excluídos
     // sempre com valor visível, não só o nome).
+    // Quando o orçamento tem mais de um ambiente (ex.: "Salão Leopoldina" e
+    // "Salão Imperatriz"), o nome do ambiente entra na linha — sem isso não
+    // dá pra saber ONDE o item entrou ou saiu.
+    var ambs={};
+    itAnt.concat(itAtual).forEach(function(r){ if(r.amb) ambs[r.amb]=1; });
+    var varios=Object.keys(ambs).length>1;
+    function comAmb(r){ return (varios&&r.amb)?(' ['+r.amb+']'):''; }
+
     itAnt.forEach(function(r){
       var found=acharCorrespondente(r,itAtual);
-      if(!found)diffs.push({campo:'Removido de '+SEC_NOMES[s],de:r.qty+'x '+r.name+' — '+fmt(rowTot(r)),para:'— (R$ 0,00)',destaque:'reducao'});
+      if(!found)diffs.push({campo:'Removido de '+SEC_NOMES[s],de:r.qty+'x '+r.name+comAmb(r)+' — '+fmt(rowTot(r)),para:'— (R$ 0,00)',destaque:'reducao'});
     });
     // Itens adicionados — mesma lógica, com o valor do item novo.
     itAtual.forEach(function(r){
       var found=acharCorrespondente(r,itAnt);
-      if(!found)diffs.push({campo:'Adicionado em '+SEC_NOMES[s],de:'— (R$ 0,00)',para:r.qty+'x '+r.name+' — '+fmt(rowTot(r)),destaque:'aumento'});
+      if(!found)diffs.push({campo:'Adicionado em '+SEC_NOMES[s],de:'— (R$ 0,00)',para:r.qty+'x '+r.name+comAmb(r)+' — '+fmt(rowTot(r)),destaque:'aumento'});
     });
     // Qtd, valor unit., diária ou dimensão (painel/palco) alterados — e o
     // TOTAL DO ITEM antes/depois, pra fechar a conta: cada linha individual
@@ -9765,6 +9875,18 @@ function compararSnapshots(ant,atual){
       var ant2=acharCorrespondente(r,itAnt);
       if(ant2){
         var mudouAlgo=false;
+        // TROCA DE EQUIPAMENTO na mesma linha (ex.: "Painel Ph2.5 Indoor"
+        // virou "Painel Ph3.9 Outdoor"). Antes isso não gerava linha nenhuma
+        // no histórico: o item continuava o mesmo pro sistema, só o nome
+        // mudava — e era impossível saber que o equipamento tinha trocado.
+        if(String(ant2.name||'')!==String(r.name||'')){
+          diffs.push({campo:'Item trocado em '+SEC_NOMES[s],de:String(ant2.name||'—'),para:String(r.name||'—')});
+          mudouAlgo=true;
+        }
+        if(varios && String(ant2.amb||'')!==String(r.amb||'') && (ant2.amb||r.amb)){
+          diffs.push({campo:'Ambiente de '+r.name,de:String(ant2.amb||'—'),para:String(r.amb||'—')});
+          mudouAlgo=true;
+        }
         if(ant2.qty!==r.qty){diffs.push({campo:'Qtd '+r.name,de:String(ant2.qty),para:String(r.qty),destaque:(parseFloat(r.qty)||0)>(parseFloat(ant2.qty)||0)?'aumento':'reducao'});mudouAlgo=true;}
         if(Math.abs((ant2.val||0)-(r.val||0))>0.01){diffs.push({campo:'Valor unit. '+r.name,de:fmt(ant2.val||0),para:fmt(r.val||0),destaque:(r.val||0)>(ant2.val||0)?'aumento':'reducao'});mudouAlgo=true;}
         var diariaAnt=parseFloat(ant2.diaria)||1,diariaNova=parseFloat(r.diaria)||1;
@@ -9777,6 +9899,19 @@ function compararSnapshots(ant,atual){
           diffs.push({campo:'Dimensão '+r.name,de:(ant2.larg||0)+'m x '+(ant2.prof||0)+'m',para:(r.larg||0)+'m x '+(r.prof||0)+'m'});
           mudouAlgo=true;
         }
+        // Elevação e carpete do palco entram no valor e não apareciam.
+        if(r.palco||r.painel){
+          var elA=(ant2.elObj&&(ant2.elObj.l||ant2.elObj.v))||'', elB=(r.elObj&&(r.elObj.l||r.elObj.v))||'';
+          if(String(elA)!==String(elB)){
+            diffs.push({campo:'Elevação '+r.name,de:String(elA||'—'),para:String(elB||'—')});
+            mudouAlgo=true;
+          }
+        }
+        if(r.palco && (!!ant2.carp!==!!r.carp || String(ant2.carpT||'')!==String(r.carpT||'') || String(ant2.carpC||'')!==String(r.carpC||''))){
+          function carpTxt(x){ return x.carp?('sim'+(x.carpT?(' - '+x.carpT):'')+(x.carpC?(' '+x.carpC):'')):'não'; }
+          diffs.push({campo:'Carpete '+r.name,de:carpTxt(ant2),para:carpTxt(r)});
+          mudouAlgo=true;
+        }
         // Total do item (qty×val×diária, ou fórmula de painel/palco) antes
         // e depois — aparece sempre que ALGUM campo acima mudou (pedido do
         // usuário: itens alterados sempre com valor antes/depois, mesmo nos
@@ -9786,7 +9921,9 @@ function compararSnapshots(ant,atual){
         if(mudouAlgo){
           var totAnt=rowTot(ant2),totNovo=rowTot(r);
           var totItemMudou=Math.abs(totAnt-totNovo)>0.01;
-          diffs.push({campo:'Total do item '+r.name,de:fmt(totAnt),para:fmt(totNovo),destaque:totItemMudou?(totNovo>totAnt?'aumento':'reducao'):undefined,bold:true});
+          // Quando o total do item não mudou (ex.: só mudou de ambiente), a
+          // linha entra como REFERÊNCIA — não infla a contagem de alterações.
+          diffs.push({campo:'Total do item '+r.name,de:fmt(totAnt),para:fmt(totNovo),destaque:totItemMudou?(totNovo>totAnt?'aumento':'reducao'):undefined,bold:true,contexto:!totItemMudou});
         }
       }
     });
@@ -9794,7 +9931,8 @@ function compararSnapshots(ant,atual){
   return diffs;
 }
 
-function renderDiffNoHistorico(diffs,idx){
+function renderDiffNoHistorico(diffs,idx,opts){
+  opts=opts||{};
   if(!diffs||!diffs.length)return'';
   var id='diff-box-'+(idx||0);
   // Itens marcados "contexto" (ex.: Valor Total que não mudou nesta versão)
@@ -9823,12 +9961,19 @@ function renderDiffNoHistorico(diffs,idx){
     // distinguir antes/depois sem precisar de outra cor.
     itens+='<div class="diff-item" style="'+bold+'"><span class="diff-campo">'+d.campo+':</span> <span style="color:var(--R);opacity:.75;text-decoration:line-through">'+d.de+'</span> &rarr; <span style="color:var(--R);font-weight:800">'+d.para+'</span></div>';
   });
-  return '<div class="diff-box">'
-    +'<div class="diff-title" style="cursor:pointer;display:flex;justify-content:space-between" onclick="diffToggle(\''+id+'\')" title="Clique para ver as alteracoes">'
-    +'<span>&#128221; '+n+' alteracao(oes) nesta versao &mdash; clique para ver</span>'
-    +'<span id="'+id+'-ic">&#9660;</span>'
+  // A alteração PENDENTE (ainda não reenviada) abre expandida: é a que o
+  // gerente precisa avaliar agora, não faz sentido esconder atrás de um
+  // clique.
+  var aberto=!!opts.aberto;
+  var rotulo=opts.rotulo
+    ? ('&#128221; '+n+' '+opts.rotulo)
+    : ('&#128221; '+n+' alteracao(oes) nesta versao &mdash; clique para ver');
+  return '<div class="diff-box"'+(aberto?' style="border-color:var(--R)"':'')+'>'
+    +'<div class="diff-title" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px" onclick="diffToggle(\''+id+'\')" title="Clique para mostrar/ocultar as alteracoes">'
+    +'<span>'+rotulo+'</span>'
+    +'<span id="'+id+'-ic">'+(aberto?'&#9650;':'&#9660;')+'</span>'
     +'</div>'
-    +'<div id="'+id+'" style="display:none">'+itens+'</div>'
+    +'<div id="'+id+'"'+(aberto?'':' style="display:none"')+'>'+itens+'</div>'
     +'</div>';
 }
 
