@@ -1491,7 +1491,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
   <div class="modal-box">
     <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <div><h2 style="margin-bottom:2px">📋 Aprovações</h2><p class="sub" style="margin:0">Gerencie os orçamentos em andamento</p></div>
-      <button class="btn btn-o btn-sm" onclick="document.getElementById('aprov-ov').classList.remove('open');abrirHome()" title="Fechar">✕</button>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('aprov-ov').classList.remove('open');voltarDoModulo()" title="Fechar">✕</button>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <div class="modal-tabs" style="flex:1">
@@ -1502,7 +1502,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <button class="btn btn-o btn-sm" id="btn-atualizar-aprov" onclick="atualizarAprovacoes(this)" title="Atualizar lista de pendências" style="white-space:nowrap">🔄 Atualizar</button>
     </div>
     <div id="aprov-lista"><div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">Clique em uma aba para carregar</div></div>
-    <div style="margin-top:16px;text-align:right"><button class="btn btn-o btn-sm" onclick="document.getElementById('aprov-ov').classList.remove('open');abrirHome()">Fechar</button></div>
+    <div style="margin-top:16px;text-align:right"><button class="btn btn-o btn-sm" onclick="document.getElementById('aprov-ov').classList.remove('open');voltarDoModulo()">Fechar</button></div>
   </div>
 </div>
 
@@ -1510,7 +1510,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
   <div class="modal-box" style="max-width:780px">
     <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div><h2 style="margin-bottom:2px">⚙️ Administração</h2><p class="sub" style="margin:0">Usuários, Permissões e Acessos</p></div>
-      <button class="btn btn-o btn-sm" onclick="document.getElementById('adm-ov').classList.remove('open');abrirHome()">✕</button>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('adm-ov').classList.remove('open');voltarDoModulo()">✕</button>
     </div>
     <div class="rel-tabs" style="margin-bottom:12px">
       <div class="rel-tab active" onclick="admAba('usuarios')">👤 Usuários</div>
@@ -1732,7 +1732,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div><h2 style="margin-bottom:2px">👥 Cadastro de Clientes</h2><p class="sub" style="margin:0">Clientes cadastrados (PF/PJ)</p></div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-g btn-sm" onclick="clienteNovo()">+ Novo Cliente</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('clientes-ov').classList.remove('open');if(!_clienteBuscaModoSelecao)abrirHome();">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('clientes-ov').classList.remove('open');if(!_clienteBuscaModoSelecao)voltarDoModulo();">✕</button>
       </div>
     </div>
     <input id="clientes-busca" type="text" placeholder="🔍 Buscar por nome, CNPJ/CPF ou e-mail..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text);font-size:12px;margin:12px 0 10px" oninput="clientesRenderLista(this.value)">
@@ -1814,7 +1814,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div><h2 style="margin-bottom:2px">🎪 Cadastro de Eventos</h2><p class="sub" style="margin:0">Eventos recorrentes — reaproveite tipo e endereço em orçamentos futuros</p></div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-g btn-sm" onclick="eventoNovo()">+ Novo Evento</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('eventos-ov').classList.remove('open');if(!_eventoBuscaModoSelecao)abrirHome();">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('eventos-ov').classList.remove('open');if(!_eventoBuscaModoSelecao)voltarDoModulo();">✕</button>
       </div>
     </div>
     <div id="eventos-status" style="display:none;padding:9px 12px;border-radius:6px;font-size:11.5px;font-weight:700;margin:10px 0"></div>
@@ -1873,7 +1873,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <button class="btn btn-g btn-sm" onclick="produtoNovo()">+ Novo Produto</button>
         <button class="btn btn-o btn-sm" onclick="scannerAbrir()">🔎 Bipar Equipamento</button>
         <button class="btn btn-o btn-sm" onclick="abrirFaltantes()">⚠️ Itens Faltantes</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('produtos-ov').classList.remove('open');if(!_produtoBuscaModoSelecao)abrirHome();">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('produtos-ov').classList.remove('open');if(!_produtoBuscaModoSelecao)voltarDoModulo();">✕</button>
       </div>
     </div>
     <div id="produtos-status" style="display:none;padding:9px 12px;border-radius:6px;font-size:11.5px;font-weight:700;margin:10px 0"></div>
@@ -1995,7 +1995,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div><h2 style="margin-bottom:2px">⚠️ Itens Faltantes no Estoque</h2><p class="sub" style="margin:0">Equipamentos onde a demanda dos orçamentos ativos excede o cadastrado — considere locação com terceiros</p></div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-o btn-sm" onclick="faltantesRenderizar()">🔄 Atualizar</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('faltantes-ov').classList.remove('open');abrirHome()">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('faltantes-ov').classList.remove('open');voltarDoModulo()">✕</button>
       </div>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;padding:10px;background:var(--surface-2);border-radius:6px">
@@ -2050,7 +2050,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       </div>
       <div style="display:flex;gap:7px;align-items:center">
         <button class="btn btn-r btn-sm" onclick="dashFinAtualizar()">🔄 Atualizar</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('dashfin-ov').classList.remove('open');abrirHome()">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('dashfin-ov').classList.remove('open');voltarDoModulo()">✕</button>
       </div>
     </div>
     <div class="dash-filtros">
@@ -2084,7 +2084,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div style="display:flex;gap:10px;align-items:center">
         <span id="metas-save-status" class="metas-save-status-txt" style="font-size:10px;font-weight:700"></span>
         <button class="btn btn-r btn-sm" onclick="metasRenderizar()">🔄 Atualizar</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('metas-ov').classList.remove('open');abrirHome()">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('metas-ov').classList.remove('open');voltarDoModulo()">✕</button>
       </div>
     </div>
 
@@ -2178,7 +2178,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-r btn-sm" onclick="resultadosAtualizar()" title="Rebusca os dados do Drive e do Firestore antes de recalcular — sempre com números atuais">🔄 Atualizar</button>
         <button class="btn btn-o btn-sm" onclick="resultadosExportarPDF()" title="Gera um PDF pronto pra enviar ou apresentar na reunião">📄 Exportar PDF</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('resultados-ov').classList.remove('open');abrirHome()">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('resultados-ov').classList.remove('open');voltarDoModulo()">✕</button>
       </div>
     </div>
 
@@ -2237,7 +2237,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <button class="btn btn-b btn-sm" id="conc-btn-reenviar" onclick="concReenviarFaltantes()" title="Recria/corrige no Google Agenda os eventos que estão faltando, foram apagados na agenda, estão com a data divergente ou com a tarja de liberação errada">🔁 Reenviar Faltantes</button>
         <button class="btn btn-o btn-sm" id="conc-btn-limpar" onclick="concLimparAgendaOrfaos()" title="Procura eventos que continuam no Google Agenda de orçamentos que NÃO estão mais em Venda Ganha (perdidos, standby, em negociação) e remove">🧹 Limpar Agenda</button>
         <button class="btn btn-o btn-sm" onclick="concExportarExcel()" title="Exporta esta listagem para Excel (.csv)">📊 Exportar Excel</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('conc-ov').classList.remove('open');abrirHome()">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('conc-ov').classList.remove('open');voltarDoModulo()">✕</button>
       </div>
     </div>
 
@@ -2284,7 +2284,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <button class="btn btn-r btn-sm" onclick="logAtualizar()" title="Rebusca os orçamentos do Drive antes de recalcular">🔄 Atualizar</button>
         <button class="btn btn-o btn-sm" onclick="logExportarExcel()" title="Exporta a lista atualmente filtrada em CSV/Excel">📊 Excel</button>
         <button class="btn btn-o btn-sm" onclick="logExportarPDF()" title="Exporta a lista atualmente filtrada em PDF">📄 PDF</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('log-ov').classList.remove('open');abrirHome()">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('log-ov').classList.remove('open');voltarDoModulo()">✕</button>
       </div>
     </div>
 
@@ -2383,7 +2383,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       </div>
       <div style="display:flex;gap:7px;align-items:center">
         <button class="btn btn-r btn-sm" onclick="dashElabAtualizar()">🔄 Atualizar</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('dash-elab-ov').classList.remove('open');abrirHome()">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('dash-elab-ov').classList.remove('open');voltarDoModulo()">✕</button>
       </div>
     </div>
     <div class="dash-filtros">
@@ -2414,7 +2414,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <button class="btn btn-r btn-sm" onclick="dashAtualizar(true)">🔄 Atualizar</button>
         <button class="btn btn-o btn-sm" onclick="dashExportarExcel()" title="Exportar os dados filtrados (Resultados por Etapa + Taxa de Conversão por Consultor) em Excel">📊 Exportar Excel</button>
         <button class="btn btn-o btn-sm" onclick="dashExportarPDF()" title="Gera um PDF com a mesma aparência desta tela (KPIs, tabelas e gráficos), pronto pra apresentação mensal">📄 Exportar PDF</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('dash-ov').classList.remove('open');abrirHome()">✕</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('dash-ov').classList.remove('open');voltarDoModulo()">✕</button>
       </div>
     </div>
 
@@ -2486,7 +2486,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <h2 style="margin-bottom:2px">📋 Ordens de Serviço</h2>
         <p class="sub" id="os-mod-sub" style="margin:0">Filtre por data do evento e imprima as OS</p>
       </div>
-      <button class="btn btn-o btn-sm" onclick="document.getElementById('os-mod-ov').classList.remove('open');abrirHome()">✕</button>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('os-mod-ov').classList.remove('open');voltarDoModulo()">✕</button>
     </div>
 
     <!-- Filtros -->
@@ -2544,7 +2544,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div style="display:flex;gap:8px;align-items:center">
         <input type="file" id="historico-rd-file" accept=".csv" style="display:none" onchange="historicoRDImportarArquivo(this)">
         <button id="btn-importar-historico-rd" class="btn btn-o btn-sm" onclick="historicoRDAbrirImportacao()" title="Importa o histórico de negociações exportado do RD Station (CSV) para enriquecer estes relatórios">📥 Importar Histórico (RD)</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('rel-ov').classList.remove('open');abrirHome()">✕ Fechar</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('rel-ov').classList.remove('open');voltarDoModulo()">✕ Fechar</button>
       </div>
     </div>
     <p class="sub" id="rel-sub">Carregando orçamentos do Drive...</p>
@@ -2679,7 +2679,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div style="display:flex;gap:7px;flex-wrap:wrap">
         <button class="btn btn-sm" onclick="relExportarExcel()" style="background:#1d6f42;color:#fff">📗 Exportar Excel</button>
         <button class="btn btn-sm" onclick="relExportarPDF()" style="background:var(--R);color:#fff">📄 Exportar PDF</button>
-        <button class="btn btn-o btn-sm" onclick="document.getElementById('rel-ov').classList.remove('open');abrirHome()">✕ Fechar</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('rel-ov').classList.remove('open');voltarDoModulo()">✕ Fechar</button>
       </div>
     </div>
 
@@ -3705,7 +3705,78 @@ var driveIdAtual=null;
 // em vez de sempre cair no Menu principal. É uma função sem argumentos que
 // reabre aquela tela; null = não há origem específica, cai no Menu.
 var _origemOrc=null;
+
+// ── "Voltar" de dentro de um módulo ───────────────────────────────────────
+// Abrir a Agenda (ou a OS, a Logística, um relatório) DE DENTRO de um
+// orçamento que está sendo preenchido e, ao fechar, cair no Menu é péssimo:
+// a pessoa perde o lugar e precisa procurar o orçamento de novo. Então, na
+// hora em que uma tela de módulo abre, guardamos de onde ela veio — da Home
+// ou do orçamento — e o fechamento devolve para lá, na mesma rolagem.
+// _moduloVoltaOrc = null (veio da Home) | {scroll:Number} (veio do orçamento).
+var _moduloVoltaOrc=null;
+
+function _orcNaTela(){
+  try{ return !!(driveIdAtual || gv('f-num') || gv('f-cliente')); }catch(e){ return false; }
+}
+
+// Decide a origem no momento em que a PRIMEIRA tela abre. Um módulo aberto
+// por cima de outro não mexe nisso — a origem continua sendo a do primeiro.
+function _registrarOrigemOv(){
+  if(document.querySelector('.ov.open')) return;
+  var homeEl=document.getElementById('home-ov');
+  var homeVisivel=homeEl && !homeEl.classList.contains('hidden');
+  _moduloVoltaOrc=(!homeVisivel && _orcNaTela())
+    ? {scroll:(window.scrollY||window.pageYOffset||0)}
+    : null;
+}
+
+// Abre uma tela registrando a origem. Substitui o antigo
+// getElementById(id).classList.add('open') espalhado pelo sistema.
+function _abrirOv(id){
+  var el=document.getElementById(id);
+  if(!el) return null;
+  _registrarOrigemOv();
+  el.classList.add('open');
+  return el;
+}
+
+// Usado por todos os "✕ / Fechar" das telas principais no lugar de abrirHome().
+function voltarDoModulo(){
+  var volta=_moduloVoltaOrc;
+  if(volta && _orcNaTela()){
+    _moduloVoltaOrc=null;
+    document.querySelectorAll('.ov.open').forEach(function(o){ o.classList.remove('open'); });
+    var h=document.getElementById('home-ov');
+    if(h) h.classList.add('hidden');
+    if(typeof _atualizarBtnVoltarFloat==='function') _atualizarBtnVoltarFloat();
+    // A trava de rolagem do fundo já devolve a posição quando a última tela
+    // fecha, mas ela roda num requestAnimationFrame e nem sempre chegou a
+    // travar. Isto é a rede de segurança, aplicada depois dela.
+    try{
+      var _y=volta.scroll||0;
+      requestAnimationFrame(function(){ requestAnimationFrame(function(){
+        if(Math.abs((window.scrollY||0)-_y)>4) window.scrollTo(0,_y);
+      }); });
+    }catch(e){}
+    return;
+  }
+  abrirHome();
+}
+
 function voltarTelaAnterior(){
+  // Com uma tela de módulo por cima, o "voltar" é dela: fecha e devolve para
+  // onde foi aberta (antes ele chamava a Home por cima, deixando o módulo
+  // aberto atrás e tirando a pessoa do orçamento que estava preenchendo).
+  var abertos=document.querySelectorAll('.ov.open');
+  if(abertos.length){
+    abertos[abertos.length-1].classList.remove('open');
+    if(document.querySelector('.ov.open')){
+      if(typeof _atualizarBtnVoltarFloat==='function') _atualizarBtnVoltarFloat();
+      return;
+    }
+    voltarDoModulo();
+    return;
+  }
   var fn=_origemOrc;
   _origemOrc=null;
   if(typeof fn==='function'){
@@ -4769,7 +4840,7 @@ async function aprovAcaoInline(novo){
   }
 }
 
-async function abrirAdm(){mostrarCarregando('⏳ Carregando administração...');try{await permCarregar();renderAdmList();renderAdmExclusoes();document.getElementById('adm-ov').classList.add('open');admAba('usuarios');}finally{esconderCarregando();}}
+async function abrirAdm(){mostrarCarregando('⏳ Carregando administração...');try{await permCarregar();renderAdmList();renderAdmExclusoes();_abrirOv('adm-ov');admAba('usuarios');}finally{esconderCarregando();}}
 
 function toggleNegociacaoBox(){
   var b=document.getElementById('negociacao-box');
@@ -4793,7 +4864,7 @@ async function enviarNegociacao(){
   }
 }
 function abrirAprovacoes(){
-  document.getElementById('aprov-ov').classList.add('open');
+  _abrirOv('aprov-ov');
   mostrarCarregando('⏳ Carregando aprovações...');
   // Varredura de solicitações de exclusão roda em segundo plano (não deve travar o indicador de carregamento)
   carregarSolExclusaoDrive().then(function(){
@@ -7320,6 +7391,7 @@ function _atualizarBtnClonar(){
 // ════════════════════════════════════════════════════════
 
 function abrirHome(){
+  _moduloVoltaOrc=null;
   document.getElementById('home-ov').classList.remove('hidden');
   _renderizarHome();
   _atualizarBtnVoltarFloat();
@@ -8137,15 +8209,17 @@ function avisosRenderizar(){
 function homeAbrirAprovacoes(){
   if(_moduloBloqueado('aprovacoes')) return;
   homeFecharBusca();
-  fecharHome();
+  // Abrir ANTES de fechar a Home: é assim que _registrarOrigemOv() enxerga
+  // que a tela veio da Home (e não de um orçamento aberto por trás).
   abrirAprovacoes();
+  fecharHome();
 }
 
 function homeAbrirElab(){
   if(_moduloBloqueado('dash-elab')) return;
   homeFecharBusca();
-  fecharHome();
   abrirDashElab();
+  fecharHome();
 }
 
 // ── Salvar no Drive e voltar para home ───────────────────────────
@@ -8642,7 +8716,7 @@ function abrirPDF(modo){
   if(modo==='prev'){
     document.getElementById('pdf-content').innerHTML=html;
     document.getElementById('pdf-title').textContent=label;
-    document.getElementById('pdf-ov').classList.add('open');
+    _abrirOv('pdf-ov');
     document.getElementById('pdf-ov').scrollTop=0;
   }else{
     var w=window.open('','_blank');if(!w){alert('⚠️ Pop-up bloqueado!');return;}
@@ -13414,7 +13488,7 @@ function fkAbrirEtapa(colKey){
   _fkEtapaAtual = colKey;
   _fkEtapaPendentes = {};
   var busca=document.getElementById('fk-etapa-busca'); if(busca) busca.value='';
-  document.getElementById('fk-etapa-ov').classList.add('open');
+  _abrirOv('fk-etapa-ov');
   fkEtapaRenderizar();
 }
 
@@ -14863,7 +14937,7 @@ function abrirFinanceiro(){
   document.getElementById('fin-num-venda').value=finNumVenda||'';
   finRenderParcelas();
   finAtualizarResumo();
-  document.getElementById('fin-ov').classList.add('open');
+  _abrirOv('fin-ov');
 }
 
 function fecharFinanceiro(){
@@ -15535,7 +15609,7 @@ function relAba(aba){
 
 async function abrirRelatorios(){
   if(_moduloBloqueado('rel')) return;
-  document.getElementById('rel-ov').classList.add('open');
+  _abrirOv('rel-ov');
   var btnImportarRD=document.getElementById('btn-importar-historico-rd');
   if(btnImportarRD){
     var podeImportar=usuarioAtual && ['adm','gerente','diretor'].includes(usuarioAtual.nivel);
@@ -16439,7 +16513,7 @@ var _dashDados = [];
 
 async function abrirDashboard(){
   if(_moduloBloqueado('dash-com')) return;
-  document.getElementById('dash-ov').classList.add('open');
+  _abrirOv('dash-ov');
   // Período padrão: início do mês vigente até hoje
   var hoje = new Date();
   var inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -16543,7 +16617,7 @@ function dashValOrc(o){
 }
 
 async function abrirDashElab(){
-  document.getElementById('dash-elab-ov').classList.add('open');
+  _abrirOv('dash-elab-ov');
   // Preencher filtro com mês vigente (01/mm/yyyy até hoje)
   var hoje2=new Date();
   var anoM=hoje2.getFullYear();
@@ -18059,7 +18133,7 @@ function _apresSlideHTML(s){
 // ════════════════════════════════════════════════════════
 async function abrirApresentacao(){
   if(_moduloBloqueado('dash-apres')) return;
-  document.getElementById('apres-ov').classList.add('open');
+  _abrirOv('apres-ov');
   var hoje=new Date();
   var selA=document.getElementById('apres-ano'), selM=document.getElementById('apres-mes');
   if(!selA.options.length){
@@ -18075,7 +18149,7 @@ async function abrirApresentacao(){
 
 function fecharApresentacao(){
   document.getElementById('apres-ov').classList.remove('open');
-  abrirHome();
+  voltarDoModulo();
 }
 
 async function apresAtualizar(forcar){
@@ -19030,7 +19104,7 @@ function metasAba(aba){
 
 async function abrirMetas(){
   if(_moduloBloqueado('dash-metas')) return;
-  document.getElementById('metas-ov').classList.add('open');
+  _abrirOv('metas-ov');
   document.getElementById('meta-ano').value=new Date().getFullYear();
   document.getElementById('metas-sub').textContent='Carregando dados...';
   await metasCarregar();
@@ -19477,7 +19551,7 @@ function _metasMontarTabelaTicket(ano,ganhosTodos){
 
 async function abrirResultados(){
   if(_moduloBloqueado('dash-resultados')) return;
-  document.getElementById('resultados-ov').classList.add('open');
+  _abrirOv('resultados-ov');
   document.getElementById('resultados-sub').textContent='Carregando dados...';
   await metasCarregar();
   await metasCarregarConsultoresNomes();
@@ -19870,7 +19944,7 @@ async function resultadosExportarPDF(){
 
 async function abrirConciliacao(){
   if(_moduloBloqueado('dash-conc')) return;
-  document.getElementById('conc-ov').classList.add('open');
+  _abrirOv('conc-ov');
   document.getElementById('conc-sub').textContent='Carregando dados...';
   document.getElementById('conc-status').textContent='';
   await metasCarregarConsultoresNomes();
@@ -20328,7 +20402,7 @@ var _logData=''; // ISO YYYY-MM-DD — dia de referência do período mostrado
 
 async function abrirLogistica(){
   if(_moduloBloqueado('dash-log')) return;
-  document.getElementById('log-ov').classList.add('open');
+  _abrirOv('log-ov');
   document.getElementById('log-sub').textContent='Carregando dados...';
   await metasCarregarConsultoresNomes();
   await dashAtualizar(true);
@@ -20762,7 +20836,7 @@ function logAbrirPreviewOS(driveId){
     document.getElementById('log-os-ov').classList.remove('open');
     dashDrillAbrirOrc(driveId, f['f-cliente']||'');
   };
-  document.getElementById('log-os-ov').classList.add('open');
+  _abrirOv('log-os-ov');
 }
 
 // Pedido do usuário: "quando clicar no botão + na visualização abra um
@@ -20777,7 +20851,7 @@ function logAbrirDiaPopup(iso){
   } else {
     corpo.innerHTML=doDia.map(function(it){ return _logCardDia(it,iso); }).join('');
   }
-  document.getElementById('log-dia-pop-ov').classList.add('open');
+  _abrirOv('log-dia-pop-ov');
 }
 
 // ── Exportação — reaproveita o mesmo padrão de CSV (BOM+;) já usado em
@@ -21746,7 +21820,7 @@ async function abrirClientes(){
   _clienteBuscaModoSelecao=false;
   document.getElementById('clientes-busca').value='';
   document.getElementById('clientes-lista').innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">⏳ Carregando clientes...</div>';
-  document.getElementById('clientes-ov').classList.add('open');
+  _abrirOv('clientes-ov');
   mostrarCarregando('⏳ Carregando clientes...');
   try{
     await clientesCarregarStorage();
@@ -21822,7 +21896,7 @@ function clienteNovo(prefill){
   }
   document.getElementById('cliente-form-titulo').textContent='👤 Novo Cliente';
   document.getElementById('cf-btn-excluir').style.display='none';
-  document.getElementById('cliente-form-ov').classList.add('open');
+  _abrirOv('cliente-form-ov');
 }
 
 function clienteEditar(idx){
@@ -21847,7 +21921,7 @@ function clienteEditar(idx){
   cfAtualizarLabels();
   document.getElementById('cliente-form-titulo').textContent='✏️ Editar Cliente';
   document.getElementById('cf-btn-excluir').style.display='inline-block';
-  document.getElementById('cliente-form-ov').classList.add('open');
+  _abrirOv('cliente-form-ov');
 }
 
 async function cfBuscaCNPJ(){
@@ -22098,7 +22172,7 @@ function clienteHistoricoAbrir(){
       +'<div style="font-weight:700;color:#66bb6a;font-size:13px">'+fmt(o.valor)+'</div>'
       +'</div>';
   }).join('');
-  document.getElementById('cliente-hist-ov').classList.add('open');
+  _abrirOv('cliente-hist-ov');
 }
 
 function clienteHistoricoAbrirOrcamento(id,nome){
@@ -22150,7 +22224,7 @@ function clienteAbrirBuscaModal(){
   _clienteBuscaModoSelecao=true;
   document.getElementById('clientes-busca').value='';
   clientesRenderLista('');
-  document.getElementById('clientes-ov').classList.add('open');
+  _abrirOv('clientes-ov');
 }
 
 function clienteSelecionarParaOrcamento(idx){
@@ -22226,7 +22300,7 @@ async function abrirEventos(){
   _eventoBuscaModoSelecao=false;
   document.getElementById('eventos-busca').value='';
   document.getElementById('eventos-lista').innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">⏳ Carregando eventos...</div>';
-  document.getElementById('eventos-ov').classList.add('open');
+  _abrirOv('eventos-ov');
   _eventosStatus('');
   mostrarCarregando('⏳ Carregando eventos...');
   try{
@@ -22294,7 +22368,7 @@ async function eventoHistoricoAbrir(idx){
   var box=document.getElementById('evento-hist-lista');
   if(sub) sub.textContent='⏳ Buscando orçamentos de "'+e.nome+'"...';
   if(box) box.innerHTML='';
-  document.getElementById('evento-hist-ov').classList.add('open');
+  _abrirOv('evento-hist-ov');
   try{
     var snap=await fbDb.collection('orcamentos').where('form.f-nome-evento','==', e.nome).get();
     var lista=[];
@@ -22362,7 +22436,7 @@ function eventoNovo(prefill){
   }
   document.getElementById('evento-form-titulo').textContent='🎪 Novo Evento';
   document.getElementById('ef-btn-excluir').style.display='none';
-  document.getElementById('evento-form-ov').classList.add('open');
+  _abrirOv('evento-form-ov');
 }
 
 function eventoEditar(idx){
@@ -22379,7 +22453,7 @@ function eventoEditar(idx){
   document.getElementById('ef-obs').value=e.obs||'';
   document.getElementById('evento-form-titulo').textContent='✏️ Editar Evento';
   document.getElementById('ef-btn-excluir').style.display='inline-block';
-  document.getElementById('evento-form-ov').classList.add('open');
+  _abrirOv('evento-form-ov');
 }
 
 async function eventoSalvar(){
@@ -22496,7 +22570,7 @@ function eventoAbrirBuscaModal(){
   var textoAtual=(document.getElementById('f-nome-evento')||{}).value||'';
   document.getElementById('eventos-busca').value=textoAtual;
   eventosRenderLista(textoAtual);
-  document.getElementById('eventos-ov').classList.add('open');
+  _abrirOv('eventos-ov');
 }
 
 function eventoSelecionarParaOrcamento(idx){
@@ -23180,7 +23254,7 @@ async function abrirProdutos(){
   _produtoBuscaModoSelecao=false;
   document.getElementById('produtos-busca').value='';
   document.getElementById('produtos-lista').innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">⏳ Carregando produtos...</div>';
-  document.getElementById('produtos-ov').classList.add('open');
+  _abrirOv('produtos-ov');
   _produtosStatus('');
   mostrarCarregando('⏳ Carregando produtos...');
   try{
@@ -23297,7 +23371,7 @@ function produtoNovo(){
   _produtoLimparForm();
   document.getElementById('produto-form-titulo').textContent='📦 Novo Produto';
   document.getElementById('pf-btn-excluir').style.display='none';
-  document.getElementById('produto-form-ov').classList.add('open');
+  _abrirOv('produto-form-ov');
 }
 
 function produtoEditar(idx){
@@ -23328,7 +23402,7 @@ function produtoEditar(idx){
   _produtoAtualizarPreviewFoto(p.fotoThumb||'');
   document.getElementById('produto-form-titulo').textContent='✏️ Editar Produto';
   document.getElementById('pf-btn-excluir').style.display='inline-block';
-  document.getElementById('produto-form-ov').classList.add('open');
+  _abrirOv('produto-form-ov');
 }
 
 async function produtoSalvar(){
@@ -23870,7 +23944,7 @@ function estoqueListaFaltantes(filtro){
 
 async function abrirFaltantes(){
   if(_moduloBloqueado('dash-faltantes')) return;
-  document.getElementById('faltantes-ov').classList.add('open');
+  _abrirOv('faltantes-ov');
   if(typeof mostrarCarregando==='function') mostrarCarregando('⏳ Carregando itens faltantes...');
   try{
     if(typeof estoqueCompromissosCarregarStorage==='function') await estoqueCompromissosCarregarStorage();
@@ -24085,7 +24159,7 @@ function produtoAbrirUnidades(idx){
   document.getElementById('pu-sub').textContent=subTxt;
   var st=document.getElementById('pu-status'); if(st) st.style.display='none';
   produtoUnidadesRenderLista();
-  document.getElementById('produto-unidades-ov').classList.add('open');
+  _abrirOv('produto-unidades-ov');
 }
 
 function _puStatus(msg,tipo){
@@ -24174,7 +24248,7 @@ var _scannerStream=null;
 var _scannerLoopAtivo=false;
 
 function scannerAbrir(){
-  document.getElementById('scanner-ov').classList.add('open');
+  _abrirOv('scanner-ov');
   document.getElementById('scanner-resultado').innerHTML='';
   setTimeout(function(){var inp=document.getElementById('scanner-input');if(inp)inp.focus();},150);
 }
@@ -24402,7 +24476,7 @@ async function transferAbrirLote(){
   if(radioAberto) radioAberto.checked = true;
   await _transferPopularConsultoresSelect('transfer-de');
   await _transferPopularConsultoresSelect('transfer-para');
-  document.getElementById('transfer-ov').classList.add('open');
+  _abrirOv('transfer-ov');
 }
 
 async function transferAbrirIndividualAtual(){
@@ -24421,7 +24495,7 @@ async function transferAbrirIndividual(tipo, id){
   document.getElementById('transfer-lista').innerHTML = '';
   await _transferPopularConsultoresSelect('transfer-para');
   var item = tipo==='lead' ? _transferCarregarItemLead(id) : await _transferCarregarItemOrcamento(id);
-  document.getElementById('transfer-ov').classList.add('open');
+  _abrirOv('transfer-ov');
   if(!item){
     if(statusEl) statusEl.textContent = '⚠️ Item não encontrado.';
     _transferItens = [];
@@ -24986,6 +25060,7 @@ var ORC_ORIGENS=[
 // Financeiro…), que continua ocupando a tela inteira — e dá a impressão de
 // que o botão "Abrir Orçamento" não fez nada.
 function _fecharTudoParaAbrirOrc(){
+  _moduloVoltaOrc=null;
   document.querySelectorAll('.ov.open').forEach(function(o){ o.classList.remove('open'); });
   document.querySelectorAll('.pov.open').forEach(function(o){ o.classList.remove('open'); });
   if(typeof fecharFunilHome==='function'){ try{ fecharFunilHome(); }catch(e){} }
@@ -25028,7 +25103,7 @@ var _osModFiltrados = [];
 
 async function abrirModuloOS(){
   if(_moduloBloqueado('mod-os')) return;
-  document.getElementById('os-mod-ov').classList.add('open');
+  _abrirOv('os-mod-ov');
   // Preencher semana atual como padrão
   osModAtalho('semana');
   // Carregar dados se necessário (reutiliza cache do funil/dash)
@@ -25395,7 +25470,7 @@ function osModGerarOS(lista){
 
 async function abrirDashFin(){
   if(_moduloBloqueado('dash-fin')) return;
-  document.getElementById('dashfin-ov').classList.add('open');
+  _abrirOv('dashfin-ov');
   var hoje = new Date();
   var inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
   document.getElementById('dashfin-de').value = inicioMes.toISOString().split('T')[0];
@@ -26184,12 +26259,12 @@ document.getElementById('l-user').addEventListener('keydown',function(e){if(e.ke
 // fechar — igual ao botão "✕"/"Fechar" de cada uma. Sub-modais (formulários,
 // históricos, etc., abertos DENTRO de uma tela principal) apenas se fecham,
 // permanecendo na tela que os abriu.
-var _OV_TELAS_PRINCIPAIS={'adm-ov':1,'aprov-ov':1,'faltantes-ov':1,'dashfin-ov':1,'metas-ov':1,'dash-elab-ov':1,'dash-ov':1,'os-mod-ov':1,'rel-ov':1};
+var _OV_TELAS_PRINCIPAIS={'adm-ov':1,'aprov-ov':1,'faltantes-ov':1,'dashfin-ov':1,'metas-ov':1,'dash-elab-ov':1,'dash-ov':1,'os-mod-ov':1,'rel-ov':1,'log-ov':1,'conc-ov':1,'resultados-ov':1,'apres-ov':1};
 function _fecharOvVoltarHome(id){
-  if(id==='clientes-ov'){ if(!_clienteBuscaModoSelecao&&typeof abrirHome==='function') abrirHome(); return; }
-  if(id==='produtos-ov'){ if(!_produtoBuscaModoSelecao&&typeof abrirHome==='function') abrirHome(); return; }
-  if(id==='eventos-ov'){ if(!_eventoBuscaModoSelecao&&typeof abrirHome==='function') abrirHome(); return; }
-  if(_OV_TELAS_PRINCIPAIS[id]&&typeof abrirHome==='function') abrirHome();
+  if(id==='clientes-ov'){ if(!_clienteBuscaModoSelecao) voltarDoModulo(); return; }
+  if(id==='produtos-ov'){ if(!_produtoBuscaModoSelecao) voltarDoModulo(); return; }
+  if(id==='eventos-ov'){ if(!_eventoBuscaModoSelecao) voltarDoModulo(); return; }
+  if(_OV_TELAS_PRINCIPAIS[id]) voltarDoModulo();
 }
 document.querySelectorAll('.ov').forEach(function(ov){
   ov.addEventListener('click',function(e){
