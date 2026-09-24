@@ -10857,6 +10857,16 @@ function salvarComercial(){
   var pendEl=document.getElementById('com-pendente');
   if(pendEl)pendEl.style.display='none';
 
+  // Negócio decidido: encerra os lembretes automáticos de follow-up que
+  // ainda estavam pendentes — ninguém precisa ser cobrado por uma proposta
+  // já ganha ou perdida.
+  if(FUNIL_ETAPAS_ENCERRA_FOLLOWUP[comercialStatus]){
+    followupData='';   // some a data de "próximo follow-up" junto
+    if(driveIdAtual && typeof _fkEncerrarFollowupsAutomaticos==='function'){
+      _fkEncerrarFollowupsAutomaticos(driveIdAtual, comercialStatus);
+    }
+  }
+
   // Abrir financeiro se venda ganha
   if(comercialStatus==='ganha') setTimeout(function(){abrirFinanceiro();},300);
 
@@ -13858,6 +13868,8 @@ async function _fkMudarEtapaRapido(driveId, novaEtapa){
       if(novaEtapa==='perdida') delete dados.googleAgenda.preReservaEventId;
     }
     dados.comercialStatus = novaEtapa;
+    // Negócio decidido: a data do próximo follow-up deixa de fazer sentido.
+    if(FUNIL_ETAPAS_ENCERRA_FOLLOWUP[novaEtapa]) dados.followupData = '';
     dados.comercialHist = (dados.comercialHist||[]).concat([{
       status: novaEtapa,
       motivo: '',
@@ -13931,6 +13943,43 @@ var FUNIL_AUTO_TAREFA = {
   negociacao: { msg:'Dar continuidade à negociação em andamento.' }
 };
 
+// ── Negócio decidido: a cadência para aqui ──────────────────────────────
+// Marcar Venda Ganha ou Venda Perdida não cancelava os lembretes de
+// follow-up que já estavam agendados — o consultor continuava sendo cobrado
+// pra "fazer follow-up da proposta enviada" de uma venda fechada dias antes.
+// Agora, ao entrar nessas duas etapas, os lembretes AUTOMÁTICOS pendentes do
+// orçamento são encerrados na hora, com o motivo registrado na própria
+// tarefa. Tarefas agendadas à mão não são tocadas: depois de uma Venda Ganha
+// costuma haver compromisso real marcado (contrato, reunião de produção).
+var FUNIL_ETAPAS_ENCERRA_FOLLOWUP = { ganha:1, perdida:1 };
+
+async function _fkEncerrarFollowupsAutomaticos(driveId, etapa){
+  if(!driveId || !FUNIL_ETAPAS_ENCERRA_FOLLOWUP[etapa]) return 0;
+  if(typeof TAREFAS==='undefined' || !TAREFAS) return 0;
+  var alvo=TAREFAS.filter(function(t){
+    return t && t.vinculoTipo==='orcamento' && t.vinculoId===driveId
+        && t.autoEtapa && t.status!=='concluida';
+  });
+  if(!alvo.length) return 0;
+  var rotulo=(typeof FUNIL_SI!=='undefined' && FUNIL_SI[etapa] && FUNIL_SI[etapa].label) || etapa;
+  var quando=new Date().toLocaleString('pt-BR');
+  for(var i=0;i<alvo.length;i++){
+    var t=alvo[i];
+    t.status='concluida';
+    t.concluidoEm=quando;
+    t.concluidoPor='Sistema (automação)';
+    t.encerradoPorEtapa=etapa;
+    if(String(t.obs||'').indexOf('Encerrado automaticamente')<0){
+      t.obs=(t.obs||'')+' [Encerrado automaticamente: negócio marcado como '+rotulo+'.]';
+    }
+    try{ await _tarefaSalvarFirestore(t); }
+    catch(e){ console.warn('_fkEncerrarFollowupsAutomaticos:', e&&e.message); }
+  }
+  try{ _tarefasAtualizarTelasAbertas('orcamento', driveId); }catch(e){}
+  try{ if(typeof atualizarBadgeTarefas==='function') atualizarBadgeTarefas(); }catch(e){}
+  return alvo.length;
+}
+
 // Cria o lembrete automático do "passo" indicado (0=1º, 1=2º, 2=3º...) da
 // cadência, com prazo em FUNIL_CADENCIA_DIAS[passo] dias a partir de hoje.
 // Compartilhada entre o gatilho de mudança de etapa (passo 0, sempre) e o
@@ -13944,6 +13993,10 @@ async function _fkCriarPassoCadencia(driveId, etapa, passo){
   });
   if(jaExiste) return;
   var orc = (_funilCache||[]).find(function(o){ return o.driveId===driveId; });
+  // Trava de segurança: se o negócio já foi fechado (ganho ou perdido) entre
+  // o disparo e este ponto, não nasce lembrete nenhum.
+  var _csAgora=(orc && orc.dados && orc.dados.comercialStatus) || '';
+  if(FUNIL_ETAPAS_ENCERRA_FOLLOWUP[_csAgora]) return;
   var f = (orc&&orc.form) || {};
   var dataPrazo = new Date();
   dataPrazo.setDate(dataPrazo.getDate() + FUNIL_CADENCIA_DIAS[passo]);
@@ -13981,6 +14034,11 @@ async function _fkCriarPassoCadencia(driveId, etapa, passo){
 // Entrypoint original (mudança de etapa via drag no kanban) — sempre cria o
 // 1º passo da cadência.
 async function _fkAutoCriarTarefaEtapa(driveId, novaEtapa){
+  // Venda Ganha / Venda Perdida: em vez de criar, encerra o que estava aberto.
+  if(FUNIL_ETAPAS_ENCERRA_FOLLOWUP[novaEtapa]){
+    await _fkEncerrarFollowupsAutomaticos(driveId, novaEtapa);
+    return;
+  }
   await _fkCriarPassoCadencia(driveId, novaEtapa, 0);
 }
 
@@ -14009,6 +14067,12 @@ async function verificarCadenciaFollowup(lista){
     var orc=lista[i];
     if(!orc||!orc.driveId) continue;
     var cs=(orc.dados&&orc.dados.comercialStatus)||'';
+    // Negócio decidido: encerra lembretes que tenham sobrado (pega também os
+    // orçamentos fechados ANTES desta correção existir).
+    if(FUNIL_ETAPAS_ENCERRA_FOLLOWUP[cs]){
+      await _fkEncerrarFollowupsAutomaticos(orc.driveId, cs);
+      continue;
+    }
     if(!FUNIL_AUTO_TAREFA[cs]) continue;
     var temPendente=(TAREFAS||[]).some(function(t){
       return t.vinculoTipo==='orcamento' && t.vinculoId===orc.driveId && t.autoEtapa===cs && t.status!=='concluida';
@@ -14374,6 +14438,7 @@ async function fkMudarEtapaComSalvamento(etapa, motivo, obs){
       if(etapa==='perdida') delete dados.googleAgenda.preReservaEventId;
     }
     dados.comercialStatus = etapa;
+    if(FUNIL_ETAPAS_ENCERRA_FOLLOWUP[etapa]) dados.followupData = '';
     dados.comercialHist = (dados.comercialHist||[]).concat([{
       status: etapa,
       motivo: motivo || '',
