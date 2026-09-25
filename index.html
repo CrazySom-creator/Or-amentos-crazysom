@@ -3472,6 +3472,56 @@ var SCRIPT_URL='https://script.google.com/macros/s/AKfycbwV251xtPwAUjSn-CJM88-iy
     return {ok:true,dados:dados,nome:nome.replace('.json','')};
   }
 
+  // ── Duas coisas derrubam uma gravação no Firestore sem aviso nenhum ───
+  // 1) Qualquer campo com valor `undefined` — o Firestore recusa o documento
+  //    inteiro ("Unsupported field value: undefined"), e a única pista que
+  //    sobrava era um aviso no console que ninguém vê.
+  // 2) O limite de ~1 MB POR DOCUMENTO. Um orçamento grande com muitas
+  //    aprovações no histórico chega lá: cada aprovação guarda a lista de
+  //    itens e a lista de alterações daquele momento.
+  // As duas viravam "falha ao salvar" genérica. Agora: os undefined são
+  // removidos antes de gravar, e o documento é enxugado (detalhes das
+  // aprovações MAIS ANTIGAS) até caber — sem nunca perder valores, itens do
+  // orçamento ou o histórico em si.
+  var DOC_LIMITE_BYTES = 1048576;
+  var DOC_ALVO_BYTES   =  900*1024;
+  var HIST_MANTER_DETALHE = 5;   // últimas aprovações preservadas por inteiro
+
+  function _semIndefinidos(v){
+    if(v===undefined) return null;
+    if(v===null||typeof v!=='object') return v;
+    if(Array.isArray(v)) return v.map(_semIndefinidos);
+    var out={};
+    Object.keys(v).forEach(function(k){
+      if(v[k]===undefined) return;      // campo some (não vira null à toa)
+      out[k]=_semIndefinidos(v[k]);
+    });
+    return out;
+  }
+
+  function _tamanhoDoc(o){
+    try{ return new Blob([JSON.stringify(o)]).size; }
+    catch(e){ try{ return JSON.stringify(o).length; }catch(e2){ return 0; } }
+  }
+
+  // Tira o peso das aprovações antigas: a lista item a item e a lista de
+  // alterações. Os VALORES aprovados (bruto, total, por seção) ficam — é o
+  // que o histórico mostra na linha principal.
+  function _enxugarHistorico(doc){
+    var hist=doc&&doc.aprovHist;
+    if(!Array.isArray(hist)||hist.length<=HIST_MANTER_DETALHE) return false;
+    var mexeu=false;
+    for(var i=0;i<hist.length-HIST_MANTER_DETALHE;i++){
+      var h=hist[i];
+      if(!h||h._compactado) continue;
+      if(h.valores&&h.valores.itensDet){ delete h.valores.itensDet; mexeu=true; }
+      if(Array.isArray(h.diffs)&&h.diffs.length){ h.diffs=[]; h._diffsRemovidos=true; mexeu=true; }
+      if(mexeu) h._compactado=true;
+      if(_tamanhoDoc(doc)<=DOC_ALVO_BYTES) return true;
+    }
+    return mexeu;
+  }
+
   async function _shimSave(body){
     var id=body.id||_orcId();
     var num=body.numero||'SN';
@@ -3485,9 +3535,24 @@ var SCRIPT_URL='https://script.google.com/macros/s/AKfycbwV251xtPwAUjSn-CJM88-iy
     // um segmento vazio no meio do nome.
     var evt=(body.dados&&body.dados.form&&body.dados.form['f-nome-evento'])||'';
     var nome=evt?(num+' - '+cli+' - '+evt+' - '+data+'.json'):(num+' - '+cli+' - '+data+'.json');
-    var doc=Object.assign({},body.dados,{_driveId:id,_driveNome:nome,_driveModificado:_fmtDataBr(new Date())});
+    var doc=_semIndefinidos(Object.assign({},body.dados,{_driveId:id,_driveNome:nome,_driveModificado:_fmtDataBr(new Date())}));
+
+    var tam=_tamanhoDoc(doc);
+    var enxugou=false;
+    if(tam>DOC_ALVO_BYTES){
+      enxugou=_enxugarHistorico(doc);
+      tam=_tamanhoDoc(doc);
+      if(enxugou) console.warn('[Salvar] Documento grande ('+Math.round(tam/1024)+' KB) — detalhes das aprovações antigas foram compactados para caber.');
+    }
+    if(tam>DOC_LIMITE_BYTES){
+      var kb=Math.round(tam/1024);
+      throw new Error('O orçamento ficou grande demais para gravar ('+kb+' KB; o limite é 1024 KB por orçamento). '
+        +'Normalmente isso acontece quando há muitos itens e muitas aprovações no histórico. '
+        +'Salve uma cópia local (botão "Salvar Local") e fale com o suporte antes de continuar — nada foi perdido.');
+    }
+
     await fbDb.collection('orcamentos').doc(id).set(doc);
-    return {ok:true,id:id,nome:nome};
+    return {ok:true,id:id,nome:nome,bytes:tam,compactado:enxugou};
   }
 
   async function _shimDelete(id){
@@ -6319,6 +6384,7 @@ var AUTOSAVE_INATIVIDADE_MS = 15000;   // grava 15s depois da última digitaçã
 var AUTOSAVE_MAXIMO_MS      = 90000;   // e nunca passa de 90s editando sem gravar
 var _autoSaveTimer=null, _autoSaveRodando=false;
 var _autoSaveUltimoOk=0, _autoSavePrimeiraAlteracao=0, _autoSaveEstado='';
+var _autoSaveUltimoErro='', _autoSaveErroEm=0, _autoSaveTentativas=0;
 var _autoSaveLigado=true;
 
 // A tela do orçamento é a que fica POR BAIXO de tudo: só está de fato em uso
@@ -6385,13 +6451,20 @@ async function _autoSaveExecutar(){
       _autoSaveUltimoOk=Date.now();
       _autoSavePrimeiraAlteracao=0;
       _autoSaveEstado='ok';
+      _autoSaveUltimoErro=''; _autoSaveTentativas=0;
       _rascunhoLimpar();
     }else{
       _autoSaveEstado='';        // não salvou (faltou algo) — segue só a cópia local
     }
   }catch(e){
     _autoSaveEstado='erro';
-    console.warn('[Auto-salvamento]', e&&e.message);
+    // O motivo REAL (vem do Firestore) precisa chegar em quem está usando o
+    // sistema: antes ele morria num console.warn e a pessoa via só um aviso
+    // vermelho genérico, sem saber o que fazer.
+    _autoSaveUltimoErro=(e&&e.message)?String(e.message):'erro desconhecido';
+    _autoSaveErroEm=Date.now();
+    _autoSaveTentativas++;
+    console.warn('[Auto-salvamento]', _autoSaveUltimoErro);
   }finally{
     _autoSaveRodando=false;
     _autoSaveChip();
@@ -6401,13 +6474,52 @@ async function _autoSaveExecutar(){
   }
 }
 
+// Abre o motivo da falha em linguagem de gente e oferece tentar de novo na
+// hora. A cópia local continua guardada, então nada se perde enquanto isso.
+function autoSaveMostrarErro(){
+  var msg=_autoSaveUltimoErro||'motivo não identificado';
+  var quando=_autoSaveErroEm?new Date(_autoSaveErroEm).toLocaleTimeString('pt-BR'):'';
+  var dica='';
+  var m=msg.toLowerCase();
+  if(m.indexOf('permission')>=0||m.indexOf('insufficient')>=0||m.indexOf('permiss')>=0)
+    dica='Parece falta de permissão no banco. Sua sessão pode ter expirado — saia e entre no sistema de novo.';
+  else if(m.indexOf('grande demais')>=0||m.indexOf('longer than')>=0||m.indexOf('bytes')>=0)
+    dica='O orçamento passou do tamanho máximo que o banco aceita por documento.';
+  else if(m.indexOf('undefined')>=0||m.indexOf('unsupported field')>=0)
+    dica='Algum campo do orçamento ficou com valor inválido. Avise o suporte com o número deste orçamento.';
+  else if(m.indexOf('offline')>=0||m.indexOf('network')>=0||m.indexOf('unavailable')>=0||m.indexOf('failed to fetch')>=0)
+    dica='Parece queda de conexão. Confira a internet — assim que voltar, clique em 💾 Salvar.';
+  else if(m.indexOf('quota')>=0||m.indexOf('resource-exhausted')>=0)
+    dica='O banco recusou por limite de uso. Tente de novo em alguns minutos.';
+
+  var txt='⚠️ O salvamento automático falhou'+(quando?' (última tentativa às '+quando+')':'')+'.\n\n'
+    +'MOTIVO:\n'+msg+'\n\n'
+    +(dica?dica+'\n\n':'')
+    +'✅ Seu trabalho NÃO foi perdido: existe uma cópia local guardada neste navegador.\n\n'
+    +'Tentar salvar agora?';
+  if(confirm(txt)){
+    salvarNoDrive({mostrarStatus:true}).catch(function(e){
+      alert('⚠️ Ainda não foi possível salvar.\n\nMOTIVO:\n'+((e&&e.message)||'desconhecido')
+        +'\n\nUse "💾 Salvar Local" para guardar um arquivo no computador e não perder o trabalho.');
+    });
+  }
+}
+
 function _autoSaveChip(){
   var el=document.getElementById('autosave-chip');
   if(!el) return;
   if(!usuarioAtual || (typeof _orcVisivel==='function' && !_orcVisivel())){ el.textContent=''; el.className='autosave-chip'; return; }
   var num=(gv('f-num')||'').trim();
   if(_autoSaveEstado==='salvando'){ el.textContent='💾 salvando…'; el.className='autosave-chip as-salvando'; return; }
-  if(_autoSaveEstado==='erro'){ el.textContent='⚠️ falha ao salvar — clique em 💾 Salvar'; el.className='autosave-chip as-erro'; return; }
+  if(_autoSaveEstado==='erro'){
+    el.textContent='⚠️ falha ao salvar — clique aqui para ver o motivo';
+    el.className='autosave-chip as-erro';
+    el.style.cursor='pointer';
+    el.title=_autoSaveUltimoErro||'';
+    el.onclick=autoSaveMostrarErro;
+    return;
+  }
+  el.style.cursor=''; el.onclick=null; el.title='';
   if(_naoSalvo){
     el.textContent=_autoSavePodeSalvar()?'✏️ alterações não salvas — salvando sozinho':'✏️ alterações não salvas (cópia local guardada)';
     el.className='autosave-chip as-pend'; return;
@@ -6731,6 +6843,7 @@ async function _executarSave(num,cli,dt,opts){
     if(_numReservado && String(_numReservado)===String(num)) _liberarNumeroReservado();
     _rascunhoLimpar();
     _autoSaveUltimoOk=Date.now(); _autoSavePrimeiraAlteracao=0;
+    _autoSaveUltimoErro=''; _autoSaveTentativas=0;
     if(_autoSaveEstado!=='salvando') _autoSaveEstado='ok';
     if(typeof _autoSaveChip==='function') _autoSaveChip();
     var _pgtoR=_pgtoCondicaoDefinida();
@@ -7191,7 +7304,20 @@ async function verificarLockEEditar(){
 }
 
 async function driveSalvar(){
-  await salvarNoDrive({mostrarStatus:true});
+  // O clique em "💾 Salvar" precisa terminar com uma resposta clara. Antes,
+  // se a gravação falhasse, a promessa era rejeitada sem ninguém tratar: a
+  // única pista era um texto vermelho que sumia em 5 segundos.
+  try{
+    await salvarNoDrive({mostrarStatus:true});
+  }catch(e){
+    _autoSaveUltimoErro=(e&&e.message)?String(e.message):'erro desconhecido';
+    _autoSaveErroEm=Date.now();
+    _autoSaveEstado='erro';
+    if(typeof _autoSaveChip==='function') _autoSaveChip();
+    alert('⚠️ NÃO FOI POSSÍVEL SALVAR NO SERVIDOR\n\nMOTIVO:\n'+_autoSaveUltimoErro
+      +'\n\n✅ Seu trabalho continua na tela e há uma cópia local guardada neste navegador.'
+      +'\n\nSe o erro insistir, use "💾 Salvar Local" para gerar um arquivo no computador antes de fechar a página.');
+  }
 }
 
 async function driveCarregar(id,nome){
@@ -10502,6 +10628,13 @@ function _aprovItensCompactos(snap){
   return out;
 }
 
+// Marca no bloco de valores que os detalhes deste evento foram compactados
+// (ver _enxugarHistorico no gravador) — o histórico então explica o porquê.
+function _aprovMarcarCompactado(h){
+  if(h && h._compactado && h.valores && !h.valores.itensDet) h.valores._compactado=true;
+  return h;
+}
+
 function _aprovValoresDe(snap, impostoDe){
   if(!snap) return null;
   var itens={};
@@ -10602,6 +10735,7 @@ function _aprovValoresHTML(v, idx, atualSnap){
   }
 
   var linhas='';
+  var _compactado=!!(v && v._compactado);
   var _secsCaixa=COMP_SECS.slice();
   Object.keys(v.secoes||{}).concat(atual?Object.keys(atual.secoes||{}):[]).forEach(function(k){
     if(ehCatExtra(k) && _secsCaixa.indexOf(k)<0) _secsCaixa.push(k);
@@ -10634,6 +10768,11 @@ function _aprovValoresHTML(v, idx, atualSnap){
       +'</div>'
       +'<div id="'+idSec+'" style="display:none">'+_aprovDetalheSecaoHTML(sec, detAnt, detAtual)+'</div>';
   });
+  if(_compactado){
+    linhas+='<div class="diff-item" style="color:var(--text-muted);font-size:10px">'
+      +'🗜️ O detalhe item a item desta aprovação foi compactado para o orçamento caber no limite de tamanho do banco. '
+      +'Os valores acima continuam exatos.</div>';
+  }
   linhas+=linha('Subtotal bruto', v.bruto, atual?atual.bruto:null, false);
   var temDesc=(parseFloat(v.descRs)||0)>0||(parseFloat(v.descPct)||0)>0;
   if(temDesc){
@@ -10669,6 +10808,7 @@ function _aprovValoresHTML(v, idx, atualSnap){
 // ficarem sem informação nenhuma.
 function _aprovValoresDoEvento(h, idx, lista, atualSnap, snapFallback, prefixo){
   if(!h || !/aprovad/i.test(h.acao||'')) return '';
+  _aprovMarcarCompactado(h);
   var v=h.valores;
   if(!v && snapFallback){
     var ultimaAprov=-1;
