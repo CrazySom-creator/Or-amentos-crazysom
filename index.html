@@ -78,6 +78,8 @@ textarea{resize:vertical;min-height:44px;}
 .amb-bar{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:8px;padding:8px;background:var(--surface-2);border-radius:5px;border:1px solid var(--border);}
 .abtn{padding:4px 10px;background:var(--surface-3);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;color:var(--text-dim);}
 .abtn.active{background:var(--R);color:#fff;border-color:var(--R);}
+.tbtn-addcat{background:transparent;border:1px dashed var(--border-strong);color:var(--text-dim);font-weight:700;}
+.tbtn-addcat:hover{border-color:var(--R);color:var(--R);}
 .abtn-add{padding:4px 10px;background:#e8f4fd;border:1px dashed #90caf9;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;color:#1565c0;}
 .abtn-del{padding:2px 6px;background:#e53935;border:none;border-radius:3px;cursor:pointer;font-size:10px;color:#fff;margin-left:2px;}
 table.it{width:100%;border-collapse:collapse;font-size:11px;margin-top:5px;}
@@ -2987,6 +2989,8 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     <div class="ti"><label>Serviço</label><span class="tval" id="r-servico">R$ 0,00</span></div>
     <div class="ti"><label>Logística</label><span class="tval" id="r-logistica">R$ 0,00</span></div>
   </div>
+  <!-- Categorias criadas neste orçamento (preenchido por _catsSincronizarResumo) -->
+  <div class="tg3" id="resumo-cats" style="display:none"></div>
   <div class="sep">
     <div id="subtot-geral-ambientes" style="display:none;background:var(--surface-3);border:1px solid var(--border);border-radius:6px;padding:11px 14px;margin-bottom:10px"></div>
     <div class="tg3">
@@ -3341,9 +3345,81 @@ function _mostrarErroConexao(detalhe){
 </script>
 <script>
 var IMP=0.135;
-var SECS=['som','video','luz','estrutura','servico','logistica','extra'];
-var SEC_LBL={som:'Sonorização',video:'Vídeo',luz:'Iluminação',estrutura:'Estrutura',servico:'Serviço',logistica:'Logística',extra:'Custos Extra'};
-var SEC_ICO={som:'🔊',video:'📺',luz:'💡',estrutura:'🏗️',servico:'⚙️',logistica:'🚚',extra:'💰'};
+// ── Seções do orçamento ────────────────────────────────────────────────
+// As 7 fixas + as CATEGORIAS criadas pelo usuário dentro de cada orçamento
+// (pedido: um "+ Categoria" ao lado de Custos Extra, com nome editável, do
+// mesmo jeito que o "+ Ambiente"). Uma categoria criada aqui é uma seção de
+// venda como qualquer outra: entra no total, na base do BV, no PDF do
+// cliente, na OS e no contrato. Ela vive NO ORÇAMENTO (vai junto no
+// documento salvo), não num cadastro global — cada orçamento cria as que
+// precisa.
+var SECS_BASE=['som','video','luz','estrutura','servico','logistica','extra'];
+var SEC_LBL_BASE={som:'Sonorização',video:'Vídeo',luz:'Iluminação',estrutura:'Estrutura',servico:'Serviço',logistica:'Logística',extra:'Custos Extra'};
+var SEC_ICO_BASE={som:'🔊',video:'📺',luz:'💡',estrutura:'🏗️',servico:'⚙️',logistica:'🚚',extra:'💰'};
+
+// Seções que somam no total do cliente e na base de BV (as fixas).
+var SECS_VENDA_BASE=['som','video','luz','estrutura','servico','logistica'];
+// Seções que saem item a item no PDF/OS/contrato (Logística sai como linha
+// única, Custos Extra não sai).
+var SECS_PDF_BASE=['som','video','luz','estrutura','servico'];
+
+var SECS=SECS_BASE.slice();
+var SEC_LBL=Object.assign({},SEC_LBL_BASE);
+var SEC_ICO=Object.assign({},SEC_ICO_BASE);
+
+var CAT_ICO_PADRAO='🏷️';
+var catExtras=[];   // [{id:'cat_...', nome:'Decoração', ico:'🏷️'}]
+
+function ehCatExtra(s){ return String(s||'').indexOf('cat_')===0; }
+function catIds(){ return catExtras.map(function(c){ return c.id; }); }
+function _catIdsDe(dados){
+  return (((dados&&dados.catExtras)||[])).map(function(c){ return c&&c.id; }).filter(Boolean);
+}
+// Seções de venda / detalhadas de um orçamento QUALQUER (não só o da tela):
+// os dashboards, a OS em lote e o contrato trabalham sobre dados salvos.
+function _secsVendaDe(dados){ return SECS_VENDA_BASE.concat(_catIdsDe(dados)); }
+function _secsPdfDe(dados){ return SECS_PDF_BASE.concat(_catIdsDe(dados)); }
+function secsVenda(){ return SECS_VENDA_BASE.concat(catIds()); }
+function secsPdf(){ return SECS_PDF_BASE.concat(catIds()); }
+// Rótulo de uma seção que pode ser uma categoria de OUTRO orçamento (o nome
+// viaja junto nos dados/snapshots, senão o histórico mostraria só o id).
+function secRotulo(sec, dados){
+  if(SEC_LBL[sec]) return SEC_LBL[sec];
+  var lista=(dados&&(dados.catExtras||dados.secLbl))||null;
+  if(Array.isArray(lista)){
+    var c=lista.find(function(x){ return x&&x.id===sec; });
+    if(c) return c.nome||sec;
+  }else if(lista && lista[sec]){ return lista[sec]; }
+  return sec;
+}
+function secIcone(sec){ return SEC_ICO[sec]||CAT_ICO_PADRAO; }
+
+// Reconstrói SECS/SEC_LBL/SEC_ICO e o `state` a partir de catExtras.
+function _catsAplicar(){
+  SECS=SECS_BASE.concat(catIds());
+  SEC_LBL=Object.assign({},SEC_LBL_BASE);
+  SEC_ICO=Object.assign({},SEC_ICO_BASE);
+  catExtras.forEach(function(c){
+    SEC_LBL[c.id]=c.nome||'Categoria';
+    SEC_ICO[c.id]=c.ico||CAT_ICO_PADRAO;
+  });
+  if(typeof state!=='undefined' && state){
+    catIds().forEach(function(id){
+      if(!state[id]) state[id]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{default:[]}};
+    });
+    // Categoria que saiu (outro orçamento aberto) não deixa itens para trás.
+    Object.keys(state).forEach(function(k){
+      if(ehCatExtra(k) && catIds().indexOf(k)<0) delete state[k];
+    });
+  }
+}
+// Troca a lista inteira — usada ao abrir/limpar/clonar um orçamento.
+function _catsDefinir(lista){
+  catExtras=((lista||[])).filter(Boolean).map(function(c){
+    return {id:c.id||('cat_'+Date.now()+'_'+Math.random().toString(36).slice(2,6)), nome:c.nome||'Categoria', ico:c.ico||CAT_ICO_PADRAO};
+  });
+  _catsAplicar();
+}
 var SCRIPT_URL='https://script.google.com/macros/s/AKfycbwV251xtPwAUjSn-CJM88-iySrObu5oZqF9FQuMQdmhSbHAu_DRnrCy9VJGRSwwKzAR/exec';
 
 // ═══════════════════════════════════════════════════════
@@ -3891,6 +3967,34 @@ function _aprovDiffsDoEvento(h, snapAtual){
 // ════════════════════════════════════════════════════════
 var COMP_SECS=['som','video','luz','estrutura','servico','logistica'];
 var COMP_ICO={som:'🔊',video:'📹',luz:'💡',estrutura:'🏗️',servico:'🛠️',logistica:'🚚'};
+
+// Seções presentes em dois retratos — as 6 fixas mais as categorias que o
+// orçamento tinha em cada um deles (uma categoria criada DEPOIS da aprovação
+// precisa aparecer na comparação, senão os itens dela sumiriam da análise).
+function _secsDeSnapshots(){
+  var out=COMP_SECS.slice(), vistos={};
+  out.forEach(function(x){ vistos[x]=true; });
+  Array.prototype.slice.call(arguments).forEach(function(snap){
+    if(!snap) return;
+    ['itens','totaisSec'].forEach(function(campo){
+      Object.keys(snap[campo]||{}).forEach(function(k){
+        if(ehCatExtra(k) && !vistos[k]){ vistos[k]=true; out.push(k); }
+      });
+    });
+  });
+  return out;
+}
+// Nome de uma seção lida de um retrato (a categoria pode nem existir mais).
+function _secRotuloSnap(sec, a, b){
+  if(SEC_LBL[sec]) return SEC_LBL[sec];
+  var achado=null;
+  [a,b].forEach(function(snap){
+    if(achado||!snap) return;
+    var c=((snap.catExtras)||[]).find(function(x){ return x&&x.id===sec; });
+    if(c) achado=c.nome;
+  });
+  return achado||'Categoria';
+}
 var _compMostrarIguais=false;
 
 // Casa os itens das duas versões por id (estável, gravado junto com o
@@ -3960,7 +4064,7 @@ function _orcComparativoHTML(base, atual, rotuloBase){
   var html='';
   var totalMudancas=0;
 
-  COMP_SECS.forEach(function(sec){
+  _secsDeSnapshots(base, atual).forEach(function(sec){
     var pares=_compPares((base.itens&&base.itens[sec])||[], (atual.itens&&atual.itens[sec])||[]);
     if(!pares.length) return;
     var linhas='', mudou=0, iguais=0;
@@ -3978,12 +4082,12 @@ function _orcComparativoHTML(base, atual, rotuloBase){
     var difSec=Math.abs(tAnt-tAtual)>0.01;
     html+='<div style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">'
       +'<div style="display:grid;grid-template-columns:1fr 130px 130px;gap:8px;background:var(--R);color:#fff;padding:6px 8px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px">'
-        +'<div>'+COMP_ICO[sec]+' '+(SEC_LBL[sec]||sec)+(mudou?(' — '+mudou+(mudou>1?' alterações':' alteração')):' — sem alterações')+'</div>'
+        +'<div>'+(COMP_ICO[sec]||CAT_ICO_PADRAO)+' '+_secRotuloSnap(sec,base,atual)+(mudou?(' — '+mudou+(mudou>1?' alterações':' alteração')):' — sem alterações')+'</div>'
         +'<div style="text-align:right">Aprovado</div><div style="text-align:right">Agora</div>'
       +'</div>'
       +linhas
       +'<div style="display:grid;grid-template-columns:1fr 130px 130px;gap:8px;padding:6px 8px;background:var(--surface-2);font-size:11px;font-weight:800">'
-        +'<div style="color:var(--text-dim)">TOTAL '+(SEC_LBL[sec]||sec).toUpperCase()+'</div>'
+        +'<div style="color:var(--text-dim)">TOTAL '+_secRotuloSnap(sec,base,atual).toUpperCase()+'</div>'
         +'<div style="text-align:right;color:var(--text-dim)">'+fmt(tAnt)+'</div>'
         +'<div style="text-align:right;color:'+(difSec?'var(--R)':'var(--text-dim)')+'">'+fmt(tAtual)+'</div>'
       +'</div>'
@@ -4704,7 +4808,7 @@ function renderStatusOrc(){
   }
   if(!usuarioAtual){sa.innerHTML='<p style="font-size:11px;color:var(--text-muted);padding:6px 0">Faça login para acessar as ações de aprovação.</p>';return;}
   var nivel=usuarioAtual.nivel==='adm'?'consultor':usuarioAtual.nivel;
-  var cImp=0;try{cImp=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)*(1+IMP);}catch(e){}
+  var cImp=0;try{cImp=secsVenda().reduce(function(t,s){return t+secTotAll(s);},0)*(1+IMP);}catch(e){}
   var acoes='';
   var obsVal=document.getElementById('aprov-obs')?document.getElementById('aprov-obs').value:'';
   var obsHtml='<textarea id="aprov-obs" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:4px;font-size:11px;resize:vertical;height:52px;margin-top:8px;background:var(--surface);color:var(--text)" placeholder="Observação / Motivo...">'+obsVal+'</textarea>';
@@ -4778,7 +4882,7 @@ function renderAprovInline(){
   var btnsEl=document.getElementById('aprov-inline-btns');
   if(!box||!btnsEl)return;  if(!usuarioAtual){box.style.display='none';return;}
   var nivel=usuarioAtual.nivel==='adm'?'consultor':usuarioAtual.nivel;
-  var cImp=0;try{cImp=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0)*(1+IMP);}catch(e){}
+  var cImp=0;try{cImp=secsVenda().reduce(function(t,s){return t+secTotAll(s);},0)*(1+IMP);}catch(e){}
   function btn(cor,txt,st){var b=document.createElement('button');b.className='acao-btn';b.style.background=cor;b.textContent=txt;b.onclick=function(){aprovAcaoInline(st);};return b;}
   btnsEl.innerHTML='';var mostrar=false;
   if(nivel==='consultor'&&(aprovStatus==='rascunho'||aprovStatus==='revisao')){mostrar=true;btnsEl.appendChild(btn('#1565c0',aprovStatus==='rascunho'?'📤 Enviar para Análise Técnica':'📤 Reenviar para Análise Técnica','analise'));}
@@ -5204,7 +5308,7 @@ function toggleDetalhes(idx){var el=document.getElementById('det-'+idx);if(el)el
 function _tirarSnapshotDeDados(dadosObj){
   var form=(dadosObj&&dadosObj.form)||{};
   var st=(dadosObj&&dadosObj.state)||{};
-  var SECS6=['som','video','luz','estrutura','servico','logistica'];
+  var SECS6=_secsVendaDe(dadosObj);
   function rowsDe(s){
     var secSt=st[s];
     if(!secSt||!secSt.rows) return [];
@@ -5260,7 +5364,9 @@ function _tirarSnapshotDeDados(dadosObj){
     descPct:form['desc-pct']||'0',descRs:form['desc-rs']||'0',arredRs:form['arred-rs']||'0',
     valLiq:form['val-liq']||'',pgto:form['f-pgto']||'',
     obs:form['f-obs']||'',svinc:form['f-svinc']||'',
-    totalBruto:bruto,totalFinal:total,totaisSec:totais,itens:itens
+    totalBruto:bruto,totalFinal:total,totaisSec:totais,
+    catExtras:((dadosObj&&dadosObj.catExtras)||[]).map(function(c){ return {id:c.id,nome:c.nome}; }),
+    itens:itens
   };
 }
 
@@ -5305,13 +5411,68 @@ function buildTabs(){
   var W=document.getElementById('tabs-wrap'),P=document.getElementById('panes-wrap');
   W.innerHTML='';P.innerHTML='';
   SECS.forEach(function(s,i){
+    if(!state[s]) state[s]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{default:[]}};
     var cnt=Object.values(state[s].rows).reduce(function(t,a){return t+a.length;},0);
     var btn=document.createElement('button');btn.className='tbtn'+(i===0?' active':'');btn.id='stab-'+s;
-    btn.innerHTML=SEC_ICO[s]+' '+SEC_LBL[s]+' <span class="badge" id="sbadge-'+s+'">'+cnt+'</span>';
+    btn.innerHTML=secIcone(s)+' '+(SEC_LBL[s]||s)+' <span class="badge" id="sbadge-'+s+'">'+cnt+'</span>';
     btn.addEventListener('click',function(){swTab(s);});W.appendChild(btn);
     var pane=document.createElement('div');pane.className='tpane'+(i===0?' active':'');pane.id='spane-'+s;
     P.appendChild(pane);buildSecPane(s);
   });
+  // "+ Categoria" — mesmo lugar e mesma ideia do "+ Ambiente", só que para
+  // a lista de abas. Fica sempre depois de Custos Extra e das categorias já
+  // criadas.
+  var add=document.createElement('button');
+  add.className='tbtn tbtn-addcat';
+  add.id='btn-add-categoria';
+  add.title='Criar uma categoria nova neste orçamento (nome editável) — ela sai no orçamento do cliente como as demais';
+  add.innerHTML='➕ Categoria';
+  add.addEventListener('click',function(){ catAdicionar(); });
+  W.appendChild(add);
+}
+
+// ── Categorias criadas pelo usuário ────────────────────────────────────
+function catAdicionar(){
+  var id='cat_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+  catExtras.push({id:id, nome:'Categoria '+(catExtras.length+1), ico:CAT_ICO_PADRAO});
+  _catsAplicar();
+  buildTabs();
+  swTab(id);
+  calc(); marcarAlterado();
+  setTimeout(function(){
+    var inp=document.getElementById('cat-nome-'+id);
+    if(inp){ inp.focus(); inp.select(); inp.scrollIntoView({behavior:'smooth',block:'center'}); }
+  },60);
+}
+
+function catRenomear(id, nome){
+  var c=catExtras.find(function(x){ return x.id===id; });
+  if(!c) return;
+  c.nome=nome;
+  SEC_LBL[id]=nome||'Categoria';
+  var tab=document.getElementById('stab-'+id);
+  if(tab){
+    var badge=tab.querySelector('.badge');
+    tab.innerHTML=secIcone(id)+' '+(nome||'Categoria')+' ';
+    if(badge) tab.appendChild(badge);
+  }
+  var tot=document.getElementById('rot-tot-'+id);
+  if(tot) tot.textContent='Total '+(nome||'Categoria')+':';
+  calc(); marcarAlterado();
+}
+
+function catExcluir(id){
+  var c=catExtras.find(function(x){ return x.id===id; });
+  if(!c) return;
+  var qt=Object.values((state[id]&&state[id].rows)||{}).reduce(function(t,a){return t+a.length;},0);
+  var aviso='🗑️ Excluir a categoria "'+(c.nome||'')+'"?';
+  if(qt>0) aviso+='\n\n'+qt+' item(ns) lançado(s) nela serão removidos do orçamento.';
+  if(!confirm(aviso)) return;
+  catExtras=catExtras.filter(function(x){ return x.id!==id; });
+  _catsAplicar();
+  buildTabs();
+  swTab(SECS[0]);
+  calc(); marcarAlterado();
 }
 function swTab(s){document.querySelectorAll('.tbtn').forEach(function(b){b.classList.remove('active');});document.querySelectorAll('.tpane').forEach(function(p){p.classList.remove('active');});document.getElementById('stab-'+s).classList.add('active');document.getElementById('spane-'+s).classList.add('active');}
 function buildSecPane(s){
@@ -5320,6 +5481,20 @@ function buildSecPane(s){
   if(s==='logistica')info='<div style="background:#e8f4fd;border:1px solid #90caf9;border-radius:4px;padding:7px 11px;font-size:10px;color:#1565c0;margin-bottom:7px"><b>🚚 Logística</b> — No PDF aparece como linha única com o valor total.</div>';
 
   if(s==='extra')info='<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:4px;padding:7px 11px;font-size:10px;color:#7a5a00;margin-bottom:7px"><b>💰 Custos Extra</b> — Uso interno. Não aparece no PDF do cliente.<div id="bv-extra-info" style="margin-top:5px;font-weight:700"></div></div>';
+
+  // Categoria criada pelo usuário: nome editável e botão de excluir, no
+  // mesmo espírito do nome do ambiente.
+  if(ehCatExtra(s)){
+    var _c=catExtras.find(function(x){ return x.id===s; })||{nome:''};
+    info='<div style="background:#f3e5f5;border:1px solid #ce93d8;border-radius:4px;padding:8px 11px;margin-bottom:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+      +'<span style="font-size:10px;color:#6a1b9a;font-weight:800;white-space:nowrap">'+CAT_ICO_PADRAO+' Nome da categoria</span>'
+      +'<input type="text" id="cat-nome-'+s+'" value="'+eh(_c.nome||'')+'" placeholder="Ex.: Decoração, Gerador, Climatização" maxlength="40" '
+      +'style="flex:1;min-width:150px;max-width:280px;font-size:12px;padding:5px 9px;border:1px solid #ce93d8;background:#fff;border-radius:4px;color:#000" '
+      +'oninput="catRenomear(\''+s+'\', this.value)">'
+      +'<button class="btn btn-o btn-sm" onclick="catExcluir(\''+s+'\')" title="Excluir esta categoria e os itens lançados nela" style="white-space:nowrap">🗑️ Excluir categoria</button>'
+      +'<div style="flex-basis:100%;font-size:10px;color:#6a1b9a">Sai no orçamento do cliente como as demais categorias — soma no total, na base de BV, na OS e no contrato.</div>'
+      +'</div>';
+  }
 
   var bvHtml=s==='servico'?'<div id="bv-box" style="background:var(--surface-3);border:1px solid var(--border-strong);border-radius:4px;padding:6px 10px;margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
     +'<span style="font-size:10px;color:var(--text-dim);white-space:nowrap">🎁 BV Produtora</span>'
@@ -5371,7 +5546,7 @@ function renderAmbContent(s){
     +'<div class="stot">Custo: <b id="tot-extra">R$ 0,00</b> | Cobrado: <b id="tot-extra-cob">R$ 0,00</b></div>'
     +'<div id="subtot-amb-'+s+'" style="display:none;background:#fff3e0;border:1px solid #ffb74d;border-radius:4px;padding:5px 10px;margin-top:5px;font-size:11px;color:#e65100;font-weight:700"></div>'
     :'<div class="add-bar"><div class="f"><label>Buscar item</label><select id="sel-'+s+'" onchange="selItem(\''+s+'\',this)"><option value="">— Selecione da tabela —</option></select></div><button class="btn btn-o btn-sm" onclick="addCustom(\''+s+'\')">+ Personalizado</button></div>'
-    +'<div class="stot">Total '+SEC_LBL[s]+': <b id="tot-'+s+'">R$ 0,00</b> | c/Imp: <b id="tot-'+s+'-imp">R$ 0,00</b></div>'
+    +'<div class="stot"><span id="rot-tot-'+s+'">Total '+(SEC_LBL[s]||s)+':</span> <b id="tot-'+s+'">R$ 0,00</b> | c/Imp: <b id="tot-'+s+'-imp">R$ 0,00</b></div>'
     +'<div id="subtot-amb-'+s+'" style="display:none;background:#e8f4fd;border:1px solid #90caf9;border-radius:4px;padding:5px 10px;margin-top:5px;font-size:11px;color:#1565c0;font-weight:700"></div>';
   var thead=s==='logistica'
     ?'<tr><th style="width:44px"></th><th>Qtd</th><th colspan="2">Descrição</th><th>Valor Unit.</th><th>Total</th><th>c/Imp</th><th></th></tr>'
@@ -5401,6 +5576,30 @@ function renderAmbContent(s){
 // qualquer item novo — de qualquer uma das duas fontes — já nasce na posição
 // certa da lista, sem precisar reordenar nada manualmente.
 function _itensDisponiveisSecao(s){
+  // Categoria criada pelo usuário não tem tabela própria: oferece o catálogo
+  // inteiro da Crazy Som (todas as seções + os produtos do Estoque), porque
+  // a pessoa pode querer juntar ali itens de origens diferentes.
+  if(ehCatExtra(s)){
+    var todos=[];
+    var vistos={};
+    var normC=(typeof _normalizarNomeItem==='function')?_normalizarNomeItem:function(x){return String(x||'').toLowerCase();};
+    SECS_VENDA_BASE.forEach(function(sec){
+      (PRECOS[sec]||[]).forEach(function(it){
+        var k=normC(it.n);
+        if(!k||vistos[k]) return;
+        vistos[k]=true; todos.push({n:it.n,v:it.v});
+      });
+    });
+    if(typeof PRODUTOS!=='undefined' && Array.isArray(PRODUTOS)){
+      PRODUTOS.forEach(function(pr){
+        var k=normC(pr.nome);
+        if(!k||vistos[k]) return;
+        vistos[k]=true; todos.push({n:pr.nome,v:pr.preco||0});
+      });
+    }
+    todos.sort(function(a,b){ return a.n.localeCompare(b.n,'pt-BR',{sensitivity:'base'}); });
+    return todos;
+  }
   var base=(PRECOS[s]||[]).slice();
   var normFn=(typeof _normalizarNomeItem==='function')?_normalizarNomeItem:function(x){return String(x||'').toLowerCase();};
   var nomesExistentes={};
@@ -5423,7 +5622,7 @@ function _itensDisponiveisSecao(s){
 // (🟢/⚠️) na frente de cada item que tenha um Produto do Estoque correspondente
 // (casado por nome). Itens sem produto correspondente aparecem sem indicador.
 function _popularSelecaoComSinaleira(s,sel){
-  if(!sel||!PRECOS[s]) return;
+  if(!sel||(!PRECOS[s]&&!ehCatExtra(s))) return;
   var valorAtual=sel.value;
   sel.innerHTML='<option value="">— Selecione da tabela —</option>';
   _itensDisponiveisSecao(s).forEach(function(it){
@@ -5483,9 +5682,10 @@ function toggleDiariaAuto(s,aid,id,checked){
 function rowTot(r){if(r.painel)return safe(r.larg*r.alt*r.val*r.diaria*r.qty);if(r.palco||isPalco(r.name))return safe(calcPalco(r).total*r.diaria*r.qty);return safe(r.qty*r.val*r.diaria);}
 // Total "cru" de uma seção, sem qualquer diluição de BV (usado internamente
 // pra evitar recursão ao calcular o próprio valor do BV).
-function _secTotAllBase(s){return Object.values(state[s].rows).reduce(function(t,arr){return t+arr.reduce(function(a,r){return a+rowTot(r);},0);},0);}
+function _secTotAllBase(s){if(!state[s])return 0;return Object.values(state[s].rows).reduce(function(t,arr){return t+arr.reduce(function(a,r){return a+rowTot(r);},0);},0);}
 
-var _BV_SECS=['som','video','luz','estrutura','servico','logistica'];
+// Base do BV = as 6 fixas + as categorias criadas (são seções de venda).
+function _bvSecs(){ return secsVenda(); }
 
 // Valor em R$ do BV, calculado a partir do percentual digitado (_bvStorage
 // agora guarda o PERCENTUAL, não mais um valor em R$) sobre o valor COM
@@ -5493,7 +5693,7 @@ var _BV_SECS=['som','video','luz','estrutura','servico','logistica'];
 function bvValorCalculado(){
   var pct=_bvStorage||parseFloat(gv('f-bv'))||0;
   if(!pct)return 0;
-  var base=_BV_SECS.reduce(function(t,s){return t+_secTotAllBase(s);},0);
+  var base=_bvSecs().reduce(function(t,s){return t+_secTotAllBase(s);},0);
   var baseComImposto=base*(1+IMP);
   return baseComImposto*pct/100;
 }
@@ -5507,10 +5707,10 @@ function bvValorCalculado(){
 // sobre o próprio BV.
 function secTotAll(s){
   var base=_secTotAllBase(s);
-  if(_BV_SECS.indexOf(s)>=0){
+  if(_bvSecs().indexOf(s)>=0){
     var bv=bvValorCalculado();
     if(bv>0){
-      var comItens=_BV_SECS.filter(function(s2){return _secTotAllBase(s2)>0;});
+      var comItens=_bvSecs().filter(function(s2){return _secTotAllBase(s2)>0;});
       if(comItens.length>0 && comItens.indexOf(s)>=0){
         base+=(bv/(1+IMP))/comItens.length;
       }
@@ -5700,7 +5900,7 @@ function syncDesc(from){
   // desc-pct: sempre % sobre BRUTO (base comercial interna)
   // desc-rs:  no modo c/imp = desconto sobre cImp; no modo s/imp = desconto sobre bruto
   // Assim: o consultor digita R$ e o total calculado = referência visível - desconto digitado
-  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
+  var bruto=secsVenda().reduce(function(t,s){return t+secTotAll(s);},0);
   var cImp=bruto*(1+IMP);
   var modoSimp=(impAtual==='simp'||finImposto==='simp');
   var maxDesc=descontoMaxPermitido();
@@ -5739,7 +5939,8 @@ function syncDesc(from){
   calc();
 }
 function calc(){
-  var MAIN=['som','video','luz','estrutura','servico','logistica'];
+  var MAIN=secsVenda();
+  _catsSincronizarResumo();
   MAIN.forEach(function(s){
     var tot=secTotAll(s);
     sv('r-'+s,fmt(tot));
@@ -5812,7 +6013,8 @@ function calc(){
   var dl=document.getElementById('desc-label');if(dl){var modoLabel=modoSimp?'s/ imposto':'c/ imposto';dl.textContent=dv_display>0?'Desconto: -'+fmt(dv_display)+' ('+modoLabel+')':'';}
   // Agrupa subtotal por NOME do ambiente somando todas as secoes (evita repeticao de ambientes iguais entre secoes)
   var ambTotPorNome={},ambOrdem=[];
-  ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+  secsVenda().forEach(function(s){
+    if(!state[s]) return;
     state[s].ambientes.forEach(function(a){
       var nome=a.nome||'Geral';
       var t=(state[s].rows[a.id]||[]).reduce(function(acc,r){return acc+rowTot(r);},0);
@@ -5836,6 +6038,30 @@ function calc(){
   }
   renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   _preencherValLiqCalculado();
+}
+
+// Mantém o bloco "Resumo & Margem" em dia com as categorias criadas: um
+// quadrinho por categoria, ao lado de Sonorização/Vídeo/…
+function _catsSincronizarResumo(){
+  var grid=document.getElementById('resumo-cats');
+  if(!grid) return;
+  var ids=catIds();
+  // Remove os que não existem mais
+  Array.prototype.slice.call(grid.children).forEach(function(el){
+    if(ids.indexOf(el.dataset.cat)<0) el.remove();
+  });
+  ids.forEach(function(id){
+    var el=grid.querySelector('[data-cat="'+id+'"]');
+    if(!el){
+      el=document.createElement('div');
+      el.className='ti'; el.dataset.cat=id;
+      el.innerHTML='<label></label><span class="tval" id="r-'+id+'">R$ 0,00</span>';
+      grid.appendChild(el);
+    }
+    var lab=el.querySelector('label');
+    if(lab) lab.textContent=SEC_LBL[id]||'Categoria';
+  });
+  grid.style.display=ids.length?'':'none';
 }
 
 function driveStatus(msg,tipo){var el=document.getElementById('drive-status');if(!el)return;el.textContent=msg;el.className='drive-status '+(tipo||'');if(msg)setTimeout(function(){if(el.textContent===msg)el.textContent='';},5000);}
@@ -6029,6 +6255,7 @@ function getDadosCompletos(){
     followupData:followupData,
     googleAgenda:orcAtualGoogleAgenda,
     anexos:anexosOrc,
+    catExtras:catExtras,
     criadoEmISO:orcCriadoEmISO,
     snapshotAnterior:snapshotAnterior,
     snapshotAprovado:snapshotAprovado,
@@ -7014,6 +7241,9 @@ async function driveCarregar(id,nome){
 // carregamento vindo do servidor.
 function _aplicarDadosOrcamento(dados){
   dados=dados||{};
+  // As categorias deste orçamento entram ANTES do state, senão as abas
+  // delas não existiriam na hora de restaurar os itens.
+  _catsDefinir(dados.catExtras||[]);
   SECS.forEach(function(s){
     var ds=(dados.state&&dados.state[s])||null;
     state[s].ambientes=(ds&&ds.ambientes)||[{id:'default',nome:'Geral'}];
@@ -7186,7 +7416,7 @@ function setForm(f){
   });
   sv('orc-disp',f['f-num']||'—');
 }
-function salvar(){var blob=new Blob([JSON.stringify({form:getForm(),state:state,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,snapshotAprovado:snapshotAprovado,finParcelas:finParcelas,finObs:finObs},null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(gv('f-num')||'orc')+' - '+(gv('f-cliente')||'cliente')+'.json';a.click();URL.revokeObjectURL(a.href);}
+function salvar(){var blob=new Blob([JSON.stringify({form:getForm(),state:state,catExtras:catExtras,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,snapshotAprovado:snapshotAprovado,finParcelas:finParcelas,finObs:finObs},null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(gv('f-num')||'orc')+' - '+(gv('f-cliente')||'cliente')+'.json';a.click();URL.revokeObjectURL(a.href);}
 function carregar(input){
   var file=input.files[0];if(!file)return;
   var fr=new FileReader();
@@ -7197,6 +7427,7 @@ function carregar(input){
       // Mesma correção aplicada em _driveCarregarDados(): reset incondicional
       // por seção, pra um JSON antigo (sem a chave "extra", por ex.) não
       // deixar equipamentos/custos do orçamento anterior na tela.
+      _catsDefinir(data.catExtras||[]);
       SECS.forEach(function(s){
         var ds=(data.state&&data.state[s])||null;
         state[s].ambientes=(ds&&ds.ambientes)||[{id:'default',nome:'Geral'}];
@@ -7248,6 +7479,7 @@ async function limpar(){
   // Não parar sessionHeartbeat no limpar (usuário ainda está logado)
   desativarModoLeitura();
   if(_idLimpar&&!_modoLeitura) await lockLiberar(_idLimpar);
+  _catsDefinir([]);   // orçamento novo começa sem categorias criadas
   SECS.forEach(function(s){state[s]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{default:[]}};});
   FORM_IDS.filter(function(id){return ['desc-pct','desc-rs','arred-rs','val-liq','f-pgto','f-svinc'].indexOf(id)<0;}).forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('f-cons').value='';
@@ -8266,6 +8498,7 @@ async function _resetarEstadoOrcamento(){
   lockPararHeartbeat();
   desativarModoLeitura();
   // Limpar estado sem confirmação adicional
+  _catsDefinir([]);   // orçamento novo começa sem categorias criadas
   SECS.forEach(function(s){state[s]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{default:[]}};});
   FORM_IDS.filter(function(id){return ['desc-pct','desc-rs','arred-rs','val-liq','f-pgto','f-svinc'].indexOf(id)<0;}).forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('f-cons').value='';
@@ -8369,7 +8602,7 @@ function selImpVenda(t){
 
 function _preencherValLiqCalculado(){
   try{
-    var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
+    var bruto=secsVenda().reduce(function(t,s){return t+secTotAll(s);},0);
     var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
     var cImpPVL=bruto*(1+IMP);
     var modoSimpPVL=(impAtual==='simp'||finImposto==='simp');
@@ -8409,13 +8642,15 @@ var PDF_STYLES={
 };
 
 function buildPDF(tipo){
-  var SECS_PDF=['som','video','luz','estrutura','servico'];
+  // As categorias criadas no orçamento entram depois de Operação Técnica,
+  // antes do bloco de Logística.
+  var SECS_PDF=secsPdf();
   // Nomes usados SÓ no texto do PDF (o sistema, nas abas de edição, continua
   // usando SEC_LBL normalmente — essa troca é só do documento final).
   var SEC_LBL_PDF=Object.assign({},SEC_LBL,{servico:'Operação Técnica',logistica:'Logística e Serviços'});
   var F=pdfFator();
   var orcN=gv('f-num')||'—',dataorc=gv('f-data')?fD(gv('f-data')):new Date().toLocaleDateString('pt-BR');
-  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
+  var bruto=secsVenda().reduce(function(t,s){return t+secTotAll(s);},0);
   var imp=bruto*IMP,cImp=bruto+imp;
   var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
   var vl=parseFloat(gv('val-liq'))||0;
@@ -8475,6 +8710,7 @@ function buildPDF(tipo){
   // Coletar ambientes agrupados por nome (evita repetição)
   var todosAmb=[],ambNomes={};
   SECS_PDF.forEach(function(s){
+    if(!state[s]) return;
     state[s].ambientes.forEach(function(a){
       if(!ambNomes[a.nome]){
         ambNomes[a.nome]={nome:a.nome,ids:[]};
@@ -8489,6 +8725,7 @@ function buildPDF(tipo){
 
   function secBlock(s,aid,det){
     if(s==='logistica')return'';
+    if(!state[s]||!state[s].rows)return'';
     var rows2=(state[s].rows[aid]||[]).filter(function(r){return !isOcult(r.name);});if(!rows2.length)return'';
     var secTotal=rows2.reduce(function(t,r){return t+rTotF(r);},0);
     if(det){
@@ -8533,7 +8770,7 @@ function buildPDF(tipo){
     todosAmb.forEach(function(amb){
       // Verificar se tem itens em qualquer ID deste ambiente
       var temItens=SECS_PDF.some(function(s){
-        return amb.ids.some(function(aid){return (state[s].rows[aid]||[]).length>0;});
+        return state[s] && amb.ids.some(function(aid){return (state[s].rows[aid]||[]).length>0;});
       });
       if(!temItens)return;
       // Cabeçalho do ambiente — apenas uma vez
@@ -8546,6 +8783,7 @@ function buildPDF(tipo){
       if(tipo==='det'){
         var linhasAmb='';var totalAmb=0;
         SECS_PDF.forEach(function(s){
+          if(!state[s]) return;
           var t=amb.ids.reduce(function(tot,aid){return tot+(state[s].rows[aid]||[]).reduce(function(a,r){return a+rTotF(r);},0);},0);
           if(t>0){
             linhasAmb+='<tr><td style="padding:3px 9px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-dim)">'+SEC_LBL_PDF[s]+'</td><td style="padding:3px 9px;border-bottom:1px solid var(--border);font-size:11px;text-align:right;font-weight:600">'+fmt(t)+'</td></tr>';
@@ -8578,6 +8816,7 @@ function buildPDF(tipo){
   if(multiAmb2){
     todosAmb.forEach(function(amb){
       var t2=SECS_PDF.reduce(function(tot,s){
+        if(!state[s]) return tot;
         return tot+amb.ids.reduce(function(tt,aid){return tt+(state[s].rows[aid]||[]).reduce(function(a,r){return a+rTotF(r);},0);},0);
       },0);
       if(t2>0)res+='<tr><td>'+amb.nome+'</td><td class="r">'+fmt(t2)+'</td></tr>';
@@ -8591,6 +8830,7 @@ function buildPDF(tipo){
       return t+arr.filter(function(r){return r.name==='Laudo Técnico + ART';}).reduce(function(tt,r){return tt+rTotF(r);},0);
     },0);
     [{n:'SONORIZAÇÃO',s:'som'},{n:'VÍDEO',s:'video'},{n:'ILUMINAÇÃO',s:'luz'},{n:'ESTRUTURA',s:'estrutura'},{n:'OPERAÇÃO TÉCNICA',s:'servico'}]
+      .concat(catExtras.map(function(c){ return {n:String(c.nome||'Categoria').toUpperCase(), s:c.id}; }))
       .forEach(function(x){
         var vSec=secTotAll(x.s)*F;
         if(x.s==='servico') vSec-=laudoTot;
@@ -8825,7 +9065,7 @@ function _montarOSHtml(form, dadosCompletos){
   var endEv=[form['f-end-ev'],form['f-num-ev'],form['f-bairro-ev'],form['f-cid-ev']].filter(Boolean).join(', ');
   var incLines=(form['f-svinc']||'').split('\n').map(function(l){return l.trim();}).filter(Boolean);
   var dataorc=form['f-data']?fD(form['f-data']):new Date().toLocaleDateString('pt-BR');
-  var SECS_OS=['som','video','luz','estrutura','servico'];
+  var SECS_OS=SECS_PDF_BASE.concat(Object.keys(st||{}).filter(ehCatExtra));
   var todosAmb=[],ambIds3={};
   SECS_OS.forEach(function(s){((st[s]&&st[s].ambientes)||[]).forEach(function(a){if(!ambIds3[a.id]){ambIds3[a.id]=true;todosAmb.push({id:a.id,nome:a.nome});}});});
   function bRow(r){
@@ -8844,7 +9084,7 @@ function _montarOSHtml(form, dadosCompletos){
         var rows2=((st[s]&&st[s].rows&&st[s].rows[amb.id])||[]).filter(function(r){return !isOcult(r.name);});
         var isLog=(s==='logistica');
         if(!rows2.length&&(!isLog||!incLines.length))return;
-        corpoOS+='<tr><td colspan="3" style="background:var(--R);color:#fff;font-weight:bold;padding:3px 8px;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact">'+SEC_ICO[s]+' '+SEC_LBL[s].toUpperCase()+'</td></tr>';
+        corpoOS+='<tr><td colspan="3" style="background:var(--R);color:#fff;font-weight:bold;padding:3px 8px;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact">'+secIcone(s)+' '+String(SEC_LBL[s]||s).toUpperCase()+'</td></tr>';
         rows2.forEach(function(r){corpoOS+=bRow(r);});
         if(isLog)incLines.forEach(function(l){corpoOS+='<tr><td class="qtd">—</td><td class="item">'+l+'</td><td class="chk">☐</td></tr>';});
       });
@@ -8855,7 +9095,7 @@ function _montarOSHtml(form, dadosCompletos){
       var rows2=((st[s]&&st[s].rows&&st[s].rows['default'])||[]).filter(function(r){return !isOcult(r.name);});
       var isLog=(s==='logistica');
       if(!rows2.length&&(!isLog||!incLines.length))return;
-      corpoOS+='<tr><td colspan="3" style="background:var(--R);color:#fff;font-weight:bold;padding:4px 8px;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact">'+SEC_ICO[s]+' '+SEC_LBL[s].toUpperCase()+'</td></tr>';
+      corpoOS+='<tr><td colspan="3" style="background:var(--R);color:#fff;font-weight:bold;padding:4px 8px;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact">'+secIcone(s)+' '+String(SEC_LBL[s]||s).toUpperCase()+'</td></tr>';
       rows2.forEach(function(r){corpoOS+=bRow(r);});
       if(isLog)incLines.forEach(function(l){corpoOS+='<tr><td class="qtd">—</td><td class="item">'+l+'</td><td class="chk">☐</td></tr>';});
       corpoOS+='<tr><td colspan="3" style="height:4px"></td></tr>';
@@ -9221,9 +9461,10 @@ function _gaMontarDescricao(){
   // evento da Agenda, já que é lido justamente pela equipe de montagem no
   // dia, e a Agenda costuma ser a primeira coisa que eles conferem no celular.
   if(gv('f-obs-os')) linhas.push('Observações da OS: '+gv('f-obs-os'));
-  var SECS_GA=['som','video','luz','estrutura','servico'];
+  var SECS_GA=secsPdf();
   SECS_GA.forEach(function(s){
     var todasRows=[];
+    if(!state[s]) return;
     state[s].ambientes.forEach(function(a){ (state[s].rows[a.id]||[]).forEach(function(r){ if(!isOcult(r.name)) todasRows.push(r); }); });
     if(!todasRows.length) return;
     linhas.push('');
@@ -9606,7 +9847,7 @@ function _gaMontarDescricaoDe(form, state){
   // comentário lá): entra na descrição do evento pra chegar até o time de
   // montagem mesmo quando o envio é "headless" (automação de Venda Ganha).
   if(form['f-obs-os']) linhas.push('Observações da OS: '+form['f-obs-os']);
-  var SECS_GA=['som','video','luz','estrutura','servico'];
+  var SECS_GA=SECS_PDF_BASE.concat(Object.keys(state||{}).filter(ehCatExtra));
   var st=state||{};
   SECS_GA.forEach(function(s){
     var todasRows=[];
@@ -10156,11 +10397,12 @@ async function googleAgendaEnviarOS(){
 
 function tirarSnapshot(){
   var form=getForm();
+  var _SECS_SNAP=secsVenda();
   var totais={};
-  ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+  _SECS_SNAP.forEach(function(s){
     totais[s]=secTotAll(s);
   });
-  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
+  var bruto=_SECS_SNAP.reduce(function(t,s){return t+secTotAll(s);},0);
   var cImp=bruto*(1+IMP);
   var drs=parseFloat(form['desc-rs'])||0,dpct=parseFloat(form['desc-pct'])||0;
   var cImpOS=bruto*(1+IMP);
@@ -10185,8 +10427,9 @@ function tirarSnapshot(){
   // era exatamente esse o bug: o total mudava sem nenhuma linha
   // explicando o motivo.
   var itens={};
-  ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+  _SECS_SNAP.forEach(function(s){
     var rows=[];
+    if(!state[s]) return;
     state[s].ambientes.forEach(function(a){
       (state[s].rows[a.id]||[]).forEach(function(r){
         rows.push({
@@ -10223,6 +10466,9 @@ function tirarSnapshot(){
     totalBruto:bruto,
     totalFinal:total,
     totaisSec:totais,
+    // O NOME das categorias viaja junto: sem isso o histórico de um
+    // orçamento antigo mostraria "cat_1758..." no lugar de "Decoração".
+    catExtras:catExtras.map(function(c){ return {id:c.id,nome:c.nome}; }),
     itens:itens
   };
 }
@@ -10248,7 +10494,7 @@ var APROV_SECS=['som','video','luz','estrutura','servico','logistica'];
 // não o retrato inteiro) mantém o orçamento leve.
 function _aprovItensCompactos(snap){
   var out={};
-  APROV_SECS.forEach(function(sec){
+  _secsDeSnapshots(snap).forEach(function(sec){
     out[sec]=((snap&&snap.itens&&snap.itens[sec])||[]).map(function(r){
       return {i:r.id||'', n:r.name||'', q:r.qty, t:rowTot(r), a:r.amb||''};
     });
@@ -10259,11 +10505,14 @@ function _aprovItensCompactos(snap){
 function _aprovValoresDe(snap, impostoDe){
   if(!snap) return null;
   var itens={};
-  APROV_SECS.forEach(function(sec){ itens[sec]=((snap.itens&&snap.itens[sec])||[]).length; });
+  _secsDeSnapshots(snap).forEach(function(sec){ itens[sec]=((snap.itens&&snap.itens[sec])||[]).length; });
+  var secLbl={};
+  ((snap.catExtras)||[]).forEach(function(c){ if(c&&c.id) secLbl[c.id]=c.nome||'Categoria'; });
   return {
     bruto:snap.totalBruto||0,
     total:snap.totalFinal||0,
     secoes:Object.assign({}, snap.totaisSec||{}),
+    secLbl:secLbl,
     itens:itens,
     itensDet:_aprovItensCompactos(snap),
     descPct:snap.descPct||'0',
@@ -10353,12 +10602,16 @@ function _aprovValoresHTML(v, idx, atualSnap){
   }
 
   var linhas='';
-  APROV_SECS.forEach(function(sec){
+  var _secsCaixa=COMP_SECS.slice();
+  Object.keys(v.secoes||{}).concat(atual?Object.keys(atual.secoes||{}):[]).forEach(function(k){
+    if(ehCatExtra(k) && _secsCaixa.indexOf(k)<0) _secsCaixa.push(k);
+  });
+  _secsCaixa.forEach(function(sec){
     var ap=v.secoes[sec]||0;
     var ho=atual?(atual.secoes[sec]||0):null;
     if(!ap && !ho) return;
     var qt=v.itens&&v.itens[sec];
-    var rot=(SEC_LBL[sec]||sec)+(qt?(' ('+qt+(qt>1?' itens':' item')+')'):'');
+    var rot=(SEC_LBL[sec]||(v.secLbl&&v.secLbl[sec])||'Categoria')+(qt?(' ('+qt+(qt>1?' itens':' item')+')'):'');
 
     // Lista de itens da seção: da versão aprovada (gravada junto) e de hoje.
     // Aprovações registradas ANTES deste recurso não têm a lista gravada —
@@ -10441,6 +10694,12 @@ function compararSnapshots(ant,atual){
   // Mostrar os dois juntos duplicava a informação e era uma das coisas que
   // deixava o diff confuso (pedido do usuário).
   var SEC_NOMES={som:'Sonorização',video:'Vídeo',luz:'Iluminação',estrutura:'Estrutura',servico:'Serviço',logistica:'Logística'};
+  // Categorias criadas pelo usuário entram na comparação com o nome que
+  // tinham em cada retrato — inclusive uma que só existe num dos dois.
+  var _SECS_DIFF=_secsDeSnapshots(ant, atual);
+  _SECS_DIFF.forEach(function(sec){
+    if(!SEC_NOMES[sec]) SEC_NOMES[sec]=_secRotuloSnap(sec, ant, atual);
+  });
   // Campos numéricos, onde "aumento/redução" faz sentido para colorir o antes/depois.
   // Os demais (Cliente, Local, Tipo, datas, Forma de Pagamento) são texto — não tem
   // "lado bom" claro, então ficam com destaque neutro em vez de cair em verde por padrão.
@@ -10495,7 +10754,7 @@ function compararSnapshots(ant,atual){
     contexto: !totalMudou
   });
   // Comparar totais por seção
-  ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+  _SECS_DIFF.forEach(function(s){
     var a=ant.totaisSec[s]||0;
     var b=atual.totaisSec[s]||0;
     if(Math.abs(a-b)>0.01)diffs.push({
@@ -10516,7 +10775,7 @@ function compararSnapshots(ant,atual){
     }
     return lista.find(function(r2){return r2.name===item.name;});
   }
-  ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+  _SECS_DIFF.forEach(function(s){
     var itAnt=(ant.itens&&ant.itens[s])||[];
     var itAtual=(atual.itens&&atual.itens[s])||[];
     // Itens removidos — mostra qty+nome E o valor (R$) que saiu do
@@ -15011,7 +15270,7 @@ function fecharFinanceiro(){
 
 function finGetTotal(){
   // Mesma logica do calc(): desc-rs e sobre cImp no modo c/imp, sobre bruto no modo s/imp
-  var bruto=['som','video','luz','estrutura','servico','logistica'].reduce(function(t,s){return t+secTotAll(s);},0);
+  var bruto=secsVenda().reduce(function(t,s){return t+secTotAll(s);},0);
   var cImp=bruto*(1+IMP);
   var drs=parseFloat(gv('desc-rs'))||0,dpct=parseFloat(gv('desc-pct'))||0;
   var vlSimp=parseFloat(gv('val-liq-si'))||0;
@@ -15790,7 +16049,7 @@ function relGerarPeriodo(){
   var rows=dados.map(function(o){
     var f=o.form||{};
     var bruto=0;
-    try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+    try{_secsVendaDe(o.dados).forEach(function(s){
       if(o.dados&&o.dados.state&&o.dados.state[s]){
         var st2=o.dados.state[s];
         Object.keys(st2.rows||{}).forEach(function(aid){
@@ -15837,7 +16096,7 @@ function relGerarConsultor(){
     var pc=porCons[cons];
     pc.qtd++;
     var bruto=0;
-    try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+    try{_secsVendaDe(o.dados).forEach(function(s){
       if(o.dados&&o.dados.state&&o.dados.state[s]){
         var st2=o.dados.state[s];
         Object.keys(st2.rows||{}).forEach(function(aid){
@@ -16094,7 +16353,7 @@ function relGerarEventos(){
     if(!porGrupo[chave])porGrupo[chave]={qtd:0,val:0};
     porGrupo[chave].qtd++;
     var bruto=0;
-    try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+    try{_secsVendaDe(o.dados).forEach(function(s){
       if(o.dados&&o.dados.state&&o.dados.state[s]){
         var st2=o.dados.state[s];
         Object.keys(st2.rows||{}).forEach(function(aid){
@@ -16139,7 +16398,7 @@ function relGerarEventos(){
   var rowsItem=dadosOrd.map(function(o){
     var f=o.form||{};
     var bruto=0;
-    try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+    try{_secsVendaDe(o.dados).forEach(function(s){
       if(o.dados&&o.dados.state&&o.dados.state[s]){
         var st2=o.dados.state[s];
         Object.keys(st2.rows||{}).forEach(function(aid){
@@ -16207,7 +16466,7 @@ function relGerarProximos(){
       :'<span style="color:var(--text-muted)">em '+dias+'d</span>';
     var cor=SI_CORES2[o.st]||'var(--text-muted)';
     var bruto=0;
-    try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+    try{_secsVendaDe(o.dados).forEach(function(s){
       if(o.dados&&o.dados.state&&o.dados.state[s]){
         var st2=o.dados.state[s];
         Object.keys(st2.rows||{}).forEach(function(aid){
@@ -16271,7 +16530,7 @@ function relGetDadosTabela(){
     var linhas=dados.map(function(o){
       var f=o.form||{};
       var bruto=0;
-      try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){if(o.dados&&o.dados.state&&o.dados.state[s]){var st2=o.dados.state[s];Object.keys(st2.rows||{}).forEach(function(aid){(st2.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});});}});}catch(e){}
+      try{_secsVendaDe(o.dados).forEach(function(s){if(o.dados&&o.dados.state&&o.dados.state[s]){var st2=o.dados.state[s];Object.keys(st2.rows||{}).forEach(function(aid){(st2.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});});}});}catch(e){}
       return[f['f-num']||'',f['f-data']?fD(f['f-data']):'',f['f-cliente']||'',f['f-nome-evento']||'',f['f-cons']||'',SI_LABELS[o.st]||o.st,COM_LABELS[o.dados&&o.dados.comercialStatus||'']||'',bruto*(1+IMP)];
     });
     return{titulo:relGetTituloAba()+'  ('+de+' a '+ate+')',cabecalho:cabecalho,linhas:linhas,moeda:[7]};
@@ -16286,7 +16545,7 @@ function relGetDadosTabela(){
       var c=(o.form&&o.form['f-cons'])||'Sem Consultor';
       if(!porCons[c])porCons[c]={qtd:0,aprovados:0,ganhos:0,perdidos:0,val:0};
       var pc=porCons[c];pc.qtd++;
-      var bruto=0;try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){if(o.dados&&o.dados.state&&o.dados.state[s]){var st2=o.dados.state[s];Object.keys(st2.rows||{}).forEach(function(aid){(st2.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});});}});}catch(e){}
+      var bruto=0;try{_secsVendaDe(o.dados).forEach(function(s){if(o.dados&&o.dados.state&&o.dados.state[s]){var st2=o.dados.state[s];Object.keys(st2.rows||{}).forEach(function(aid){(st2.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});});}});}catch(e){}
       pc.val+=bruto*(1+IMP);
       if(o.st==='aprovado')pc.aprovados++;
       var cs=o.dados&&o.dados.comercialStatus||'';
@@ -16356,14 +16615,14 @@ function relGetDadosTabela(){
       return dt;
     }
     var porGrupo={};
-    dados.forEach(function(o){var dt=o.form&&o.form['f-dia']||'';var k=getChave2(dt);if(!porGrupo[k])porGrupo[k]={qtd:0,val:0};porGrupo[k].qtd++;var bruto=0;try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){if(o.dados&&o.dados.state&&o.dados.state[s]){var st2=o.dados.state[s];Object.keys(st2.rows||{}).forEach(function(aid){(st2.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});});}});}catch(e){}porGrupo[k].val+=bruto*(1+IMP);});
+    dados.forEach(function(o){var dt=o.form&&o.form['f-dia']||'';var k=getChave2(dt);if(!porGrupo[k])porGrupo[k]={qtd:0,val:0};porGrupo[k].qtd++;var bruto=0;try{_secsVendaDe(o.dados).forEach(function(s){if(o.dados&&o.dados.state&&o.dados.state[s]){var st2=o.dados.state[s];Object.keys(st2.rows||{}).forEach(function(aid){(st2.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});});}});}catch(e){}porGrupo[k].val+=bruto*(1+IMP);});
     var linhas=Object.keys(porGrupo).sort().map(function(k){return[k,porGrupo[k].qtd,porGrupo[k].val];});
     // Segunda tabela: itemizada, com nome/tipo/cliente/local/cidade/consultor/valor de cada evento
     var dadosOrd2=dados.slice().sort(function(a,b){var da=a.form&&a.form['f-dia']||'';var db=b.form&&b.form['f-dia']||'';return da>db?1:(da<db?-1:0);});
     var linhasItem=dadosOrd2.map(function(o){
       var f=o.form||{};
       var bruto=0;
-      try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+      try{_secsVendaDe(o.dados).forEach(function(s){
         if(o.dados&&o.dados.state&&o.dados.state[s]){
           var st2=o.dados.state[s];
           Object.keys(st2.rows||{}).forEach(function(aid){(st2.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});});
@@ -16385,7 +16644,7 @@ function relGetDadosTabela(){
     dados.sort(function(a,b){return(a.form&&a.form['f-dia']||'')>(b.form&&b.form['f-dia']||'')?1:-1;});
     var linhas=dados.map(function(o){
       var f=o.form||{};var bruto=0;
-      try{['som','video','luz','estrutura','servico','logistica'].forEach(function(s){if(o.dados&&o.dados.state&&o.dados.state[s]){var st2=o.dados.state[s];Object.keys(st2.rows||{}).forEach(function(aid){(st2.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});});}});}catch(e){}
+      try{_secsVendaDe(o.dados).forEach(function(s){if(o.dados&&o.dados.state&&o.dados.state[s]){var st2=o.dados.state[s];Object.keys(st2.rows||{}).forEach(function(aid){(st2.rows[aid]||[]).forEach(function(r){bruto+=rowTot(r);});});}});}catch(e){}
       var diasR=Math.ceil((new Date((f['f-dia']||hoje)+'T12:00:00')-new Date(hoje+'T12:00:00'))/(1000*60*60*24));
       return[f['f-data']?fD(f['f-data']):'',f['f-num']||'',f['f-cliente']||'',f['f-nome-evento']||'',f['f-local']||'',f['f-cons']||'',SI_LABELS2[o.st]||o.st,COM2[o.dados&&o.dados.comercialStatus||'']||'',diasR,bruto*(1+IMP)];
     });
@@ -16654,7 +16913,7 @@ function dashValOrc(o){
   if(fimp==='cimp'&&valLiq>0) return valLiq;
   var bruto=0;
   try{
-    ['som','video','luz','estrutura','servico','logistica'].forEach(function(s){
+    _secsVendaDe(o.dados).forEach(function(s){
       if(o.dados&&o.dados.state&&o.dados.state[s]){
         var st2=o.dados.state[s];
         Object.keys(st2.rows||{}).forEach(function(aid){
@@ -25392,13 +25651,20 @@ function osModGerarOS(lista){
     return'<tr><td class="qtd">'+r.qty+'x</td><td class="item">'+eh(desc)+'</td><td class="chk">☐</td></tr>';
   }
 
-  var SEC_ICO2={som:'🔊',video:'🎬',luz:'⚡',estrutura:'🏗️',servico:'🔧',logistica:'🚛'};
-  var SEC_LBL2={som:'Sonorização',video:'Vídeo',luz:'Iluminação',estrutura:'Estrutura',servico:'Serviço',logistica:'Logística'};
-  var SECS_OS=['som','video','luz','estrutura','servico'];
+  var _SEC_ICO_OS={som:'🔊',video:'🎬',luz:'⚡',estrutura:'🏗️',servico:'🔧',logistica:'🚛'};
+  var _SEC_LBL_OS={som:'Sonorização',video:'Vídeo',luz:'Iluminação',estrutura:'Estrutura',servico:'Serviço',logistica:'Logística'};
 
   var paginasHTML=lista.map(function(o,idx){
     var f=o.form||{};
     var st=o.dados&&o.dados.state||{};
+    // Categorias criadas NESTE orçamento entram como seções da OS dele.
+    var SECS_OS=SECS_PDF_BASE.concat(_catIdsDe(o.dados));
+    var SEC_ICO2=Object.assign({}, _SEC_ICO_OS);
+    var SEC_LBL2=Object.assign({}, _SEC_LBL_OS);
+    ((o.dados&&o.dados.catExtras)||[]).forEach(function(c){
+      if(!c||!c.id) return;
+      SEC_ICO2[c.id]=CAT_ICO_PADRAO; SEC_LBL2[c.id]=c.nome||'Categoria';
+    });
     var num=f['f-num']||'—';
     var dataorc=f['f-data']?fD(f['f-data']):new Date().toLocaleDateString('pt-BR');
     var horEv=f['f-dia']?fD(f['f-dia']):'—';
@@ -25432,7 +25698,7 @@ function osModGerarOS(lista){
           if(!st[s])return;
           var rows2=(st[s].rows[amb.id]||[]).filter(function(r){return !isOcultOS(r.name)&&r.qty>0;});
           if(!rows2.length)return;
-          corpoOS+='<tr><td colspan="3" style="background:var(--R);color:#fff;font-weight:bold;padding:3px 8px;font-size:11px;print-color-adjust:exact;-webkit-print-color-adjust:exact">'+SEC_ICO2[s]+' '+SEC_LBL2[s].toUpperCase()+'</td></tr>';
+          corpoOS+='<tr><td colspan="3" style="background:var(--R);color:#fff;font-weight:bold;padding:3px 8px;font-size:11px;print-color-adjust:exact;-webkit-print-color-adjust:exact">'+(SEC_ICO2[s]||CAT_ICO_PADRAO)+' '+String(SEC_LBL2[s]||s).toUpperCase()+'</td></tr>';
           rows2.forEach(function(r){corpoOS+=bRowOS(r);});
         });
         corpoOS+='<tr><td colspan="3" style="height:5px"></td></tr>';
@@ -25442,7 +25708,7 @@ function osModGerarOS(lista){
         if(!st[s])return;
         var rows2=(st[s].rows['default']||[]).filter(function(r){return !isOcultOS(r.name)&&r.qty>0;});
         if(!rows2.length)return;
-        corpoOS+='<tr><td colspan="3" style="background:var(--R);color:#fff;font-weight:bold;padding:4px 8px;font-size:12px;print-color-adjust:exact;-webkit-print-color-adjust:exact">'+SEC_ICO2[s]+' '+SEC_LBL2[s].toUpperCase()+'</td></tr>';
+        corpoOS+='<tr><td colspan="3" style="background:var(--R);color:#fff;font-weight:bold;padding:4px 8px;font-size:12px;print-color-adjust:exact;-webkit-print-color-adjust:exact">'+(SEC_ICO2[s]||CAT_ICO_PADRAO)+' '+String(SEC_LBL2[s]||s).toUpperCase()+'</td></tr>';
         rows2.forEach(function(r){corpoOS+=bRowOS(r);});
         corpoOS+='<tr><td colspan="3" style="height:4px"></td></tr>';
       });
@@ -26798,8 +27064,9 @@ function gerarContrato(){
     // Equipamentos (mesma lógica do PDF do orçamento)
     // 'extra' (Custos Extras / BV) é INTERNO — usado só para cálculo de margem
     // e NUNCA deve aparecer no contrato do cliente. Por isso fica fora daqui.
-    var SECS_C=['som','video','luz','estrutura','servico','logistica'];
+    var SECS_C=secsVenda();
     var SEC_N={som:'Sonorizacao',video:'Video / LED',luz:'Iluminacao',estrutura:'Estrutura',servico:'Servico / Equipe Tecnica',logistica:'Logistica'};
+    catExtras.forEach(function(c){ SEC_N[c.id]=c.nome||'Categoria'; });
     var todosAmbNomes={};
     SECS_C.forEach(function(s){var st=state[s];if(!st)return;st.ambientes.forEach(function(a){if(!todosAmbNomes[a.nome])todosAmbNomes[a.nome]={nome:a.nome,ids:[]};if(todosAmbNomes[a.nome].ids.indexOf(a.id)<0)todosAmbNomes[a.nome].ids.push(a.id);});});
     var ambList=Object.values(todosAmbNomes);
