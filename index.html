@@ -3950,16 +3950,35 @@ var ELEV=[{l:'20cm',v:100},{l:'30cm',v:100},{l:'40cm',v:100},{l:'60cm',v:100},{l
 function isPalco(n){return n&&n.trim().toLowerCase()==='palco';}
 function calcPalco(r){var a=r.larg*r.prof,np=Math.ceil(a/2),vp=r.elObj?r.elObj.v:100;var tc=r.carp&&r.carpT?a*(r.carpT==='novo'?40:25):0;return{area:a,np:np,tc:tc,total:np*vp+tc};}
 var OCULT=['Montagem','Desmontagem','Frete','Almoço/Janta','Combustível','Hotel','Pedágio','Projeto','Carregadores','BV Produtora','Bônus de Venda'];
-function isOcult(n){
+// OCULT são as LINHAS DE CUSTO (Montagem, Frete, Projeto, Hotel…) que o
+// cliente não vê item a item — elas entram no valor, não na lista.
+//
+// O problema: a regra antiga escondia qualquer item cuja descrição CITASSE
+// uma dessas palavras em qualquer posição. Foi assim que
+// "Tunel em Boxtruss P15 40,00 x 2,65m (conforme PROJETO enviado pelo
+// cliente)" — um item de Estrutura de R$ 9.000 — sumiu do orçamento do
+// cliente e da OS: a palavra "projeto" no meio da descrição bastava.
+//
+// Agora:
+//  • Item digitado à mão (CUSTOM) numa seção de venda NUNCA é escondido —
+//    foi a pessoa que escreveu ali, é coisa que o cliente está contratando.
+//  • Nas seções de venda, a palavra só esconde se a descrição COMEÇAR com
+//    ela ("Montagem 2 dias" esconde; "Palco com projeto especial" não).
+//  • Em Logística e Custos Extra — que são internas por natureza e nunca
+//    saem item a item no PDF — a regra ampla continua valendo.
+function isOcult(n, r, sec){
   if(!n) return false;
-  var nl=n.toLowerCase();
+  var interna=(sec==='logistica'||sec==='extra');
+  if(r && r.custom && !interna) return false;
+  var nl=String(n).trim().toLowerCase();
+  var letra=/[a-záàãâéêíóôõúçñ0-9]/i;
   return OCULT.some(function(o){
     var ol=o.toLowerCase();
-    // Verificar se é palavra inteira (não substring de outra palavra)
     var idx=nl.indexOf(ol);
     if(idx<0) return false;
-    var antes=idx===0||!/[a-záàãâéêíóôõúç]/i.test(nl[idx-1]);
-    var depois=idx+ol.length>=nl.length||!/[a-záàãâéêíóôõúç]/i.test(nl[idx+ol.length]);
+    if(!interna && idx!==0) return false;   // seção de venda: só no começo
+    var antes=idx===0||!letra.test(nl[idx-1]);
+    var depois=idx+ol.length>=nl.length||!letra.test(nl[idx+ol.length]);
     return antes&&depois;
   });
 }
@@ -8852,7 +8871,7 @@ function buildPDF(tipo){
   function secBlock(s,aid,det){
     if(s==='logistica')return'';
     if(!state[s]||!state[s].rows)return'';
-    var rows2=(state[s].rows[aid]||[]).filter(function(r){return !isOcult(r.name);});if(!rows2.length)return'';
+    var rows2=(state[s].rows[aid]||[]).filter(function(r){return !isOcult(r.name,r,s);});if(!rows2.length)return'';
     var secTotal=rows2.reduce(function(t,r){return t+rTotF(r);},0);
     if(det){
       var h='<div class="psec">'+SEC_ICO[s]+' '+SEC_LBL_PDF[s]+'</div>'
@@ -9203,11 +9222,11 @@ function _montarOSHtml(form, dadosCompletos){
   var corpoOS='';var multiAmb=todosAmb.length>1||todosAmb.some(function(a){return a.id!=='default';});
   if(multiAmb){
     todosAmb.forEach(function(amb){
-      var temItens=SECS_OS.some(function(s){return ((st[s]&&st[s].rows&&st[s].rows[amb.id])||[]).filter(function(r){return !isOcult(r.name);}).length>0;});
+      var temItens=SECS_OS.some(function(s){return ((st[s]&&st[s].rows&&st[s].rows[amb.id])||[]).filter(function(r){return !isOcult(r.name,r,s);}).length>0;});
       if(!temItens)return;
       corpoOS+='<tr><td colspan="3" style="background:var(--surface-3);color:var(--text);font-weight:bold;padding:5px 8px;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact">🏢 '+amb.nome+'</td></tr>';
       SECS_OS.forEach(function(s){
-        var rows2=((st[s]&&st[s].rows&&st[s].rows[amb.id])||[]).filter(function(r){return !isOcult(r.name);});
+        var rows2=((st[s]&&st[s].rows&&st[s].rows[amb.id])||[]).filter(function(r){return !isOcult(r.name,r,s);});
         var isLog=(s==='logistica');
         if(!rows2.length&&(!isLog||!incLines.length))return;
         corpoOS+='<tr><td colspan="3" style="background:var(--R);color:#fff;font-weight:bold;padding:3px 8px;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact">'+secIcone(s)+' '+String(SEC_LBL[s]||s).toUpperCase()+'</td></tr>';
@@ -9218,7 +9237,7 @@ function _montarOSHtml(form, dadosCompletos){
     });
   }else{
     SECS_OS.forEach(function(s){
-      var rows2=((st[s]&&st[s].rows&&st[s].rows['default'])||[]).filter(function(r){return !isOcult(r.name);});
+      var rows2=((st[s]&&st[s].rows&&st[s].rows['default'])||[]).filter(function(r){return !isOcult(r.name,r,s);});
       var isLog=(s==='logistica');
       if(!rows2.length&&(!isLog||!incLines.length))return;
       corpoOS+='<tr><td colspan="3" style="background:var(--R);color:#fff;font-weight:bold;padding:4px 8px;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact">'+secIcone(s)+' '+String(SEC_LBL[s]||s).toUpperCase()+'</td></tr>';
@@ -9591,7 +9610,7 @@ function _gaMontarDescricao(){
   SECS_GA.forEach(function(s){
     var todasRows=[];
     if(!state[s]) return;
-    state[s].ambientes.forEach(function(a){ (state[s].rows[a.id]||[]).forEach(function(r){ if(!isOcult(r.name)) todasRows.push(r); }); });
+    state[s].ambientes.forEach(function(a){ (state[s].rows[a.id]||[]).forEach(function(r){ if(!isOcult(r.name,r,s)) todasRows.push(r); }); });
     if(!todasRows.length) return;
     linhas.push('');
     linhas.push((SEC_LBL[s]||s).toUpperCase());
@@ -9979,7 +9998,7 @@ function _gaMontarDescricaoDe(form, state){
     var todasRows=[];
     var secState=st[s];
     if(secState&&secState.ambientes){
-      secState.ambientes.forEach(function(a){ (secState.rows[a.id]||[]).forEach(function(r){ if(!isOcult(r.name)) todasRows.push(r); }); });
+      secState.ambientes.forEach(function(a){ (secState.rows[a.id]||[]).forEach(function(r){ if(!isOcult(r.name,r,s)) todasRows.push(r); }); });
     }
     if(!todasRows.length) return;
     linhas.push('');
@@ -25771,15 +25790,21 @@ function osModGerarOS(lista){
 
   // Gerar HTML de todas as OS em uma única página (separadas por page-break)
   var OCULT_LOC=['Montagem','Desmontagem','Frete','Almoço/Janta','Combustível','Hotel','Pedágio','Projeto','Carregadores','BV Produtora','Bônus de Venda'];
-  function isOcultOS(n){
+  // Mesma regra do orçamento (ver isOcult): item personalizado não some da
+  // OS só porque a descrição cita "projeto", "montagem" etc.
+  function isOcultOS(n, r, sec){
     if(!n)return false;
-    var nl=n.toLowerCase();
+    var interna=(sec==='logistica'||sec==='extra');
+    if(r && r.custom && !interna) return false;
+    var nl=String(n).trim().toLowerCase();
+    var letra=/[a-záàãâéêíóôõúçñ0-9]/i;
     return OCULT_LOC.some(function(o){
       var ol=o.toLowerCase();
       var idx=nl.indexOf(ol);
       if(idx<0)return false;
-      var antes=idx===0||!/[a-záàãâéêíóôõúç]/i.test(nl[idx-1]);
-      var depois=idx+ol.length>=nl.length||!/[a-záàãâéêíóôõúç]/i.test(nl[idx+ol.length]);
+      if(!interna && idx!==0) return false;
+      var antes=idx===0||!letra.test(nl[idx-1]);
+      var depois=idx+ol.length>=nl.length||!letra.test(nl[idx+ol.length]);
       return antes&&depois;
     });
   }
@@ -25831,12 +25856,12 @@ function osModGerarOS(lista){
     var corpoOS='';
     if(multiAmb4){
       todosAmb.forEach(function(amb){
-        var temItens=SECS_OS.some(function(s){return st[s]&&(st[s].rows[amb.id]||[]).filter(function(r){return !isOcultOS(r.name)&&r.qty>0;}).length>0;});
+        var temItens=SECS_OS.some(function(s){return st[s]&&(st[s].rows[amb.id]||[]).filter(function(r){return !isOcultOS(r.name,r,s)&&r.qty>0;}).length>0;});
         if(!temItens)return;
         corpoOS+='<tr><td colspan="3" style="background:var(--surface-3);color:var(--text);font-weight:bold;padding:5px 8px;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact">🏢 '+eh(amb.nome)+'</td></tr>';
         SECS_OS.forEach(function(s){
           if(!st[s])return;
-          var rows2=(st[s].rows[amb.id]||[]).filter(function(r){return !isOcultOS(r.name)&&r.qty>0;});
+          var rows2=(st[s].rows[amb.id]||[]).filter(function(r){return !isOcultOS(r.name,r,s)&&r.qty>0;});
           if(!rows2.length)return;
           corpoOS+='<tr><td colspan="3" style="background:var(--R);color:#fff;font-weight:bold;padding:3px 8px;font-size:11px;print-color-adjust:exact;-webkit-print-color-adjust:exact">'+(SEC_ICO2[s]||CAT_ICO_PADRAO)+' '+String(SEC_LBL2[s]||s).toUpperCase()+'</td></tr>';
           rows2.forEach(function(r){corpoOS+=bRowOS(r);});
@@ -25846,7 +25871,7 @@ function osModGerarOS(lista){
     }else{
       SECS_OS.forEach(function(s){
         if(!st[s])return;
-        var rows2=(st[s].rows['default']||[]).filter(function(r){return !isOcultOS(r.name)&&r.qty>0;});
+        var rows2=(st[s].rows['default']||[]).filter(function(r){return !isOcultOS(r.name,r,s)&&r.qty>0;});
         if(!rows2.length)return;
         corpoOS+='<tr><td colspan="3" style="background:var(--R);color:#fff;font-weight:bold;padding:4px 8px;font-size:12px;print-color-adjust:exact;-webkit-print-color-adjust:exact">'+(SEC_ICO2[s]||CAT_ICO_PADRAO)+' '+String(SEC_LBL2[s]||s).toUpperCase()+'</td></tr>';
         rows2.forEach(function(r){corpoOS+=bRowOS(r);});
@@ -27228,13 +27253,13 @@ function gerarContrato(){
     }
     if(multiAmb){
       ambList.forEach(function(amb){
-        var temItens=SECS_C.some(function(s){var st=state[s];if(!st)return false;return amb.ids.some(function(aid){return(st.rows[aid]||[]).filter(function(r){return typeof isOcult==='function'?!isOcult(r.name):true;}).length>0;});});
+        var temItens=SECS_C.some(function(s){var st=state[s];if(!st)return false;return amb.ids.some(function(aid){return(st.rows[aid]||[]).filter(function(r){return typeof isOcult==='function'?!isOcult(r.name,r,s):true;}).length>0;});});
         if(!temItens)return;
         linhasAnexo.push({tipo:'ambiente',nome:amb.nome});
-        SECS_C.forEach(function(s){var st=state[s];if(!st)return;amb.ids.forEach(function(aid){var rows=(st.rows[aid]||[]).filter(function(r){return typeof isOcult==='function'?!isOcult(r.name):true;});if(!rows.length)return;linhasAnexo.push({tipo:'secao',nome:SEC_N[s]});rows.forEach(function(r){linhasAnexo.push({tipo:'item',qty:r.qty,desc:descFromRow(r),diaria:r.diaria||1});});});});
+        SECS_C.forEach(function(s){var st=state[s];if(!st)return;amb.ids.forEach(function(aid){var rows=(st.rows[aid]||[]).filter(function(r){return typeof isOcult==='function'?!isOcult(r.name,r,s):true;});if(!rows.length)return;linhasAnexo.push({tipo:'secao',nome:SEC_N[s]});rows.forEach(function(r){linhasAnexo.push({tipo:'item',qty:r.qty,desc:descFromRow(r),diaria:r.diaria||1});});});});
       });
     }else{
-      SECS_C.forEach(function(s){var st=state[s];if(!st)return;var rows=[];st.ambientes.forEach(function(a){(st.rows[a.id]||[]).filter(function(r){return typeof isOcult==='function'?!isOcult(r.name):true;}).forEach(function(r){rows.push(r);});});if(!rows.length)return;linhasAnexo.push({tipo:'secao',nome:SEC_N[s]});rows.forEach(function(r){linhasAnexo.push({tipo:'item',qty:r.qty,desc:descFromRow(r),diaria:r.diaria||1});});});
+      SECS_C.forEach(function(s){var st=state[s];if(!st)return;var rows=[];st.ambientes.forEach(function(a){(st.rows[a.id]||[]).filter(function(r){return typeof isOcult==='function'?!isOcult(r.name,r,s):true;}).forEach(function(r){rows.push(r);});});if(!rows.length)return;linhasAnexo.push({tipo:'secao',nome:SEC_N[s]});rows.forEach(function(r){linhasAnexo.push({tipo:'item',qty:r.qty,desc:descFromRow(r),diaria:r.diaria||1});});});
     }
 
     // ── PDF ──
