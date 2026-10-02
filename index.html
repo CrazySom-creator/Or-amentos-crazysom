@@ -3003,13 +3003,12 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     <div><label>Hora Montagem</label><input type="time" id="f-hm" oninput="marcarAlterado()"></div>
     <div><label>Fim Montagem</label><input type="date" id="f-dm-fim" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc()"></div>
     <div><label>LED disponível?</label><button type="button" class="btn btn-o btn-sm" id="btn-led-disp" onclick="ledConsultarOrcamento()" title="Confere, na janela de montagem até desmontagem deste orçamento, se há metros quadrados de painel de LED livres — ou quanto falta sublocar" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px">🟥 LED <span id="led-badge" style="background:var(--surface-3);border-radius:10px;padding:1px 8px;font-weight:800;font-size:11px;color:var(--text-dim)">—</span></button></div>
-    <div><label>Agenda</label><button type="button" class="btn btn-o btn-sm" id="btn-agenda-contador" onclick="abrirAgendaLogisticaDoOrcamento()" title="Ver a agenda da Logística pra esse período — eventos fechados e pré-reservados que se sobrepõem" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px">📅 Agenda <span id="agenda-contador-badge" style="background:var(--surface-3);border-radius:10px;padding:1px 8px;font-weight:800;font-size:11px;color:var(--text-dim)">—</span></button></div>
   </div>
   <div class="g4" style="margin-bottom:8px">
     <div><label>Início Desmontagem</label><input type="date" id="f-dd" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc()"></div>
     <div><label>Hora Desmontagem</label><input type="time" id="f-hd" oninput="marcarAlterado()"></div>
     <div><label>Fim Desmontagem</label><input type="date" id="f-dd-fim" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc()"></div>
-    <div></div>
+    <div><label>Agenda</label><button type="button" class="btn btn-o btn-sm" id="btn-agenda-contador" onclick="abrirAgendaLogisticaDoOrcamento()" title="Ver a agenda da Logística pra esse período — eventos fechados e pré-reservados que se sobrepõem" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px">📅 Agenda <span id="agenda-contador-badge" style="background:var(--surface-3);border-radius:10px;padding:1px 8px;font-weight:800;font-size:11px;color:var(--text-dim)">—</span></button></div>
   </div>
   <div class="g3">
     <div><label>Público Estimado</label><input type="number" id="f-pub" placeholder="500" oninput="marcarAlterado()"></div>
