@@ -1532,6 +1532,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div class="rel-tab" onclick="admAba('subgruposproduto')">🗃️ Subgrupos de Produto</div>
       <div class="rel-tab" onclick="admAba('enderecosproduto')">📍 Endereçamento</div>
       <div class="rel-tab" onclick="admAba('painelled')">🟥 Painéis de LED</div>
+      <div class="rel-tab" onclick="admAba('anexos')">📎 Anexos</div>
       <div class="rel-tab" onclick="admAba('googleagenda')">🗓️ Google Agenda</div>
     </div>
     <!-- ABA Usuários -->
@@ -1640,6 +1641,31 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <button class="btn btn-r btn-sm" onclick="painelLedSalvar()">💾 Salvar cadastro</button>
         <button class="btn btn-o btn-sm" onclick="painelLedRestaurar()" title="Volta aos 5 tipos padrão com os m² originais">↺ Restaurar padrão</button>
         <span id="painelled-status" style="font-size:11px;color:var(--text-dim)"></span>
+      </div>
+    </div>
+    <!-- ABA Anexos -->
+    <div class="rel-pane" id="admpane-anexos">
+      <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">
+        Os anexos (plantas, descritivos, fotos) são gravados no banco em pedaços. O banco só aceita gravar
+        onde as <b>regras de segurança</b> permitem — e essas regras valem por perfil de usuário.
+        Se uma pessoa consegue anexar e outra não, é quase sempre isto.
+      </p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn btn-r btn-sm" onclick="anxDiagTestar()">🔎 Testar gravação com o meu login</button>
+        <span id="anx-diag-status" style="font-size:11px;color:var(--text-dim)"></span>
+      </div>
+      <div id="anx-diag-resultado" style="margin-bottom:14px"></div>
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:12px 14px">
+        <div style="font-size:11px;font-weight:800;margin-bottom:6px">📋 Regra para liberar anexos para TODOS os usuários</div>
+        <p style="font-size:10.5px;color:var(--text-muted);margin:0 0 8px;line-height:1.6">
+          Abra <b>console.firebase.google.com</b> › projeto <b>crazysom-sistema</b> › <b>Firestore Database</b> › aba <b>Regras</b>.
+          Cole o bloco abaixo dentro de <code>match /databases/{database}/documents {</code> e clique em <b>Publicar</b>.
+        </p>
+        <textarea id="anx-regra-texto" readonly style="width:100%;min-height:92px;font-family:monospace;font-size:11px;background:var(--surface);color:var(--text);border:1px solid var(--border-strong);border-radius:4px;padding:8px"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <button class="btn btn-g btn-sm" onclick="anxDiagCopiarRegra()">📋 Copiar regra</button>
+          <span id="anx-regra-copia" style="font-size:11px;color:var(--text-dim)"></span>
+        </div>
       </div>
     </div>
     <div class="rel-pane" id="admpane-googleagenda">
@@ -12887,26 +12913,46 @@ async function _anxSubirFirestore(blob, id, idOrc, onProgresso){
             dados:b64.substr(i*ANX_CHUNK_B64, ANX_CHUNK_B64)};
   }
 
-  // Descobre uma vez por sessão onde dá pra gravar, usando o 1º pedaço real.
-  if(!ANX_COL){
+  // Onde gravar: as regras do banco mudam por perfil de usuário, então o
+  // lugar que serve para um pode não servir para outro. Foi exatamente o caso
+  // relatado — o administrador gravava em "config" (coleção que só
+  // administrador escreve) e, para a consultora, não sobrava lugar nenhum.
+  // Por isso aqui: tenta o lugar já conhecido; se recusar, sonda a lista
+  // inteira de novo. E "config", por ser o último recurso, é sempre
+  // reavaliado — assim que a regra do banco for publicada, o sistema migra
+  // sozinho para o lugar certo, sem ninguém precisar relogar.
+  async function sondar(){
     var recusas=[];
     for(var t=0;t<ANX_LOCAIS.length;t++){
       try{
         await _anxDoc(ANX_LOCAIS[t], id, 0, idOrc).set(pedaco(0));
-        ANX_COL=ANX_LOCAIS[t];
-        break;
+        return {col:ANX_LOCAIS[t]};
       }catch(e){
         recusas.push(ANX_LOCAIS[t]+': '+((e&&(e.code||e.message))||e));
         console.warn('[Anexos] sem permissão em '+ANX_LOCAIS[t], e&&(e.code||e.message));
       }
     }
-    if(!ANX_COL){
-      var err=new Error('sem-lugar-para-gravar');
-      err.detalhe=recusas.join(' | ');
-      throw err;
+    return {recusas:recusas};
+  }
+
+  if(ANX_COL && ANX_COL!=='config'){
+    try{
+      await _anxDoc(ANX_COL, id, 0, idOrc).set(pedaco(0));
+    }catch(eCol){
+      console.warn('[Anexos] "'+ANX_COL+'" não serve para este usuário — sondando de novo.', eCol&&(eCol.code||eCol.message));
+      ANX_COL='';
     }
   } else {
-    await _anxDoc(ANX_COL, id, 0, idOrc).set(pedaco(0));
+    ANX_COL='';
+  }
+  if(!ANX_COL){
+    var r=await sondar();
+    if(!r.col){
+      var err=new Error('sem-lugar-para-gravar');
+      err.detalhe=(r.recusas||[]).join(' | ');
+      throw err;
+    }
+    ANX_COL=r.col;
   }
   if(onProgresso) onProgresso(1/total);
 
@@ -12988,17 +13034,123 @@ async function anxVerificar(){
 
 // Texto de socorro quando NENHUM lugar aceita a gravação — mostra a regra
 // pronta pra colar no console, em vez de um "peça a um administrador".
+// As duas regras que faltam no Firestore. Enquanto não existirem, só quem
+// pode escrever em "config" (administrador) consegue anexar — foi por isso
+// que funcionava para o Fabiano e não para a Giovana.
+var ANX_REGRA_TEXTO=''
+  +'match /orcamentos/{orc}/anexos/{parte} {\n'
+  +'  allow read, write: if request.auth != null;\n'
+  +'}\n'
+  +'match /anexos/{parte} {\n'
+  +'  allow read, write: if request.auth != null;\n'
+  +'}';
+
 var ANX_REGRA_AJUDA=''
   +'⚠️ O BANCO ESTÁ RECUSANDO A GRAVAÇÃO DOS ANEXOS\n\n'
-  +'As regras de segurança do Firebase ainda não permitem gravar os arquivos.\n\n'
+  +'As regras de segurança do Firebase ainda não permitem que TODOS os usuários gravem anexos — '
+  +'hoje só quem é administrador consegue.\n\n'
   +'COMO RESOLVER (leva 1 minuto, precisa ser um administrador):\n'
   +'1. Abra console.firebase.google.com > projeto crazysom-sistema\n'
   +'2. Firestore Database > aba "Regras" (Rules)\n'
   +'3. Dentro de "match /databases/{database}/documents {", acrescente:\n\n'
-  +'   match /orcamentos/{orc}/anexos/{parte} {\n'
-  +'     allow read, write: if request.auth != null;\n'
-  +'   }\n\n'
-  +'4. Clique em Publicar e tente anexar de novo.';
+  +ANX_REGRA_TEXTO.split('\n').map(function(l){ return '   '+l; }).join('\n')+'\n\n'
+  +'4. Clique em Publicar e tente anexar de novo.\n\n'
+  +'O texto pronto para copiar está em Administração > Anexos.';
+
+var ANX_REGRA_AJUDA_USUARIO=''
+  +'⚠️ O BANCO RECUSOU A GRAVAÇÃO DO ANEXO\n\n'
+  +'Não é problema do seu arquivo nem do seu computador: as regras de segurança do banco '
+  +'ainda não liberam anexos para o seu perfil.\n\n'
+  +'Avise um administrador — a correção é em Administração > Anexos e leva 1 minuto.\n\n'
+  +'Enquanto isso, nada do seu orçamento foi perdido.';
+
+/* ── Diagnóstico de anexos (Admin) ──────────────────────────────────────
+   Transforma um problema invisível (regra do banco) em algo conferível em
+   10 segundos: grava um pedacinho de teste em cada lugar possível COM O
+   LOGIN DE QUEM ESTÁ NA TELA e diz onde deu certo. Peça para a pessoa que
+   não consegue anexar rodar este mesmo teste — a diferença aparece na hora.
+   O teste limpa o que gravou. ────────────────────────────────────────── */
+function anxDiagRenderAdmin(){
+  var ta=document.getElementById('anx-regra-texto');
+  if(ta) ta.value=ANX_REGRA_TEXTO;
+  var res=document.getElementById('anx-diag-resultado');
+  if(res && !res.innerHTML){
+    res.innerHTML='<div style="font-size:11px;color:var(--text-muted);padding:10px 12px;border:1px dashed var(--border);border-radius:6px">'
+      +'Clique em <b>Testar gravação</b> para ver onde o banco deixa este login gravar anexos.</div>';
+  }
+}
+
+function anxDiagCopiarRegra(){
+  var ta=document.getElementById('anx-regra-texto');
+  var av=document.getElementById('anx-regra-copia');
+  if(!ta) return;
+  try{
+    ta.select(); ta.setSelectionRange(0, 99999);
+    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value);
+    else document.execCommand('copy');
+    if(av){ av.style.color='#4caf50'; av.textContent='✅ Copiado — cole no console do Firebase e publique.'; setTimeout(function(){av.textContent='';},5000); }
+  }catch(e){
+    if(av){ av.style.color='#ff5555'; av.textContent='Selecione o texto e copie com Ctrl+C.'; }
+  }
+}
+
+async function anxDiagTestar(){
+  var st=document.getElementById('anx-diag-status');
+  var res=document.getElementById('anx-diag-resultado');
+  if(st){ st.style.color='var(--text-dim)'; st.textContent='⏳ Testando...'; }
+  var idTeste='diagnostico_'+Date.now();
+  var idOrcTeste=driveIdAtual||'diagnostico';
+  var linhas=[];
+  for(var i=0;i<ANX_LOCAIS.length;i++){
+    var loc=ANX_LOCAIS[i];
+    var ref=_anxDoc(loc, idTeste, 0, idOrcTeste);
+    var ok=false, erro='';
+    try{
+      await ref.set({anexoId:idTeste, parte:0, total:1, dados:'teste', diagnostico:true});
+      ok=true;
+      try{ await ref.delete(); }catch(eDel){}
+    }catch(e){ erro=(e&&(e.code||e.message))||String(e); }
+    linhas.push({loc:loc, ok:ok, erro:erro});
+  }
+  var nomes={orcamento:'Dentro do orçamento (orcamentos/.../anexos)', anexos:'Coleção "anexos"', config:'Coleção "config" — só administrador'};
+  var algum=linhas.some(function(l){ return l.ok; });
+  var todos=linhas.every(function(l){ return l.ok; });
+  var soConfig=linhas.length && linhas[linhas.length-1].ok && !linhas[0].ok && !linhas[1].ok;
+
+  var h='<div style="border:1px solid var(--border);border-radius:6px;overflow:hidden">';
+  linhas.forEach(function(l){
+    h+='<div style="display:flex;gap:10px;align-items:baseline;padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px">'
+      +'<span style="font-size:13px">'+(l.ok?'✅':'⛔')+'</span>'
+      +'<span style="flex:1"><b>'+eh(nomes[l.loc]||l.loc)+'</b>'
+      +(l.erro?'<div style="color:var(--text-dim);font-size:10px">'+eh(l.erro)+'</div>':'')+'</span>'
+      +'<span style="color:'+(l.ok?'#2e7d32':'#c62828')+';font-weight:800">'+(l.ok?'grava':'recusado')+'</span>'
+      +'</div>';
+  });
+  h+='</div>';
+
+  var diag, cor, bg, bd;
+  if(soConfig){
+    diag='⚠️ É exatamente o caso relatado: este login só consegue gravar em "config", que só administrador pode escrever. '
+        +'Para os consultores não sobra lugar nenhum — por isso eles não conseguem anexar. Publique a regra abaixo e teste de novo.';
+    cor='#e65100'; bg='#fff3e0'; bd='#ffb74d';
+  }else if(!algum){
+    diag='⛔ Este login não consegue gravar anexo em lugar nenhum. Publique a regra abaixo e teste de novo.';
+    cor='#c62828'; bg='#ffebee'; bd='#ef9a9a';
+  }else if(todos){
+    diag='✅ Tudo liberado — qualquer usuário consegue anexar.';
+    cor='#2e7d32'; bg='#e8f5e9'; bd='#a5d6a7';
+  }else{
+    diag='✅ Este login consegue anexar. Peça para quem NÃO está conseguindo abrir esta mesma tela e clicar no teste — '
+        +'se aparecer ⛔ nas duas primeiras linhas, é a regra do banco.';
+    cor='#2e7d32'; bg='#e8f5e9'; bd='#a5d6a7';
+  }
+  h='<div style="background:'+bg+';border:1px solid '+bd+';border-left:5px solid '+cor+';border-radius:6px;padding:10px 13px;margin-bottom:10px;font-size:11.5px;color:'+cor+';font-weight:700;line-height:1.5">'+diag+'</div>'+h
+    +'<div style="font-size:10px;color:var(--text-dim);margin-top:6px">Testado com o login <b>'+eh((usuarioAtual&&usuarioAtual.nome)||'—')+'</b>'
+    +' ('+eh((usuarioAtual&&(NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel))||'—')+'). Os registros de teste foram apagados.</div>';
+
+  if(res) res.innerHTML=h;
+  if(st){ st.style.color=algum?'#4caf50':'#ff5555'; st.textContent=algum?'Teste concluído.':'Nenhum lugar liberado.'; }
+}
 
 function anxCancelarEnvio(){
   _anxCancelar=true;
@@ -13110,7 +13262,10 @@ async function anxSelecionar(input){
   if(falhas.length){
     anxStatus('⚠️ '+falhas.length+' arquivo(s) não foram anexados.','err');
     if(falhas.some(function(f){ return /sem-lugar-para-gravar|regras de seguran/i.test(f); })){
-      alert(ANX_REGRA_AJUDA);
+      // Quem não é administrador não tem o que fazer com um passo a passo do
+      // console do Firebase — recebe o recado certo para a situação dele.
+      var ehAdm=usuarioAtual && usuarioAtual.nivel==='adm';
+      alert(ehAdm?ANX_REGRA_AJUDA:ANX_REGRA_AJUDA_USUARIO);
     }else{
       alert('⚠️ NÃO FOI POSSÍVEL ANEXAR:\n\n• '+falhas.join('\n• '));
     }
@@ -22722,7 +22877,7 @@ function dashTemAcesso(dashId){
 
 function admAba(aba){
   document.querySelectorAll('#adm-ov .rel-tab').forEach(function(t,i){
-    var abas=['usuarios','cargos','permissoes','dashboards','tiposevento','tipostarefa','categoriasproduto','gruposproduto','subgruposproduto','enderecosproduto','painelled','googleagenda'];
+    var abas=['usuarios','cargos','permissoes','dashboards','tiposevento','tipostarefa','categoriasproduto','gruposproduto','subgruposproduto','enderecosproduto','painelled','anexos','googleagenda'];
     t.classList.toggle('active',abas[i]===aba);
   });
   document.querySelectorAll('#adm-ov .rel-pane').forEach(function(p){p.classList.remove('active');});
@@ -22738,6 +22893,7 @@ function admAba(aba){
   if(aba==='subgruposproduto') subgruposProdutoRenderAdmin();
   if(aba==='enderecosproduto') enderecosProdutoRenderAdmin();
   if(aba==='painelled') painelLedRenderAdmin();
+  if(aba==='anexos') anxDiagRenderAdmin();
   if(aba==='googleagenda') googleAgendaRenderAdmin();
 }
 
