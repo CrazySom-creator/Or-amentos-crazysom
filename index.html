@@ -981,6 +981,12 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <div class="home-card-desc">Confere se toda Venda Ganha (realizado + vendido) tem evento criado no Google Agenda</div>
       </div>
 
+      <div class="home-card orange" id="home-btn-led" onclick="abrirLedMapa();fecharHome()">
+        <div class="home-card-ico">🟥</div>
+        <div class="home-card-title">Disponibilidade de LED</div>
+        <div class="home-card-desc">Metros quadrados de painel comprometidos por data — veja onde falta e precisa sublocar</div>
+      </div>
+
       <div class="home-card orange" id="home-btn-log" onclick="abrirLogistica();fecharHome()">
         <div class="home-card-ico">🚚</div>
         <div class="home-card-title">Logística de Eventos</div>
@@ -1525,6 +1531,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div class="rel-tab" onclick="admAba('gruposproduto')">🗂️ Grupos de Produto</div>
       <div class="rel-tab" onclick="admAba('subgruposproduto')">🗃️ Subgrupos de Produto</div>
       <div class="rel-tab" onclick="admAba('enderecosproduto')">📍 Endereçamento</div>
+      <div class="rel-tab" onclick="admAba('painelled')">🟥 Painéis de LED</div>
       <div class="rel-tab" onclick="admAba('googleagenda')">🗓️ Google Agenda</div>
     </div>
     <!-- ABA Usuários -->
@@ -1619,6 +1626,22 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div id="enderecosproduto-lista" style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
     </div>
     <!-- ABA Google Agenda -->
+    <!-- ABA Painéis de LED -->
+    <div class="rel-pane" id="admpane-painelled">
+      <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">
+        Painel de LED se conta em <b>metros quadrados</b>, não em unidades. Informe aqui quantos m² de cada tipo a empresa tem.
+        É com esse cadastro que o botão <b>🟥 LED</b> do orçamento e a tela <b>Disponibilidade de LED</b> respondem se há material para uma data.<br>
+        As <b>palavras que identificam</b> servem para o sistema reconhecer o tipo pelo nome do item lançado no orçamento — separe por <b>ponto e vírgula</b> (<code>;</code>), porque as próprias chaves costumam ter vírgula decimal, como <code>2,9mm</code>.
+        A lista é lida <b>de cima para baixo</b> e vale o primeiro tipo que casar — por isso "curvo" precisa ficar acima de "3.9".
+      </p>
+      <div id="painelled-lista" style="border:1px solid var(--border);border-radius:6px;overflow:auto"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-g btn-sm" onclick="painelLedAdicionar()">+ Adicionar tipo</button>
+        <button class="btn btn-r btn-sm" onclick="painelLedSalvar()">💾 Salvar cadastro</button>
+        <button class="btn btn-o btn-sm" onclick="painelLedRestaurar()" title="Volta aos 5 tipos padrão com os m² originais">↺ Restaurar padrão</button>
+        <span id="painelled-status" style="font-size:11px;color:var(--text-dim)"></span>
+      </div>
+    </div>
     <div class="rel-pane" id="admpane-googleagenda">
       <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Configura o envio dos eventos de Montagem, Evento e Desmontagem da OS para o Google Agenda da empresa — ao clicar em "📅 Agenda", ao marcar "🏆 Venda Ganha" (envio automático) ou ao clicar em "📌 Pré-Agenda" (pré-reserva manual de uma negociação avançada). Requer um Client ID OAuth criado no Google Cloud Console (peça ao suporte técnico o passo a passo de configuração) e o ID do calendário compartilhado que vai receber os eventos.</p>
       <div style="display:flex;flex-direction:column;gap:12px;max-width:520px">
@@ -2275,6 +2298,53 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
 <!--  numa agenda com visão Dia/Semana/Mês, pra facilitar a elaboração da    -->
 <!--  logística (montagem → evento → desmontagem).                          -->
 <!-- ═══════════════════════════════════════════════════════ -->
+<!-- ═══ DISPONIBILIDADE DE PAINEL DE LED ═══ -->
+<div class="ov" id="led-ov">
+  <div class="modal-box dash-modal" style="max-width:1150px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div>
+        <h2 style="margin-bottom:2px">🟥 Disponibilidade de Painel de LED</h2>
+        <p class="sub" style="margin:0">Quantos m² de cada tipo estão comprometidos em cada dia — e onde falta material</p>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-r btn-sm" onclick="ledMapaAtualizar()" title="Rebusca os orçamentos antes de recalcular">🔄 Atualizar</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('led-ov').classList.remove('open');voltarDoModulo()">✕</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 13px;margin-bottom:12px">
+      <div><label style="font-size:9px">De</label><input type="date" id="led-de" onchange="ledMapaRenderizar()" style="font-size:11px;padding:5px 7px"></div>
+      <div><label style="font-size:9px">Até</label><input type="date" id="led-ate" onchange="ledMapaRenderizar()" style="font-size:11px;padding:5px 7px"></div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer">
+        <input type="checkbox" id="led-so-criticos" onchange="ledMapaRenderizar()"> mostrar só os dias acima do estoque
+      </label>
+    </div>
+    <div id="led-mapa"></div>
+  </div>
+</div>
+
+<div class="ov" id="led-dia-ov">
+  <div class="modal-box" style="max-width:760px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h2 style="margin:0">🟥 LED no dia</h2>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('led-dia-ov').classList.remove('open')">✕</button>
+    </div>
+    <div id="led-dia-corpo"></div>
+  </div>
+</div>
+
+<div class="ov" id="led-consulta-ov">
+  <div class="modal-box" style="max-width:860px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div>
+        <h2 style="margin-bottom:2px">🟥 Tem painel de LED para esta data?</h2>
+        <p class="sub" style="margin:0">Conferência do estoque de LED na janela de montagem até desmontagem deste orçamento</p>
+      </div>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('led-consulta-ov').classList.remove('open')">✕</button>
+    </div>
+    <div id="led-consulta-corpo"></div>
+  </div>
+</div>
+
 <div class="ov" id="log-ov">
   <div class="modal-box dash-modal" style="max-width:1200px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
@@ -2929,15 +2999,16 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     <div><label>Diárias Equip. (½)</label><input id="f-diarias-equip" readonly style="background:#e8f4fd;border-color:#90caf9;font-weight:700;color:#1565c0"></div>
   </div>
   <div class="g4" style="margin-bottom:8px">
-    <div><label>Início Montagem</label><input type="date" id="f-dm" oninput="marcarAlterado();atualizarContadorAgendaOrc()"></div>
+    <div><label>Início Montagem</label><input type="date" id="f-dm" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc()"></div>
     <div><label>Hora Montagem</label><input type="time" id="f-hm" oninput="marcarAlterado()"></div>
-    <div><label>Fim Montagem</label><input type="date" id="f-dm-fim" oninput="marcarAlterado();atualizarContadorAgendaOrc()"></div>
+    <div><label>Fim Montagem</label><input type="date" id="f-dm-fim" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc()"></div>
+    <div><label>LED disponível?</label><button type="button" class="btn btn-o btn-sm" id="btn-led-disp" onclick="ledConsultarOrcamento()" title="Confere, na janela de montagem até desmontagem deste orçamento, se há metros quadrados de painel de LED livres — ou quanto falta sublocar" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px">🟥 LED <span id="led-badge" style="background:var(--surface-3);border-radius:10px;padding:1px 8px;font-weight:800;font-size:11px;color:var(--text-dim)">—</span></button></div>
     <div><label>Agenda</label><button type="button" class="btn btn-o btn-sm" id="btn-agenda-contador" onclick="abrirAgendaLogisticaDoOrcamento()" title="Ver a agenda da Logística pra esse período — eventos fechados e pré-reservados que se sobrepõem" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px">📅 Agenda <span id="agenda-contador-badge" style="background:var(--surface-3);border-radius:10px;padding:1px 8px;font-weight:800;font-size:11px;color:var(--text-dim)">—</span></button></div>
   </div>
   <div class="g4" style="margin-bottom:8px">
-    <div><label>Início Desmontagem</label><input type="date" id="f-dd" oninput="marcarAlterado();atualizarContadorAgendaOrc()"></div>
+    <div><label>Início Desmontagem</label><input type="date" id="f-dd" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc()"></div>
     <div><label>Hora Desmontagem</label><input type="time" id="f-hd" oninput="marcarAlterado()"></div>
-    <div><label>Fim Desmontagem</label><input type="date" id="f-dd-fim" oninput="marcarAlterado();atualizarContadorAgendaOrc()"></div>
+    <div><label>Fim Desmontagem</label><input type="date" id="f-dd-fim" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc()"></div>
     <div></div>
   </div>
   <div class="g3">
@@ -4478,6 +4549,7 @@ function calcDiariasAuto(){
   // Agenda (cai no fallback f-dia/f-dia-fim quando Montagem/Desmontagem não
   // estão preenchidas) — recalcula junto, sem precisar duplicar o oninput.
   try{ atualizarContadorAgendaOrc(); }catch(e){}
+  try{ atualizarBadgeLedOrc(); }catch(e){}
 }
 
 // ═══════════════════════════════════════════════════════
@@ -4579,6 +4651,553 @@ async function abrirAgendaLogisticaDoOrcamento(){
   var periodo=_agendaContadorPeriodoAtual();
   if(periodo){ _logData=periodo.inicio; _logView='semana'; }
   await abrirLogistica();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DISPONIBILIDADE DE PAINEL DE LED POR DATA
+   ──────────────────────────────────────────────────────────────────────────
+   O problema (pedido do usuário): "entra um orçamento para 21/10 e nessa data
+   estamos com uma grande quantidade de eventos que utilizam painéis de LED.
+   Hoje tenho que contabilizar manualmente para saber se temos as quantidades
+   disponíveis, se teremos que complementar sublocando de parceiros, ou se não
+   teremos como atender."
+
+   Painel de LED não se conta em UNIDADES — se conta em METROS QUADRADOS (é
+   montado em módulos). Por isso a sinaleira de estoque comum (por unidade)
+   nunca resolveu isto: o que importa é quantos m² de cada tipo (2.5, 2.9,
+   3.9, 3.9 curvo, P6) estão comprometidos naquela janela de datas.
+
+   Regras combinadas com o usuário:
+   • Venda Ganha = comprometido FIRME. Proposta Enviada / Negociação /
+     Standby entra numa linha separada, como RISCO — assim dá pra ver
+     "tenho 10 m² livres, mas 8 estão em negociação".
+   • A janela é de MONTAGEM até DESMONTAGEM (o painel sai do galpão na
+     montagem e só volta na desmontagem) — a mesma janela que a Logística e
+     o contador da Agenda já usam (_logRangeEvento).
+   • Cada tipo é um estoque independente: 2.9 não cobre a falta de 3.9.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+// Estoque por tipo, em m². Editável em Admin > Painéis de LED.
+// "chaves" = pedaços de texto que identificam o tipo no nome do item do
+// orçamento. A lista é lida DE CIMA PARA BAIXO e vale o primeiro que casar —
+// por isso "3.9 curvo" vem antes de "3.9".
+var PAINEL_LED_PADRAO=[
+  {id:'p39c', nome:'Painel 3.9 curvo', m2:15, chaves:'curvo; ph3.9 curvo; p3.9 curvo'},
+  {id:'p25',  nome:'Painel 2.5',       m2:7,  chaves:'ph2.5; p2.5; 2.5mm; 2,5mm'},
+  {id:'p29',  nome:'Painel 2.9',       m2:31, chaves:'ph2.9; p2.9; 2.9mm; 2,9mm'},
+  {id:'p39',  nome:'Painel 3.9',       m2:24, chaves:'ph3.9; p3.9; 3.9mm; 3,9mm'},
+  {id:'p6',   nome:'Painel P6',        m2:26, chaves:'ph6; p6; 6mm'}
+];
+var PAINEIS_LED=PAINEL_LED_PADRAO.map(function(t){ return Object.assign({},t); });
+
+async function painelLedCarregar(){
+  try{
+    var snap=await fbDb.collection('config').doc('painelLed').get();
+    if(snap.exists && Array.isArray(snap.data().lista) && snap.data().lista.length){
+      PAINEIS_LED=snap.data().lista.map(function(t){
+        return {id:t.id||('p'+Math.random().toString(36).slice(2,6)), nome:t.nome||'Painel', m2:parseFloat(t.m2)||0, chaves:t.chaves||''};
+      });
+    }else{
+      PAINEIS_LED=PAINEL_LED_PADRAO.map(function(t){ return Object.assign({},t); });
+    }
+  }catch(e){
+    console.warn('painelLedCarregar:',e);
+    PAINEIS_LED=PAINEL_LED_PADRAO.map(function(t){ return Object.assign({},t); });
+  }
+}
+
+async function _painelLedSalvarFirestore(){
+  try{
+    await fbDb.collection('config').doc('painelLed').set({lista:PAINEIS_LED});
+    return true;
+  }catch(e){ console.warn('_painelLedSalvarFirestore:',e); return false; }
+}
+
+function _ledNorm(s){ return String(s||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+
+// Qual tipo de painel é este item? null = não é painel de LED conhecido.
+function _ledTipoDoItem(nome){
+  var n=_ledNorm(nome);
+  if(!n) return null;
+  for(var i=0;i<PAINEIS_LED.length;i++){
+    var t=PAINEIS_LED[i];
+    // Separador é ";" — as chaves têm vírgula decimal ("2,5mm"), então
+    // vírgula como separador partia a chave ao meio e sobrava "2", que
+    // casava com qualquer item que tivesse o algarismo 2 no nome.
+    // Chave de 1 caractere é ignorada pela mesma razão.
+    var chaves=String(t.chaves||'').split(';').map(_ledNorm)
+      .filter(function(x){ return x.length>=2; });
+    for(var k=0;k<chaves.length;k++){
+      if(n.indexOf(chaves[k])>=0) return t;
+    }
+  }
+  return null;
+}
+
+// m² de painel por tipo dentro de um orçamento (salvo ou o da tela).
+// Só conta linha de painel de verdade (r.painel), que é a que tem largura e
+// altura — é dela que sai o m². Itens de LED sem dimensão (ex.: Poster LED)
+// voltam em "semMedida" pra aparecerem como ressalva, nunca sumirem calados.
+function _ledM2DoState(st){
+  var porTipo={}, semMedida=[];
+  Object.keys(st||{}).forEach(function(sec){
+    var secSt=st[sec];
+    if(!secSt||!secSt.rows) return;
+    Object.keys(secSt.rows).forEach(function(aid){
+      (secSt.rows[aid]||[]).forEach(function(r){
+        if(!r||!r.name) return;
+        var t=_ledTipoDoItem(r.name);
+        if(!t) return;
+        var qtd=parseFloat(r.qty)||0;
+        if(qtd<=0) return;
+        var larg=parseFloat(r.larg)||0, alt=parseFloat(r.alt)||0;
+        if(!r.painel || !larg || !alt){ semMedida.push({nome:r.name, qty:qtd, tipo:t.nome}); return; }
+        porTipo[t.id]=(porTipo[t.id]||0)+larg*alt*qtd;
+      });
+    });
+  });
+  return {porTipo:porTipo, semMedida:semMedida};
+}
+function _ledM2DeOrc(o){ return _ledM2DoState((o&&o.dados&&o.dados.state)||{}); }
+
+// Períodos iguais aos da Logística.
+function _ledPeriodosSobrepoem(a,b){ return a.inicio<=b.fim && b.inicio<=a.fim; }
+
+// ── A análise ─────────────────────────────────────────────────────────────
+// Devolve, por tipo: estoque, m² já comprometidos (firme e risco), livre,
+// m² pedidos pelo orçamento consultado, e quanto falta.
+function ledAnalisar(periodo, excluirDriveId, pedidoPorTipo){
+  var base=(_dashDados||[]);
+  var firmes=[], risco=[];
+  base.forEach(function(o){
+    if(!o) return;
+    if(excluirDriveId && o.driveId===excluirDriveId) return;
+    var cs=(o.dados&&o.dados.comercialStatus)||'';
+    if(cs!=='ganha' && cs!=='enviada' && cs!=='negociacao' && cs!=='standby') return;
+    var range=_logRangeEvento(o);
+    if(!range || !_ledPeriodosSobrepoem(periodo, range)) return;
+    var m=_ledM2DeOrc(o);
+    var total=Object.keys(m.porTipo).reduce(function(t,k){ return t+m.porTipo[k]; },0);
+    if(total<=0) return;
+    (cs==='ganha'?firmes:risco).push({orc:o, m2:m.porTipo, range:range, status:cs});
+  });
+
+  function somar(lista){
+    var out={};
+    lista.forEach(function(x){
+      Object.keys(x.m2).forEach(function(k){ out[k]=(out[k]||0)+x.m2[k]; });
+    });
+    return out;
+  }
+  var somaFirme=somar(firmes), somaRisco=somar(risco);
+  pedidoPorTipo=pedidoPorTipo||{};
+
+  var linhas=PAINEIS_LED.map(function(t){
+    var estoque=parseFloat(t.m2)||0;
+    var fir=somaFirme[t.id]||0;
+    var ris=somaRisco[t.id]||0;
+    var ped=pedidoPorTipo[t.id]||0;
+    var livre=estoque-fir;
+    var falta=Math.max(0, ped-livre);
+    var sobra=livre-ped;
+    var situacao;
+    if(ped<=0)               situacao='nao-pedido';
+    else if(falta>0.004)     situacao='falta';
+    else if(ris>sobra+0.004) situacao='risco';
+    else                     situacao='ok';
+    return {id:t.id, nome:t.nome, estoque:estoque, firme:fir, risco:ris,
+            livre:livre, pedido:ped, falta:falta, sobra:sobra, situacao:situacao};
+  });
+
+  var pedidas=linhas.filter(function(l){ return l.pedido>0; });
+  var veredito='sem-pedido';
+  if(pedidas.length){
+    if(pedidas.some(function(l){ return l.situacao==='falta'; })) veredito='falta';
+    else if(pedidas.some(function(l){ return l.situacao==='risco'; })) veredito='risco';
+    else veredito='ok';
+  }
+  return {periodo:periodo, linhas:linhas, firmes:firmes, risco:risco, veredito:veredito};
+}
+
+function _ledFmtM2(v){
+  var n=Math.round((parseFloat(v)||0)*100)/100;
+  return n.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2})+' m²';
+}
+
+var LED_SI={
+  ok:      {cor:'#2e7d32', bg:'#e8f5e9', bd:'#a5d6a7', ico:'✅', label:'Tem material disponível'},
+  risco:   {cor:'#e65100', bg:'#fff3e0', bd:'#ffb74d', ico:'⚠️', label:'Dá pra atender, mas há propostas disputando'},
+  falta:   {cor:'#c62828', bg:'#ffebee', bd:'#ef9a9a', ico:'❌', label:'Falta material — precisa sublocar'},
+  'sem-pedido':{cor:'#546e7a', bg:'var(--surface-2)', bd:'var(--border)', ico:'➖', label:'Nenhum painel de LED neste orçamento'}
+};
+
+/* ── BOTÃO DENTRO DO ORÇAMENTO ──────────────────────────────────────────── */
+var _ledConsultaCarregando=false;
+
+function _ledPedidoDoOrcamentoAberto(){ return _ledM2DoState(state); }
+
+// Badge do botão "🟥 LED" — mesma ideia do contador da Agenda.
+async function atualizarBadgeLedOrc(){
+  var el=document.getElementById('led-badge');
+  if(!el) return;
+  var ped=_ledPedidoDoOrcamentoAberto();
+  var temPainel=Object.keys(ped.porTipo).length>0;
+  var periodo=_agendaContadorPeriodoAtual();
+  if(!temPainel){
+    el.textContent='—';
+    el.title='Nenhum painel de LED lançado neste orçamento.';
+    _ledPintarBadge(el,'sem-pedido');
+    return;
+  }
+  if(!periodo){
+    el.textContent='?';
+    el.title='Preencha a data de Montagem (ou do Evento) para conferir a disponibilidade.';
+    _ledPintarBadge(el,'sem-pedido');
+    return;
+  }
+  if(!_agendaContadorCarregado){
+    el.textContent='…';
+    await _agendaContadorGarantirDados();
+  }
+  var r=ledAnalisar(periodo, driveIdAtual, ped.porTipo);
+  var si=LED_SI[r.veredito]||LED_SI['sem-pedido'];
+  el.textContent=si.ico;
+  el.title=si.label+' — clique para ver o detalhe por tipo de painel.';
+  _ledPintarBadge(el, r.veredito);
+}
+
+function _ledPintarBadge(el, veredito){
+  var si=LED_SI[veredito]||LED_SI['sem-pedido'];
+  el.style.background=si.bg;
+  el.style.color=si.cor;
+  el.style.border='1px solid '+si.bd;
+}
+
+// A resposta que o consultor pediu: clica e sabe se tem material.
+async function ledConsultarOrcamento(){
+  if(_ledConsultaCarregando) return;
+  var periodo=_agendaContadorPeriodoAtual();
+  if(!periodo){
+    alert('📅 Preencha a data de Montagem (ou a data do Evento) antes de consultar a disponibilidade de LED.');
+    return;
+  }
+  var ped=_ledPedidoDoOrcamentoAberto();
+  _ledConsultaCarregando=true;
+  var corpo=document.getElementById('led-consulta-corpo');
+  if(corpo) corpo.innerHTML='<div style="padding:26px;text-align:center;color:var(--text-muted);font-size:12px">⏳ Conferindo os eventos deste período...</div>';
+  _abrirOv('led-consulta-ov');
+  try{
+    await _agendaContadorGarantirDados();
+    var r=ledAnalisar(periodo, driveIdAtual, ped.porTipo);
+    if(corpo) corpo.innerHTML=_ledConsultaHTML(r, ped, periodo);
+  }catch(e){
+    if(corpo) corpo.innerHTML='<div style="padding:22px;color:var(--R);font-size:12px">⚠️ Não foi possível consultar: '+eh(e.message||e)+'</div>';
+  }finally{
+    _ledConsultaCarregando=false;
+    atualizarBadgeLedOrc();
+  }
+}
+
+function _ledConsultaHTML(r, ped, periodo){
+  var si=LED_SI[r.veredito]||LED_SI['sem-pedido'];
+  var h='<div style="background:'+si.bg+';border:1px solid '+si.bd+';border-left:5px solid '+si.cor+';border-radius:8px;padding:13px 16px;margin-bottom:12px">'
+    +'<div style="font-size:14px;font-weight:900;color:'+si.cor+'">'+si.ico+' '+si.label+'</div>'
+    +'<div style="font-size:11px;color:var(--text-dim);margin-top:4px">Período conferido: <b>'+fD(periodo.inicio)+'</b> a <b>'+fD(periodo.fim)+'</b> (montagem até desmontagem) · '
+    +r.firmes.length+' evento(s) fechado(s)'+(r.risco.length?' e '+r.risco.length+' em negociação':'')+' usando LED nesse intervalo</div>'
+    +'</div>';
+
+  var pedidas=r.linhas.filter(function(l){ return l.pedido>0; });
+  if(!pedidas.length){
+    h+='<div style="padding:16px;color:var(--text-muted);font-size:12px;text-align:center;border:1px dashed var(--border);border-radius:8px">'
+      +'Não há painel de LED lançado neste orçamento. Lance os painéis na aba <b>Vídeo</b> (com largura e altura) e consulte de novo.</div>';
+  }else{
+    h+='<table class="it" style="width:100%"><thead><tr>'
+      +'<th style="text-align:left">Tipo</th><th>Estoque</th><th>Comprometido</th><th>Livre</th>'
+      +'<th>Este orçamento</th><th>Resultado</th></tr></thead><tbody>';
+    pedidas.forEach(function(l){
+      var s=LED_SI[l.situacao]||LED_SI.ok;
+      var res;
+      if(l.situacao==='falta') res='<b style="color:#c62828">Faltam '+_ledFmtM2(l.falta)+'</b><div style="font-size:9.5px;color:var(--text-dim)">sublocar com parceiro</div>';
+      else if(l.situacao==='risco') res='<b style="color:#e65100">Sobram '+_ledFmtM2(l.sobra)+'</b><div style="font-size:9.5px;color:#e65100">'+_ledFmtM2(l.risco)+' em negociação</div>';
+      else res='<b style="color:#2e7d32">Sobram '+_ledFmtM2(l.sobra)+'</b>';
+      h+='<tr>'
+        +'<td style="text-align:left;font-weight:700">'+s.ico+' '+eh(l.nome)+'</td>'
+        +'<td>'+_ledFmtM2(l.estoque)+'</td>'
+        +'<td>'+_ledFmtM2(l.firme)+(l.risco>0?'<div style="font-size:9.5px;color:#e65100">+'+_ledFmtM2(l.risco)+' em negociação</div>':'')+'</td>'
+        +'<td>'+_ledFmtM2(l.livre)+'</td>'
+        +'<td><b>'+_ledFmtM2(l.pedido)+'</b></td>'
+        +'<td>'+res+'</td>'
+        +'</tr>';
+    });
+    h+='</tbody></table>';
+  }
+
+  if(ped.semMedida && ped.semMedida.length){
+    h+='<div style="margin-top:10px;background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:9px 12px;font-size:10.5px;color:#7a5a00">'
+      +'<b>⚠️ Não entraram na conta</b> (itens de LED sem largura/altura, então não dá para calcular m²): '
+      +ped.semMedida.map(function(x){ return eh(x.qty+'x '+x.nome); }).join(' · ')
+      +'</div>';
+  }
+
+  // Quem está ocupando
+  function bloco(titulo, lista, cor){
+    if(!lista.length) return '';
+    var b='<div style="margin-top:12px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:'+cor+';font-weight:800;margin-bottom:6px">'+titulo+'</div>';
+    lista.forEach(function(x){
+      var f=x.orc.form||{};
+      var det=Object.keys(x.m2).map(function(k){
+        var t=PAINEIS_LED.find(function(y){ return y.id===k; });
+        return (t?t.nome:k)+': '+_ledFmtM2(x.m2[k]);
+      }).join(' · ');
+      b+='<div style="display:flex;gap:9px;align-items:baseline;padding:6px 10px;border-bottom:1px solid var(--border);font-size:11px;cursor:pointer" onclick="ledAbrirOrc(\''+eh(x.orc.driveId||'')+'\')">'
+        +'<span style="font-weight:800;color:var(--R);min-width:72px">'+eh(f['f-num']||'—')+'</span>'
+        +'<span style="flex:1">'+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')
+        +'<div style="font-size:10px;color:var(--text-dim)">'+fD(x.range.inicio)+' a '+fD(x.range.fim)+' · '+det+'</div></span>'
+        +'<span style="color:var(--text-dim)">›</span></div>';
+    });
+    return b+'</div>';
+  }
+  h+=bloco('🔒 Fechados ocupando o período (Venda Ganha)', r.firmes, '#c62828');
+  h+=bloco('🤝 Em negociação no mesmo período (ainda não fechados)', r.risco, '#e65100');
+
+  h+='<div style="margin-top:12px;font-size:10px;color:var(--text-dim);line-height:1.5">'
+    +'A conta usa a janela de <b>montagem até desmontagem</b> de cada evento. Venda Ganha ocupa de verdade; '
+    +'Proposta Enviada, Negociação e Standby aparecem como risco, porque ainda podem fechar. '
+    +'Os m² de cada tipo são cadastrados em <b>Admin › Painéis de LED</b>.</div>';
+  return h;
+}
+
+function ledAbrirOrc(driveId){
+  if(!driveId) return;
+  var o=(_dashDados||[]).find(function(x){ return x.driveId===driveId; });
+  if(!o) return;
+  if(!confirm('Abrir o orçamento "'+((o.form&&o.form['f-num'])||'')+' — '+((o.form&&o.form['f-cliente'])||'')+'"?\n\nAlterações não salvas do orçamento atual serão perdidas.')) return;
+  _fecharTudoParaAbrirOrc();
+  driveCarregar(driveId, o.nome);
+}
+
+/* ── MÓDULO: MAPA DE DISPONIBILIDADE DE LED ─────────────────────────────── */
+var _ledMapaCarregado=false;
+
+async function abrirLedMapa(){
+  if(_moduloBloqueado('mod-led')) return;
+  _abrirOv('led-ov');
+  var hoje=new Date().toISOString().split('T')[0];
+  var de=document.getElementById('led-de'), ate=document.getElementById('led-ate');
+  if(de&&!de.value) de.value=hoje;
+  if(ate&&!ate.value){
+    var d=new Date(); d.setDate(d.getDate()+60);
+    ate.value=d.toISOString().split('T')[0];
+  }
+  var el=document.getElementById('led-mapa');
+  if(el&&!_ledMapaCarregado) el.innerHTML='<div style="padding:28px;text-align:center;color:var(--text-muted);font-size:12px">⏳ Carregando os eventos...</div>';
+  await _agendaContadorGarantirDados();
+  _ledMapaCarregado=true;
+  ledMapaRenderizar();
+}
+
+async function ledMapaAtualizar(){
+  var el=document.getElementById('led-mapa');
+  if(el) el.innerHTML='<div style="padding:28px;text-align:center;color:var(--text-muted);font-size:12px">⏳ Rebuscando os orçamentos...</div>';
+  _agendaContadorCarregado=false;
+  await _agendaContadorGarantirDados();
+  ledMapaRenderizar();
+}
+
+function _ledDiasDoPeriodo(de, ate){
+  var out=[], d=new Date(de+'T12:00:00'), fim=new Date(ate+'T12:00:00');
+  var guarda=0;
+  while(d<=fim && guarda++<400){ out.push(d.toISOString().split('T')[0]); d.setDate(d.getDate()+1); }
+  return out;
+}
+
+// Para cada dia do período, quanto de cada tipo está comprometido.
+function ledMapaDados(de, ate){
+  var dias=_ledDiasDoPeriodo(de, ate);
+  var porDia={};
+  dias.forEach(function(d){ porDia[d]={firme:{}, risco:{}, eventos:[]}; });
+  (_dashDados||[]).forEach(function(o){
+    if(!o) return;
+    var cs=(o.dados&&o.dados.comercialStatus)||'';
+    if(cs!=='ganha' && cs!=='enviada' && cs!=='negociacao' && cs!=='standby') return;
+    var range=_logRangeEvento(o);
+    if(!range) return;
+    var m=_ledM2DeOrc(o).porTipo;
+    if(!Object.keys(m).length) return;
+    dias.forEach(function(d){
+      if(d<range.inicio || d>range.fim) return;
+      var alvo=(cs==='ganha')?porDia[d].firme:porDia[d].risco;
+      Object.keys(m).forEach(function(k){ alvo[k]=(alvo[k]||0)+m[k]; });
+      porDia[d].eventos.push({orc:o, m2:m, status:cs, range:range});
+    });
+  });
+  return {dias:dias, porDia:porDia};
+}
+
+function ledMapaRenderizar(){
+  var el=document.getElementById('led-mapa');
+  if(!el) return;
+  var de=(document.getElementById('led-de')||{}).value||'';
+  var ate=(document.getElementById('led-ate')||{}).value||'';
+  var soCriticos=!!(document.getElementById('led-so-criticos')||{}).checked;
+  if(!de||!ate){ el.innerHTML='<div style="padding:22px;color:var(--text-muted);font-size:12px">Escolha o período.</div>'; return; }
+  if(ate<de){ el.innerHTML='<div style="padding:22px;color:var(--R);font-size:12px">A data final está antes da inicial.</div>'; return; }
+
+  var d=ledMapaDados(de, ate);
+  var linhas='', diasComUso=0, diasEstourados=0;
+
+  d.dias.forEach(function(dia){
+    var reg=d.porDia[dia];
+    var usoTotal=PAINEIS_LED.reduce(function(t,tp){ return t+(reg.firme[tp.id]||0)+(reg.risco[tp.id]||0); },0);
+    if(usoTotal<=0) return;
+    diasComUso++;
+    var estourou=PAINEIS_LED.some(function(tp){ return (reg.firme[tp.id]||0)>(parseFloat(tp.m2)||0)+0.004; });
+    if(estourou) diasEstourados++;
+    if(soCriticos && !estourou) return;
+
+    var cels='';
+    PAINEIS_LED.forEach(function(tp){
+      var est=parseFloat(tp.m2)||0;
+      var fir=reg.firme[tp.id]||0, ris=reg.risco[tp.id]||0;
+      if(fir<=0 && ris<=0){ cels+='<td style="color:var(--text-dim)">—</td>'; return; }
+      var pct=est>0?(fir/est*100):(fir>0?999:0);
+      var cor = fir>est+0.004 ? '#c62828' : (pct>=80 ? '#e65100' : '#2e7d32');
+      var bg  = fir>est+0.004 ? '#ffebee' : (pct>=80 ? '#fff3e0' : '#e8f5e9');
+      cels+='<td style="background:'+bg+';color:'+cor+';font-weight:800" title="'+eh(tp.nome)+': '+_ledFmtM2(fir)+' comprometidos de '+_ledFmtM2(est)+(ris>0?(' · '+_ledFmtM2(ris)+' em negociação'):'')+'">'
+        +Math.round(fir)+'<span style="color:var(--text-dim);font-weight:600">/'+Math.round(est)+'</span>'
+        +(ris>0?'<div style="font-size:9px;color:#e65100;font-weight:700">+'+Math.round(ris)+'</div>':'')
+        +'</td>';
+    });
+    var dt=new Date(dia+'T12:00:00');
+    var sem=['dom','seg','ter','qua','qui','sex','sáb'][dt.getDay()];
+    linhas+='<tr style="cursor:pointer" onclick="ledMapaAbrirDia(\''+dia+'\')" title="Clique para ver os eventos deste dia">'
+      +'<td style="text-align:left;font-weight:700;white-space:nowrap">'+(estourou?'🔴 ':'')+fD(dia)+' <span style="color:var(--text-dim);font-weight:500">'+sem+'</span></td>'
+      +cels
+      +'<td style="color:var(--text-dim)">'+reg.eventos.length+'</td>'
+      +'</tr>';
+  });
+
+  var cab=PAINEIS_LED.map(function(tp){ return '<th title="Estoque: '+_ledFmtM2(tp.m2)+'">'+eh(tp.nome)+'<div style="font-weight:500;color:var(--text-dim);font-size:9px">'+_ledFmtM2(tp.m2)+'</div></th>'; }).join('');
+
+  var resumo='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:11px">'
+    +'<span style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:4px 12px"><b>'+diasComUso+'</b> dia(s) com LED em uso</span>'
+    +'<span style="background:'+(diasEstourados?'#ffebee':'#e8f5e9')+';border:1px solid '+(diasEstourados?'#ef9a9a':'#a5d6a7')+';color:'+(diasEstourados?'#c62828':'#2e7d32')+';border-radius:14px;padding:4px 12px;font-weight:800">'
+      +(diasEstourados?('🔴 '+diasEstourados+' dia(s) acima do estoque'):'✅ nenhum dia acima do estoque')+'</span>'
+    +'</div>';
+
+  if(!linhas){
+    el.innerHTML=resumo+'<div style="padding:26px;text-align:center;color:var(--text-muted);font-size:12px;border:1px dashed var(--border);border-radius:8px">'
+      +(soCriticos?'Nenhum dia acima do estoque neste período. 👍':'Nenhum evento com painel de LED neste período.')+'</div>';
+    return;
+  }
+  el.innerHTML=resumo
+    +'<div style="overflow-x:auto"><table class="it" style="width:100%;min-width:620px">'
+    +'<thead><tr><th style="text-align:left">Dia</th>'+cab+'<th>Eventos</th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody></table></div>'
+    +'<div style="margin-top:9px;font-size:10px;color:var(--text-dim);line-height:1.6">'
+    +'Cada célula mostra <b>m² comprometidos / m² em estoque</b> daquele tipo. O número laranja embaixo (+) são os m² de propostas '
+    +'em negociação, que ainda podem fechar. <span style="color:#2e7d32;font-weight:700">Verde</span> até 80% do estoque, '
+    +'<span style="color:#e65100;font-weight:700">laranja</span> acima de 80%, <span style="color:#c62828;font-weight:700">vermelho</span> quando passa do estoque '
+    +'(aí é sublocar com parceiro). Clique num dia para ver os eventos.</div>';
+}
+
+function ledMapaAbrirDia(dia){
+  var de=(document.getElementById('led-de')||{}).value||dia;
+  var ate=(document.getElementById('led-ate')||{}).value||dia;
+  var d=ledMapaDados(de, ate);
+  var reg=d.porDia[dia];
+  if(!reg) return;
+  var h='<div style="font-size:12px;font-weight:800;margin-bottom:8px">📅 '+fD(dia)+' — '+reg.eventos.length+' evento(s) com painel de LED</div>';
+  PAINEIS_LED.forEach(function(tp){
+    var fir=reg.firme[tp.id]||0, ris=reg.risco[tp.id]||0, est=parseFloat(tp.m2)||0;
+    if(fir<=0 && ris<=0) return;
+    var falta=Math.max(0, fir-est);
+    h+='<div style="display:flex;gap:8px;align-items:baseline;font-size:11px;padding:4px 0;border-bottom:1px solid var(--border)">'
+      +'<b style="min-width:120px">'+eh(tp.nome)+'</b>'
+      +'<span>'+_ledFmtM2(fir)+' de '+_ledFmtM2(est)+'</span>'
+      +(ris>0?'<span style="color:#e65100">+'+_ledFmtM2(ris)+' em negociação</span>':'')
+      +(falta>0.004?'<span style="color:#c62828;font-weight:800;margin-left:auto">faltam '+_ledFmtM2(falta)+'</span>':'')
+      +'</div>';
+  });
+  h+='<div style="margin-top:10px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);font-weight:800">Eventos</div>';
+  reg.eventos.forEach(function(x){
+    var f=x.orc.form||{};
+    var det=Object.keys(x.m2).map(function(k){
+      var t=PAINEIS_LED.find(function(y){ return y.id===k; });
+      return (t?t.nome:k)+': '+_ledFmtM2(x.m2[k]);
+    }).join(' · ');
+    var si=(x.status==='ganha')?{c:'#c62828',t:'🔒 Fechado'}:{c:'#e65100',t:'🤝 Em negociação'};
+    h+='<div style="padding:7px 10px;border-bottom:1px solid var(--border);font-size:11px;cursor:pointer" onclick="ledAbrirOrc(\''+eh(x.orc.driveId||'')+'\')">'
+      +'<span style="font-weight:800;color:var(--R)">'+eh(f['f-num']||'—')+'</span> '+eh(f['f-cliente']||'—')
+      +(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')
+      +'<div style="font-size:10px;color:var(--text-dim)"><span style="color:'+si.c+';font-weight:700">'+si.t+'</span> · '
+      +fD(x.range.inicio)+' a '+fD(x.range.fim)+' · '+det+'</div></div>';
+  });
+  var corpo=document.getElementById('led-dia-corpo');
+  if(corpo) corpo.innerHTML=h;
+  _abrirOv('led-dia-ov');
+}
+
+/* ── ADMIN: cadastro dos tipos e dos m² ─────────────────────────────────── */
+function painelLedRenderAdmin(){
+  var box=document.getElementById('painelled-lista');
+  if(!box) return;
+  if(!PAINEIS_LED.length){
+    box.innerHTML='<div style="text-align:center;padding:22px;color:var(--text-muted);font-size:12px">Nenhum tipo cadastrado.</div>';
+    return;
+  }
+  box.innerHTML='<table class="it" style="width:100%"><thead><tr>'
+    +'<th style="width:34px"></th><th style="text-align:left">Tipo</th><th style="width:110px">m² disponíveis</th>'
+    +'<th style="text-align:left">Palavras que identificam o item no orçamento</th><th style="width:40px"></th>'
+    +'</tr></thead><tbody>'
+    +PAINEIS_LED.map(function(t,i){
+      return '<tr>'
+        +'<td><button class="bmov" onclick="painelLedMover('+i+',-1)" title="Subir — a lista é lida de cima para baixo">▲</button>'
+          +'<button class="bmov" onclick="painelLedMover('+i+',1)" title="Descer">▼</button></td>'
+        +'<td style="text-align:left"><input type="text" value="'+eh(t.nome)+'" oninput="painelLedEditar('+i+',\'nome\',this.value)" style="width:100%;font-size:12px;padding:4px 7px"></td>'
+        +'<td><input type="number" step="0.01" min="0" value="'+(parseFloat(t.m2)||0)+'" oninput="painelLedEditar('+i+',\'m2\',this.value)" style="width:92px;font-size:12px;padding:4px 7px"></td>'
+        +'<td style="text-align:left"><input type="text" value="'+eh(t.chaves)+'" oninput="painelLedEditar('+i+',\'chaves\',this.value)" placeholder="ph2.9; p2.9; 2,9mm" style="width:100%;font-size:11px;padding:4px 7px"></td>'
+        +'<td><button class="btn btn-danger btn-sm" onclick="painelLedExcluir('+i+')" title="Remover este tipo">✕</button></td>'
+        +'</tr>';
+    }).join('')
+    +'</tbody></table>';
+}
+
+function painelLedEditar(i, campo, valor){
+  if(!PAINEIS_LED[i]) return;
+  PAINEIS_LED[i][campo] = (campo==='m2') ? (parseFloat(valor)||0) : valor;
+}
+function painelLedMover(i, dir){
+  var j=i+dir;
+  if(j<0||j>=PAINEIS_LED.length) return;
+  var t=PAINEIS_LED[i]; PAINEIS_LED[i]=PAINEIS_LED[j]; PAINEIS_LED[j]=t;
+  painelLedRenderAdmin();
+}
+function painelLedAdicionar(){
+  PAINEIS_LED.push({id:'p'+Date.now().toString(36), nome:'Novo tipo', m2:0, chaves:''});
+  painelLedRenderAdmin();
+}
+function painelLedExcluir(i){
+  if(!PAINEIS_LED[i]) return;
+  if(!confirm('Remover o tipo "'+(PAINEIS_LED[i].nome||'')+'" do cadastro?')) return;
+  PAINEIS_LED.splice(i,1);
+  painelLedRenderAdmin();
+}
+function painelLedRestaurar(){
+  if(!confirm('Restaurar os 5 tipos padrão (2.5, 2.9, 3.9, 3.9 curvo e P6) com os m² originais?\n\nO que estiver cadastrado agora será substituído.')) return;
+  PAINEIS_LED=PAINEL_LED_PADRAO.map(function(t){ return Object.assign({},t); });
+  painelLedRenderAdmin();
+}
+async function painelLedSalvar(){
+  var st=document.getElementById('painelled-status');
+  if(st){ st.style.color='var(--text-dim)'; st.textContent='⏳ Salvando...'; }
+  var ok=await _painelLedSalvarFirestore();
+  if(st){
+    st.style.color=ok?'#4caf50':'#ff5555';
+    st.textContent=ok?'✅ Cadastro salvo — vale para todos os usuários.':'⚠️ Não foi possível salvar.';
+    setTimeout(function(){ if(st.textContent.indexOf('✅')===0) st.textContent=''; }, 4000);
+  }
+  if(ok) try{ atualizarBadgeLedOrc(); }catch(e){}
 }
 
 var PRECOS={
@@ -4716,6 +5335,7 @@ async function _entrarNoSistema(email, perfil, opts){
   clientesCarregarStorage();
   eventosCarregarStorage();
   tiposEventoCarregar();
+  painelLedCarregar();
   cargosCarregar();
   tarefasCarregarStorage().then(atualizarBadgeTarefas);
   tiposTarefaCarregar();
@@ -6122,6 +6742,8 @@ function calc(){
   }
   renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   _preencherValLiqCalculado();
+  // O badge do LED acompanha a edição dos painéis (m² muda com largura/altura)
+  try{ if(typeof atualizarBadgeLedOrc==='function') atualizarBadgeLedOrc(); }catch(e){}
 }
 
 // Mantém o bloco "Resumo & Margem" em dia com as categorias criadas: um
@@ -7900,6 +8522,7 @@ async function atualizarDadosAgora(){
   await passo('clientes', function(){ return clientesCarregarStorage(); });
   await passo('eventos', function(){ return eventosCarregarStorage(); });
   await passo('tipos de evento', function(){ return tiposEventoCarregar(); });
+  await passo('painéis de LED', function(){ return painelLedCarregar(); });
   await passo('cargos', function(){ return cargosCarregar(); });
   await passo('tarefas', function(){ return tarefasCarregarStorage().then(function(){ if(typeof atualizarBadgeTarefas==='function') atualizarBadgeTarefas(); }); });
   await passo('metas', function(){ return typeof metasCarregar==='function'?metasCarregar():null; });
@@ -21791,6 +22414,7 @@ var DASH_MODULOS = [
   {id:'funil-card',     card:'home-btn-funil',      label:'📊 CRM — Funil de Vendas',     grupo:'Operacional'},
   {id:'mod-tarefas',    card:'home-btn-tarefas',    label:'📋 Minhas Tarefas',            grupo:'Operacional'},
   {id:'dash-log',       card:'home-btn-log',        label:'🚚 Logística de Eventos',      grupo:'Operacional'},
+  {id:'mod-led',        card:'home-btn-led',        label:'🟥 Disponibilidade de LED',     grupo:'Operacional'},
   {id:'mod-os',         card:'home-btn-os',         label:'🗂️ Ordens de Serviço',        grupo:'Operacional'},
   // ── Cadastros ──
   {id:'mod-clientes',   card:'home-btn-clientes',   label:'👥 Cadastro de Clientes',      grupo:'Cadastros'},
@@ -22099,7 +22723,7 @@ function dashTemAcesso(dashId){
 
 function admAba(aba){
   document.querySelectorAll('#adm-ov .rel-tab').forEach(function(t,i){
-    var abas=['usuarios','cargos','permissoes','dashboards','tiposevento','tipostarefa','categoriasproduto','gruposproduto','subgruposproduto','enderecosproduto','googleagenda'];
+    var abas=['usuarios','cargos','permissoes','dashboards','tiposevento','tipostarefa','categoriasproduto','gruposproduto','subgruposproduto','enderecosproduto','painelled','googleagenda'];
     t.classList.toggle('active',abas[i]===aba);
   });
   document.querySelectorAll('#adm-ov .rel-pane').forEach(function(p){p.classList.remove('active');});
@@ -22114,6 +22738,7 @@ function admAba(aba){
   if(aba==='gruposproduto') gruposProdutoRenderAdmin();
   if(aba==='subgruposproduto') subgruposProdutoRenderAdmin();
   if(aba==='enderecosproduto') enderecosProdutoRenderAdmin();
+  if(aba==='painelled') painelLedRenderAdmin();
   if(aba==='googleagenda') googleAgendaRenderAdmin();
 }
 
