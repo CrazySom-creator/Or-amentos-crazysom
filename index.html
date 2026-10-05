@@ -10062,15 +10062,49 @@ function _gaGarantirTokenClient(){
 // Promise que resolve com um access token válido, pedindo consentimento ao
 // usuário (popup do Google) só quando necessário (token ainda não obtido ou
 // expirado nesta sessão do navegador).
-function googleAgendaObterToken(){
-  return new Promise(function(resolve,reject){
-    if(_gaAccessToken && Date.now()<_gaTokenExpiraEm){ resolve(_gaAccessToken); return; }
-    var client=_gaGarantirTokenClient();
-    if(!client){
-      reject(new Error('Integração com o Google Agenda não configurada ou biblioteca do Google ainda carregando. Configure em Admin > Google Agenda.'));
-      return;
-    }
+//
+// DOIS PROBLEMAS QUE ESTA FUNÇÃO TINHA — e que explicam o caso do Wagner
+// (Venda Ganha registrada, nada criado na agenda, ninguém avisado):
+//
+// 1) O popup do Google só abre dentro de um CLIQUE do usuário. O envio
+//    automático da Venda Ganha roda depois de vários "await" (salvar no
+//    servidor, carregar config...), quando o navegador já não considera mais
+//    que existe um clique em andamento — então ele BLOQUEIA o popup.
+// 2) Quando o popup é bloqueado, o Google simplesmente nunca chama o
+//    callback. A Promise ficava pendurada para sempre: sem token, sem erro,
+//    sem aviso. O envio morria ali, em silêncio absoluto.
+//
+// Agora: existe prazo (nada fica pendurado), o pedido em andamento é
+// reaproveitado, e quem roda em segundo plano pode pedir o token SEM popup
+// (opts.semPopup) — se não houver autorização válida, falha na hora com um
+// motivo claro, em vez de travar.
+var GA_TOKEN_PRAZO_MS=150000;      // 2min30 para a pessoa responder o popup
+var _gaTokenPromessa=null;
+
+function googleAgendaObterToken(opts){
+  opts=opts||{};
+  if(_gaAccessToken && Date.now()<_gaTokenExpiraEm) return Promise.resolve(_gaAccessToken);
+  // Já existe um pedido em andamento (ex.: iniciado no clique de Venda
+  // Ganha): aproveita o mesmo, em vez de abrir um segundo popup.
+  if(_gaTokenPromessa) return _gaTokenPromessa;
+  if(opts.semPopup){
+    return Promise.reject(new Error('autorizacao-google-necessaria'));
+  }
+  var client=_gaGarantirTokenClient();
+  if(!client){
+    return Promise.reject(new Error('Integração com o Google Agenda não configurada ou biblioteca do Google ainda carregando. Configure em Admin > Google Agenda.'));
+  }
+  _gaTokenPromessa=new Promise(function(resolve,reject){
+    var respondido=false;
+    var prazo=setTimeout(function(){
+      if(respondido) return;
+      respondido=true;
+      reject(new Error('A janela de autorização do Google não respondeu. Ela pode ter sido bloqueada pelo navegador — '
+        +'libere os pop-ups para este site (ícone na barra de endereço) e tente de novo.'));
+    }, GA_TOKEN_PRAZO_MS);
     client.callback=function(resp){
+      if(respondido) return;
+      respondido=true; clearTimeout(prazo);
       if(resp&&resp.access_token){
         _gaAccessToken=resp.access_token;
         _gaTokenExpiraEm=Date.now()+((resp.expires_in||3300)*1000)-30000;
@@ -10079,8 +10113,30 @@ function googleAgendaObterToken(){
         reject(new Error((resp&&resp.error)?('Autorização recusada: '+resp.error):'Não foi possível autorizar o acesso ao Google Agenda.'));
       }
     };
-    client.requestAccessToken();
+    try{ client.requestAccessToken(); }
+    catch(eReq){
+      respondido=true; clearTimeout(prazo);
+      reject(new Error('Não foi possível abrir a janela de autorização do Google: '+(eReq&&eReq.message||eReq)));
+    }
   });
+  _gaTokenPromessa.catch(function(){}).then(function(){ _gaTokenPromessa=null; });
+  return _gaTokenPromessa;
+}
+
+// Chamada DENTRO do clique de "Venda Ganha", antes de qualquer await: é o
+// único momento em que o navegador deixa o popup do Google abrir. Se já há
+// autorização válida, não faz nada. Não trava o fluxo — o envio automático
+// mais adiante reaproveita esta mesma promessa.
+function _gaPreAutorizar(){
+  try{
+    if(_gaAccessToken && Date.now()<_gaTokenExpiraEm) return;
+    var cfg=(typeof GOOGLE_AGENDA_CONFIG!=='undefined'&&GOOGLE_AGENDA_CONFIG)||{};
+    if(!cfg.clientId||!cfg.calendarId) return;   // integração não configurada
+    if(!_gaGarantirTokenClient()) return;
+    googleAgendaObterToken().catch(function(e){
+      console.warn('[Google Agenda] Pré-autorização não concluída:', e&&e.message);
+    });
+  }catch(e){ console.warn('[Google Agenda] _gaPreAutorizar:', e&&e.message); }
 }
 
 async function googleAgendaTestarConexao(){
@@ -10481,6 +10537,10 @@ function _gaErroAmigavel(msg){
     return 'a conta conectada não tem permissão de escrita nesse calendário.';
   if(/Invalid Credentials|invalid_grant|Unauthorized|401/i.test(msg))
     return 'a autorização do Google expirou. Conecte a conta de novo na Administração.';
+  if(/autorizacao-google-necessaria/i.test(msg))
+    return 'falta autorizar o Google Agenda neste navegador — clique em "🔁 Enviar à Agenda agora" e autorize na janela do Google.';
+  if(/janela de autorização do Google não respondeu|bloqueada pelo navegador|pop-?up/i.test(msg))
+    return 'a janela de autorização do Google foi bloqueada pelo navegador. Libere os pop-ups para este site e use "🔁 Enviar à Agenda agora".';
   return msg;
 }
 
@@ -10855,15 +10915,15 @@ function _gaRegistrarLiberadaNoEnvio(driveId, valor){
   }catch(e){ console.warn('[Google Agenda] _gaRegistrarLiberadaNoEnvio:', e&&e.message); }
 }
 
-function _gaEnviarEventosParaOrcamento(driveId, form, dadosCompletos, eventosDisp){
-  return _gaEnfileirar(function(){ return _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompletos, eventosDisp); });
+function _gaEnviarEventosParaOrcamento(driveId, form, dadosCompletos, eventosDisp, opcoesToken){
+  return _gaEnfileirar(function(){ return _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompletos, eventosDisp, opcoesToken); });
 }
-async function _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompletos, eventosDisp){
+async function _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompletos, eventosDisp, opcoesToken){
   if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
   if(!GOOGLE_AGENDA_CONFIG.clientId||!GOOGLE_AGENDA_CONFIG.calendarId){
     throw new Error('Google Agenda não configurado');
   }
-  var token=await googleAgendaObterToken();
+  var token=await googleAgendaObterToken(opcoesToken);
   var idsExistentes=Object.assign({},(dadosCompletos&&dadosCompletos.googleAgenda)||{});
   // Relê os IDs gravados no orçamento IMEDIATAMENTE antes de enviar. O
   // `dadosCompletos` pode ter sido montado segundos atrás (ou vir do cache do
@@ -10969,6 +11029,23 @@ function _toastMostrar(msg, tipo, ms){
 // interrompe o fluxo comercial com um alert() bloqueante — mas sempre avisa
 // visualmente (toast) se o envio deu certo ou não, pra equipe saber que os
 // eventos foram (ou não) parar na agenda sem precisar checar o console.
+// Carimba no histórico comercial o que REALMENTE aconteceu com a agenda.
+// Mexe só no último evento de "Venda Ganha" deste orçamento, e só quando ele
+// é o que acabou de ser criado — nunca reescreve histórico antigo.
+function _gaRegistrarResultadoNoHistorico(driveId, ok, motivo){
+  try{
+    if(driveId!==driveIdAtual) return;              // outro orçamento na tela
+    if(!comercialHist || !comercialHist.length) return;
+    var h=comercialHist[comercialHist.length-1];
+    if(!h || h.status!=='ganha') return;
+    var marca=ok ? ' [Eventos criados no Google Agenda ✅]'
+                 : ' [⚠️ NÃO foi para a agenda: '+(motivo||'falha no envio')+']';
+    h.obs=String(h.obs||'').replace(' [Envio à agenda solicitado]','')+marca;
+    if(typeof renderComercial==='function') renderComercial();
+    if(typeof marcarAlteradoSemAprovacao==='function') marcarAlteradoSemAprovacao();
+  }catch(e){ console.warn('_gaRegistrarResultadoNoHistorico:', e&&e.message); }
+}
+
 async function _gaAutoEnviarSeGanha(driveId, dadosCompletos){
   try{
     if(!driveId||!dadosCompletos||!dadosCompletos.form) return;
@@ -10996,23 +11073,39 @@ async function _gaAutoEnviarSeGanha(driveId, dadosCompletos){
     var eventosDisp=_gaEventosDisponiveisDe(form,dadosCompletos);
     if(!eventosDisp.length) return;
     var cliente=form['f-cliente'];
-    _gaEnviarEventosParaOrcamento(driveId,form,dadosCompletos,eventosDisp)
+    // semPopup: o navegador bloqueia popup fora de clique. Se a autorização
+    // não estiver válida, falha JÁ com motivo claro (e o aviso fica gravado
+    // no orçamento) em vez de ficar pendurada para sempre, como acontecia.
+    _gaEnviarEventosParaOrcamento(driveId,form,dadosCompletos,eventosDisp,{semPopup:true})
       .then(function(resultadoEnvio){
         console.log('[Google Agenda] Envio automático (Venda Ganha) concluído para',driveId);
         var msg='📅 Enviado para o Google Agenda: '+cliente+' (Montagem/Evento/Desmontagem).';
         if(resultadoEnvio&&resultadoEnvio.preReservaRemovida) msg+=' A pré-reserva foi substituída pelos eventos definitivos.';
         if(_tarjaGanha) msg+=' ⚠️ Enviado com LIBERAÇÃO DE MONTAGEM PENDENTE — '+_tarjaGanha;
         _toastMostrar(msg,_tarjaGanha?'warn':'ok');
+        _gaRegistrarResultadoNoHistorico(driveId, true);
         if(typeof renderMontagemGate==='function' && driveId===driveIdAtual) renderMontagemGate();
       })
       .catch(function(e){
         console.warn('[Google Agenda] Falha no envio automático (Venda Ganha):',e&&e.message);
+        _gaRegistrarResultadoNoHistorico(driveId, false, _gaErroAmigavel(e&&e.message));
         // O motivo POR EVENTO vem na mensagem do erro (ex. "Evento: ...;
         // Desmontagem: ...") — mostrar isso é o que permite ver que o envio
         // foi PARCIAL. Antes o aviso era genérico e uma falha em 2 dos 3
         // eventos passava batida, deixando a agenda incompleta em silêncio.
-        _toastMostrar('⚠️ Google Agenda incompleto ('+cliente+'): '+(e&&e.message?e.message:'falha no envio')
-          +' — abra o orçamento e use "🔍 Conferir na Agenda" / "🔁 Reenviar à Agenda".','warn',12000);
+        _toastMostrar('⚠️ Google Agenda incompleto ('+cliente+'): '+_gaErroAmigavel(e&&e.message)
+          +' — abra o orçamento e use "🔁 Enviar à Agenda agora".','warn',12000);
+        // A pendência fica gravada NO ORÇAMENTO: um toast some em segundos e
+        // ninguém mais fica sabendo. Assim o aviso sobrevive ao F5 e aparece
+        // para qualquer um que abrir este orçamento.
+        if(driveId===driveIdAtual){
+          try{
+            orcAtualGoogleAgenda=orcAtualGoogleAgenda||{};
+            orcAtualGoogleAgenda.ultimoErro={quando:new Date().toISOString(), itens:[_gaErroAmigavel(e&&e.message)]};
+            if(typeof renderMontagemGate==='function') renderMontagemGate();
+            if(typeof salvarNoDrive==='function') salvarNoDrive({mostrarStatus:false}).catch(function(){});
+          }catch(ePend){}
+        }
         if(typeof renderMontagemGate==='function' && driveId===driveIdAtual) renderMontagemGate();
       });
   }catch(e){
@@ -11897,6 +11990,12 @@ function salvarComercial(){
   comercialStatus=statusParaSalvar;
   _comercialStatusSelecionado='';
 
+  // Autorização do Google AQUI, ainda dentro do clique: é o único instante
+  // em que o navegador permite abrir o popup. O envio automático acontece
+  // vários "await" depois, quando o popup já seria bloqueado em silêncio —
+  // foi assim que uma Venda Ganha ficou registrada sem nada chegar à agenda.
+  if(comercialStatus==='ganha' && typeof _gaPreAutorizar==='function') _gaPreAutorizar();
+
   // Saindo de Venda Ganha (desistência/adiamento): limpa o Google Agenda.
   _gaAoMudarStatusComercial(_statusAnterior, comercialStatus, driveIdAtual);
 
@@ -11904,7 +12003,11 @@ function salvarComercial(){
   if(_statusAnterior==='ganha' && comercialStatus!=='ganha'){
     _obsAgenda=' [Eventos removidos do Google Agenda]';
   } else if(_statusAnterior!=='ganha' && comercialStatus==='ganha' && _statusAnterior){
-    _obsAgenda=' [Eventos reenviados ao Google Agenda]';
+    // Antes esta linha dizia "[Eventos reenviados ao Google Agenda]" SEMPRE,
+    // mesmo quando o envio falhava — o histórico afirmava uma coisa que não
+    // tinha acontecido. Agora registra a intenção; o RESULTADO de verdade é
+    // gravado depois, por _gaRegistrarResultadoNoHistorico().
+    _obsAgenda=' [Envio à agenda solicitado]';
   }
   comercialHist.push({
     status:comercialStatus,
@@ -12636,16 +12739,32 @@ function _gaPainelHTML(){
   var faltando=_GA_TIPOS_PAINEL.filter(function(t){ return gv(t.campo) && !ga[t.chave]; }).length;
   var enviado=_GA_TIPOS_PAINEL.some(function(t){ return !!ga[t.chave]; });
   var erro=ga.ultimoErro;
+  // Venda ganha e agenda vazia é o caso mais grave: o evento está fechado e
+  // ninguém da operação sabe. Antes isso aparecia como um texto cinza
+  // ("nenhum evento enviado ainda") sem nenhum botão para resolver.
+  var ganhaSemAgenda=(typeof comercialStatus!=='undefined' && comercialStatus==='ganha' && faltando>0);
   var corBorda=(faltando||erro)?'#c62828':'var(--border)';
   var html='<div style="border:1px solid '+corBorda+';border-left:4px solid '+corBorda+';border-radius:6px;padding:8px 10px;background:rgba(127,127,127,.08)">'
-    +'<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);font-weight:700;margin-bottom:5px">🗓️ Estado no Google Agenda</div>'
-    +linhas;
+    +'<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);font-weight:700;margin-bottom:5px">🗓️ Estado no Google Agenda</div>';
+  if(ganhaSemAgenda){
+    html+='<div style="background:#ffebee;border:1px solid #ef9a9a;border-radius:5px;padding:7px 10px;margin-bottom:6px;color:#c62828;font-size:11.5px;font-weight:800;line-height:1.5">'
+      +'🚨 VENDA GANHA, MAS '+(faltando>1?'OS EVENTOS NÃO ESTÃO':'O EVENTO NÃO ESTÁ')+' NA AGENDA'
+      +'<div style="font-weight:600;font-size:10.5px;margin-top:3px">A equipe de operação não vai enxergar este evento. Clique no botão abaixo para enviar agora.</div>'
+      +'</div>';
+  }
+  html+=linhas;
   if(!enviado){
-    html+='<div style="font-size:10.5px;color:var(--text-dim);margin-top:5px">Nenhum evento enviado ainda — use <b>📅 Agenda</b>.</div>';
+    html+='<div style="font-size:10.5px;color:var(--text-dim);margin-top:5px">Nenhum evento enviado ainda'+(ganhaSemAgenda?'.':' — use <b>📅 Agenda</b>.')+'</div>';
   }
   if(erro&&erro.itens&&erro.itens.length){
     html+='<div style="margin-top:6px;font-size:10.5px;color:#ff8a8a;line-height:1.5"><b>⚠️ O último envio deixou pendência:</b><br>• '
       +erro.itens.map(function(x){return eh(String(x));}).join('<br>• ')+'</div>';
+  }
+  if(!enviado && faltando>0){
+    html+='<div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">'
+      +'<button class="com-btn" style="background:#c62828;color:#fff;font-weight:800" onclick="googleAgendaEnviarOS()">🔁 Enviar à Agenda agora</button>'
+      +'<button class="com-btn" style="background:#37474f;color:#fff" onclick="_gaConferirAgenda()">🔍 Conferir na Agenda</button>'
+      +'</div>';
   }
   if(enviado){
     var tarjaAgora=!!_montagemTarjaTexto();
@@ -12658,7 +12777,8 @@ function _gaPainelHTML(){
     }
     html+='<div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">'
       +'<button class="com-btn" style="background:#37474f;color:#fff" onclick="_gaConferirAgenda()">🔍 Conferir na Agenda</button>'
-      +'<button class="com-btn" style="background:#1565c0;color:#fff" onclick="googleAgendaEnviarOS()">🔁 Reenviar à Agenda</button>'
+      +'<button class="com-btn" style="background:'+(faltando?'#c62828':'#1565c0')+';color:#fff'+(faltando?';font-weight:800':'')+'" onclick="googleAgendaEnviarOS()">'
+      +(faltando?'🔁 Enviar à Agenda agora':'🔁 Reenviar à Agenda')+'</button>'
       +'</div>';
   }
   return html+'</div>';
