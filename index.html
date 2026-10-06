@@ -12765,6 +12765,38 @@ var _GA_TIPOS_PAINEL=[
   {chave:'desmontagemEventId', rotulo:'Desmontagem', campo:'f-dd'}
 ];
 
+// A pré-reserva não é um dos três eventos definitivos: ela SEGURA a data
+// enquanto a proposta está em negociação e é substituída pelos eventos
+// definitivos quando a venda é ganha. Por isso ela tem uma linha própria no
+// checklist, com regra própria — nunca entra na contagem de "faltando"
+// (não existir é o normal na maior parte do tempo).
+function _gaLinhaPreReserva(ga){
+  var dia=gv('f-dia');
+  if(!dia) return '';
+  var cs=(typeof comercialStatus!=='undefined')?comercialStatus:'';
+  var tem=!!ga.preReservaEventId;
+  var emNegociacao=(cs==='enviada'||cs==='negociacao'||cs==='standby');
+  var fim=gv('f-dia-fim')||dia;
+  var periodo=fD(dia)+(fim!==dia?(' a '+fD(fim)):'');
+
+  if(tem && cs==='ganha'){
+    // Venda ganha deveria ter trocado a pré-reserva pelos eventos definitivos.
+    return '<div style="font-size:10.5px;padding:2px 0;color:#ffa726">⚠️ Pré-reserva — '+periodo
+      +' <b>ainda na agenda</b> (a venda já foi ganha — ela deveria ter saído). Use 🔁 Enviar à Agenda agora.</div>';
+  }
+  if(tem){
+    return '<div style="font-size:10.5px;padding:2px 0;color:var(--text-dim)">📌 Pré-reserva — '+periodo+' na agenda, segurando a data</div>';
+  }
+  if(emNegociacao){
+    // Aqui a ausência importa de verdade: sem pré-reserva no Google, esta
+    // data NÃO é contada como ocupada pela Logística nem pelo contador da
+    // Agenda — ou seja, ninguém está segurando nada.
+    return '<div style="font-size:10.5px;padding:2px 0;color:#ffa726">📌 Pré-reserva — '+periodo
+      +' <b>não criada</b>: a data não está sendo segurada. Use <b>📌 Pré-Agenda</b>.</div>';
+  }
+  return '<div style="font-size:10.5px;color:var(--text-dim);padding:2px 0;opacity:.7">— Pré-reserva: não se aplica neste momento</div>';
+}
+
 function _gaPainelHTML(){
   var ga=(typeof orcAtualGoogleAgenda!=='undefined'&&orcAtualGoogleAgenda)||{};
   var temData=_GA_TIPOS_PAINEL.some(function(t){ return !!gv(t.campo); });
@@ -12775,9 +12807,10 @@ function _gaPainelHTML(){
     var ok=!!ga[t.chave];
     return '<div style="font-size:10.5px;padding:2px 0;color:'+(ok?'var(--text-dim)':'#ef5350')+'">'
       +(ok?'✅':'❌')+' '+t.rotulo+' — '+fD(data)+(ok?'':' <b>não está na agenda</b>')+'</div>';
-  }).join('');
+  }).join('')+_gaLinhaPreReserva(ga);
   var faltando=_GA_TIPOS_PAINEL.filter(function(t){ return gv(t.campo) && !ga[t.chave]; }).length;
   var enviado=_GA_TIPOS_PAINEL.some(function(t){ return !!ga[t.chave]; });
+  var temPreReserva=!!ga.preReservaEventId;
   var erro=ga.ultimoErro;
   // Venda ganha e agenda vazia é o caso mais grave: o evento está fechado e
   // ninguém da operação sabe. Antes isso aparecia como um texto cinza
@@ -12794,7 +12827,10 @@ function _gaPainelHTML(){
   }
   html+=linhas;
   if(!enviado){
-    html+='<div style="font-size:10.5px;color:var(--text-dim);margin-top:5px">Nenhum evento enviado ainda'+(ganhaSemAgenda?'.':' — use <b>📅 Agenda</b>.')+'</div>';
+    html+='<div style="font-size:10.5px;color:var(--text-dim);margin-top:5px">'
+      +(temPreReserva?'Só a pré-reserva está na agenda — os eventos definitivos entram quando a venda for ganha.'
+                     :('Nenhum evento enviado ainda'+(ganhaSemAgenda?'.':' — use <b>📅 Agenda</b>.')))
+      +'</div>';
   }
   if(erro&&erro.itens&&erro.itens.length){
     html+='<div style="margin-top:6px;font-size:10.5px;color:#ff8a8a;line-height:1.5"><b>⚠️ O último envio deixou pendência:</b><br>• '
@@ -12859,6 +12895,25 @@ async function _gaConferirAgenda(){
       problemas++;
     }
     relatorio.push(txt);
+  }
+  // Pré-reserva: confere de verdade no calendário, igual aos demais.
+  var _diaPre=gv('f-dia');
+  if(_diaPre){
+    var _csPre=(typeof comercialStatus!=='undefined')?comercialStatus:'';
+    if(!ga.preReservaEventId){
+      if(_csPre==='enviada'||_csPre==='negociacao'||_csPre==='standby'){
+        relatorio.push('📌 Pré-reserva ('+fD(_diaPre)+'): não criada — a data NÃO está sendo segurada. Use "📌 Pré-Agenda".');
+        problemas++;
+      }else{
+        relatorio.push('— Pré-reserva: não se aplica neste momento.');
+      }
+    }else{
+      var rPre=await _concChecarEventoAoVivo(ga.preReservaEventId, _diaPre, token);
+      if(rPre.motivo==='apagado'){ relatorio.push('❌ Pré-reserva ('+fD(_diaPre)+'): foi apagada direto na agenda.'); problemas++; }
+      else if(rPre.motivo==='erro'){ relatorio.push('⚠️ Pré-reserva: não foi possível conferir — '+_gaErroAmigavel(rPre.msg||'')); problemas++; }
+      else if(_csPre==='ganha'){ relatorio.push('⚠️ Pré-reserva ('+fD(_diaPre)+'): ainda na agenda, mas a venda já foi ganha — ela deveria ter saído.'); problemas++; }
+      else { relatorio.push('✅ Pré-reserva ('+fD(_diaPre)+'): confirmada na agenda, segurando a data.'); }
+    }
   }
   driveStatus(problemas?('⚠️ '+problemas+' pendência(s) na agenda.'):'✅ Agenda conferida — tudo certo.', problemas?'err':'ok');
   alert('🔍 CONFERÊNCIA NO GOOGLE AGENDA — OS '+(gv('f-num')||'')+'\n\n'+relatorio.join('\n')
