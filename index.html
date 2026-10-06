@@ -4375,6 +4375,10 @@ function diffsRequeremAprovacao(diffs){
     // mexem direto no preço (um painel maior custa mais m²; mais diárias
     // multiplicam o item) — davam pra passar sem ninguém revisar.
     return c==='Data do Evento'||c==='Data Fim'
+      // Desconto e arredondamento mudam o VALOR FINAL que o cliente recebeu.
+      // Faltavam aqui: dava pra aumentar o desconto de um orçamento já
+      // aprovado e ele continuar aprovado, sem ninguém revisar.
+      ||c==='Desconto %'||c==='Desconto R$'||c==='Arredondamento (R$)'
       ||c.indexOf('Qtd ')===0||c.indexOf('Valor unit. ')===0
       ||c.indexOf('Removido de ')===0||c.indexOf('Adicionado em ')===0
       ||c.indexOf('Item trocado em ')===0||c.indexOf('Dimensão ')===0||c.indexOf('Diária(s) ')===0;
@@ -4404,6 +4408,51 @@ function marcarAlteradoSemAprovacao(){
   }
 }
 
+// ── A trava de aprovação, num ponto só ────────────────────────────────────
+// Antes, derrubar a aprovação dependia de cada caminho de edição lembrar de
+// chamar marcarAlterado(). Qualquer caminho que esquecesse — e existem vários
+// (recuperação da cópia local, importação de arquivo, rotinas que mexem no
+// state direto) — deixava um orçamento APROVADO seguir alterado, com valor
+// diferente do que o cliente recebeu. Foi o que aconteceu no 20266322.
+//
+// Agora a conferência é uma função só, chamada também no SALVAMENTO e na
+// ABERTURA do orçamento. Não importa por onde a alteração entrou: antes de
+// virar documento salvo, ela passa por aqui.
+//
+// Devolve true quando derrubou a aprovação.
+function _aprovVerificarDesvio(origem){
+  if(typeof aprovStatus==='undefined' || aprovStatus!=='aprovado') return false;
+  var atualSnap;
+  try{ atualSnap=tirarSnapshot(); }catch(e){ return false; }
+  var motivo, diffs=[], base=null, rotuloBase='';
+  if(!snapshotAprovado){
+    // Aprovado sem retrato de referência (orçamento antigo, anterior a esta
+    // trava). Sem base não dá pra comparar — e um aprovado editado NUNCA pode
+    // seguir aprovado em silêncio. Fail-safe: derruba.
+    if(origem==='abertura') return false;   // ao abrir, sem base, nada mudou ainda
+    motivo='Alteração feita em orçamento já aprovado (sem retrato de referência salvo para comparar). Necessita nova aprovação.';
+    base=snapshotAnterior||null; rotuloBase='última versão enviada';
+  }else{
+    diffs=compararSnapshots(snapshotAprovado, atualSnap);
+    if(!diffsRequeremAprovacao(diffs)) return false;
+    motivo=(origem==='abertura')
+      ? 'Detectado na abertura: o orçamento está diferente da versão aprovada (valores/quantidades de itens, datas ou desconto). Necessita nova aprovação.'
+      : 'Alteração em valores/quantidades de itens, datas ou desconto. Necessita nova aprovação.';
+    base=snapshotAprovado; rotuloBase='versão aprovada';
+  }
+  _aprovCongelarPendentes(atualSnap);
+  aprovHist.push({ico:'⚠️',acao:'Aprovação anulada por alteração',
+    usuario:usuarioAtual?usuarioAtual.nome:'Sistema',
+    cargo:usuarioAtual?(NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel):'',
+    data:new Date().toLocaleString('pt-BR'),
+    obs:motivo, diffs:diffs, base:base, baseRotulo:rotuloBase});
+  aprovStatus='analise';
+  snapshotAnterior=atualSnap;
+  _naoSalvo=true;
+  try{ renderStatusOrc(); renderAprovInline(); }catch(e){}
+  return true;
+}
+
 function marcarAlterado(){
   if(_carregandoOrc)return;
   _naoSalvo = true;
@@ -4411,40 +4460,7 @@ function marcarAlterado(){
   // gravação automática no servidor (ver o bloco SALVAMENTO AUTOMÁTICO).
   if(typeof _rascunhoAgendar==='function') _rascunhoAgendar();
   if(typeof _autoSaveAgendar==='function') _autoSaveAgendar();
-  if(aprovStatus==='aprovado'){
-    var atualSnap=tirarSnapshot();
-    if(!snapshotAprovado){
-      // Orçamento está "aprovado" mas não existe snapshot de referência
-      // salvo (ex.: orçamento aprovado antes desta trava existir, ou por
-      // algum fluxo antigo que não gravava snapshotAprovado). Sem baseline
-      // não dá pra montar um diff detalhado do que mudou — mas um orçamento
-      // aprovado NUNCA pode continuar "aprovado" silenciosamente enquanto
-      // está sendo editado. Por segurança (fail-safe), qualquer edição
-      // nessas condições já derruba pra nova análise, em vez de não fazer
-      // nada (bug relatado: itens adicionados depois de aprovado sem voltar
-      // pra aprovação — orçamento 20266322).
-      _aprovCongelarPendentes(atualSnap);
-      aprovHist.push({ico:'⚠️',acao:'Aprovação anulada por alteração',usuario:usuarioAtual?usuarioAtual.nome:'Sistema',cargo:usuarioAtual?(NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel):'',data:new Date().toLocaleString('pt-BR'),obs:'Alteração feita em orçamento já aprovado (sem retrato de referência salvo para comparar). Necessita nova aprovação.',diffs:[],
-        base:(snapshotAnterior||null), baseRotulo:'última versão enviada'});
-      aprovStatus='analise';
-      snapshotAnterior=atualSnap;
-      renderStatusOrc();
-      renderAprovInline();
-      return;
-    }
-    var diffs=compararSnapshots(snapshotAprovado,atualSnap);
-    if(diffsRequeremAprovacao(diffs)){
-      _aprovCongelarPendentes(atualSnap);
-      // Guarda o RETRATO da versão aprovada, não a lista pronta: a partir
-      // daqui toda edição seguinte entra na conta automaticamente.
-      aprovHist.push({ico:'⚠️',acao:'Aprovação anulada por alteração',usuario:usuarioAtual?usuarioAtual.nome:'Sistema',cargo:usuarioAtual?(NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel):'',data:new Date().toLocaleString('pt-BR'),obs:'Alteração em valores/quantidades de itens ou na data do evento. Necessita nova aprovação.',diffs:diffs,
-        base:(snapshotAprovado||null), baseRotulo:'versão aprovada'});
-      aprovStatus='analise';
-      snapshotAnterior=atualSnap;
-      renderStatusOrc();
-      renderAprovInline();
-    }
-  }
+  _aprovVerificarDesvio('edicao');
 }
 
 async function buscaCEP(c,e,n,ci,st,br){
@@ -7484,6 +7500,17 @@ async function _executarSave(num,cli,dt,opts){
   // detectar a colisão logo depois de criar o arquivo — bem a tempo de
   // avisar o usuário antes que ele gere a OS/Agenda com o número errado.
   var _eraNovo = !driveIdAtual;
+  // Última barreira antes de virar documento salvo: um orçamento APROVADO
+  // cujo conteúdo não é mais o aprovado não pode ser gravado como aprovado,
+  // tenha a alteração vindo por onde tiver vindo. É aqui que a trava deixa
+  // de depender de cada tela lembrar de avisar.
+  try{
+    if(!opts.auto || aprovStatus==='aprovado'){
+      if(_aprovVerificarDesvio('salvamento')){
+        driveStatus('⚠️ O orçamento mudou em relação ao aprovado — voltou para Análise Técnica.','err');
+      }
+    }
+  }catch(eDesvio){ console.warn('[Aprovação] verificação no salvamento:', eDesvio&&eDesvio.message); }
   try{
     var dados=getDadosCompletos();
     // Gravar nova versão (timestamp)
@@ -8048,6 +8075,19 @@ function _aplicarDadosOrcamento(dados){
   descDiscriminarPDF=(dados.descDiscriminarPDF!==undefined)?!!dados.descDiscriminarPDF:true;
   var _chkDescDiscr=document.getElementById('chk-desc-discriminar');if(_chkDescDiscr)_chkDescDiscr.checked=descDiscriminarPDF;
   _limparCamposComercialDOM();
+  // Orçamento que já chegou do servidor marcado "aprovado" mas com conteúdo
+  // diferente do aprovado: alguém alterou por um caminho que escapou da
+  // trava (ou antes dela existir). Flagra na abertura, em vez de deixar
+  // seguir mostrando "Aprovado" com outro valor — foi o caso do 20266322.
+  // Roda depois do render inicial, já com tudo aplicado na tela.
+  setTimeout(function(){
+    try{
+      if(_aprovVerificarDesvio('abertura')){
+        _toastMostrar('⚠️ Este orçamento estava marcado como APROVADO, mas o conteúdo não é mais o que foi aprovado. '
+          +'Ele voltou para Análise Técnica — veja o que mudou no histórico.','warn',14000);
+      }
+    }catch(e){ console.warn('[Aprovação] verificação na abertura:', e&&e.message); }
+  }, 600);
 }
 
 var _driveCarregarSeq=0;
