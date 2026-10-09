@@ -262,7 +262,9 @@ body.fundo-travado{position:fixed!important;left:0;right:0;width:100%;overflow:h
 .orc-topo{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;}
 .orc-num{color:var(--text);font-size:13px;font-weight:800;}
 .orc-cli{color:var(--text-muted);font-size:11px;flex:1;}
+.orc-val{color:var(--text);font-size:12px;font-weight:800;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;}
 .orc-badge{padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;}
+@media(max-width:620px){.orc-val{font-size:11.5px;}}
 .orc-info{font-size:10px;color:var(--text-dim);line-height:1.9;}
 .orc-info b{color:var(--text-faint);}
 .etapas{display:flex;gap:4px;flex-wrap:wrap;margin-top:7px;align-items:center;}
@@ -6023,7 +6025,7 @@ function buildOrcCard(orc,idx){
   var infoAgd=orc.st!=='aprovado'?'<b>Aguardando:</b> '+(aguardando[orc.st]||'—')+(minhaVez?' <b style="color:#ff9800">← SUA VEZ</b>':'')+'<br>':'';
   var infoEv=orc.form['f-dia']?new Date(orc.form['f-dia']+'T12:00:00').toLocaleDateString('pt-BR'):'';
   return '<div class="orc-card '+orc.st+'" id="orc-card-'+idx+'" onclick="toggleDetalhes('+idx+')">'
-    +'<div class="orc-topo"><span class="orc-num">'+(orc.form['f-num']||'—')+'</span><span class="orc-cli">'+(orc.form['f-cliente']||'—')+(orc.form['f-nome-evento']?' — '+orc.form['f-nome-evento']:'')+'</span><span class="orc-badge" style="background:'+si.bg+';color:'+si.tx+';border:1px solid '+si.bd+'">'+si.label+'</span></div>'
+    +'<div class="orc-topo"><span class="orc-num">'+(orc.form['f-num']||'—')+'</span><span class="orc-cli">'+(orc.form['f-cliente']||'—')+(orc.form['f-nome-evento']?' — '+orc.form['f-nome-evento']:'')+'</span><span class="orc-val" title="Valor do orçamento">'+_valorOrcColuna(orc)+'</span><span class="orc-badge" style="background:'+si.bg+';color:'+si.tx+';border:1px solid '+si.bd+'">'+si.label+'</span></div>'
     +'<div class="orc-info">'+infoAgd+(orc.form['f-cons']?'<b>Consultor:</b> '+orc.form['f-cons']+' · ':'')+(infoEv?'<b>Evento:</b> '+infoEv+' · ':'')+' <b>Atualizado:</b> '+orc.modificado+(ult?'<br><b>Última ação:</b> '+ult.acao+' por '+_nomeUsuario(ult.usuario):'')+'</div>'
     +'<div class="etapas">'+etapasHTML+'</div>'
     +'<div id="det-'+idx+'" class="aprov-detalhe">'+histHtml
@@ -9198,13 +9200,14 @@ function avisosToggle(id){
 // Valor do orçamento na linha do aviso — o mesmo número que o Funil e os
 // dashboards usam (dashValOrc), para não existirem dois valores diferentes
 // para o mesmo orçamento em telas diferentes.
-function _avisosValor(o){
+function _valorOrcColuna(o){
   try{
     var v=dashValOrc(o);
     if(!v || !isFinite(v)) return '<span style="color:var(--text-dim);font-weight:500">—</span>';
     return fmt(v);
   }catch(e){ return '<span style="color:var(--text-dim);font-weight:500">—</span>'; }
 }
+function _avisosValor(o){ return _valorOrcColuna(o); }
 
 function _avisosItemHTML(o){
   var f=o.form||{};
