@@ -2121,8 +2121,78 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         </select>
       </div>
       <div><button class="btn btn-r btn-sm" onclick="dashFinRenderizar()">📊 Aplicar</button></div>
+      <div><button class="btn btn-b btn-sm" onclick="arecAbrir()" title="Gera um PDF das parcelas que ainda não foram recebidas, com vencimento dentro do período que você escolher">📄 Relatório A Receber</button></div>
     </div>
     <div id="dashfin-corpo"><div class="dash-loading">⏳ Carregando...</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  RELATÓRIO DE CONTAS A RECEBER (PDF)                   -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="arec-ov">
+  <div class="modal-box" style="max-width:520px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <h2 style="margin-bottom:2px">📄 Relatório de Contas a Receber</h2>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('arec-ov').classList.remove('open')">✕</button>
+    </div>
+    <p class="sub" style="margin-bottom:14px">Parcelas ainda não recebidas, com vencimento dentro do período. Só entram orçamentos marcados como <b>Venda Ganha</b>.</p>
+
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:130px">
+        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;display:block;margin-bottom:4px">Vencimento de</label>
+        <input type="date" id="arec-de" style="width:100%;padding:7px 9px;background:var(--surface);border:1px solid var(--border-strong);border-radius:4px;color:var(--text);font-size:12px">
+      </div>
+      <div style="flex:1;min-width:130px">
+        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;display:block;margin-bottom:4px">Até</label>
+        <input type="date" id="arec-ate" style="width:100%;padding:7px 9px;background:var(--surface);border:1px solid var(--border-strong);border-radius:4px;color:var(--text);font-size:12px">
+      </div>
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn btn-o btn-sm" onclick="arecPeriodo('mes')">Este mês</button>
+      <button class="btn btn-o btn-sm" onclick="arecPeriodo('prox')">Próximo mês</button>
+      <button class="btn btn-o btn-sm" onclick="arecPeriodo('30')">Próximos 30 dias</button>
+      <button class="btn btn-o btn-sm" onclick="arecPeriodo('ano')">Ano todo</button>
+      <button class="btn btn-o btn-sm" onclick="arecPeriodo('tudo')" title="Ignora o período e traz tudo que está em aberto, inclusive atrasos antigos">Tudo em aberto</button>
+    </div>
+
+    <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:11px 13px;margin-bottom:12px">
+      <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;display:block;margin-bottom:7px">O que entra no relatório</label>
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);cursor:pointer;margin-bottom:5px">
+        <input type="checkbox" id="arec-st-pendente" checked style="width:auto"> <b style="color:#ffa726">Pendente</b> <span style="font-size:10px;color:var(--text-muted)">— ainda não venceu</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);cursor:pointer;margin-bottom:5px">
+        <input type="checkbox" id="arec-st-atrasado" checked style="width:auto"> <b style="color:#ef5350">Atrasado</b> <span style="font-size:10px;color:var(--text-muted)">— venceu e não foi pago</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);cursor:pointer">
+        <input type="checkbox" id="arec-st-inadimplente" checked style="width:auto"> <b style="color:#ef9a9a">🚫 Inadimplente</b> <span style="font-size:10px;color:var(--text-muted)">— fora da cobrança ativa</span>
+      </label>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <div style="flex:1;min-width:170px">
+        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;display:block;margin-bottom:4px">Agrupar por</label>
+        <select id="arec-grupo" style="width:100%;padding:7px 9px;background:var(--surface);border:1px solid var(--border-strong);border-radius:4px;color:var(--text);font-size:12px">
+          <option value="venc">Vencimento (subtotal por mês)</option>
+          <option value="cliente">Cliente</option>
+          <option value="cons">Consultor</option>
+        </select>
+      </div>
+      <div style="flex:1;min-width:170px">
+        <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;display:block;margin-bottom:4px">Consultor</label>
+        <select id="arec-filtro-cons" style="width:100%;padding:7px 9px;background:var(--surface);border:1px solid var(--border-strong);border-radius:4px;color:var(--text);font-size:12px">
+          <option value="">Todos</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="arec-previa" style="font-size:11px;color:var(--text-dim);background:var(--surface-3);border:1px solid var(--border);border-radius:5px;padding:9px 12px;margin-bottom:14px"></div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-o" onclick="document.getElementById('arec-ov').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-r" onclick="arecGerarPDF()">📄 Gerar PDF</button>
+    </div>
   </div>
 </div>
 
@@ -27018,17 +27088,15 @@ async function dashFinAtualizar(forcar){
   }
 }
 
-function dashFinRenderizar(){
-  var de     = document.getElementById('dashfin-de').value;
-  var ate    = document.getElementById('dashfin-ate').value;
-  var stFilt = document.getElementById('dashfin-status').value;
-  var hoje   = new Date().toISOString().split('T')[0];
-
-  // Coletar todas as parcelas (com referência ao driveId do orçamento)
-  // IMPORTANTE: só entram orçamentos com venda GANHA — parcelas configuradas
-  // em orçamentos ainda em negociação/rascunho não são compromisso financeiro real.
+// Fonte única das parcelas do financeiro — usada pelo Dashboard Financeiro e
+// pelo Relatório de Contas a Receber, pra que os dois nunca mostrem números
+// diferentes para o mesmo dado.
+// IMPORTANTE: só entram orçamentos com venda GANHA — parcelas configuradas em
+// orçamentos ainda em negociação/rascunho não são compromisso financeiro real.
+function _finColetarParcelas(){
+  var hoje = new Date().toISOString().split('T')[0];
   var todas = [];
-  _dashFinDados.forEach(function(o){
+  (_dashFinDados||[]).forEach(function(o){
     var cs = (o.dados && o.dados.comercialStatus) || '';
     if(cs !== 'ganha') return;
     var fin = (o.dados && o.dados.finParcelas)||[];
@@ -27057,6 +27125,16 @@ function dashFinRenderizar(){
       });
     });
   });
+  return todas;
+}
+
+function dashFinRenderizar(){
+  var de     = document.getElementById('dashfin-de').value;
+  var ate    = document.getElementById('dashfin-ate').value;
+  var stFilt = document.getElementById('dashfin-status').value;
+  var hoje   = new Date().toISOString().split('T')[0];
+
+  var todas = _finColetarParcelas();
 
   // Filtrar por data e status
   var filtradas = todas.filter(function(p){
@@ -27336,6 +27414,295 @@ async function dashFinAbrirOrc(driveId, nome){
   _origemOrc=abrirDashFin;
   window.scrollTo({top:0,behavior:'smooth'});
   await driveCarregar(driveId, nome);
+}
+
+// ════════════════════════════════════════════════════════
+//  RELATÓRIO DE CONTAS A RECEBER
+//
+//  Pedido do usuário: definir o período e gerar o relatório do que ainda
+//  está pra entrar. Três coisas ficam na mão dele, porque cada uso pede
+//  um corte diferente:
+//    • QUAIS situações entram (pendente / atrasado / inadimplente) — uma
+//      projeção de caixa quer só o que ainda vai vencer; uma reunião de
+//      cobrança quer justamente o atrasado;
+//    • COMO agrupar (vencimento, cliente, consultor) — fluxo de caixa,
+//      régua de cobrança ou acompanhamento de equipe;
+//    • "Tudo em aberto", que ignora o período e mostra a dívida inteira.
+//
+//  O filtro de período é sempre pela DATA DE VENCIMENTO da parcela: é a
+//  data que responde "quanto entra em tal mês". As parcelas vêm de
+//  _finColetarParcelas(), a mesma fonte do Dashboard Financeiro.
+// ════════════════════════════════════════════════════════
+
+var AREC_ST_INFO = {
+  pendente:     {lbl:'Pendente',          cor:'#e65100'},
+  atrasado:     {lbl:'Atrasado',          cor:'#c62828'},
+  inadimplente: {lbl:'Inadimplente',      cor:'#8e24aa'}
+};
+
+function arecAbrir(){
+  if(!(_dashFinDados||[]).length){
+    alert('Os dados do financeiro ainda não foram carregados.\n\nClique em "🔄 Atualizar" no Dashboard Financeiro e tente de novo.');
+    return;
+  }
+  var dDe=document.getElementById('dashfin-de').value;
+  var dAte=document.getElementById('dashfin-ate').value;
+  document.getElementById('arec-de').value=dDe||'';
+  document.getElementById('arec-ate').value=dAte||'';
+  if(!dDe && !dAte) arecPeriodo('mes');
+
+  // Lista de consultores que realmente têm parcela em aberto
+  var cons={};
+  _finColetarParcelas().forEach(function(p){ if(p.status!=='pago') cons[p.cons||'—']=1; });
+  var sel=document.getElementById('arec-filtro-cons');
+  var antes=sel.value;
+  sel.innerHTML='<option value="">Todos</option>'+Object.keys(cons).sort().map(function(c){
+    return '<option value="'+eh(c)+'">'+eh(c)+'</option>';
+  }).join('');
+  sel.value=antes;
+
+  ['arec-de','arec-ate','arec-st-pendente','arec-st-atrasado','arec-st-inadimplente','arec-grupo','arec-filtro-cons'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el && !el._arecLigado){ el.addEventListener('change', arecPrevia); el._arecLigado=true; }
+  });
+
+  document.getElementById('arec-ov').classList.add('open');
+  arecPrevia();
+}
+
+function arecPeriodo(qual){
+  var hoje=new Date();
+  var de, ate;
+  if(qual==='mes'){
+    de=new Date(hoje.getFullYear(),hoje.getMonth(),1);
+    ate=new Date(hoje.getFullYear(),hoje.getMonth()+1,0);
+  }else if(qual==='prox'){
+    de=new Date(hoje.getFullYear(),hoje.getMonth()+1,1);
+    ate=new Date(hoje.getFullYear(),hoje.getMonth()+2,0);
+  }else if(qual==='30'){
+    de=new Date(hoje.getTime());
+    ate=new Date(hoje.getTime()); ate.setDate(ate.getDate()+30);
+  }else if(qual==='ano'){
+    de=new Date(hoje.getFullYear(),0,1);
+    ate=new Date(hoje.getFullYear(),11,31);
+  }else{ // tudo em aberto
+    document.getElementById('arec-de').value='';
+    document.getElementById('arec-ate').value='';
+    arecPrevia();
+    return;
+  }
+  var iso=function(d){return d.toISOString().split('T')[0];};
+  document.getElementById('arec-de').value=iso(de);
+  document.getElementById('arec-ate').value=iso(ate);
+  arecPrevia();
+}
+
+function _arecConfig(){
+  var sts=[];
+  if(document.getElementById('arec-st-pendente').checked)     sts.push('pendente');
+  if(document.getElementById('arec-st-atrasado').checked)     sts.push('atrasado');
+  if(document.getElementById('arec-st-inadimplente').checked) sts.push('inadimplente');
+  return {
+    de:    document.getElementById('arec-de').value||'',
+    ate:   document.getElementById('arec-ate').value||'',
+    sts:   sts,
+    grupo: document.getElementById('arec-grupo').value||'venc',
+    cons:  document.getElementById('arec-filtro-cons').value||''
+  };
+}
+
+function _arecFiltrar(cfg){
+  return _finColetarParcelas().filter(function(p){
+    if(cfg.sts.indexOf(p.status)<0) return false;
+    if(cfg.cons && p.cons!==cfg.cons) return false;
+    // Parcela sem data de vencimento é um dado incompleto: entra só quando
+    // não há recorte de período, pra não desaparecer sem ninguém notar.
+    if(!p.data) return !cfg.de && !cfg.ate;
+    if(cfg.de  && p.data < cfg.de)  return false;
+    if(cfg.ate && p.data > cfg.ate) return false;
+    return true;
+  }).sort(function(a,b){ return (a.data||'9999')>(b.data||'9999')?1:-1; });
+}
+
+function arecPrevia(){
+  var cfg=_arecConfig();
+  var el=document.getElementById('arec-previa');
+  if(!el) return;
+  if(!cfg.sts.length){
+    el.innerHTML='<b style="color:#ef5350">Marque pelo menos uma situação.</b>';
+    return;
+  }
+  var lista=_arecFiltrar(cfg);
+  if(!lista.length){
+    el.innerHTML='Nenhuma parcela em aberto com esses filtros.';
+    return;
+  }
+  var total=lista.reduce(function(t,p){return t+p.valor;},0);
+  var porSt={};
+  lista.forEach(function(p){ porSt[p.status]=(porSt[p.status]||0)+p.valor; });
+  var det=cfg.sts.filter(function(s){return porSt[s];}).map(function(s){
+    return '<span style="color:'+AREC_ST_INFO[s].cor+';font-weight:700">'+AREC_ST_INFO[s].lbl+': '+fmt(porSt[s])+'</span>';
+  }).join(' · ');
+  el.innerHTML='<b style="color:var(--text);font-size:13px">'+fmt(total)+'</b> em <b>'+lista.length+'</b> parcela(s)'
+    +(cfg.de||cfg.ate?'':' <span style="color:var(--text-muted)">(tudo em aberto)</span>')
+    +(det?'<div style="margin-top:4px">'+det+'</div>':'');
+}
+
+// Monta os blocos do PDF conforme o agrupamento escolhido.
+function _arecMontarHTML(cfg, lista){
+  var total=lista.reduce(function(t,p){return t+p.valor;},0);
+  var hojeISO=new Date().toISOString().split('T')[0];
+
+  function dias(p){
+    if(!p.data) return '';
+    var d=Math.round((new Date(p.data+'T12:00:00')-new Date(hojeISO+'T12:00:00'))/86400000);
+    if(d===0) return 'hoje';
+    return d>0 ? 'em '+d+'d' : d*-1+'d atraso';
+  }
+
+  function linhas(itens, mostrarCliente, mostrarCons){
+    return itens.map(function(p){
+      var si=AREC_ST_INFO[p.status]||{lbl:p.status,cor:'#555'};
+      return '<tr>'
+        +'<td style="white-space:nowrap">'+(p.data?fD(p.data):'—')+'</td>'
+        +'<td style="white-space:nowrap;color:#777;font-size:8.5px">'+dias(p)+'</td>'
+        +'<td style="white-space:nowrap">'+eh(p.num)+'</td>'
+        +(mostrarCliente?'<td>'+eh(p.cliente)+(p.evento?' <span style="color:#888">— '+eh(p.evento)+'</span>':'')+'</td>':'<td>'+(p.evento?eh(p.evento):'<span style="color:#aaa">—</span>')+'</td>')
+        +(mostrarCons?'<td style="white-space:nowrap">'+eh(p.cons)+'</td>':'')
+        +'<td>'+eh(p.desc)+'</td>'
+        +'<td style="white-space:nowrap">'+eh(p.forma)+'</td>'
+        +'<td style="white-space:nowrap;color:'+si.cor+';font-weight:700">'+si.lbl+'</td>'
+        +'<td style="text-align:right;white-space:nowrap;font-weight:700">'+fmt(p.valor)+'</td>'
+        +'</tr>';
+    }).join('');
+  }
+
+  function cabecalho(mostrarCliente, mostrarCons){
+    return '<thead><tr>'
+      +'<th>Venc.</th><th></th><th>Orç.</th>'
+      +'<th>'+(mostrarCliente?'Cliente / Evento':'Evento')+'</th>'
+      +(mostrarCons?'<th>Consultor</th>':'')
+      +'<th>Parcela</th><th>Forma</th><th>Situação</th><th style="text-align:right">Valor</th>'
+      +'</tr></thead>';
+  }
+
+  function bloco(titulo, itens, mostrarCliente, mostrarCons){
+    var sub=itens.reduce(function(t,p){return t+p.valor;},0);
+    // Colunas: Venc · dias · Orç · Cliente|Evento · [Consultor] · Parcela · Forma · Situação · Valor
+    var colsAntesDoValor=7+(mostrarCons?1:0);
+    return '<div class="grp">'
+      +'<div class="grp-h"><span>'+eh(titulo)+'</span><span>'+itens.length+' parcela(s) · <b>'+fmt(sub)+'</b></span></div>'
+      +'<table>'+cabecalho(mostrarCliente,mostrarCons)+'<tbody>'+linhas(itens,mostrarCliente,mostrarCons)
+      +'<tr class="sub"><td colspan="'+colsAntesDoValor+'">Subtotal</td><td style="text-align:right">'+fmt(sub)+'</td></tr>'
+      +'</tbody></table></div>';
+  }
+
+  var corpo='';
+  if(cfg.grupo==='cliente' || cfg.grupo==='cons'){
+    var chave = cfg.grupo==='cliente' ? 'cliente' : 'cons';
+    var grupos={};
+    lista.forEach(function(p){ var k=p[chave]||'—'; (grupos[k]=grupos[k]||[]).push(p); });
+    corpo=Object.keys(grupos).sort(function(a,b){
+      return grupos[b].reduce(function(t,p){return t+p.valor;},0)-grupos[a].reduce(function(t,p){return t+p.valor;},0);
+    }).map(function(k){
+      return bloco(k, grupos[k], chave!=='cliente', chave!=='cons');
+    }).join('');
+  }else{
+    var meses={};
+    lista.forEach(function(p){ var m=p.data?p.data.substring(0,7):'sem-data'; (meses[m]=meses[m]||[]).push(p); });
+    corpo=Object.keys(meses).sort().map(function(m){
+      var tit;
+      if(m==='sem-data') tit='Sem data de vencimento';
+      else{ var pts=m.split('-'); tit=(MESES_NOMES[parseInt(pts[1],10)-1]||pts[1])+'/'+pts[0]; }
+      return bloco(tit, meses[m], true, true);
+    }).join('');
+  }
+
+  // Resumo por situação
+  var porSt={};
+  lista.forEach(function(p){ porSt[p.status]=(porSt[p.status]||{v:0,n:0}); porSt[p.status].v+=p.valor; porSt[p.status].n++; });
+  var kpis='<div class="kpis">'
+    +['pendente','atrasado','inadimplente'].filter(function(s){return porSt[s];}).map(function(s){
+      return '<div class="kpi" style="border-left:4px solid '+AREC_ST_INFO[s].cor+'">'
+        +'<label>'+AREC_ST_INFO[s].lbl+'</label>'
+        +'<b style="color:'+AREC_ST_INFO[s].cor+'">'+fmt(porSt[s].v)+'</b>'
+        +'<span>'+porSt[s].n+' parcela(s)</span></div>';
+    }).join('')
+    +'<div class="kpi" style="border-left:4px solid #111"><label>Total a Receber</label><b>'+fmt(total)+'</b><span>'+lista.length+' parcela(s)</span></div>'
+    +'</div>';
+
+  return kpis+corpo;
+}
+
+function arecGerarPDF(){
+  var cfg=_arecConfig();
+  if(!cfg.sts.length){ alert('Marque pelo menos uma situação (Pendente, Atrasado ou Inadimplente).'); return; }
+  var lista=_arecFiltrar(cfg);
+  if(!lista.length){ alert('Nenhuma parcela em aberto com esses filtros. Ajuste o período ou as situações.'); return; }
+
+  var periodoTxt = (cfg.de||cfg.ate)
+    ? 'Vencimento de '+(cfg.de?fD(cfg.de):'início')+' a '+(cfg.ate?fD(cfg.ate):'sem limite')
+    : 'Todas as parcelas em aberto (sem recorte de período)';
+  var grupoTxt = cfg.grupo==='cliente'?'Agrupado por cliente':cfg.grupo==='cons'?'Agrupado por consultor':'Agrupado por mês de vencimento';
+  var filtroTxt = 'Situações: '+cfg.sts.map(function(s){return AREC_ST_INFO[s].lbl;}).join(', ')
+    +(cfg.cons?' · Consultor: '+cfg.cons:'');
+
+  var corpo=_arecMontarHTML(cfg, lista);
+  var agora=new Date();
+  var nomeArq='CrazySom_ContasAReceber_'+agora.toISOString().split('T')[0].replace(/-/g,'');
+
+  var w=window.open('','_blank','width=1100,height=850');
+  if(!w){ alert('Pop-up bloqueado! Libere pop-ups pra este site e tente de novo.'); return; }
+  w.document.open();
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+nomeArq+'</title>'
+    +'<style>'
+    +'@page{size:A4 landscape;margin:8mm}'
+    +'*{box-sizing:border-box;margin:0;padding:0;font-family:"Segoe UI",Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'body{background:#fff;color:#111}'
+    +'.hdr{background:#d63447;color:#fff;padding:11px 15px;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;border-radius:5px}'
+    +'.hdr h1{font-size:14px;font-weight:900;margin-bottom:3px}'
+    +'.hdr .sub{font-size:9.5px;opacity:.92;line-height:1.5}'
+    +'.hdr .ger{font-size:8.5px;opacity:.8;text-align:right;white-space:nowrap}'
+    +'.kpis{display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap}'
+    +'.kpi{flex:1;min-width:120px;background:#f7f7f7;border:1px solid #e0e0e0;border-radius:4px;padding:7px 10px}'
+    +'.kpi label{display:block;font-size:8px;text-transform:uppercase;letter-spacing:.6px;color:#777;font-weight:800;margin-bottom:2px}'
+    +'.kpi b{display:block;font-size:14px;font-weight:900;color:#111}'
+    +'.kpi span{display:block;font-size:8px;color:#999;margin-top:1px}'
+    +'.grp{margin-bottom:11px;page-break-inside:avoid}'
+    +'.grp-h{display:flex;justify-content:space-between;align-items:center;background:#2b2b2b;color:#fff;padding:5px 10px;border-radius:4px 4px 0 0;font-size:10px;font-weight:800}'
+    +'table{width:100%;border-collapse:collapse;font-size:9px}'
+    +'th{background:#efefef;color:#444;text-align:left;padding:4px 6px;border-bottom:1px solid #ccc;font-size:8px;text-transform:uppercase;letter-spacing:.4px}'
+    +'td{padding:4px 6px;border-bottom:1px solid #eee;color:#222}'
+    +'tr:nth-child(even) td{background:#fbfbfb}'
+    +'tr.sub td{background:#f0f0f0!important;font-weight:900;font-size:9.5px;border-top:1px solid #ccc;border-bottom:none;text-align:right}'
+    +'.tot{margin-top:4px;background:#d63447;color:#fff;padding:8px 12px;border-radius:4px;display:flex;justify-content:space-between;font-size:12px;font-weight:900}'
+    +'.pe{margin-top:10px;font-size:8px;color:#aaa;text-align:center;border-top:1px solid #ddd;padding-top:5px}'
+    +'#st{position:fixed;top:0;left:0;right:0;background:#d63447;color:#fff;text-align:center;padding:10px;font-size:13px;font-weight:bold;z-index:9999}'
+    +'@media print{#st{display:none}}'
+    +'</style>'
+    +'<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>'
+    +'</head><body>'
+    +'<div id="st">Gerando PDF...</div>'
+    +'<div id="pw">'
+    +'<div class="hdr"><div><h1>CRAZY SOM — CONTAS A RECEBER</h1>'
+    +'<div class="sub">'+eh(periodoTxt)+'<br>'+eh(grupoTxt)+' · '+eh(filtroTxt)+'</div></div>'
+    +'<div class="ger">Gerado em '+agora.toLocaleString('pt-BR')+'<br>'+eh((usuarioAtual&&usuarioAtual.nome)||'')+'</div></div>'
+    +corpo
+    +'<div class="tot"><span>TOTAL A RECEBER</span><span>'+fmt(lista.reduce(function(t,p){return t+p.valor;},0))+'</span></div>'
+    +'<div class="pe">Crazy Som Audiovisuais – CNPJ: 10.909.827/0001-76 – Considera apenas orçamentos marcados como Venda Ganha.</div>'
+    +'</div>'
+    +'<script>'
+    +'window.onload=function(){setTimeout(function(){'
+    +'var opt={margin:5,filename:"'+nomeArq+'.pdf",image:{type:"jpeg",quality:1},'
+    +'html2canvas:{scale:2,useCORS:true,logging:false,backgroundColor:"#ffffff"},'
+    +'jsPDF:{unit:"mm",format:"a4",orientation:"landscape"},pagebreak:{mode:["css","legacy"]}};'
+    +'html2pdf().set(opt).from(document.getElementById("pw")).save().then(function(){'
+    +'document.getElementById("st").style.background="#2e7d32";'
+    +'document.getElementById("st").textContent="PDF salvo! Pode fechar esta janela.";'
+    +'}).catch(function(e){document.getElementById("st").textContent="Erro ao gerar: "+e.message;});'
+    +'},600);};'
+    +'<\/script></body></html>');
+  w.document.close();
 }
 
 function renderAdmExclusoes(){
