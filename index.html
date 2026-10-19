@@ -5442,7 +5442,7 @@ async function eqCarregar(){
           id:    it.id||('e'+Math.random().toString(36).slice(2,7)),
           sec:   EQ_SECS.indexOf(it.sec)>=0?it.sec:'som',
           nome:  String(it.nome||''),
-          qtd:   parseFloat(it.qtd)||0,
+          qtd:   Math.max(0, Math.round(parseFloat(it.qtd)||0)),
           extra: !!it.extra
         };
       }).filter(function(it){ return !!it.nome; });
@@ -5470,7 +5470,7 @@ function _eqNorm(s){
 
 // Só os itens que valem pra análise: marcados E com quantidade informada.
 function _eqControlados(){
-  return ESTOQUE_EQ.filter(function(it){ return (parseFloat(it.qtd)||0)>0; });
+  return ESTOQUE_EQ.filter(function(it){ return (parseInt(it.qtd,10)||0)>0; });
 }
 
 // nome normalizado → item de estoque. O casamento ignora a seção: um mesmo
@@ -6122,8 +6122,8 @@ function eqAdminRenderizar(){
   var semQtd=ESTOQUE_EQ.filter(function(it){ return (parseFloat(it.qtd)||0)<=0; }).length;
 
   var topo='<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;font-size:11px">'
-    +'<span style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:4px 12px"><b>'+marcados+'</b> item(ns) marcado(s)</span>'
-    +(semQtd?'<span style="background:#fff3e0;border:1px solid #ffb74d;color:#e65100;border-radius:14px;padding:4px 12px;font-weight:700">⚠️ '+semQtd+' sem quantidade — não são conferidos</span>':'')
+    +'<span style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:4px 12px"><b id="eq-topo-marcados">'+marcados+'</b> item(ns) marcado(s)</span>'
+    +'<span id="eq-topo-semqtd" style="background:#fff3e0;border:1px solid #ffb74d;color:#e65100;border-radius:14px;padding:4px 12px;font-weight:700'+(semQtd?'':';display:none')+'">⚠️ <span id="eq-topo-semqtd-n">'+semQtd+'</span> sem quantidade — não são conferidos</span>'
     +'<input type="search" placeholder="🔍 filtrar equipamento..." value="'+eh(_eqAdminBusca)+'" oninput="eqAdminBuscar(this.value)" style="flex:1;min-width:180px;padding:6px 10px;font-size:11px;background:var(--surface);border:1px solid var(--border-strong);border-radius:4px;color:var(--text)">'
     +'</div>';
 
@@ -6146,7 +6146,7 @@ function eqAdminRenderizar(){
     html+='<div style="border:1px solid var(--border);border-radius:6px;margin-bottom:9px;overflow:hidden">'
       +'<div onclick="eqAdminToggleSec(\''+sec+'\')" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 13px;background:var(--surface-2);cursor:pointer">'
       +'<span style="font-size:12px;font-weight:800">'+(EQ_SEC_ICO[sec]||'')+' '+eh(EQ_SEC_LBL[sec]||sec)+'</span>'
-      +'<span style="font-size:10px;color:var(--text-dim)">'+marcadosSec+' marcado(s) de '+todos.length+' · '+(aberta?'▲':'▼')+'</span>'
+      +'<span style="font-size:10px;color:var(--text-dim)"><span id="eq-cnt-'+sec+'">'+marcadosSec+'</span> marcado(s) de '+todos.length+' · '+(aberta?'▲':'▼')+'</span>'
       +'</div>';
 
     if(aberta){
@@ -6157,23 +6157,29 @@ function eqAdminRenderizar(){
         todos.forEach(function(x){
           var ent=_eqEntradaPorNome(sec, x.n);
           var on=!!ent;
-          var qtd=ent?(parseFloat(ent.qtd)||0):'';
-          var alerta=on && !(parseFloat(ent.qtd)>0);
-          html+='<div style="display:flex;align-items:center;gap:9px;padding:5px 13px;border-bottom:1px solid var(--border)'+(on?';background:var(--surface-3)':'')+'">'
-            +'<input type="checkbox" '+(on?'checked':'')+' onchange="eqAdminMarcar(\''+sec+'\',\''+eh(x.n).replace(/'/g,"\\'")+'\',this.checked)" style="width:auto;flex:none" title="Controlar este equipamento">'
-            +'<span style="flex:1;font-size:11.5px;'+(on?'font-weight:700;color:var(--text)':'color:var(--text-dim)')+'">'+eh(x.n)
+          var qtd=ent?(parseInt(ent.qtd,10)||0):'';
+          var k=sec+'-'+_eqNorm(x.n);
+          var nomeJs=eh(x.n).replace(/'/g,"\\'");
+          html+='<div id="eq-row-'+k+'" style="display:flex;align-items:center;gap:9px;padding:5px 13px;border-bottom:1px solid var(--border)'+(on?';background:var(--surface-3)':'')+'">'
+            +'<input type="checkbox" '+(on?'checked':'')+' onchange="eqAdminMarcar(\''+sec+'\',\''+nomeJs+'\',this.checked)" style="width:auto;flex:none" title="Controlar este equipamento">'
+            +'<span id="eq-lb-'+k+'" style="flex:1;font-size:11.5px;'+(on?'font-weight:700;color:var(--text)':'color:var(--text-dim)')+'">'+eh(x.n)
               +(x._livre?' <span style="font-size:9px;color:var(--text-muted);border:1px solid var(--border);border-radius:3px;padding:0 4px">fora da tabela</span>':'')+'</span>'
-            +'<input type="number" step="0.01" min="0" value="'+qtd+'" placeholder="qtd" '+(on?'':'disabled')
-              +' oninput="eqAdminQtd(\''+sec+'\',\''+eh(x.n).replace(/'/g,"\\'")+'\',this.value)"'
-              +' style="width:80px;font-size:11px;padding:4px 7px;text-align:right'+(alerta?';border-color:#ffb74d;background:#fff3e0;color:#e65100':'')+(on?'':';opacity:.35')+'"'
-              +' title="Quantidade em estoque (na unidade do item: peças, metros, m²)">'
+            +'<input id="eq-q-'+k+'" type="number" step="1" min="0" inputmode="numeric" value="'+qtd+'" placeholder="qtd" '+(on?'':'disabled')
+              +' oninput="eqAdminQtd(\''+sec+'\',\''+nomeJs+'\',this.value,this)"'
+              +' onblur="eqAdminQtdFechar(\''+sec+'\',\''+nomeJs+'\',this)"'
+              +' style="width:80px;font-size:11px;padding:4px 7px;text-align:right'+(on?'':';opacity:.35')+'"'
+              +' title="Quantidade em estoque, em números inteiros (peças, metros, m²)">'
             +'</div>';
+          // O destaque laranja de "marcado sem quantidade" é aplicado pelo
+          // mesmo caminho que o usado durante a digitação, pra não existirem
+          // duas versões da mesma regra.
+          if(on) setTimeout(function(){ _eqAdminPintarQtd(k, ent); }, 0);
         });
         html+='</div>';
       }
       html+='<div style="padding:9px 13px;background:var(--surface-2);border-top:1px solid var(--border);display:flex;gap:7px;align-items:center;flex-wrap:wrap">'
         +'<input type="text" id="eq-novo-'+sec+'" placeholder="equipamento que não está na tabela..." style="flex:1;min-width:170px;font-size:11px;padding:5px 9px;background:var(--surface);border:1px solid var(--border-strong);border-radius:4px;color:var(--text)">'
-        +'<input type="number" step="0.01" min="0" id="eq-novo-qtd-'+sec+'" placeholder="qtd" style="width:80px;font-size:11px;padding:5px 7px;text-align:right">'
+        +'<input type="number" step="1" min="0" inputmode="numeric" id="eq-novo-qtd-'+sec+'" placeholder="qtd" style="width:80px;font-size:11px;padding:5px 7px;text-align:right">'
         +'<button class="btn btn-g btn-sm" onclick="eqAdminAdicionarLivre(\''+sec+'\')">+ Adicionar</button>'
         +'</div>';
     }
@@ -6183,24 +6189,104 @@ function eqAdminRenderizar(){
   box.innerHTML=topo+html;
 }
 
+// Marcar/desmarcar NÃO redesenha a lista: a lista tem mais de 120 linhas e
+// redesenhar jogava o scroll de volta pro topo a cada clique, o que tornava o
+// preenchimento em sequência insuportável. Em vez disso, mexe só na linha
+// tocada e nos contadores.
+function _eqAdminChave(sec, nome){ return sec+'-'+_eqNorm(nome); }
+
+function _eqAdminPintarQtd(k, ent){
+  var inp=document.getElementById('eq-q-'+k);
+  if(!inp) return;
+  var falta=!!ent && !(parseInt(ent.qtd,10)>0);
+  inp.style.borderColor = falta?'#ffb74d':'';
+  inp.style.background  = falta?'#fff3e0':'';
+  inp.style.color       = falta?'#e65100':'';
+}
+
+function _eqAdminAtualizarContadores(sec){
+  var t=document.getElementById('eq-topo-marcados');
+  if(t) t.textContent=ESTOQUE_EQ.length;
+  var semQtd=ESTOQUE_EQ.filter(function(it){ return !(parseInt(it.qtd,10)>0); }).length;
+  var av=document.getElementById('eq-topo-semqtd');
+  var avn=document.getElementById('eq-topo-semqtd-n');
+  if(avn) avn.textContent=semQtd;
+  if(av) av.style.display=semQtd?'':'none';
+  if(sec){
+    var c=document.getElementById('eq-cnt-'+sec);
+    if(c) c.textContent=ESTOQUE_EQ.filter(function(it){ return it.sec===sec; }).length;
+  }
+}
+
 function eqAdminMarcar(sec, nome, on){
   var ent=_eqEntradaPorNome(sec, nome);
   if(on){
-    if(ent){ ent.sec=sec; return; }
-    ESTOQUE_EQ.push({id:'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
-                     sec:sec, nome:nome, qtd:0, extra:false});
+    if(ent){ ent.sec=sec; }
+    else{
+      ent={id:'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+           sec:sec, nome:nome, qtd:0, extra:false};
+      ESTOQUE_EQ.push(ent);
+    }
   }else{
     if(!ent) return;
     var i=ESTOQUE_EQ.indexOf(ent);
     if(i>=0) ESTOQUE_EQ.splice(i,1);
+    ent=null;
   }
-  eqAdminRenderizar();
+
+  var k=_eqAdminChave(sec, nome);
+  var row=document.getElementById('eq-row-'+k);
+  var lb =document.getElementById('eq-lb-'+k);
+  var inp=document.getElementById('eq-q-'+k);
+  if(row) row.style.background = on?'var(--surface-3)':'';
+  if(lb){
+    lb.style.fontWeight = on?'700':'';
+    lb.style.color      = on?'var(--text)':'var(--text-dim)';
+  }
+  if(inp){
+    inp.disabled = !on;
+    inp.style.opacity = on?'':'.35';
+    if(!on) inp.value='';
+    _eqAdminPintarQtd(k, ent);
+    // Marcou: o próximo passo é digitar a quantidade — já deixa o cursor lá.
+    // preventScroll é essencial: sem ele o foco rola a lista até a linha,
+    // que é exatamente o salto que este caminho existe para evitar.
+    if(on) try{ inp.focus({preventScroll:true}); inp.select(); }catch(e){ try{ inp.focus(); }catch(e2){} }
+  }
+  _eqAdminAtualizarContadores(sec);
 }
 
-function eqAdminQtd(sec, nome, valor){
+// Quantidade é sempre número inteiro: peça, metro de boxtruss ou m² de
+// carpete não se aluga pela metade, e o passo decimal do campo fazia a seta
+// do teclado virar 0,01.
+function _eqInteiro(valor){
+  // Trunca na vírgula/ponto em vez de apagar o separador: "12,5" é doze e
+  // meio, então vira 12. Apagar o separador daria 125 — um erro silencioso
+  // de uma ordem de grandeza no estoque.
+  var t=String(valor==null?'':valor).replace(/[^0-9.,]/g,'');
+  var inteiro=t.split(/[.,]/)[0].replace(/[^0-9]/g,'');
+  return parseInt(inteiro,10)||0;
+}
+
+function eqAdminQtd(sec, nome, valor, inp){
   var ent=_eqEntradaPorNome(sec, nome);
   if(!ent) return;
-  ent.qtd=parseFloat(valor)||0;
+  var n=_eqInteiro(valor);
+  ent.qtd=n;
+  var limpo=n?String(n):(String(valor||'').trim()===''?'':'0');
+  if(inp && limpo!==String(valor)) inp.value=limpo;
+  _eqAdminPintarQtd(_eqAdminChave(sec, nome), ent);
+  _eqAdminAtualizarContadores(sec);
+}
+
+// Ao sair do campo, normaliza o que ficou na tela (campo vazio vira 0, "007"
+// vira 7), sem atrapalhar quem ainda está digitando.
+function eqAdminQtdFechar(sec, nome, inp){
+  var ent=_eqEntradaPorNome(sec, nome);
+  if(!ent || !inp) return;
+  var n=parseInt(ent.qtd,10)||0;
+  inp.value=n?String(n):'';
+  _eqAdminPintarQtd(_eqAdminChave(sec, nome), ent);
 }
 
 function eqAdminAdicionarLivre(sec){
@@ -6210,7 +6296,7 @@ function eqAdminAdicionarLivre(sec){
   if(!nome){ alert('Digite o nome do equipamento.'); if(inp) inp.focus(); return; }
   if(_eqEntradaPorNome(sec, nome)){ alert('"'+nome+'" já está na lista de controle.'); return; }
   ESTOQUE_EQ.push({id:'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
-                   sec:sec, nome:nome, qtd:parseFloat(inq&&inq.value)||0, extra:true});
+                   sec:sec, nome:nome, qtd:_eqInteiro(inq&&inq.value), extra:true});
   if(inp) inp.value='';
   if(inq) inq.value='';
   _eqAdminSecAberta[sec]=true;
