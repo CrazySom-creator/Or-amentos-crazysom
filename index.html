@@ -991,6 +991,12 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <div class="home-card-desc">Metros quadrados de painel comprometidos por data — veja onde falta e precisa sublocar</div>
       </div>
 
+      <div class="home-card orange" id="home-btn-estoque-eq" onclick="abrirEqMapa();fecharHome()">
+        <div class="home-card-ico">📦</div>
+        <div class="home-card-title">Disponibilidade de Equipamento</div>
+        <div class="home-card-desc">Som, iluminação, vídeo e estrutura: o que vai faltar em cada data — alertas, mapa por dia e consulta por período</div>
+      </div>
+
       <div class="home-card orange" id="home-btn-log" onclick="abrirLogistica();fecharHome()">
         <div class="home-card-ico">🚚</div>
         <div class="home-card-title">Logística de Eventos</div>
@@ -1536,6 +1542,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div class="rel-tab" onclick="admAba('subgruposproduto')">🗃️ Subgrupos de Produto</div>
       <div class="rel-tab" onclick="admAba('enderecosproduto')">📍 Endereçamento</div>
       <div class="rel-tab" onclick="admAba('painelled')">🟥 Painéis de LED</div>
+      <div class="rel-tab" onclick="admAba('estoqueeq')">📦 Estoque de Equipamento</div>
       <div class="rel-tab" onclick="admAba('anexos')">📎 Anexos</div>
       <div class="rel-tab" onclick="admAba('googleagenda')">🗓️ Google Agenda</div>
     </div>
@@ -1645,6 +1652,23 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <button class="btn btn-r btn-sm" onclick="painelLedSalvar()">💾 Salvar cadastro</button>
         <button class="btn btn-o btn-sm" onclick="painelLedRestaurar()" title="Volta aos 5 tipos padrão com os m² originais">↺ Restaurar padrão</button>
         <span id="painelled-status" style="font-size:11px;color:var(--text-dim)"></span>
+      </div>
+    </div>
+    <!-- ABA Estoque de Equipamento (provisorio) -->
+    <div class="rel-pane" id="admpane-estoqueeq">
+      <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">
+        Controle <b>provisório</b> de disponibilidade, até o módulo de Estoque ficar pronto. Marque a caixa dos equipamentos que a empresa tem
+        e informe <b>quantos</b> — a quantidade é na unidade do próprio item (peças, metros de boxtruss, m² de carpete).<br>
+        Só o que estiver <b>marcado e com quantidade</b> entra na conta: o botão <b>📦 Equip.</b> do orçamento e a tela
+        <b>Disponibilidade de Equipamento</b> ignoram todo o resto. Item marcado sem quantidade aparece destacado em laranja e não é conferido.<br>
+        A lista traz o catálogo de cada categoria; se o equipamento não estiver na tabela de preços, use o campo no pé da categoria para cadastrá-lo à mão.
+        O reconhecimento no orçamento é pelo <b>nome do item</b>, então ele conta mesmo que seja lançado numa categoria personalizada.
+      </p>
+      <div id="estoqueeq-lista"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-r btn-sm" onclick="eqAdminSalvar()">💾 Salvar cadastro</button>
+        <button class="btn btn-o btn-sm" onclick="eqAdminLimpar()" title="Desmarca todos os equipamentos e apaga as quantidades">↺ Limpar tudo</button>
+        <span id="estoqueeq-status" style="font-size:11px;color:var(--text-dim)"></span>
       </div>
     </div>
     <!-- ABA Anexos -->
@@ -2445,6 +2469,60 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
   </div>
 </div>
 
+<div class="ov" id="eqd-ov">
+  <div class="modal-box dash-modal" style="max-width:1150px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div>
+        <h2 style="margin-bottom:2px">📦 Disponibilidade de Equipamento</h2>
+        <p class="sub" style="margin:0">Onde vai faltar equipamento — por categoria, dia a dia <b>(versão provisória, até o módulo de Estoque)</b></p>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-r btn-sm" onclick="eqMapaAtualizar()" title="Rebusca os orçamentos antes de recalcular">🔄 Atualizar</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('eqd-ov').classList.remove('open');voltarDoModulo()">✕</button>
+      </div>
+    </div>
+    <div class="rel-tabs" style="margin-bottom:10px">
+      <div class="rel-tab active" id="eqd-tab-alertas" onclick="eqAba('alertas')">🚨 Alertas</div>
+      <div class="rel-tab" id="eqd-tab-mapa" onclick="eqAba('mapa')">📅 Mapa por dia</div>
+      <div class="rel-tab" id="eqd-tab-periodo" onclick="eqAba('periodo')">📋 Consulta por período</div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 13px;margin-bottom:12px">
+      <div><label style="font-size:9px">De</label><input type="date" id="eqd-de" onchange="eqRenderizar()" style="font-size:11px;padding:5px 7px"></div>
+      <div><label style="font-size:9px">Até</label><input type="date" id="eqd-ate" onchange="eqRenderizar()" style="font-size:11px;padding:5px 7px"></div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer">
+        <input type="checkbox" id="eqd-so-criticos" onchange="eqRenderizar()"> só os dias com falta <span style="color:var(--text-muted);font-size:10px">(mapa)</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer">
+        <input type="checkbox" id="eqd-so-uso" checked onchange="eqRenderizar()"> só itens em uso <span style="color:var(--text-muted);font-size:10px">(consulta)</span>
+      </label>
+    </div>
+    <div id="eqd-corpo"></div>
+  </div>
+</div>
+
+<div class="ov" id="eqd-dia-ov">
+  <div class="modal-box" style="max-width:760px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h2 style="margin:0">📦 Equipamento no dia</h2>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('eqd-dia-ov').classList.remove('open')">✕</button>
+    </div>
+    <div id="eqd-dia-corpo"></div>
+  </div>
+</div>
+
+<div class="ov" id="eq-consulta-ov">
+  <div class="modal-box" style="max-width:900px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div>
+        <h2 style="margin-bottom:2px">📦 Tem equipamento para esta data?</h2>
+        <p class="sub" style="margin:0">Conferência do estoque na janela de montagem até desmontagem deste orçamento</p>
+      </div>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('eq-consulta-ov').classList.remove('open')">✕</button>
+    </div>
+    <div id="eq-consulta-corpo"></div>
+  </div>
+</div>
+
 <div class="ov" id="log-ov">
   <div class="modal-box dash-modal" style="max-width:1200px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
@@ -3099,16 +3177,20 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     <div><label>Diárias Equip. (½)</label><input id="f-diarias-equip" readonly style="background:#e8f4fd;border-color:#90caf9;font-weight:700;color:#1565c0"></div>
   </div>
   <div class="g4" style="margin-bottom:8px">
-    <div><label>Início Montagem</label><input type="date" id="f-dm" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc()"></div>
+    <div><label>Início Montagem</label><input type="date" id="f-dm" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc();atualizarBadgeEqOrc()"></div>
     <div><label>Hora Montagem</label><input type="time" id="f-hm" oninput="marcarAlterado()"></div>
-    <div><label>Fim Montagem</label><input type="date" id="f-dm-fim" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc()"></div>
+    <div><label>Fim Montagem</label><input type="date" id="f-dm-fim" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc();atualizarBadgeEqOrc()"></div>
     <div><label>LED disponível?</label><button type="button" class="btn btn-o btn-sm" id="btn-led-disp" onclick="ledConsultarOrcamento()" title="Confere, na janela de montagem até desmontagem deste orçamento, se há metros quadrados de painel de LED livres — ou quanto falta sublocar" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px">🟥 LED <span id="led-badge" style="background:var(--surface-3);border-radius:10px;padding:1px 8px;font-weight:800;font-size:11px;color:var(--text-dim)">—</span></button></div>
   </div>
   <div class="g4" style="margin-bottom:8px">
-    <div><label>Início Desmontagem</label><input type="date" id="f-dd" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc()"></div>
+    <div><label>Início Desmontagem</label><input type="date" id="f-dd" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc();atualizarBadgeEqOrc()"></div>
     <div><label>Hora Desmontagem</label><input type="time" id="f-hd" oninput="marcarAlterado()"></div>
-    <div><label>Fim Desmontagem</label><input type="date" id="f-dd-fim" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc()"></div>
+    <div><label>Fim Desmontagem</label><input type="date" id="f-dd-fim" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc();atualizarBadgeEqOrc()"></div>
     <div><label>Agenda</label><button type="button" class="btn btn-o btn-sm" id="btn-agenda-contador" onclick="abrirAgendaLogisticaDoOrcamento()" title="Ver a agenda da Logística pra esse período — eventos fechados e pré-reservados que se sobrepõem" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px">📅 Agenda <span id="agenda-contador-badge" style="background:var(--surface-3);border-radius:10px;padding:1px 8px;font-weight:800;font-size:11px;color:var(--text-dim)">—</span></button></div>
+  </div>
+  <div class="g4" style="margin-bottom:8px">
+    <div></div><div></div><div></div>
+    <div><label>Equipamento disponível?</label><button type="button" class="btn btn-o btn-sm" id="btn-eq-disp" onclick="eqConsultarOrcamento()" title="Confere, na janela de montagem até desmontagem deste orçamento, se há equipamento livre em estoque — ou quanto falta sublocar" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px">📦 Equip. <span id="eq-badge" style="background:var(--surface-3);border-radius:10px;padding:1px 8px;font-weight:800;font-size:11px;color:var(--text-dim)">—</span></button></div>
   </div>
   <div class="g3">
     <div><label>Público Estimado</label><input type="number" id="f-pub" placeholder="500" oninput="marcarAlterado()"></div>
@@ -4665,6 +4747,7 @@ function calcDiariasAuto(){
   // estão preenchidas) — recalcula junto, sem precisar duplicar o oninput.
   try{ atualizarContadorAgendaOrc(); }catch(e){}
   try{ atualizarBadgeLedOrc(); }catch(e){}
+  try{ atualizarBadgeEqOrc(); }catch(e){}
 }
 
 // ═══════════════════════════════════════════════════════
@@ -5315,6 +5398,847 @@ async function painelLedSalvar(){
   if(ok) try{ atualizarBadgeLedOrc(); }catch(e){}
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   DISPONIBILIDADE DE EQUIPAMENTO — versão provisória
+   ──────────────────────────────────────────────────────────────────────────
+   Pedido do Fabiano: enquanto o módulo de Estoque não for feito, a Logística
+   precisa enxergar se vai faltar equipamento numa data. Mesma mecânica já
+   validada no módulo de LED, com três diferenças:
+
+   • conta em UNIDADES (ou na unidade do próprio item — metro de boxtruss,
+     m² de carpete), não em m²;
+   • o item é reconhecido pelo NOME exato do catálogo (normalizado), não por
+     palavras-chave. Nome do catálogo é único, então não existe o problema de
+     chave curta casando com item errado que apareceu no LED;
+   • só entra na conta o que o Fabiano marcar na caixa de seleção do Admin.
+     Item não marcado é ignorado — é isso que mantém a lista curta e útil
+     enquanto o estoque de verdade não existe.
+
+   Convenções herdadas do LED, de propósito, pra que os dois módulos nunca
+   discordem:
+   • janela de ocupação = montagem até desmontagem (_logRangeEvento);
+   • Venda Ganha ocupa de verdade ("firme"); Proposta Enviada, Negociação e
+     Standby aparecem à parte como "disputando" ("risco");
+   • cada item é um estoque independente.
+
+   Item marcado mas SEM quantidade informada não é checado (não vira alerta
+   falso) — aparece como pendência no próprio cadastro.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+var EQ_SECS=['som','luz','video','estrutura'];
+var EQ_SEC_LBL={som:'Sonorização',luz:'Iluminação',video:'Vídeo',estrutura:'Estrutura'};
+var EQ_SEC_ICO={som:'🔊',luz:'💡',video:'📺',estrutura:'🏗️'};
+
+// [{id, sec, nome, qtd, extra}] — extra:true = item digitado à mão, que não
+// existe na tabela de preços.
+var ESTOQUE_EQ=[];
+
+async function eqCarregar(){
+  try{
+    var snap=await fbDb.collection('config').doc('estoqueEquip').get();
+    if(snap.exists && Array.isArray(snap.data().lista)){
+      ESTOQUE_EQ=snap.data().lista.map(function(it){
+        return {
+          id:    it.id||('e'+Math.random().toString(36).slice(2,7)),
+          sec:   EQ_SECS.indexOf(it.sec)>=0?it.sec:'som',
+          nome:  String(it.nome||''),
+          qtd:   parseFloat(it.qtd)||0,
+          extra: !!it.extra
+        };
+      }).filter(function(it){ return !!it.nome; });
+    }else{
+      ESTOQUE_EQ=[];
+    }
+  }catch(e){
+    console.warn('eqCarregar:',e);
+    ESTOQUE_EQ=[];
+  }
+}
+
+async function _eqSalvarFirestore(){
+  try{
+    await fbDb.collection('config').doc('estoqueEquip').set({lista:ESTOQUE_EQ});
+    return true;
+  }catch(e){ console.warn('_eqSalvarFirestore:',e); return false; }
+}
+
+function _eqNorm(s){
+  return (typeof _normalizarNomeItem==='function')
+    ? _normalizarNomeItem(s)
+    : String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+}
+
+// Só os itens que valem pra análise: marcados E com quantidade informada.
+function _eqControlados(){
+  return ESTOQUE_EQ.filter(function(it){ return (parseFloat(it.qtd)||0)>0; });
+}
+
+// nome normalizado → item de estoque. O casamento ignora a seção: um mesmo
+// equipamento pode ser lançado numa categoria personalizada do orçamento, e
+// ele tem que continuar contando.
+function _eqIndicePorNome(){
+  var ix={};
+  _eqControlados().forEach(function(it){
+    var k=_eqNorm(it.nome);
+    if(k) ix[k]=it;
+  });
+  return ix;
+}
+
+function _eqItemPorId(id){
+  return ESTOQUE_EQ.find(function(it){ return it.id===id; })||null;
+}
+
+// Quanto cada item controlado é pedido dentro de um orçamento.
+function _eqPedidoDoState(st){
+  var ix=_eqIndicePorNome(), porId={};
+  Object.keys(st||{}).forEach(function(sec){
+    var secSt=st[sec];
+    if(!secSt||!secSt.rows) return;
+    Object.keys(secSt.rows).forEach(function(aid){
+      (secSt.rows[aid]||[]).forEach(function(r){
+        if(!r||!r.name) return;
+        var it=ix[_eqNorm(r.name)];
+        if(!it) return;
+        var q=parseFloat(r.qty)||0;
+        if(q<=0) return;
+        porId[it.id]=(porId[it.id]||0)+q;
+      });
+    });
+  });
+  return porId;
+}
+function _eqPedidoDeOrc(o){ return _eqPedidoDoState((o&&o.dados&&o.dados.state)||{}); }
+
+function _eqPeriodosSobrepoem(a,b){ return a.inicio<=b.fim && b.inicio<=a.fim; }
+
+function _eqStatusConta(cs){
+  return cs==='ganha'||cs==='enviada'||cs==='negociacao'||cs==='standby';
+}
+
+// ── A análise ─────────────────────────────────────────────────────────────
+function eqAnalisar(periodo, excluirDriveId, pedidoPorId){
+  var firmes=[], risco=[];
+  (_dashDados||[]).forEach(function(o){
+    if(!o) return;
+    if(excluirDriveId && o.driveId===excluirDriveId) return;
+    var cs=(o.dados&&o.dados.comercialStatus)||'';
+    if(!_eqStatusConta(cs)) return;
+    var range=_logRangeEvento(o);
+    if(!range || !_eqPeriodosSobrepoem(periodo, range)) return;
+    var ped=_eqPedidoDeOrc(o);
+    if(!Object.keys(ped).length) return;
+    (cs==='ganha'?firmes:risco).push({orc:o, qtd:ped, range:range, status:cs});
+  });
+
+  function somar(lista){
+    var out={};
+    lista.forEach(function(x){
+      Object.keys(x.qtd).forEach(function(k){ out[k]=(out[k]||0)+x.qtd[k]; });
+    });
+    return out;
+  }
+  var somaFirme=somar(firmes), somaRisco=somar(risco);
+  pedidoPorId=pedidoPorId||{};
+
+  var linhas=_eqControlados().map(function(it){
+    var estoque=parseFloat(it.qtd)||0;
+    var fir=somaFirme[it.id]||0;
+    var ris=somaRisco[it.id]||0;
+    var ped=pedidoPorId[it.id]||0;
+    var livre=estoque-fir;
+    var falta=Math.max(0, ped-livre);
+    var sobra=livre-ped;
+    var situacao;
+    if(ped<=0)           situacao='nao-pedido';
+    else if(falta>0.004) situacao='falta';
+    else if(ris>sobra+0.004) situacao='risco';
+    else                 situacao='ok';
+    return {id:it.id, sec:it.sec, nome:it.nome, estoque:estoque, firme:fir, risco:ris,
+            livre:livre, pedido:ped, falta:falta, sobra:sobra, situacao:situacao};
+  });
+
+  var pedidas=linhas.filter(function(l){ return l.pedido>0; });
+  var veredito='sem-pedido';
+  if(pedidas.length){
+    if(pedidas.some(function(l){ return l.situacao==='falta'; })) veredito='falta';
+    else if(pedidas.some(function(l){ return l.situacao==='risco'; })) veredito='risco';
+    else veredito='ok';
+  }
+  return {periodo:periodo, linhas:linhas, firmes:firmes, risco:risco, veredito:veredito};
+}
+
+function _eqFmtQtd(v){
+  var n=Math.round((parseFloat(v)||0)*100)/100;
+  return n.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2});
+}
+
+var EQ_SI={
+  ok:      {cor:'#2e7d32', bg:'#e8f5e9', bd:'#a5d6a7', ico:'✅', label:'Tem equipamento disponível'},
+  risco:   {cor:'#e65100', bg:'#fff3e0', bd:'#ffb74d', ico:'⚠️', label:'Dá pra atender, mas há propostas disputando'},
+  falta:   {cor:'#c62828', bg:'#ffebee', bd:'#ef9a9a', ico:'❌', label:'Falta equipamento — precisa sublocar'},
+  'sem-pedido':{cor:'#546e7a', bg:'var(--surface-2)', bd:'var(--border)', ico:'➖', label:'Nenhum item controlado neste orçamento'}
+};
+
+/* ── BOTÃO DENTRO DO ORÇAMENTO ──────────────────────────────────────────── */
+var _eqConsultaCarregando=false;
+
+function _eqPedidoDoOrcamentoAberto(){ return _eqPedidoDoState(state); }
+
+async function atualizarBadgeEqOrc(){
+  var el=document.getElementById('eq-badge');
+  if(!el) return;
+  var ped=_eqPedidoDoOrcamentoAberto();
+  var temItem=Object.keys(ped).length>0;
+  var periodo=_agendaContadorPeriodoAtual();
+  if(!temItem){
+    el.textContent='—';
+    el.style.background='var(--surface-3)'; el.style.color='var(--text-dim)';
+    el.title=_eqControlados().length
+      ? 'Nenhum equipamento controlado foi lançado neste orçamento'
+      : 'Nenhum equipamento cadastrado em Admin › Estoque de Equipamento';
+    return;
+  }
+  if(!periodo){
+    el.textContent='?';
+    el.style.background='var(--surface-3)'; el.style.color='var(--text-dim)';
+    el.title='Preencha a data de montagem (ou do evento) para conferir';
+    return;
+  }
+  if(!_agendaContadorCarregado){
+    el.textContent='•';
+    el.style.background='var(--surface-3)'; el.style.color='var(--text-dim)';
+    el.title='Clique para conferir a disponibilidade';
+    return;
+  }
+  var r=eqAnalisar(periodo, driveIdAtual, ped);
+  var si=EQ_SI[r.veredito]||EQ_SI['sem-pedido'];
+  var faltando=r.linhas.filter(function(l){ return l.situacao==='falta'; }).length;
+  el.textContent=(r.veredito==='falta')?('❌ '+faltando):(r.veredito==='risco'?'⚠️':'✅');
+  el.style.background=si.cor; el.style.color='#fff';
+  el.title=si.label;
+}
+
+async function eqConsultarOrcamento(){
+  if(_eqConsultaCarregando) return;
+  var periodo=_agendaContadorPeriodoAtual();
+  if(!periodo){
+    alert('📅 Preencha a data de Montagem (ou a data do Evento) antes de consultar a disponibilidade de equipamento.');
+    return;
+  }
+  var ped=_eqPedidoDoOrcamentoAberto();
+  _eqConsultaCarregando=true;
+  var corpo=document.getElementById('eq-consulta-corpo');
+  if(corpo) corpo.innerHTML='<div style="padding:26px;text-align:center;color:var(--text-muted);font-size:12px">⏳ Conferindo os eventos deste período...</div>';
+  _abrirOv('eq-consulta-ov');
+  try{
+    await _agendaContadorGarantirDados();
+    var r=eqAnalisar(periodo, driveIdAtual, ped);
+    if(corpo) corpo.innerHTML=_eqConsultaHTML(r, periodo);
+  }catch(e){
+    if(corpo) corpo.innerHTML='<div style="padding:22px;color:var(--R);font-size:12px">⚠️ Não foi possível consultar: '+eh(e.message||e)+'</div>';
+  }finally{
+    _eqConsultaCarregando=false;
+    atualizarBadgeEqOrc();
+  }
+}
+
+function _eqBlocoEventos(titulo, lista, cor){
+  if(!lista.length) return '';
+  var b='<div style="margin-top:12px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:'+cor+';font-weight:800;margin-bottom:6px">'+titulo+'</div>';
+  lista.forEach(function(x){
+    var f=x.orc.form||{};
+    var det=Object.keys(x.qtd).map(function(k){
+      var it=_eqItemPorId(k);
+      return (it?it.nome:k)+': '+_eqFmtQtd(x.qtd[k]);
+    }).join(' · ');
+    b+='<div style="display:flex;gap:9px;align-items:baseline;padding:6px 10px;border-bottom:1px solid var(--border);font-size:11px;cursor:pointer" onclick="eqAbrirOrc(\''+eh(x.orc.driveId||'')+'\')">'
+      +'<span style="font-weight:800;color:var(--R);min-width:72px">'+eh(f['f-num']||'—')+'</span>'
+      +'<span style="flex:1">'+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')
+      +'<div style="font-size:10px;color:var(--text-dim)">'+fD(x.range.inicio)+' a '+fD(x.range.fim)+' · '+det+'</div></span>'
+      +'<span style="color:var(--text-dim)">›</span></div>';
+  });
+  return b+'</div>';
+}
+
+function _eqConsultaHTML(r, periodo){
+  var si=EQ_SI[r.veredito]||EQ_SI['sem-pedido'];
+  var h='<div style="background:'+si.bg+';border:1px solid '+si.bd+';border-left:5px solid '+si.cor+';border-radius:8px;padding:13px 16px;margin-bottom:12px">'
+    +'<div style="font-size:14px;font-weight:900;color:'+si.cor+'">'+si.ico+' '+si.label+'</div>'
+    +'<div style="font-size:11px;color:var(--text-dim);margin-top:4px">Período conferido: <b>'+fD(periodo.inicio)+'</b> a <b>'+fD(periodo.fim)+'</b> (montagem até desmontagem) · '
+    +r.firmes.length+' evento(s) fechado(s)'+(r.risco.length?' e '+r.risco.length+' em negociação':'')+' usando equipamento controlado nesse intervalo</div>'
+    +'</div>';
+
+  var pedidas=r.linhas.filter(function(l){ return l.pedido>0; });
+  if(!pedidas.length){
+    h+='<div style="padding:16px;color:var(--text-muted);font-size:12px;text-align:center;border:1px dashed var(--border);border-radius:8px">'
+      +(_eqControlados().length
+        ? 'Nenhum equipamento <b>controlado</b> foi lançado neste orçamento. Só entram na conta os itens marcados em <b>Admin › Estoque de Equipamento</b>.'
+        : 'Nenhum equipamento cadastrado ainda. Marque os itens e informe as quantidades em <b>Admin › Estoque de Equipamento</b>.')
+      +'</div>';
+  }else{
+    // Falta primeiro: é o que muda a decisão do consultor.
+    var ordem={falta:0,risco:1,ok:2};
+    pedidas.sort(function(a,b){
+      var d=(ordem[a.situacao]||9)-(ordem[b.situacao]||9);
+      return d!==0?d:a.nome.localeCompare(b.nome,'pt-BR');
+    });
+    h+='<table class="it" style="width:100%"><thead><tr>'
+      +'<th style="text-align:left">Equipamento</th><th>Estoque</th><th>Comprometido</th><th>Livre</th>'
+      +'<th>Este orçamento</th><th>Resultado</th></tr></thead><tbody>';
+    pedidas.forEach(function(l){
+      var s=EQ_SI[l.situacao]||EQ_SI.ok;
+      var res;
+      if(l.situacao==='falta') res='<b style="color:#c62828">Faltam '+_eqFmtQtd(l.falta)+'</b><div style="font-size:9.5px;color:var(--text-dim)">sublocar com parceiro</div>';
+      else if(l.situacao==='risco') res='<b style="color:#e65100">Sobram '+_eqFmtQtd(l.sobra)+'</b><div style="font-size:9.5px;color:#e65100">'+_eqFmtQtd(l.risco)+' em negociação</div>';
+      else res='<b style="color:#2e7d32">Sobram '+_eqFmtQtd(l.sobra)+'</b>';
+      h+='<tr>'
+        +'<td style="text-align:left;font-weight:700">'+s.ico+' '+eh(l.nome)+'<div style="font-size:9px;color:var(--text-dim);font-weight:500">'+(EQ_SEC_ICO[l.sec]||'')+' '+eh(EQ_SEC_LBL[l.sec]||l.sec)+'</div></td>'
+        +'<td>'+_eqFmtQtd(l.estoque)+'</td>'
+        +'<td>'+_eqFmtQtd(l.firme)+(l.risco>0?'<div style="font-size:9.5px;color:#e65100">+'+_eqFmtQtd(l.risco)+' em negociação</div>':'')+'</td>'
+        +'<td>'+_eqFmtQtd(l.livre)+'</td>'
+        +'<td><b>'+_eqFmtQtd(l.pedido)+'</b></td>'
+        +'<td>'+res+'</td>'
+        +'</tr>';
+    });
+    h+='</tbody></table>';
+  }
+
+  h+=_eqBlocoEventos('🔒 Fechados ocupando o período (Venda Ganha)', r.firmes, '#c62828');
+  h+=_eqBlocoEventos('🤝 Em negociação no mesmo período (ainda não fechados)', r.risco, '#e65100');
+
+  h+='<div style="margin-top:12px;font-size:10px;color:var(--text-dim);line-height:1.5">'
+    +'A conta usa a janela de <b>montagem até desmontagem</b> de cada evento. Venda Ganha ocupa de verdade; '
+    +'Proposta Enviada, Negociação e Standby aparecem como risco, porque ainda podem fechar. '
+    +'As quantidades são cadastradas em <b>Admin › Estoque de Equipamento</b> — item sem quantidade informada não é conferido.</div>';
+  return h;
+}
+
+function eqAbrirOrc(driveId){
+  if(!driveId) return;
+  var o=(_dashDados||[]).find(function(x){ return x.driveId===driveId; });
+  if(!o) return;
+  if(!confirm('Abrir o orçamento "'+((o.form&&o.form['f-num'])||'')+' — '+((o.form&&o.form['f-cliente'])||'')+'"?\n\nAlterações não salvas do orçamento atual serão perdidas.')) return;
+  _fecharTudoParaAbrirOrc();
+  driveCarregar(driveId, o.nome);
+}
+
+/* ── MÓDULO: DISPONIBILIDADE DE EQUIPAMENTO ─────────────────────────────── */
+var _eqMapaCarregado=false;
+var _eqAbaAtual='alertas';
+
+async function abrirEqMapa(){
+  if(_moduloBloqueado('mod-estoque-eq')) return;
+  _abrirOv('eqd-ov');
+  var hoje=new Date().toISOString().split('T')[0];
+  var de=document.getElementById('eqd-de'), ate=document.getElementById('eqd-ate');
+  if(de&&!de.value) de.value=hoje;
+  if(ate&&!ate.value){
+    var d=new Date(); d.setDate(d.getDate()+60);
+    ate.value=d.toISOString().split('T')[0];
+  }
+  var el=document.getElementById('eqd-corpo');
+  if(el&&!_eqMapaCarregado) el.innerHTML='<div style="padding:28px;text-align:center;color:var(--text-muted);font-size:12px">⏳ Carregando os eventos...</div>';
+  await _agendaContadorGarantirDados();
+  _eqMapaCarregado=true;
+  eqRenderizar();
+}
+
+async function eqMapaAtualizar(){
+  var el=document.getElementById('eqd-corpo');
+  if(el) el.innerHTML='<div style="padding:28px;text-align:center;color:var(--text-muted);font-size:12px">⏳ Rebuscando os orçamentos...</div>';
+  _agendaContadorCarregado=false;
+  await _agendaContadorGarantirDados();
+  eqRenderizar();
+}
+
+function eqAba(a){
+  _eqAbaAtual=a;
+  ['alertas','mapa','periodo'].forEach(function(x){
+    var t=document.getElementById('eqd-tab-'+x);
+    if(t) t.classList.toggle('active', x===a);
+  });
+  eqRenderizar();
+}
+
+function eqRenderizar(){
+  var el=document.getElementById('eqd-corpo');
+  if(!el) return;
+  if(!_eqControlados().length){
+    el.innerHTML='<div style="padding:26px;text-align:center;color:var(--text-muted);font-size:12px;border:1px dashed var(--border);border-radius:8px;line-height:1.7">'
+      +'📦 Nenhum equipamento está sendo controlado ainda.<br>'
+      +'Vá em <b>Admin › Estoque de Equipamento</b>, marque os itens que a empresa tem e informe a quantidade de cada um.<br>'
+      +'<span style="font-size:11px">Só os itens marcados <b>e com quantidade</b> entram nesta análise.</span></div>';
+    return;
+  }
+  if(_eqAbaAtual==='alertas')      eqAlertasRenderizar();
+  else if(_eqAbaAtual==='mapa')    eqMapaRenderizar();
+  else                             eqPeriodoRenderizar();
+}
+
+function _eqDiasDoPeriodo(de, ate){
+  var out=[], d=new Date(de+'T12:00:00'), fim=new Date(ate+'T12:00:00');
+  var guarda=0;
+  while(d<=fim && guarda++<400){ out.push(d.toISOString().split('T')[0]); d.setDate(d.getDate()+1); }
+  return out;
+}
+
+// Por dia, quanto de cada item controlado está comprometido.
+function eqMapaDados(de, ate){
+  var dias=_eqDiasDoPeriodo(de, ate);
+  var porDia={};
+  dias.forEach(function(d){ porDia[d]={firme:{}, risco:{}, eventos:[]}; });
+  (_dashDados||[]).forEach(function(o){
+    if(!o) return;
+    var cs=(o.dados&&o.dados.comercialStatus)||'';
+    if(!_eqStatusConta(cs)) return;
+    var range=_logRangeEvento(o);
+    if(!range) return;
+    var ped=_eqPedidoDeOrc(o);
+    if(!Object.keys(ped).length) return;
+    dias.forEach(function(d){
+      if(d<range.inicio || d>range.fim) return;
+      var alvo=(cs==='ganha')?porDia[d].firme:porDia[d].risco;
+      Object.keys(ped).forEach(function(k){ alvo[k]=(alvo[k]||0)+ped[k]; });
+      porDia[d].eventos.push({orc:o, qtd:ped, status:cs, range:range});
+    });
+  });
+  return {dias:dias, porDia:porDia};
+}
+
+// Situação de um item num dia: 'falta' | 'limite' | 'ok'
+function _eqSituacaoDia(it, reg){
+  var est=parseFloat(it.qtd)||0;
+  var fir=reg.firme[it.id]||0, ris=reg.risco[it.id]||0;
+  if(fir<=0 && ris<=0) return null;
+  if(fir>est+0.004) return {st:'falta', firme:fir, risco:ris, estoque:est, falta:fir-est};
+  if(ris>0 && fir+ris>est+0.004) return {st:'limite', firme:fir, risco:ris, estoque:est, falta:0};
+  if(est>0 && fir/est>=0.8) return {st:'limite', firme:fir, risco:ris, estoque:est, falta:0};
+  return {st:'ok', firme:fir, risco:ris, estoque:est, falta:0};
+}
+
+/* ── ABA 1: ALERTAS ─────────────────────────────────────────────────────── */
+// Junta dias consecutivos do mesmo item num único alerta, senão um evento de
+// 4 dias viraria 4 linhas iguais e a lista perderia a utilidade.
+function eqAlertasDados(de, ate){
+  var d=eqMapaDados(de, ate);
+  var itens=_eqControlados();
+  var alertas=[];
+  itens.forEach(function(it){
+    var atual=null;
+    d.dias.forEach(function(dia){
+      var s=_eqSituacaoDia(it, d.porDia[dia]);
+      var grave=s && (s.st==='falta' || s.st==='limite');
+      if(!grave){
+        if(atual){ alertas.push(atual); atual=null; }
+        return;
+      }
+      // Só os eventos que usam ESTE item: senão o alerta da caixa de som
+      // listaria um evento que só pediu moving head, e a Logística perderia
+      // tempo abrindo orçamento que não tem nada a ver com a falta.
+      var doItem=d.porDia[dia].eventos.filter(function(ev){ return (ev.qtd[it.id]||0)>0; });
+      if(atual && atual.st===s.st && atual._ultimo===_eqDiaAnterior(dia)){
+        atual.fim=dia; atual._ultimo=dia;
+        atual.pico=Math.max(atual.pico, s.falta);
+        doItem.forEach(function(ev){ atual.eventos[ev.orc.driveId]=ev; });
+      }else{
+        if(atual) alertas.push(atual);
+        atual={item:it, st:s.st, inicio:dia, fim:dia, _ultimo:dia, pico:s.falta,
+               firme:s.firme, risco:s.risco, estoque:s.estoque, eventos:{}};
+        doItem.forEach(function(ev){ atual.eventos[ev.orc.driveId]=ev; });
+      }
+    });
+    if(atual) alertas.push(atual);
+  });
+  alertas.sort(function(a,b){
+    if(a.st!==b.st) return a.st==='falta'?-1:1;
+    return a.inicio<b.inicio?-1:(a.inicio>b.inicio?1:0);
+  });
+  return alertas;
+}
+function _eqDiaAnterior(dia){
+  var d=new Date(dia+'T12:00:00'); d.setDate(d.getDate()-1);
+  return d.toISOString().split('T')[0];
+}
+
+function eqAlertasRenderizar(){
+  var el=document.getElementById('eqd-corpo');
+  var de=(document.getElementById('eqd-de')||{}).value||'';
+  var ate=(document.getElementById('eqd-ate')||{}).value||'';
+  if(!de||!ate){ el.innerHTML='<div style="padding:22px;color:var(--text-muted);font-size:12px">Escolha o período.</div>'; return; }
+  if(ate<de){ el.innerHTML='<div style="padding:22px;color:var(--R);font-size:12px">A data final está antes da inicial.</div>'; return; }
+
+  var alertas=eqAlertasDados(de, ate);
+  var faltas=alertas.filter(function(a){ return a.st==='falta'; });
+  var limites=alertas.filter(function(a){ return a.st==='limite'; });
+
+  var resumo='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:11px">'
+    +'<span style="background:'+(faltas.length?'#ffebee':'#e8f5e9')+';border:1px solid '+(faltas.length?'#ef9a9a':'#a5d6a7')+';color:'+(faltas.length?'#c62828':'#2e7d32')+';border-radius:14px;padding:5px 13px;font-weight:800">'
+      +(faltas.length?('❌ '+faltas.length+' alerta(s) de falta'):'✅ nenhuma falta no período')+'</span>'
+    +'<span style="background:'+(limites.length?'#fff3e0':'var(--surface-2)')+';border:1px solid '+(limites.length?'#ffb74d':'var(--border)')+';color:'+(limites.length?'#e65100':'var(--text-dim)')+';border-radius:14px;padding:5px 13px;font-weight:700">'
+      +'⚠️ '+limites.length+' no limite / disputado(s)</span>'
+    +'<span style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:5px 13px"><b>'+_eqControlados().length+'</b> item(ns) controlado(s)</span>'
+    +'</div>';
+
+  if(!alertas.length){
+    el.innerHTML=resumo+'<div style="padding:26px;text-align:center;color:#2e7d32;font-size:12px;border:1px dashed #a5d6a7;border-radius:8px;background:#e8f5e9">'
+      +'👍 Nenhum equipamento controlado fica apertado entre '+fD(de)+' e '+fD(ate)+'.</div>';
+    return;
+  }
+
+  function card(a){
+    var falta=a.st==='falta';
+    var cor=falta?'#c62828':'#e65100';
+    var bg =falta?'#ffebee':'#fff3e0';
+    var bd =falta?'#ef9a9a':'#ffb74d';
+    var evs=Object.keys(a.eventos).map(function(k){ return a.eventos[k]; });
+    var periodoTxt=(a.inicio===a.fim)?fD(a.inicio):(fD(a.inicio)+' a '+fD(a.fim));
+    var h='<div style="background:'+bg+';border:1px solid '+bd+';border-left:5px solid '+cor+';border-radius:7px;padding:11px 14px;margin-bottom:9px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">'
+      +'<div style="font-size:12.5px;font-weight:900;color:'+cor+'">'+(falta?'❌':'⚠️')+' '+eh(a.item.nome)+'</div>'
+      +'<div style="font-size:11px;font-weight:800;color:'+cor+'">'+periodoTxt+'</div></div>'
+      +'<div style="font-size:11px;color:var(--text-dim);margin-top:3px">'
+      +(EQ_SEC_ICO[a.item.sec]||'')+' '+eh(EQ_SEC_LBL[a.item.sec]||a.item.sec)
+      +' · estoque <b>'+_eqFmtQtd(a.estoque)+'</b>'
+      +' · fechado <b>'+_eqFmtQtd(a.firme)+'</b>'
+      +(a.risco>0?' · em negociação <b style="color:#e65100">'+_eqFmtQtd(a.risco)+'</b>':'')
+      +(falta?' · <b style="color:#c62828">faltam até '+_eqFmtQtd(a.pico)+'</b>':'')
+      +'</div>';
+    h+='<div style="margin-top:7px">';
+    evs.forEach(function(x){
+      var f=x.orc.form||{};
+      var si=(x.status==='ganha')?{c:'#c62828',t:'🔒 Fechado'}:{c:'#e65100',t:'🤝 Em negociação'};
+      h+='<div style="font-size:10.5px;padding:3px 0;cursor:pointer" onclick="eqAbrirOrc(\''+eh(x.orc.driveId||'')+'\')">'
+        +'<span style="font-weight:800;color:var(--R)">'+eh(f['f-num']||'—')+'</span> '+eh(f['f-cliente']||'—')
+        +(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')
+        +' <span style="color:'+si.c+';font-weight:700">'+si.t+'</span>'
+        +' <span style="color:var(--text-dim)">· '+_eqFmtQtd(x.qtd[a.item.id]||0)+' un · '+fD(x.range.inicio)+' a '+fD(x.range.fim)+'</span>'
+        +'</div>';
+    });
+    return h+'</div></div>';
+  }
+
+  el.innerHTML=resumo
+    +(faltas.length?'<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#c62828;font-weight:800;margin-bottom:7px">Vai faltar</div>'+faltas.map(card).join(''):'')
+    +(limites.length?'<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#e65100;font-weight:800;margin:14px 0 7px">No limite ou disputado</div>'+limites.map(card).join(''):'')
+    +'<div style="margin-top:10px;font-size:10px;color:var(--text-dim);line-height:1.6">'
+    +'<b>Vai faltar</b> = o que já está fechado (Venda Ganha) passa do estoque: precisa sublocar. '
+    +'<b>No limite</b> = o fechado chegou a 80% do estoque, ou o fechado mais as propostas em negociação passariam do estoque se todas fecharem. '
+    +'Dias seguidos do mesmo item aparecem como um único alerta. Clique num evento para abrir o orçamento.</div>';
+}
+
+/* ── ABA 2: MAPA POR DIA ────────────────────────────────────────────────── */
+function eqMapaRenderizar(){
+  var el=document.getElementById('eqd-corpo');
+  var de=(document.getElementById('eqd-de')||{}).value||'';
+  var ate=(document.getElementById('eqd-ate')||{}).value||'';
+  var soCriticos=!!(document.getElementById('eqd-so-criticos')||{}).checked;
+  if(!de||!ate){ el.innerHTML='<div style="padding:22px;color:var(--text-muted);font-size:12px">Escolha o período.</div>'; return; }
+  if(ate<de){ el.innerHTML='<div style="padding:22px;color:var(--R);font-size:12px">A data final está antes da inicial.</div>'; return; }
+
+  var d=eqMapaDados(de, ate);
+  var itens=_eqControlados();
+  var linhas='', diasComUso=0, diasEstourados=0;
+
+  d.dias.forEach(function(dia){
+    var reg=d.porDia[dia];
+    if(!reg.eventos.length) return;
+    diasComUso++;
+    var faltando=[], limite=[];
+    itens.forEach(function(it){
+      var s=_eqSituacaoDia(it, reg);
+      if(!s) return;
+      if(s.st==='falta') faltando.push({it:it, s:s});
+      else if(s.st==='limite') limite.push({it:it, s:s});
+    });
+    if(faltando.length) diasEstourados++;
+    if(soCriticos && !faltando.length) return;
+
+    var dt=new Date(dia+'T12:00:00');
+    var sem=['dom','seg','ter','qua','qui','sex','sáb'][dt.getDay()];
+    function chips(lista, cor, bg, bd){
+      if(!lista.length) return '<span style="color:var(--text-dim)">—</span>';
+      return lista.map(function(x){
+        return '<span style="display:inline-block;background:'+bg+';border:1px solid '+bd+';color:'+cor+';border-radius:10px;padding:1px 7px;font-size:9.5px;font-weight:700;margin:1px 2px 1px 0" title="'+eh(x.it.nome)+': '+_eqFmtQtd(x.s.firme)+' de '+_eqFmtQtd(x.s.estoque)+'">'
+          +eh(x.it.nome)+(x.s.falta>0.004?(' −'+_eqFmtQtd(x.s.falta)):'')+'</span>';
+      }).join('');
+    }
+    linhas+='<tr style="cursor:pointer" onclick="eqMapaAbrirDia(\''+dia+'\')" title="Clique para ver os eventos deste dia">'
+      +'<td style="text-align:left;font-weight:700;white-space:nowrap;vertical-align:top">'+(faltando.length?'🔴 ':'')+fD(dia)+' <span style="color:var(--text-dim);font-weight:500">'+sem+'</span></td>'
+      +'<td style="text-align:left">'+chips(faltando,'#c62828','#ffebee','#ef9a9a')+'</td>'
+      +'<td style="text-align:left">'+chips(limite,'#e65100','#fff3e0','#ffb74d')+'</td>'
+      +'<td style="color:var(--text-dim);vertical-align:top">'+reg.eventos.length+'</td>'
+      +'</tr>';
+  });
+
+  var resumo='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:11px">'
+    +'<span style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:4px 12px"><b>'+diasComUso+'</b> dia(s) com evento</span>'
+    +'<span style="background:'+(diasEstourados?'#ffebee':'#e8f5e9')+';border:1px solid '+(diasEstourados?'#ef9a9a':'#a5d6a7')+';color:'+(diasEstourados?'#c62828':'#2e7d32')+';border-radius:14px;padding:4px 12px;font-weight:800">'
+      +(diasEstourados?('🔴 '+diasEstourados+' dia(s) com falta'):'✅ nenhum dia com falta')+'</span>'
+    +'</div>';
+
+  if(!linhas){
+    el.innerHTML=resumo+'<div style="padding:26px;text-align:center;color:var(--text-muted);font-size:12px;border:1px dashed var(--border);border-radius:8px">'
+      +(soCriticos?'Nenhum dia com falta neste período. 👍':'Nenhum evento com equipamento controlado neste período.')+'</div>';
+    return;
+  }
+  el.innerHTML=resumo
+    +'<div style="overflow-x:auto"><table class="it" style="width:100%;min-width:640px">'
+    +'<thead><tr><th style="text-align:left">Dia</th><th style="text-align:left">Vai faltar</th><th style="text-align:left">No limite / disputado</th><th>Eventos</th></tr></thead>'
+    +'<tbody>'+linhas+'</tbody></table></div>'
+    +'<div style="margin-top:9px;font-size:10px;color:var(--text-dim);line-height:1.6">'
+    +'O número depois do nome (−2) é quanto falta daquele item naquele dia, considerando só o que já está fechado. '
+    +'Clique num dia para ver os eventos e as quantidades.</div>';
+}
+
+function eqMapaAbrirDia(dia){
+  var de=(document.getElementById('eqd-de')||{}).value||dia;
+  var ate=(document.getElementById('eqd-ate')||{}).value||dia;
+  var d=eqMapaDados(de, ate);
+  var reg=d.porDia[dia];
+  if(!reg) return;
+  var h='<div style="font-size:12px;font-weight:800;margin-bottom:8px">📅 '+fD(dia)+' — '+reg.eventos.length+' evento(s) com equipamento controlado</div>';
+  var algum=false;
+  _eqControlados().forEach(function(it){
+    var s=_eqSituacaoDia(it, reg);
+    if(!s) return;
+    algum=true;
+    var cor=s.st==='falta'?'#c62828':(s.st==='limite'?'#e65100':'#2e7d32');
+    h+='<div style="display:flex;gap:8px;align-items:baseline;font-size:11px;padding:4px 0;border-bottom:1px solid var(--border)">'
+      +'<b style="min-width:180px;color:'+cor+'">'+eh(it.nome)+'</b>'
+      +'<span>'+_eqFmtQtd(s.firme)+' de '+_eqFmtQtd(s.estoque)+'</span>'
+      +(s.risco>0?'<span style="color:#e65100">+'+_eqFmtQtd(s.risco)+' em negociação</span>':'')
+      +(s.falta>0.004?'<span style="color:#c62828;font-weight:800;margin-left:auto">faltam '+_eqFmtQtd(s.falta)+'</span>':'')
+      +'</div>';
+  });
+  if(!algum) h+='<div style="font-size:11px;color:var(--text-muted);padding:8px 0">Nenhum item controlado em uso neste dia.</div>';
+  h+='<div style="margin-top:10px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);font-weight:800">Eventos</div>';
+  reg.eventos.forEach(function(x){
+    var f=x.orc.form||{};
+    var det=Object.keys(x.qtd).map(function(k){
+      var it=_eqItemPorId(k);
+      return (it?it.nome:k)+': '+_eqFmtQtd(x.qtd[k]);
+    }).join(' · ');
+    var si=(x.status==='ganha')?{c:'#c62828',t:'🔒 Fechado'}:{c:'#e65100',t:'🤝 Em negociação'};
+    h+='<div style="padding:7px 10px;border-bottom:1px solid var(--border);font-size:11px;cursor:pointer" onclick="eqAbrirOrc(\''+eh(x.orc.driveId||'')+'\')">'
+      +'<span style="font-weight:800;color:var(--R)">'+eh(f['f-num']||'—')+'</span> '+eh(f['f-cliente']||'—')
+      +(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')
+      +'<div style="font-size:10px;color:var(--text-dim)"><span style="color:'+si.c+';font-weight:700">'+si.t+'</span> · '
+      +fD(x.range.inicio)+' a '+fD(x.range.fim)+' · '+det+'</div></div>';
+  });
+  var corpo=document.getElementById('eqd-dia-corpo');
+  if(corpo) corpo.innerHTML=h;
+  _abrirOv('eqd-dia-ov');
+}
+
+/* ── ABA 3: CONSULTA POR PERÍODO ────────────────────────────────────────── */
+// A tabela completa do período: estoque, comprometido, livre. Sem orçamento
+// consultado, "pedido" é zero — é a foto do que a casa tem naquele intervalo.
+function eqPeriodoRenderizar(){
+  var el=document.getElementById('eqd-corpo');
+  var de=(document.getElementById('eqd-de')||{}).value||'';
+  var ate=(document.getElementById('eqd-ate')||{}).value||'';
+  if(!de||!ate){ el.innerHTML='<div style="padding:22px;color:var(--text-muted);font-size:12px">Escolha o período.</div>'; return; }
+  if(ate<de){ el.innerHTML='<div style="padding:22px;color:var(--R);font-size:12px">A data final está antes da inicial.</div>'; return; }
+
+  var r=eqAnalisar({inicio:de, fim:ate}, null, {});
+  var comUso=r.linhas.filter(function(l){ return l.firme>0 || l.risco>0; });
+  var soComUso=!!(document.getElementById('eqd-so-uso')||{}).checked;
+  var lista=soComUso?comUso:r.linhas;
+
+  var resumo='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:11px">'
+    +'<span style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:4px 12px">'
+      +'Período: <b>'+fD(de)+'</b> a <b>'+fD(ate)+'</b></span>'
+    +'<span style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:4px 12px">'
+      +'<b>'+r.firmes.length+'</b> fechado(s) · <b>'+r.risco.length+'</b> em negociação</span>'
+    +'<span style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:4px 12px">'
+      +'<b>'+comUso.length+'</b> de '+r.linhas.length+' item(ns) em uso</span>'
+    +'</div>';
+
+  if(!lista.length){
+    el.innerHTML=resumo+'<div style="padding:26px;text-align:center;color:var(--text-muted);font-size:12px;border:1px dashed var(--border);border-radius:8px">Nenhum item controlado em uso neste período.</div>';
+    return;
+  }
+
+  var h=resumo+'<div style="overflow-x:auto"><table class="it" style="width:100%;min-width:620px">'
+    +'<thead><tr><th style="text-align:left">Equipamento</th><th>Estoque</th><th>Fechado</th><th>Em negociação</th><th>Livre</th><th>Situação</th></tr></thead><tbody>';
+  EQ_SECS.forEach(function(sec){
+    var daSec=lista.filter(function(l){ return l.sec===sec; });
+    if(!daSec.length) return;
+    daSec.sort(function(a,b){ return a.nome.localeCompare(b.nome,'pt-BR'); });
+    h+='<tr><td colspan="6" style="text-align:left;background:var(--surface-2);font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim)">'
+      +(EQ_SEC_ICO[sec]||'')+' '+eh(EQ_SEC_LBL[sec]||sec)+'</td></tr>';
+    daSec.forEach(function(l){
+      var estourou=l.firme>l.estoque+0.004;
+      var disputa=!estourou && (l.firme+l.risco>l.estoque+0.004);
+      var apertado=!estourou && !disputa && l.estoque>0 && l.firme/l.estoque>=0.8;
+      var cor=estourou?'#c62828':(disputa||apertado?'#e65100':'var(--text)');
+      var sit=estourou
+        ? '<b style="color:#c62828">❌ faltam '+_eqFmtQtd(l.firme-l.estoque)+'</b>'
+        : (disputa
+          ? '<b style="color:#e65100">⚠️ disputado</b>'
+          : (apertado ? '<b style="color:#e65100">⚠️ no limite</b>' : '<span style="color:#2e7d32">✅ ok</span>'));
+      h+='<tr>'
+        +'<td style="text-align:left;font-weight:700;color:'+cor+'">'+eh(l.nome)+'</td>'
+        +'<td>'+_eqFmtQtd(l.estoque)+'</td>'
+        +'<td style="font-weight:800">'+_eqFmtQtd(l.firme)+'</td>'
+        +'<td'+(l.risco>0?' style="color:#e65100;font-weight:700"':'')+'>'+(l.risco>0?_eqFmtQtd(l.risco):'—')+'</td>'
+        +'<td'+(l.livre<0?' style="color:#c62828;font-weight:800"':'')+'>'+_eqFmtQtd(l.livre)+'</td>'
+        +'<td>'+sit+'</td>'
+        +'</tr>';
+    });
+  });
+  h+='</tbody></table></div>'
+    +'<div style="margin-top:9px;font-size:10px;color:var(--text-dim);line-height:1.6">'
+    +'<b>Fechado</b> é a soma das Vendas Ganhas que ocupam qualquer dia do período; <b>Livre</b> é estoque menos fechado. '
+    +'Atenção: num período longo, dois eventos em semanas diferentes somam aqui mas não disputam o mesmo equipamento de verdade — '
+    +'para a conta dia a dia use a aba <b>Mapa por dia</b>.</div>';
+  el.innerHTML=h;
+}
+
+/* ── ADMIN: marcar itens e informar quantidades ─────────────────────────── */
+var _eqAdminBusca='';
+var _eqAdminSecAberta={som:true,luz:false,video:false,estrutura:false};
+
+function _eqEntradaPorNome(sec, nome){
+  var k=_eqNorm(nome);
+  return ESTOQUE_EQ.find(function(it){ return _eqNorm(it.nome)===k; })||null;
+}
+
+function eqAdminBuscar(v){
+  _eqAdminBusca=String(v||'').trim();
+  eqAdminRenderizar();
+}
+function eqAdminToggleSec(sec){
+  _eqAdminSecAberta[sec]=!_eqAdminSecAberta[sec];
+  eqAdminRenderizar();
+}
+
+function eqAdminRenderizar(){
+  var box=document.getElementById('estoqueeq-lista');
+  if(!box) return;
+  var busca=_eqNorm(_eqAdminBusca);
+  var marcados=ESTOQUE_EQ.length;
+  var semQtd=ESTOQUE_EQ.filter(function(it){ return (parseFloat(it.qtd)||0)<=0; }).length;
+
+  var topo='<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;font-size:11px">'
+    +'<span style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:4px 12px"><b>'+marcados+'</b> item(ns) marcado(s)</span>'
+    +(semQtd?'<span style="background:#fff3e0;border:1px solid #ffb74d;color:#e65100;border-radius:14px;padding:4px 12px;font-weight:700">⚠️ '+semQtd+' sem quantidade — não são conferidos</span>':'')
+    +'<input type="search" placeholder="🔍 filtrar equipamento..." value="'+eh(_eqAdminBusca)+'" oninput="eqAdminBuscar(this.value)" style="flex:1;min-width:180px;padding:6px 10px;font-size:11px;background:var(--surface);border:1px solid var(--border-strong);border-radius:4px;color:var(--text)">'
+    +'</div>';
+
+  var html='';
+  EQ_SECS.forEach(function(sec){
+    var cat=[];
+    try{ cat=_itensDisponiveisSecao(sec)||[]; }catch(e){ cat=(PRECOS[sec]||[]); }
+    // Itens digitados à mão nesta seção entram na mesma lista.
+    var nomesCat={};
+    cat.forEach(function(x){ nomesCat[_eqNorm(x.n)]=true; });
+    var livres=ESTOQUE_EQ.filter(function(it){ return it.sec===sec && it.extra && !nomesCat[_eqNorm(it.nome)]; })
+      .map(function(it){ return {n:it.nome, v:0, _livre:true}; });
+    var todos=cat.concat(livres);
+    if(busca) todos=todos.filter(function(x){ return _eqNorm(x.n).indexOf(busca)>=0; });
+    todos.sort(function(a,b){ return a.n.localeCompare(b.n,'pt-BR',{sensitivity:'base'}); });
+
+    var marcadosSec=ESTOQUE_EQ.filter(function(it){ return it.sec===sec; }).length;
+    var aberta=_eqAdminSecAberta[sec] || !!busca;
+
+    html+='<div style="border:1px solid var(--border);border-radius:6px;margin-bottom:9px;overflow:hidden">'
+      +'<div onclick="eqAdminToggleSec(\''+sec+'\')" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 13px;background:var(--surface-2);cursor:pointer">'
+      +'<span style="font-size:12px;font-weight:800">'+(EQ_SEC_ICO[sec]||'')+' '+eh(EQ_SEC_LBL[sec]||sec)+'</span>'
+      +'<span style="font-size:10px;color:var(--text-dim)">'+marcadosSec+' marcado(s) de '+todos.length+' · '+(aberta?'▲':'▼')+'</span>'
+      +'</div>';
+
+    if(aberta){
+      if(!todos.length){
+        html+='<div style="padding:14px;font-size:11px;color:var(--text-muted);text-align:center">Nenhum item'+(busca?' com esse texto':'')+'.</div>';
+      }else{
+        html+='<div style="max-height:360px;overflow-y:auto">';
+        todos.forEach(function(x){
+          var ent=_eqEntradaPorNome(sec, x.n);
+          var on=!!ent;
+          var qtd=ent?(parseFloat(ent.qtd)||0):'';
+          var alerta=on && !(parseFloat(ent.qtd)>0);
+          html+='<div style="display:flex;align-items:center;gap:9px;padding:5px 13px;border-bottom:1px solid var(--border)'+(on?';background:var(--surface-3)':'')+'">'
+            +'<input type="checkbox" '+(on?'checked':'')+' onchange="eqAdminMarcar(\''+sec+'\',\''+eh(x.n).replace(/'/g,"\\'")+'\',this.checked)" style="width:auto;flex:none" title="Controlar este equipamento">'
+            +'<span style="flex:1;font-size:11.5px;'+(on?'font-weight:700;color:var(--text)':'color:var(--text-dim)')+'">'+eh(x.n)
+              +(x._livre?' <span style="font-size:9px;color:var(--text-muted);border:1px solid var(--border);border-radius:3px;padding:0 4px">fora da tabela</span>':'')+'</span>'
+            +'<input type="number" step="0.01" min="0" value="'+qtd+'" placeholder="qtd" '+(on?'':'disabled')
+              +' oninput="eqAdminQtd(\''+sec+'\',\''+eh(x.n).replace(/'/g,"\\'")+'\',this.value)"'
+              +' style="width:80px;font-size:11px;padding:4px 7px;text-align:right'+(alerta?';border-color:#ffb74d;background:#fff3e0;color:#e65100':'')+(on?'':';opacity:.35')+'"'
+              +' title="Quantidade em estoque (na unidade do item: peças, metros, m²)">'
+            +'</div>';
+        });
+        html+='</div>';
+      }
+      html+='<div style="padding:9px 13px;background:var(--surface-2);border-top:1px solid var(--border);display:flex;gap:7px;align-items:center;flex-wrap:wrap">'
+        +'<input type="text" id="eq-novo-'+sec+'" placeholder="equipamento que não está na tabela..." style="flex:1;min-width:170px;font-size:11px;padding:5px 9px;background:var(--surface);border:1px solid var(--border-strong);border-radius:4px;color:var(--text)">'
+        +'<input type="number" step="0.01" min="0" id="eq-novo-qtd-'+sec+'" placeholder="qtd" style="width:80px;font-size:11px;padding:5px 7px;text-align:right">'
+        +'<button class="btn btn-g btn-sm" onclick="eqAdminAdicionarLivre(\''+sec+'\')">+ Adicionar</button>'
+        +'</div>';
+    }
+    html+='</div>';
+  });
+
+  box.innerHTML=topo+html;
+}
+
+function eqAdminMarcar(sec, nome, on){
+  var ent=_eqEntradaPorNome(sec, nome);
+  if(on){
+    if(ent){ ent.sec=sec; return; }
+    ESTOQUE_EQ.push({id:'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+                     sec:sec, nome:nome, qtd:0, extra:false});
+  }else{
+    if(!ent) return;
+    var i=ESTOQUE_EQ.indexOf(ent);
+    if(i>=0) ESTOQUE_EQ.splice(i,1);
+  }
+  eqAdminRenderizar();
+}
+
+function eqAdminQtd(sec, nome, valor){
+  var ent=_eqEntradaPorNome(sec, nome);
+  if(!ent) return;
+  ent.qtd=parseFloat(valor)||0;
+}
+
+function eqAdminAdicionarLivre(sec){
+  var inp=document.getElementById('eq-novo-'+sec);
+  var inq=document.getElementById('eq-novo-qtd-'+sec);
+  var nome=((inp&&inp.value)||'').trim();
+  if(!nome){ alert('Digite o nome do equipamento.'); if(inp) inp.focus(); return; }
+  if(_eqEntradaPorNome(sec, nome)){ alert('"'+nome+'" já está na lista de controle.'); return; }
+  ESTOQUE_EQ.push({id:'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+                   sec:sec, nome:nome, qtd:parseFloat(inq&&inq.value)||0, extra:true});
+  if(inp) inp.value='';
+  if(inq) inq.value='';
+  _eqAdminSecAberta[sec]=true;
+  eqAdminRenderizar();
+}
+
+async function eqAdminSalvar(){
+  var st=document.getElementById('estoqueeq-status');
+  if(st){ st.style.color='var(--text-dim)'; st.textContent='⏳ Salvando...'; }
+  var ok=await _eqSalvarFirestore();
+  if(st){
+    st.style.color=ok?'#4caf50':'#ff5555';
+    st.textContent=ok?'✅ Cadastro salvo — vale para todos os usuários.':'⚠️ Não foi possível salvar.';
+    setTimeout(function(){ if(st.textContent.indexOf('✅')===0) st.textContent=''; }, 4000);
+  }
+  if(ok){
+    _eqMapaCarregado=false;
+    try{ atualizarBadgeEqOrc(); }catch(e){}
+  }
+}
+
+function eqAdminLimpar(){
+  if(!ESTOQUE_EQ.length){ alert('A lista de controle já está vazia.'); return; }
+  if(!confirm('Desmarcar TODOS os '+ESTOQUE_EQ.length+' equipamentos e apagar as quantidades?\n\nIsso não mexe na tabela de preços nem nos orçamentos — só no controle de disponibilidade.')) return;
+  ESTOQUE_EQ=[];
+  eqAdminRenderizar();
+}
+
 var PRECOS={
   som:[{n:"Amplificador De Potência Até 5K",v:100},{n:"Caixa Ativa (Selenium/JBL/Lexsen/Staner)",v:100},{n:"Caixa Ativa Jbl Eon515xt",v:120},{n:"Caixa Ativa Jbl Eon612",v:120},{n:"Caixa Ativa Jbl Max 10",v:100},{n:"Caixa Ativa Jbl Max 10 (monitor)",v:100},{n:'Caixa Sub Grave T18 1X18" Passiva 800W',v:80},{n:'Caixa Sub Grave Taigar 2X18" 2400W',v:150},{n:'Caixa Line Array Taigar 2X8" 740W',v:100},{n:"Caixa Line Slim Turbosound Ip500",v:250},{n:"Caixa Line Slim Soundking ARTOS 1200",v:250},{n:"Caixa Line Slim Blg 1515A",v:300},{n:"Caixa Line Slim Taigar V851",v:500},{n:"Caixa Passiva Leacs 100W",v:60},{n:"Caixa Treeway Passiva 450W",v:80},{n:"Caixas Monitor Attack (Retorno)",v:100},{n:"Cubo de Baixo",v:150},{n:"Cubo de Guitarra",v:100},{n:"Direct Box Ativo Ou Passivo",v:30},{n:"Kit Dj 02 Cdj 350 Pioneer + Mixer",v:200},{n:"Kit Microfonação de bateria",v:120},{n:"Kit Pioneer 02 CDJ 2000 Nexus 2 + Mixer DJM 900",v:800},{n:"Mesa Som Analógica 04 Canais",v:100},{n:"Mesa Som Analógica 06 Canais",v:100},{n:"Mesa Som Analógica Behringer/Yamaha 12 Canais",v:100},{n:"Mesa Som Digital Midas M32 32 Canais",v:400},{n:"Mesa Som Digital Soundcraft Ui24 24 Canais",v:250},{n:"Mesa Som Digital Yamaha 01V 16 Canais",v:200},{n:"Mesa Som Digital Duonn Atrium 12 Canais",v:200},{n:"Microfone Com Fio Akg/Samson/Sennheiser",v:30},{n:"Microfone Com Fio Shure Sm58",v:60},{n:"Microfone Goosneck (pulpito)",v:100},{n:"Microfone Sem Fio Bastão Sennheiser",v:120},{n:"Microfone Sem Fio Headset Sennheiser",v:120},{n:"Microfone Sem Fio Bastão Shure",v:120},{n:"Microfone Sem Fio Bastão Kadosh",v:100},{n:"Antena longo alcance Combainer",v:150},{n:"Notebook Para Trilhas",v:120},{n:"Pedestal De Microfone",v:30},{n:"Power Play (sem fones)",v:100},{n:"Rack De Amplificação E Processamento",v:300}],
   video:[{n:"Base plataforma de abrir",v:300},{n:"Cpu Servidor De Vídeo",v:350},{n:"Estrutura P30 Até 10M² De Painel",v:250},{n:"Estrutura P30 Até 10M² Outdoor",v:500},{n:"Estrutura P30 Até 24M² De Painel",v:500},{n:"Notebook Placa De Vídeo Dedicado",v:150},{n:"Painel Led Ph2.5Mm Indoor",v:300},{n:"Painel Led Ph2.9Mm Indoor",v:250},{n:"Painel Led Ph3.9Mm Outdoor",v:250},{n:"Painel Led Ph6Mm Indoor",v:150},{n:"Passador de slides",v:50},{n:"Poster Led 1,00x2,00M P2.5mm",v:1200},{n:"Poster Led 1,00x3,00M P2.5mm",v:1800},{n:"Processadora De Vídeo",v:300},{n:"Processadora TB 40",v:300},{n:"Projetor 2.700 Lumens",v:120},{n:"Projetor 3.500 Lumens",v:150},{n:"Tela de projeção e pedestal",v:100},{n:'Totem Touch 32" Armário',v:1300},{n:'Totem Touch 32" Curvo',v:1200},{n:'Totem Touch 40" Armário',v:1500},{n:'Totem Touch 55" Armário',v:1700},{n:'Totem Touch 70" Armário',v:1900},{n:"Diaria adicional Totem",v:200},{n:"Adesivação Totem",v:300},{n:"Pedestal suporte TV",v:30},{n:'Tv 32"',v:120},{n:'Tv 40"/43"',v:150},{n:'Tv 55"',v:300},{n:'Tv 70"',v:500},{n:'Tv 98"',v:1000},{n:'Tv 32" doghouse + notebook cronometro',v:250},{n:'Tv 40" doghouse + notebook cronometro',v:300},{n:'Tv 32" doghouse + Spliter HDMI retorno',v:250},{n:'Tv 40" doghouse + Spliter HDMI retorno',v:300},{n:"Webcam Logitech C920",v:100}],
@@ -5451,6 +6375,7 @@ async function _entrarNoSistema(email, perfil, opts){
   eventosCarregarStorage();
   tiposEventoCarregar();
   painelLedCarregar();
+  eqCarregar();
   cargosCarregar();
   tarefasCarregarStorage().then(atualizarBadgeTarefas);
   tiposTarefaCarregar();
@@ -6857,8 +7782,10 @@ function calc(){
   }
   renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   _preencherValLiqCalculado();
-  // O badge do LED acompanha a edição dos painéis (m² muda com largura/altura)
+  // Os badges de LED e de Equipamento acompanham a edição dos itens (m² muda
+  // com largura/altura; a quantidade pedida muda com a qty de cada linha)
   try{ if(typeof atualizarBadgeLedOrc==='function') atualizarBadgeLedOrc(); }catch(e){}
+  try{ if(typeof atualizarBadgeEqOrc==='function') atualizarBadgeEqOrc(); }catch(e){}
 }
 
 // Mantém o bloco "Resumo & Margem" em dia com as categorias criadas: um
@@ -8662,6 +9589,7 @@ async function atualizarDadosAgora(){
   await passo('eventos', function(){ return eventosCarregarStorage(); });
   await passo('tipos de evento', function(){ return tiposEventoCarregar(); });
   await passo('painéis de LED', function(){ return painelLedCarregar(); });
+  await passo('estoque de equipamento', function(){ return eqCarregar(); });
   await passo('cargos', function(){ return cargosCarregar(); });
   await passo('tarefas', function(){ return tarefasCarregarStorage().then(function(){ if(typeof atualizarBadgeTarefas==='function') atualizarBadgeTarefas(); }); });
   await passo('metas', function(){ return typeof metasCarregar==='function'?metasCarregar():null; });
@@ -22871,6 +23799,7 @@ var DASH_MODULOS = [
   {id:'mod-tarefas',    card:'home-btn-tarefas',    label:'📋 Minhas Tarefas',            grupo:'Operacional'},
   {id:'dash-log',       card:'home-btn-log',        label:'🚚 Logística de Eventos',      grupo:'Operacional'},
   {id:'mod-led',        card:'home-btn-led',        label:'🟥 Disponibilidade de LED',     grupo:'Operacional'},
+  {id:'mod-estoque-eq', card:'home-btn-estoque-eq', label:'📦 Disponibilidade de Equipamento', grupo:'Operacional'},
   {id:'mod-os',         card:'home-btn-os',         label:'🗂️ Ordens de Serviço',        grupo:'Operacional'},
   // ── Cadastros ──
   {id:'mod-clientes',   card:'home-btn-clientes',   label:'👥 Cadastro de Clientes',      grupo:'Cadastros'},
@@ -23179,7 +24108,7 @@ function dashTemAcesso(dashId){
 
 function admAba(aba){
   document.querySelectorAll('#adm-ov .rel-tab').forEach(function(t,i){
-    var abas=['usuarios','cargos','permissoes','dashboards','tiposevento','tipostarefa','categoriasproduto','gruposproduto','subgruposproduto','enderecosproduto','painelled','anexos','googleagenda'];
+    var abas=['usuarios','cargos','permissoes','dashboards','tiposevento','tipostarefa','categoriasproduto','gruposproduto','subgruposproduto','enderecosproduto','painelled','estoqueeq','anexos','googleagenda'];
     t.classList.toggle('active',abas[i]===aba);
   });
   document.querySelectorAll('#adm-ov .rel-pane').forEach(function(p){p.classList.remove('active');});
@@ -23195,6 +24124,7 @@ function admAba(aba){
   if(aba==='subgruposproduto') subgruposProdutoRenderAdmin();
   if(aba==='enderecosproduto') enderecosProdutoRenderAdmin();
   if(aba==='painelled') painelLedRenderAdmin();
+  if(aba==='estoqueeq') eqAdminRenderizar();
   if(aba==='anexos') anxDiagRenderAdmin();
   if(aba==='googleagenda') googleAgendaRenderAdmin();
 }
