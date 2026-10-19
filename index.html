@@ -1662,7 +1662,11 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         Só o que estiver <b>marcado e com quantidade</b> entra na conta: o botão <b>📦 Equip.</b> do orçamento e a tela
         <b>Disponibilidade de Equipamento</b> ignoram todo o resto. Item marcado sem quantidade aparece destacado em laranja e não é conferido.<br>
         A lista traz o catálogo de cada categoria; se o equipamento não estiver na tabela de preços, use o campo no pé da categoria para cadastrá-lo à mão.
-        O reconhecimento no orçamento é pelo <b>nome do item</b>, então ele conta mesmo que seja lançado numa categoria personalizada.
+        O reconhecimento no orçamento é pelo <b>nome do item</b>, então ele conta mesmo que seja lançado numa categoria personalizada.<br>
+        <b>Esta lista e o Cadastro de Produtos são a mesma lista.</b> Ao salvar, todo equipamento marcado que ainda não tem ficha vira um produto no
+        <b>📦 Cadastro de Produtos</b>, com nome, categoria e quantidade preenchidos e a ficha técnica e a foto em branco, para completar quando der.
+        O botão <b>✏️ ficha</b> ao lado do item abre essa ficha — é lá que você <b>corrige o nome</b>, e a correção volta para cá.
+        A <b>quantidade é um número só</b>: mudou aqui, mudou lá. Desmarcar o item <b>não apaga</b> o produto — só tira da conferência de disponibilidade.
       </p>
       <div id="estoqueeq-lista"></div>
       <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">
@@ -5442,6 +5446,12 @@ async function eqCarregar(){
           id:    it.id||('e'+Math.random().toString(36).slice(2,7)),
           sec:   EQ_SECS.indexOf(it.sec)>=0?it.sec:'som',
           nome:  String(it.nome||''),
+          // Nome com que o item foi marcado no catálogo. Guardado à parte
+          // porque o nome pode ser corrigido depois no Cadastro de Produtos,
+          // e os orçamentos antigos continuam com o nome original — os dois
+          // precisam seguir casando.
+          nomeOrig: String(it.nomeOrig||it.nome||''),
+          produtoId: String(it.produtoId||''),
           qtd:   Math.max(0, Math.round(parseFloat(it.qtd)||0)),
           extra: !!it.extra
         };
@@ -5481,8 +5491,109 @@ function _eqIndicePorNome(){
   _eqControlados().forEach(function(it){
     var k=_eqNorm(it.nome);
     if(k) ix[k]=it;
+    // Se o nome foi corrigido no Cadastro de Produtos, os orçamentos já
+    // emitidos continuam com o nome antigo: os dois apontam pro mesmo item.
+    var ko=_eqNorm(it.nomeOrig);
+    if(ko && !ix[ko]) ix[ko]=it;
   });
   return ix;
+}
+
+/* ── PONTE COM O CADASTRO DE PRODUTOS ───────────────────────────────────────
+   Pedido do Fabiano: "os equipamentos do estoque devem constar no cadastro de
+   produto, tudo deve formar a mesma lista constando nos dois locais".
+
+   Como as duas pontas se encontram:
+   • Produtos → Estoque já funcionava: _itensDisponiveisSecao() mescla PRODUTOS
+     na lista de cada categoria, então um produto cadastrado já aparece aqui
+     pra ser marcado.
+   • Estoque → Produtos é o que falta: ao salvar o cadastro, cada item marcado
+     vira um Produto (nome, categoria e quantidade preenchidos; ficha técnica e
+     foto em branco, pra editar depois).
+   • O vínculo é por ID (produtoId), não por nome — assim o nome pode ser
+     corrigido no Cadastro de Produtos sem romper a ligação.
+   • Quantidade é um número só: mexeu num lado, muda no outro.
+   • Desmarcar NUNCA apaga o produto: a ficha técnica e a foto são trabalho que
+     não pode sumir por causa de um clique no controle de disponibilidade.
+   ────────────────────────────────────────────────────────────────────────── */
+
+function _eqSecParaCategoria(sec){ return CATEGORIA_PRODUTO_LEGADO[sec]||'Som'; }
+function _eqCategoriaParaSec(cat){
+  var s=SECAO_POR_CATEGORIA[_categoriaProdutoNormalizada(cat)];
+  return EQ_SECS.indexOf(s)>=0?s:'';
+}
+
+function _eqProdutoDaEntrada(it){
+  if(!it) return null;
+  if(it.produtoId){
+    var p=PRODUTOS.find(function(x){ return x.id===it.produtoId; });
+    if(p) return p;
+  }
+  // Sem vínculo gravado: tenta casar pelo nome (produto cadastrado antes).
+  var alvo=_eqNorm(it.nome), orig=_eqNorm(it.nomeOrig);
+  return PRODUTOS.find(function(x){
+    var k=_eqNorm(x.nome);
+    return k===alvo || (orig && k===orig);
+  })||null;
+}
+
+// Cria/vincula/atualiza os produtos dos itens marcados. Devolve o resumo
+// pra que o Admin diga em texto o que aconteceu.
+async function eqSincronizarComProdutos(){
+  var res={criados:0, vinculados:0, atualizados:0, erros:0};
+  for(var i=0;i<ESTOQUE_EQ.length;i++){
+    var it=ESTOQUE_EQ[i];
+    var p=_eqProdutoDaEntrada(it);
+    var obj=null;
+
+    if(!p){
+      obj={
+        id:'prd_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+        nome:it.nome,
+        categoria:_eqSecParaCategoria(it.sec),
+        marca:'', modelo:'', potencia:'', voltagem:'', peso:'', dimensoes:'',
+        conectores:'', fichaTecnica:'', obs:'',
+        quantidade:parseInt(it.qtd,10)||0,
+        numeroSerie:'', custoLocacaoTerceiros:0, descricao:'',
+        grupo:'', subgrupo:'', preco:0, endereco:'',
+        fotoId:'', fotoThumb:'',
+        criadoPeloEstoque:true,
+        atualizadoEm:new Date().toLocaleString('pt-BR'),
+        atualizadoPor:usuarioAtual?usuarioAtual.nome:''
+      };
+      PRODUTOS.push(obj);
+      it.produtoId=obj.id;
+      res.criados++;
+    }else{
+      if(it.produtoId!==p.id){ it.produtoId=p.id; res.vinculados++; }
+      // Quantidade é a mesma nos dois lugares.
+      var qNova=parseInt(it.qtd,10)||0;
+      if((parseInt(p.quantidade,10)||0)!==qNova){
+        p.quantidade=qNova;
+        obj=p;
+        res.atualizados++;
+      }
+    }
+
+    if(obj){
+      var ok=await _produtoSalvarFirestore(obj);
+      if(!ok) res.erros++;
+    }
+  }
+  return res;
+}
+
+// Caminho inverso: o produto foi editado no Cadastro de Produtos — o nome e a
+// quantidade voltam pra entrada de estoque vinculada.
+function _eqAplicarProdutoNoEstoque(prod){
+  if(!prod || !prod.id) return false;
+  var it=ESTOQUE_EQ.find(function(x){ return x.produtoId===prod.id; });
+  if(!it) return false;
+  var mudou=false;
+  if(prod.nome && prod.nome!==it.nome){ it.nome=prod.nome; mudou=true; }
+  var q=parseInt(prod.quantidade,10)||0;
+  if((parseInt(it.qtd,10)||0)!==q){ it.qtd=q; mudou=true; }
+  return mudou;
 }
 
 function _eqItemPorId(id){
@@ -6120,10 +6231,12 @@ function eqAdminRenderizar(){
   var busca=_eqNorm(_eqAdminBusca);
   var marcados=ESTOQUE_EQ.length;
   var semQtd=ESTOQUE_EQ.filter(function(it){ return (parseFloat(it.qtd)||0)<=0; }).length;
+  var semFicha=ESTOQUE_EQ.filter(function(it){ return !_eqProdutoDaEntrada(it); }).length;
 
   var topo='<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;font-size:11px">'
     +'<span style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:4px 12px"><b id="eq-topo-marcados">'+marcados+'</b> item(ns) marcado(s)</span>'
     +'<span id="eq-topo-semqtd" style="background:#fff3e0;border:1px solid #ffb74d;color:#e65100;border-radius:14px;padding:4px 12px;font-weight:700'+(semQtd?'':';display:none')+'">⚠️ <span id="eq-topo-semqtd-n">'+semQtd+'</span> sem quantidade — não são conferidos</span>'
+    +'<span id="eq-topo-semficha" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:4px 12px'+(semFicha?'':';display:none')+'">📦 <span id="eq-topo-semficha-n">'+semFicha+'</span> vira(m) produto ao salvar</span>'
     +'<input type="search" placeholder="🔍 filtrar equipamento..." value="'+eh(_eqAdminBusca)+'" oninput="eqAdminBuscar(this.value)" style="flex:1;min-width:180px;padding:6px 10px;font-size:11px;background:var(--surface);border:1px solid var(--border-strong);border-radius:4px;color:var(--text)">'
     +'</div>';
 
@@ -6131,11 +6244,21 @@ function eqAdminRenderizar(){
   EQ_SECS.forEach(function(sec){
     var cat=[];
     try{ cat=_itensDisponiveisSecao(sec)||[]; }catch(e){ cat=(PRECOS[sec]||[]); }
-    // Itens digitados à mão nesta seção entram na mesma lista.
+
+    // Nome corrigido no Cadastro de Produtos: a linha tem que aparecer com o
+    // nome NOVO, e a entrada antiga do catálogo some — senão o mesmo
+    // equipamento apareceria duas vezes, uma marcada e outra não.
+    var renomeados={};
+    ESTOQUE_EQ.forEach(function(it){
+      if(it.sec===sec && it.nomeOrig && _eqNorm(it.nomeOrig)!==_eqNorm(it.nome)) renomeados[_eqNorm(it.nomeOrig)]=true;
+    });
+    cat=cat.filter(function(x){ return !renomeados[_eqNorm(x.n)]; });
+
+    // Itens digitados à mão e itens renomeados entram na mesma lista.
     var nomesCat={};
     cat.forEach(function(x){ nomesCat[_eqNorm(x.n)]=true; });
-    var livres=ESTOQUE_EQ.filter(function(it){ return it.sec===sec && it.extra && !nomesCat[_eqNorm(it.nome)]; })
-      .map(function(it){ return {n:it.nome, v:0, _livre:true}; });
+    var livres=ESTOQUE_EQ.filter(function(it){ return it.sec===sec && !nomesCat[_eqNorm(it.nome)]; })
+      .map(function(it){ return {n:it.nome, v:0, _livre:!!it.extra}; });
     var todos=cat.concat(livres);
     if(busca) todos=todos.filter(function(x){ return _eqNorm(x.n).indexOf(busca)>=0; });
     todos.sort(function(a,b){ return a.n.localeCompare(b.n,'pt-BR',{sensitivity:'base'}); });
@@ -6163,7 +6286,8 @@ function eqAdminRenderizar(){
           html+='<div id="eq-row-'+k+'" style="display:flex;align-items:center;gap:9px;padding:5px 13px;border-bottom:1px solid var(--border)'+(on?';background:var(--surface-3)':'')+'">'
             +'<input type="checkbox" '+(on?'checked':'')+' onchange="eqAdminMarcar(\''+sec+'\',\''+nomeJs+'\',this.checked)" style="width:auto;flex:none" title="Controlar este equipamento">'
             +'<span id="eq-lb-'+k+'" style="flex:1;font-size:11.5px;'+(on?'font-weight:700;color:var(--text)':'color:var(--text-dim)')+'">'+eh(x.n)
-              +(x._livre?' <span style="font-size:9px;color:var(--text-muted);border:1px solid var(--border);border-radius:3px;padding:0 4px">fora da tabela</span>':'')+'</span>'
+              +(x._livre?' <span style="font-size:9px;color:var(--text-muted);border:1px solid var(--border);border-radius:3px;padding:0 4px">fora da tabela</span>':'')
+              +'<span id="eq-fc-'+k+'">'+_eqSeloFicha(ent)+'</span></span>'
             +'<input id="eq-q-'+k+'" type="number" step="1" min="0" inputmode="numeric" value="'+qtd+'" placeholder="qtd" '+(on?'':'disabled')
               +' oninput="eqAdminQtd(\''+sec+'\',\''+nomeJs+'\',this.value,this)"'
               +' onblur="eqAdminQtdFechar(\''+sec+'\',\''+nomeJs+'\',this)"'
@@ -6195,6 +6319,28 @@ function eqAdminRenderizar(){
 // tocada e nos contadores.
 function _eqAdminChave(sec, nome){ return sec+'-'+_eqNorm(nome); }
 
+// Selo que diz se o item já tem ficha no Cadastro de Produtos. O atalho
+// abre a ficha pra corrigir o nome e completar marca, foto e dados técnicos.
+function _eqSeloFicha(ent){
+  if(!ent) return '';
+  var p=_eqProdutoDaEntrada(ent);
+  if(!p){
+    return ' <span style="font-size:9px;color:#e65100;border:1px solid #ffb74d;background:#fff3e0;border-radius:3px;padding:0 4px" title="Ao salvar o cadastro, este equipamento vira um produto com ficha em branco">vira produto ao salvar</span>';
+  }
+  var renomeado=_eqNorm(p.nome)!==_eqNorm(ent.nomeOrig||ent.nome);
+  return ' <span style="font-size:9px;color:#2e7d32;border:1px solid #a5d6a7;background:#e8f5e9;border-radius:3px;padding:0 4px" title="Já está no Cadastro de Produtos">no cadastro</span>'
+    +(renomeado?' <span style="font-size:9px;color:var(--text-muted)" title="Nome original no catálogo: '+eh(ent.nomeOrig||'')+'">(renomeado)</span>':'')
+    +' <button onclick="event.stopPropagation();eqAbrirFicha(\''+eh(p.id)+'\')" style="font-size:9px;background:none;border:1px solid var(--border);border-radius:3px;padding:0 5px;cursor:pointer;color:var(--text-dim)" title="Abrir a ficha no Cadastro de Produtos — corrigir o nome, preencher marca, foto e dados técnicos">✏️ ficha</button>';
+}
+
+// Abre a ficha do produto direto daqui. Ao salvar, o nome e a quantidade
+// voltam pra esta lista (ver produtoSalvar).
+function eqAbrirFicha(produtoId){
+  var idx=PRODUTOS.findIndex(function(p){ return p.id===produtoId; });
+  if(idx<0){ alert('A ficha deste produto não foi encontrada. Salve o cadastro para criá-la.'); return; }
+  produtoEditar(idx);
+}
+
 function _eqAdminPintarQtd(k, ent){
   var inp=document.getElementById('eq-q-'+k);
   if(!inp) return;
@@ -6212,6 +6358,11 @@ function _eqAdminAtualizarContadores(sec){
   var avn=document.getElementById('eq-topo-semqtd-n');
   if(avn) avn.textContent=semQtd;
   if(av) av.style.display=semQtd?'':'none';
+  var semFicha=ESTOQUE_EQ.filter(function(it){ return !_eqProdutoDaEntrada(it); }).length;
+  var sf=document.getElementById('eq-topo-semficha');
+  var sfn=document.getElementById('eq-topo-semficha-n');
+  if(sfn) sfn.textContent=semFicha;
+  if(sf) sf.style.display=semFicha?'':'none';
   if(sec){
     var c=document.getElementById('eq-cnt-'+sec);
     if(c) c.textContent=ESTOQUE_EQ.filter(function(it){ return it.sec===sec; }).length;
@@ -6224,7 +6375,7 @@ function eqAdminMarcar(sec, nome, on){
     if(ent){ ent.sec=sec; }
     else{
       ent={id:'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
-           sec:sec, nome:nome, qtd:0, extra:false};
+           sec:sec, nome:nome, nomeOrig:nome, produtoId:'', qtd:0, extra:false};
       ESTOQUE_EQ.push(ent);
     }
   }else{
@@ -6238,6 +6389,8 @@ function eqAdminMarcar(sec, nome, on){
   var row=document.getElementById('eq-row-'+k);
   var lb =document.getElementById('eq-lb-'+k);
   var inp=document.getElementById('eq-q-'+k);
+  var fc=document.getElementById('eq-fc-'+k);
+  if(fc) fc.innerHTML=_eqSeloFicha(ent);
   if(row) row.style.background = on?'var(--surface-3)':'';
   if(lb){
     lb.style.fontWeight = on?'700':'';
@@ -6296,7 +6449,8 @@ function eqAdminAdicionarLivre(sec){
   if(!nome){ alert('Digite o nome do equipamento.'); if(inp) inp.focus(); return; }
   if(_eqEntradaPorNome(sec, nome)){ alert('"'+nome+'" já está na lista de controle.'); return; }
   ESTOQUE_EQ.push({id:'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
-                   sec:sec, nome:nome, qtd:_eqInteiro(inq&&inq.value), extra:true});
+                   sec:sec, nome:nome, nomeOrig:nome, produtoId:'',
+                   qtd:_eqInteiro(inq&&inq.value), extra:true});
   if(inp) inp.value='';
   if(inq) inq.value='';
   _eqAdminSecAberta[sec]=true;
@@ -6305,16 +6459,36 @@ function eqAdminAdicionarLivre(sec){
 
 async function eqAdminSalvar(){
   var st=document.getElementById('estoqueeq-status');
-  if(st){ st.style.color='var(--text-dim)'; st.textContent='⏳ Salvando...'; }
+  if(st){ st.style.color='var(--text-dim)'; st.textContent='⏳ Salvando e publicando no Cadastro de Produtos...'; }
+
+  // A ponte com o Cadastro de Produtos roda ANTES de gravar o estoque: ela
+  // preenche o produtoId de cada entrada, e é esse vínculo que precisa ir
+  // junto no mesmo documento.
+  var sync={criados:0,vinculados:0,atualizados:0,erros:0};
+  try{ sync=await eqSincronizarComProdutos(); }
+  catch(e){ console.warn('eqSincronizarComProdutos:',e); sync.erros++; }
+
   var ok=await _eqSalvarFirestore();
   if(st){
-    st.style.color=ok?'#4caf50':'#ff5555';
-    st.textContent=ok?'✅ Cadastro salvo — vale para todos os usuários.':'⚠️ Não foi possível salvar.';
-    setTimeout(function(){ if(st.textContent.indexOf('✅')===0) st.textContent=''; }, 4000);
+    if(ok){
+      var partes=[];
+      if(sync.criados)     partes.push(sync.criados+' produto(s) criado(s)');
+      if(sync.vinculados)  partes.push(sync.vinculados+' vinculado(s) a produto já existente');
+      if(sync.atualizados) partes.push(sync.atualizados+' quantidade(s) atualizada(s)');
+      st.style.color=sync.erros?'#e65100':'#4caf50';
+      st.textContent=(sync.erros?'⚠️ Cadastro salvo, mas '+sync.erros+' produto(s) não foram ao servidor. ':'✅ Cadastro salvo — vale para todos os usuários. ')
+        +(partes.length?'('+partes.join(' · ')+')':'');
+      setTimeout(function(){ if(st.textContent.indexOf('✅')===0) st.textContent=''; }, 6000);
+    }else{
+      st.style.color='#ff5555';
+      st.textContent='⚠️ Não foi possível salvar.';
+    }
   }
   if(ok){
     _eqMapaCarregado=false;
     try{ atualizarBadgeEqOrc(); }catch(e){}
+    try{ if(document.getElementById('produtos-ov').classList.contains('open')) produtosRenderLista(document.getElementById('produtos-busca').value); }catch(e){}
+    eqAdminRenderizar();
   }
 }
 
@@ -26038,6 +26212,16 @@ async function produtoSalvar(){
   if(idx>=0) PRODUTOS[idx]=Object.assign({},PRODUTOS[idx],obj);
   else PRODUTOS.push(obj);
   var ok=await _produtoSalvarFirestore(obj);
+
+  // Nome corrigido ou quantidade alterada aqui tem que chegar no controle de
+  // disponibilidade — é a mesma lista, vista de outro lugar.
+  try{
+    if(typeof _eqAplicarProdutoNoEstoque==='function' && _eqAplicarProdutoNoEstoque(obj)){
+      await _eqSalvarFirestore();
+      if(typeof eqAdminRenderizar==='function' && document.getElementById('estoqueeq-lista')) eqAdminRenderizar();
+      try{ atualizarBadgeEqOrc(); }catch(e){}
+    }
+  }catch(e){ console.warn('produtoSalvar (ponte estoque):',e); }
   document.getElementById('produto-form-ov').classList.remove('open');
   if(document.getElementById('produtos-ov').classList.contains('open')) produtosRenderLista(document.getElementById('produtos-busca').value);
   if(ok){
@@ -26056,6 +26240,15 @@ async function produtoExcluirAtual(){
   var p=PRODUTOS.find(function(x){return x.id===id;});
   if(!confirm('🗑️ Excluir o produto "'+(p?p.nome:'')+'" do cadastro?\n\nEsta ação não afeta orçamentos já emitidos.'))return;
   PRODUTOS=PRODUTOS.filter(function(x){return x.id!==id;});
+  // O item continua sendo controlado na disponibilidade; só perde a ficha.
+  try{
+    var desvinculou=false;
+    (ESTOQUE_EQ||[]).forEach(function(it){ if(it.produtoId===id){ it.produtoId=''; desvinculou=true; } });
+    if(desvinculou){
+      await _eqSalvarFirestore();
+      if(typeof eqAdminRenderizar==='function' && document.getElementById('estoqueeq-lista')) eqAdminRenderizar();
+    }
+  }catch(e){ console.warn('produtoExcluirAtual (ponte estoque):',e); }
   var ok=await _produtoExcluirFirestore(id);
   document.getElementById('produto-form-ov').classList.remove('open');
   if(document.getElementById('produtos-ov').classList.contains('open')) produtosRenderLista(document.getElementById('produtos-busca').value);
