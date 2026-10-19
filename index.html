@@ -2481,6 +2481,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <p class="sub" style="margin:0">Onde vai faltar equipamento — por categoria, dia a dia <b>(versão provisória, até o módulo de Estoque)</b></p>
       </div>
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-b btn-sm" id="eqd-btn-locacao" onclick="eqRelatorioLocacao()" title="Gera o PDF com o que falta no período, para a Logística pedir aos parceiros">📄 Relatório de Locação</button>
         <button class="btn btn-r btn-sm" onclick="eqMapaAtualizar()" title="Rebusca os orçamentos antes de recalcular">🔄 Atualizar</button>
         <button class="btn btn-o btn-sm" onclick="document.getElementById('eqd-ov').classList.remove('open');voltarDoModulo()">✕</button>
       </div>
@@ -6097,6 +6098,10 @@ function eqMapaRenderizar(){
     +'<div style="overflow-x:auto"><table class="it" style="width:100%;min-width:640px">'
     +'<thead><tr><th style="text-align:left">Dia</th><th style="text-align:left">Vai faltar</th><th style="text-align:left">No limite / disputado</th><th>Eventos</th></tr></thead>'
     +'<tbody>'+linhas+'</tbody></table></div>'
+    +'<div style="margin-top:9px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
+    +'<button class="btn btn-b btn-sm" onclick="eqRelatorioLocacao()" title="PDF com o que falta no período, para a Logística pedir aos parceiros">📄 Gerar relatório de locação</button>'
+    +'<span style="font-size:10px;color:var(--text-dim)">para encaminhar à Logística e cotar com os parceiros</span>'
+    +'</div>'
     +'<div style="margin-top:9px;font-size:10px;color:var(--text-dim);line-height:1.6">'
     +'O número depois do nome (−2) é quanto falta daquele item naquele dia, considerando só o que já está fechado. '
     +'Clique num dia para ver os eventos e as quantidades.</div>';
@@ -6145,6 +6150,39 @@ function eqMapaAbrirDia(dia){
 /* ── ABA 3: CONSULTA POR PERÍODO ────────────────────────────────────────── */
 // A tabela completa do período: estoque, comprometido, livre. Sem orçamento
 // consultado, "pedido" é zero — é a foto do que a casa tem naquele intervalo.
+// Pico diário dentro do período, item a item. Somar o período inteiro estava
+// errado: dois eventos em semanas diferentes não disputam o mesmo
+// equipamento, então a soma inflava o comprometido e inventava falta que não
+// existe. O que decide é o DIA MAIS CARREGADO — é nele que o equipamento
+// pode faltar de verdade.
+function eqPicoDoPeriodo(de, ate){
+  var d=eqMapaDados(de, ate);
+  var itens=_eqControlados();
+  var linhas=itens.map(function(it){
+    var picoFirme=0, diaFirme='', picoTotal=0, diaTotal='', riscoNoPico=0, diasEmUso=0;
+    d.dias.forEach(function(dia){
+      var reg=d.porDia[dia];
+      var f=reg.firme[it.id]||0, r=reg.risco[it.id]||0;
+      if(f>0||r>0) diasEmUso++;
+      if(f>picoFirme){ picoFirme=f; diaFirme=dia; riscoNoPico=r; }
+      if(f+r>picoTotal){ picoTotal=f+r; diaTotal=dia; }
+    });
+    var estoque=parseInt(it.qtd,10)||0;
+    var livre=estoque-picoFirme;
+    var situacao;
+    if(picoFirme<=0 && picoTotal<=0)        situacao='sem-uso';
+    else if(picoFirme>estoque+0.004)        situacao='falta';
+    else if(picoTotal>estoque+0.004)        situacao='disputado';
+    else if(estoque>0 && picoFirme/estoque>=0.8) situacao='limite';
+    else                                    situacao='ok';
+    return {id:it.id, sec:it.sec, nome:it.nome, estoque:estoque,
+            picoFirme:picoFirme, diaFirme:diaFirme, riscoNoPico:riscoNoPico,
+            picoTotal:picoTotal, diaTotal:diaTotal, livre:livre,
+            falta:Math.max(0,picoFirme-estoque), diasEmUso:diasEmUso, situacao:situacao};
+  });
+  return {dias:d.dias, porDia:d.porDia, linhas:linhas};
+}
+
 function eqPeriodoRenderizar(){
   var el=document.getElementById('eqd-corpo');
   var de=(document.getElementById('eqd-de')||{}).value||'';
@@ -6152,10 +6190,12 @@ function eqPeriodoRenderizar(){
   if(!de||!ate){ el.innerHTML='<div style="padding:22px;color:var(--text-muted);font-size:12px">Escolha o período.</div>'; return; }
   if(ate<de){ el.innerHTML='<div style="padding:22px;color:var(--R);font-size:12px">A data final está antes da inicial.</div>'; return; }
 
+  var pico=eqPicoDoPeriodo(de, ate);
   var r=eqAnalisar({inicio:de, fim:ate}, null, {});
-  var comUso=r.linhas.filter(function(l){ return l.firme>0 || l.risco>0; });
+  var comUso=pico.linhas.filter(function(l){ return l.situacao!=='sem-uso'; });
   var soComUso=!!(document.getElementById('eqd-so-uso')||{}).checked;
-  var lista=soComUso?comUso:r.linhas;
+  var lista=soComUso?comUso:pico.linhas;
+  var faltando=comUso.filter(function(l){ return l.situacao==='falta'; });
 
   var resumo='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:11px">'
     +'<span style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:4px 12px">'
@@ -6163,37 +6203,50 @@ function eqPeriodoRenderizar(){
     +'<span style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:4px 12px">'
       +'<b>'+r.firmes.length+'</b> fechado(s) · <b>'+r.risco.length+'</b> em negociação</span>'
     +'<span style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:4px 12px">'
-      +'<b>'+comUso.length+'</b> de '+r.linhas.length+' item(ns) em uso</span>'
-    +'</div>';
+      +'<b>'+comUso.length+'</b> de '+pico.linhas.length+' item(ns) em uso</span>'
+    +'<span style="background:'+(faltando.length?'#ffebee':'#e8f5e9')+';border:1px solid '+(faltando.length?'#ef9a9a':'#a5d6a7')+';color:'+(faltando.length?'#c62828':'#2e7d32')+';border-radius:14px;padding:4px 12px;font-weight:800">'
+      +(faltando.length?('❌ '+faltando.length+' item(ns) faltam em algum dia'):'✅ nenhum item falta no período')+'</span>'
+    +'</div>'
+    +'<div style="background:#e3f2fd;border:1px solid #90caf9;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:10.5px;color:#0d47a1;line-height:1.5">'
+    +'ℹ️ Os números são do <b>dia mais carregado</b> do período, não da soma do período. '
+    +'Dois eventos em semanas diferentes não disputam o mesmo equipamento, então somá-los daria uma falta que não existe.</div>';
 
   if(!lista.length){
     el.innerHTML=resumo+'<div style="padding:26px;text-align:center;color:var(--text-muted);font-size:12px;border:1px dashed var(--border);border-radius:8px">Nenhum item controlado em uso neste período.</div>';
     return;
   }
 
-  var h=resumo+'<div style="overflow-x:auto"><table class="it" style="width:100%;min-width:620px">'
-    +'<thead><tr><th style="text-align:left">Equipamento</th><th>Estoque</th><th>Fechado</th><th>Em negociação</th><th>Livre</th><th>Situação</th></tr></thead><tbody>';
+  var h=resumo+'<div style="overflow-x:auto"><table class="it" style="width:100%;min-width:700px">'
+    +'<thead><tr><th style="text-align:left">Equipamento</th><th>Estoque</th>'
+    +'<th title="Maior quantidade comprometida por Vendas Ganhas num único dia do período">Pico fechado</th>'
+    +'<th title="Em que dia acontece esse pico">Dia do pico</th>'
+    +'<th title="Propostas em negociação no mesmo dia do pico">Em negociação</th>'
+    +'<th title="Estoque menos o pico fechado">Livre no pior dia</th><th>Situação</th></tr></thead><tbody>';
   EQ_SECS.forEach(function(sec){
     var daSec=lista.filter(function(l){ return l.sec===sec; });
     if(!daSec.length) return;
-    daSec.sort(function(a,b){ return a.nome.localeCompare(b.nome,'pt-BR'); });
-    h+='<tr><td colspan="6" style="text-align:left;background:var(--surface-2);font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim)">'
+    var ordem={falta:0,disputado:1,limite:2,ok:3,'sem-uso':4};
+    daSec.sort(function(a,b){
+      var d2=(ordem[a.situacao]||9)-(ordem[b.situacao]||9);
+      return d2!==0?d2:a.nome.localeCompare(b.nome,'pt-BR');
+    });
+    h+='<tr><td colspan="7" style="text-align:left;background:var(--surface-2);font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim)">'
       +(EQ_SEC_ICO[sec]||'')+' '+eh(EQ_SEC_LBL[sec]||sec)+'</td></tr>';
     daSec.forEach(function(l){
-      var estourou=l.firme>l.estoque+0.004;
-      var disputa=!estourou && (l.firme+l.risco>l.estoque+0.004);
-      var apertado=!estourou && !disputa && l.estoque>0 && l.firme/l.estoque>=0.8;
-      var cor=estourou?'#c62828':(disputa||apertado?'#e65100':'var(--text)');
-      var sit=estourou
-        ? '<b style="color:#c62828">❌ faltam '+_eqFmtQtd(l.firme-l.estoque)+'</b>'
-        : (disputa
-          ? '<b style="color:#e65100">⚠️ disputado</b>'
-          : (apertado ? '<b style="color:#e65100">⚠️ no limite</b>' : '<span style="color:#2e7d32">✅ ok</span>'));
+      var cor=l.situacao==='falta'?'#c62828':(l.situacao==='disputado'||l.situacao==='limite'?'#e65100':'var(--text)');
+      var sit;
+      if(l.situacao==='falta')          sit='<b style="color:#c62828">❌ faltam '+_eqFmtQtd(l.falta)+'</b>';
+      else if(l.situacao==='disputado') sit='<b style="color:#e65100">⚠️ disputado</b>';
+      else if(l.situacao==='limite')    sit='<b style="color:#e65100">⚠️ no limite</b>';
+      else if(l.situacao==='sem-uso')   sit='<span style="color:var(--text-dim)">— sem uso</span>';
+      else                              sit='<span style="color:#2e7d32">✅ ok</span>';
       h+='<tr>'
-        +'<td style="text-align:left;font-weight:700;color:'+cor+'">'+eh(l.nome)+'</td>'
+        +'<td style="text-align:left;font-weight:700;color:'+cor+'">'+eh(l.nome)
+          +(l.diasEmUso?'<div style="font-size:9px;color:var(--text-dim);font-weight:500">'+l.diasEmUso+' dia(s) em uso</div>':'')+'</td>'
         +'<td>'+_eqFmtQtd(l.estoque)+'</td>'
-        +'<td style="font-weight:800">'+_eqFmtQtd(l.firme)+'</td>'
-        +'<td'+(l.risco>0?' style="color:#e65100;font-weight:700"':'')+'>'+(l.risco>0?_eqFmtQtd(l.risco):'—')+'</td>'
+        +'<td style="font-weight:800">'+(l.picoFirme>0?_eqFmtQtd(l.picoFirme):'—')+'</td>'
+        +'<td style="white-space:nowrap;color:var(--text-dim)">'+(l.diaFirme?fD(l.diaFirme):'—')+'</td>'
+        +'<td'+(l.riscoNoPico>0?' style="color:#e65100;font-weight:700"':'')+'>'+(l.riscoNoPico>0?_eqFmtQtd(l.riscoNoPico):'—')+'</td>'
         +'<td'+(l.livre<0?' style="color:#c62828;font-weight:800"':'')+'>'+_eqFmtQtd(l.livre)+'</td>'
         +'<td>'+sit+'</td>'
         +'</tr>';
@@ -6201,10 +6254,278 @@ function eqPeriodoRenderizar(){
   });
   h+='</tbody></table></div>'
     +'<div style="margin-top:9px;font-size:10px;color:var(--text-dim);line-height:1.6">'
-    +'<b>Fechado</b> é a soma das Vendas Ganhas que ocupam qualquer dia do período; <b>Livre</b> é estoque menos fechado. '
-    +'Atenção: num período longo, dois eventos em semanas diferentes somam aqui mas não disputam o mesmo equipamento de verdade — '
-    +'para a conta dia a dia use a aba <b>Mapa por dia</b>.</div>';
+    +'<b>Pico fechado</b> é a maior quantidade comprometida por Vendas Ganhas num único dia do período, e <b>Dia do pico</b> é o dia em que isso acontece. '
+    +'<b>Livre no pior dia</b> é o estoque menos esse pico — é o número que diz se dá pra assumir mais um evento. '
+    +'<b>Disputado</b> é quando o pico fechado cabe, mas somado às propostas em negociação do mesmo dia passaria do estoque. '
+    +'Para ver dia a dia e gerar o pedido de locação, use a aba <b>Mapa por dia</b>.</div>';
   el.innerHTML=h;
+}
+
+
+/* ── RELATÓRIO DE LOCAÇÃO COM PARCEIROS ────────────────────────────────────
+   Pedido do Fabiano: "no mapa por dia quero poder imprimir um relatório para
+   encaminhar para a logística locar os equipamentos que faltam com nossos
+   parceiros".
+
+   O relatório tem duas partes, porque são duas perguntas diferentes:
+
+   1) RESUMO PARA COTAÇÃO — é o que se manda ao parceiro. Um bloco por
+      equipamento, com cada janela de dias seguidos em que ele falta e a
+      MAIOR falta dessa janela. A maior, e não a soma: se faltam 2 na terça e
+      3 na quarta, aluga-se 3 peças pelos dois dias, não 5.
+
+   2) DETALHE DIA A DIA — é o que a Logística usa pra conferir e pra saber a
+      quem pertence cada necessidade: por dia, o que falta e os eventos
+      (número, cliente, consultor) que estão disputando.
+
+   Fecha com os itens "disputados": não faltam hoje, mas faltariam se as
+   propostas em negociação fecharem — serve pra avisar o parceiro de que pode
+   vir mais pedido.
+   ────────────────────────────────────────────────────────────────────────── */
+
+// Junta dias seguidos de falta do mesmo item numa janela só, guardando a
+// maior falta da janela e os eventos envolvidos.
+function eqLocacaoDados(de, ate){
+  var d=eqMapaDados(de, ate);
+  var itens=_eqControlados();
+  var blocos=[], disputados=[];
+
+  itens.forEach(function(it){
+    var atual=null, temDisputa=false, picoDisputa=0, diasDisputa=[];
+    d.dias.forEach(function(dia){
+      var reg=d.porDia[dia];
+      var fir=reg.firme[it.id]||0, ris=reg.risco[it.id]||0;
+      var est=parseInt(it.qtd,10)||0;
+      var falta=fir-est;
+
+      if(falta>0.004){
+        var doItem=reg.eventos.filter(function(ev){ return (ev.qtd[it.id]||0)>0; });
+        if(atual && atual._ultimo===_eqDiaAnterior(dia)){
+          atual.fim=dia; atual._ultimo=dia;
+          if(falta>atual.falta){ atual.falta=falta; atual.diaPico=dia; }
+          atual.picoComprometido=Math.max(atual.picoComprometido, fir);
+          doItem.forEach(function(ev){ atual.eventos[ev.orc.driveId]=ev; });
+          atual.porDia.push({dia:dia, firme:fir, risco:ris, falta:falta});
+        }else{
+          if(atual) blocos.push(atual);
+          atual={item:it, estoque:est, inicio:dia, fim:dia, _ultimo:dia,
+                 falta:falta, diaPico:dia, picoComprometido:fir, eventos:{},
+                 porDia:[{dia:dia, firme:fir, risco:ris, falta:falta}]};
+          doItem.forEach(function(ev){ atual.eventos[ev.orc.driveId]=ev; });
+        }
+      }else{
+        if(atual){ blocos.push(atual); atual=null; }
+        // Não falta hoje, mas faltaria se as propostas em negociação fecharem.
+        if(ris>0 && fir+ris>est+0.004){
+          temDisputa=true;
+          picoDisputa=Math.max(picoDisputa, fir+ris-est);
+          if(diasDisputa.indexOf(dia)<0) diasDisputa.push(dia);
+        }
+      }
+    });
+    if(atual) blocos.push(atual);
+    if(temDisputa) disputados.push({item:it, pico:picoDisputa, dias:diasDisputa});
+  });
+
+  blocos.sort(function(a,b){
+    if(a.inicio!==b.inicio) return a.inicio<b.inicio?-1:1;
+    return a.item.nome.localeCompare(b.item.nome,'pt-BR');
+  });
+  return {dias:d.dias, porDia:d.porDia, blocos:blocos, disputados:disputados, itens:itens};
+}
+
+function eqRelatorioLocacao(){
+  var de=(document.getElementById('eqd-de')||{}).value||'';
+  var ate=(document.getElementById('eqd-ate')||{}).value||'';
+  if(!de||!ate){ alert('Escolha o período antes de gerar o relatório.'); return; }
+  if(ate<de){ alert('A data final está antes da inicial.'); return; }
+  if(!_eqControlados().length){
+    alert('Nenhum equipamento está sendo controlado ainda.\n\nCadastre em Admin › Estoque de Equipamento.');
+    return;
+  }
+
+  var dados=eqLocacaoDados(de, ate);
+  if(!dados.blocos.length && !dados.disputados.length){
+    alert('Nenhum equipamento falta entre '+fD(de)+' e '+fD(ate)+'.\n\nNão há o que pedir aos parceiros neste período.');
+    return;
+  }
+
+  var agora=new Date();
+  var nomeArq='CrazySom_PedidoLocacao_'+de.replace(/-/g,'')+'_a_'+ate.replace(/-/g,'');
+
+  // ── Parte 1: resumo para cotação ──
+  var totalPecas=dados.blocos.reduce(function(t,b){ return t+Math.ceil(b.falta); },0);
+  var porItem={};
+  dados.blocos.forEach(function(b){
+    var k=b.item.id;
+    if(!porItem[k]) porItem[k]={item:b.item, janelas:[]};
+    porItem[k].janelas.push(b);
+  });
+  var itensOrdem=Object.keys(porItem).sort(function(a,b){
+    return porItem[a].item.nome.localeCompare(porItem[b].item.nome,'pt-BR');
+  });
+
+  var resumo='';
+  if(itensOrdem.length){
+    resumo='<table><thead><tr>'
+      +'<th style="width:34%">Equipamento</th><th>Categoria</th><th>Período de uso</th>'
+      +'<th style="text-align:center">Dias</th><th style="text-align:center">Nosso estoque</th>'
+      +'<th style="text-align:center">Já comprometido</th><th style="text-align:center">A LOCAR</th>'
+      +'</tr></thead><tbody>';
+    itensOrdem.forEach(function(k){
+      var g=porItem[k];
+      g.janelas.forEach(function(b, i){
+        var nd=Math.round((new Date(b.fim+'T12:00:00')-new Date(b.inicio+'T12:00:00'))/86400000)+1;
+        resumo+='<tr>'
+          +'<td'+(i>0?' style="color:#888"':' style="font-weight:700"')+'>'+(i>0?'↳ ':'')+eh(g.item.nome)+'</td>'
+          +'<td>'+eh(EQ_SEC_LBL[g.item.sec]||g.item.sec)+'</td>'
+          +'<td style="white-space:nowrap">'+(b.inicio===b.fim?fD(b.inicio):(fD(b.inicio)+' a '+fD(b.fim)))+'</td>'
+          +'<td style="text-align:center">'+nd+'</td>'
+          +'<td style="text-align:center">'+_eqFmtQtd(b.estoque)+'</td>'
+          +'<td style="text-align:center">'+_eqFmtQtd(b.picoComprometido)+'</td>'
+          +'<td style="text-align:center;font-weight:900;color:#c62828;font-size:12px">'+_eqFmtQtd(Math.ceil(b.falta))+'</td>'
+          +'</tr>';
+      });
+    });
+    resumo+='</tbody></table>';
+  }else{
+    resumo='<div class="vazio">Nenhum equipamento em falta neste período — nada a locar.</div>';
+  }
+
+  // ── Parte 2: detalhe dia a dia ──
+  var detalhe='';
+  var diasComFalta=dados.dias.filter(function(dia){
+    return dados.itens.some(function(it){
+      return (dados.porDia[dia].firme[it.id]||0) > (parseInt(it.qtd,10)||0)+0.004;
+    });
+  });
+  diasComFalta.forEach(function(dia){
+    var reg=dados.porDia[dia];
+    var dt=new Date(dia+'T12:00:00');
+    var sem=['domingo','segunda','terça','quarta','quinta','sexta','sábado'][dt.getDay()];
+    var linhas='';
+    var eventosDoDia={};
+    dados.itens.forEach(function(it){
+      var est=parseInt(it.qtd,10)||0;
+      var fir=reg.firme[it.id]||0, ris=reg.risco[it.id]||0;
+      if(fir<=est+0.004) return;
+      var doItem=reg.eventos.filter(function(ev){ return (ev.qtd[it.id]||0)>0; });
+      doItem.forEach(function(ev){ eventosDoDia[ev.orc.driveId]=ev; });
+      linhas+='<tr>'
+        +'<td style="font-weight:700">'+eh(it.nome)+'</td>'
+        +'<td style="text-align:center">'+_eqFmtQtd(est)+'</td>'
+        +'<td style="text-align:center">'+_eqFmtQtd(fir)+'</td>'
+        +'<td style="text-align:center">'+(ris>0?_eqFmtQtd(ris):'—')+'</td>'
+        +'<td style="text-align:center;font-weight:900;color:#c62828">'+_eqFmtQtd(Math.ceil(fir-est))+'</td>'
+        +'<td style="font-size:8px;color:#666">'+doItem.map(function(ev){
+            return eh((ev.orc.form&&ev.orc.form['f-num'])||'—')+' · '+_eqFmtQtd(ev.qtd[it.id]||0);
+          }).join('<br>')+'</td>'
+        +'</tr>';
+    });
+    var evs=Object.keys(eventosDoDia).map(function(k){ return eventosDoDia[k]; });
+    detalhe+='<div class="dia">'
+      +'<div class="dia-h"><span>'+fD(dia)+' · '+sem+'</span><span>'+evs.length+' evento(s) no período de montagem</span></div>'
+      +'<table><thead><tr><th style="width:30%">Equipamento</th><th style="text-align:center">Estoque</th>'
+      +'<th style="text-align:center">Comprometido</th><th style="text-align:center">Em negociação</th>'
+      +'<th style="text-align:center">Falta</th><th>Orçamentos (nº · qtd)</th></tr></thead><tbody>'+linhas+'</tbody></table>'
+      +'<div class="evs"><b>Eventos:</b> '+evs.map(function(ev){
+          var f=ev.orc.form||{};
+          return eh((f['f-num']||'—')+' '+(f['f-cliente']||'—')+(f['f-nome-evento']?' ('+f['f-nome-evento']+')':'')
+            +(f['f-cons']?' — '+f['f-cons']:''))
+            +' <span style="color:#999">['+fD(ev.range.inicio)+' a '+fD(ev.range.fim)+']</span>';
+        }).join(' · ')+'</div>'
+      +'</div>';
+  });
+
+  // ── Parte 3: atenção (disputados) ──
+  var atencao='';
+  if(dados.disputados.length){
+    atencao='<table><thead><tr><th style="width:40%">Equipamento</th><th style="text-align:center">Dias</th>'
+      +'<th style="text-align:center">Pode faltar até</th><th>Quando</th></tr></thead><tbody>'
+      +dados.disputados.map(function(x){
+        return '<tr><td style="font-weight:700">'+eh(x.item.nome)+'</td>'
+          +'<td style="text-align:center">'+x.dias.length+'</td>'
+          +'<td style="text-align:center;font-weight:800;color:#e65100">'+_eqFmtQtd(Math.ceil(x.pico))+'</td>'
+          +'<td style="font-size:8.5px">'+x.dias.slice(0,8).map(fD).join(' · ')+(x.dias.length>8?' …':'')+'</td></tr>';
+      }).join('')
+      +'</tbody></table>';
+  }
+
+  var w=window.open('','_blank','width=1100,height=850');
+  if(!w){ alert('Pop-up bloqueado! Libere pop-ups pra este site e tente de novo.'); return; }
+  w.document.open();
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+nomeArq+'</title>'
+    +'<style>'
+    +'@page{size:A4 landscape;margin:8mm}'
+    +'*{box-sizing:border-box;margin:0;padding:0;font-family:"Segoe UI",Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'body{background:#fff;color:#111}'
+    +'.hdr{background:#d63447;color:#fff;padding:11px 15px;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;border-radius:5px}'
+    +'.hdr h1{font-size:14px;font-weight:900;margin-bottom:3px}'
+    +'.hdr .sub{font-size:9.5px;opacity:.92;line-height:1.5}'
+    +'.hdr .ger{font-size:8.5px;opacity:.8;text-align:right;white-space:nowrap}'
+    +'h2{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.8px;color:#111;margin:14px 0 6px;padding-bottom:3px;border-bottom:2px solid #d63447}'
+    +'h2 small{display:block;font-size:8.5px;font-weight:600;color:#777;text-transform:none;letter-spacing:0;margin-top:2px}'
+    +'.kpis{display:flex;gap:7px;margin-bottom:10px;flex-wrap:wrap}'
+    +'.kpi{flex:1;min-width:110px;background:#f7f7f7;border:1px solid #e0e0e0;border-radius:4px;padding:7px 10px}'
+    +'.kpi label{display:block;font-size:8px;text-transform:uppercase;letter-spacing:.6px;color:#777;font-weight:800;margin-bottom:2px}'
+    +'.kpi b{display:block;font-size:15px;font-weight:900;color:#111}'
+    +'table{width:100%;border-collapse:collapse;font-size:9px}'
+    +'th{background:#efefef;color:#444;text-align:left;padding:4px 6px;border-bottom:1px solid #ccc;font-size:8px;text-transform:uppercase;letter-spacing:.4px}'
+    +'td{padding:4px 6px;border-bottom:1px solid #eee;color:#222;vertical-align:top}'
+    +'tr:nth-child(even) td{background:#fbfbfb}'
+    +'.dia{margin-bottom:9px;page-break-inside:avoid}'
+    +'.dia-h{display:flex;justify-content:space-between;align-items:center;background:#2b2b2b;color:#fff;padding:4px 10px;border-radius:4px 4px 0 0;font-size:10px;font-weight:800}'
+    +'.evs{font-size:8px;color:#555;padding:4px 8px;background:#f7f7f7;border:1px solid #eee;border-top:none;line-height:1.5}'
+    +'.vazio{font-size:10px;color:#777;padding:10px;text-align:center;border:1px dashed #ccc;border-radius:4px}'
+    +'.nota{margin-top:6px;font-size:8.5px;color:#666;line-height:1.5;background:#f7f7f7;border-left:3px solid #d63447;padding:6px 9px}'
+    +'.ass{margin-top:18px;display:flex;gap:40px;page-break-inside:avoid}'
+    +'.ass div{flex:1;border-top:1px solid #999;padding-top:4px;font-size:8.5px;color:#666;text-align:center}'
+    +'.pe{margin-top:10px;font-size:8px;color:#aaa;text-align:center;border-top:1px solid #ddd;padding-top:5px}'
+    +'#st{position:fixed;top:0;left:0;right:0;background:#d63447;color:#fff;text-align:center;padding:10px;font-size:13px;font-weight:bold;z-index:9999}'
+    +'@media print{#st{display:none}}'
+    +'</style>'
+    +'<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>'
+    +'</head><body>'
+    +'<div id="st">Gerando PDF...</div>'
+    +'<div id="pw">'
+    +'<div class="hdr"><div><h1>CRAZY SOM — PEDIDO DE LOCAÇÃO COM PARCEIROS</h1>'
+    +'<div class="sub">Equipamento que falta no nosso estoque para atender os eventos já fechados<br>'
+    +'Período: <b>'+fD(de)+'</b> a <b>'+fD(ate)+'</b></div></div>'
+    +'<div class="ger">Gerado em '+agora.toLocaleString('pt-BR')+'<br>'+eh((usuarioAtual&&usuarioAtual.nome)||'')+'</div></div>'
+
+    +'<div class="kpis">'
+    +'<div class="kpi" style="border-left:4px solid #c62828"><label>Equipamentos em falta</label><b>'+itensOrdem.length+'</b></div>'
+    +'<div class="kpi" style="border-left:4px solid #c62828"><label>Janelas de locação</label><b>'+dados.blocos.length+'</b></div>'
+    +'<div class="kpi" style="border-left:4px solid #c62828"><label>Peças a locar (soma)</label><b>'+totalPecas+'</b></div>'
+    +'<div class="kpi" style="border-left:4px solid #e65100"><label>Itens disputados</label><b>'+dados.disputados.length+'</b></div>'
+    +'<div class="kpi" style="border-left:4px solid #111"><label>Dias com falta</label><b>'+diasComFalta.length+'</b></div>'
+    +'</div>'
+
+    +'<h2>1 · Resumo para cotação<small>É o que o parceiro precisa saber: qual equipamento, para quando e quantas peças. '
+    +'A quantidade é a maior falta da janela — se faltam 2 numa terça e 3 na quarta, loca-se 3 peças pelos dois dias, não 5.</small></h2>'
+    +resumo
+    +'<div class="nota"><b>Como ler:</b> “Nosso estoque” é o que a Crazy Som tem. “Já comprometido” é quanto os eventos fechados consomem no pior dia da janela. '
+    +'“A locar” é a diferença — a quantidade a pedir ao parceiro. Linhas com ↳ são outras janelas do mesmo equipamento.</div>'
+
+    +(detalhe?'<h2 style="page-break-before:always">2 · Detalhe dia a dia<small>Para a Logística conferir e saber de quem é cada necessidade.</small></h2>'+detalhe:'')
+
+    +(atencao?'<h2>3 · Atenção — pode aumentar<small>Não falta hoje, mas faltaria se as propostas em negociação fecharem. Vale avisar o parceiro de que pode vir pedido adicional.</small></h2>'+atencao:'')
+
+    +'<div class="ass"><div>Solicitado por</div><div>Autorizado por</div><div>Parceiro / fornecedor</div></div>'
+    +'<div class="pe">Crazy Som Audiovisuais – CNPJ: 10.909.827/0001-76 – Considera apenas orçamentos marcados como Venda Ganha. Controle provisório de disponibilidade.</div>'
+    +'</div>'
+    +'<script>'
+    +'window.onload=function(){setTimeout(function(){'
+    +'var opt={margin:5,filename:"'+nomeArq+'.pdf",image:{type:"jpeg",quality:1},'
+    +'html2canvas:{scale:2,useCORS:true,logging:false,backgroundColor:"#ffffff"},'
+    +'jsPDF:{unit:"mm",format:"a4",orientation:"landscape"},pagebreak:{mode:["css","legacy"]}};'
+    +'html2pdf().set(opt).from(document.getElementById("pw")).save().then(function(){'
+    +'document.getElementById("st").style.background="#2e7d32";'
+    +'document.getElementById("st").textContent="PDF salvo! Pode fechar esta janela.";'
+    +'}).catch(function(e){document.getElementById("st").textContent="Erro ao gerar: "+e.message;});'
+    +'},600);};'
+    +'<\/script></body></html>');
+  w.document.close();
 }
 
 /* ── ADMIN: marcar itens e informar quantidades ─────────────────────────── */
