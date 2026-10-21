@@ -1519,6 +1519,14 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       </div>
       <button class="btn btn-o btn-sm" id="btn-atualizar-aprov" onclick="atualizarAprovacoes(this)" title="Atualizar lista de pendências" style="white-space:nowrap">🔄 Atualizar</button>
     </div>
+    <div id="aprov-filtro" style="display:none;align-items:center;gap:9px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-top:8px">
+      <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;white-space:nowrap">👤 Consultor</label>
+      <select id="aprov-filtro-cons" onchange="aprovFiltrar(this.value)" style="flex:1;min-width:180px;max-width:300px;padding:6px 9px;background:var(--surface);border:1px solid var(--border-strong);border-radius:4px;color:var(--text);font-size:12px">
+        <option value="">Todos os consultores</option>
+      </select>
+      <button class="btn btn-o btn-sm" id="aprov-filtro-limpar" onclick="aprovFiltrar('')" style="display:none">✕ Limpar</button>
+      <span id="aprov-filtro-info" style="font-size:11px;color:var(--text-dim);margin-left:auto"></span>
+    </div>
     <div id="aprov-lista"><div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">Clique em uma aba para carregar</div></div>
     <div style="margin-top:16px;text-align:right"><button class="btn btn-o btn-sm" onclick="document.getElementById('aprov-ov').classList.remove('open');voltarDoModulo()">Fechar</button></div>
   </div>
@@ -7350,6 +7358,8 @@ function mudarAbaAprov(aba){
   document.getElementById('tab-aprov').classList.toggle('active',aba==='aprov');
   var tabExcl=document.getElementById('tab-excl');
   if(tabExcl)tabExcl.classList.toggle('active',aba==='excl');
+  var barraF=document.getElementById('aprov-filtro');
+  if(barraF && aba==='excl') barraF.style.display='none';
   if(aba==='excl'){
     var lista=document.getElementById('aprov-lista');
     if(lista)lista.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px">⏳ Carregando solicitações...</div>';
@@ -7527,7 +7537,12 @@ async function carregarListaAprov(aba){
     });
     // Remover duplicatas de itens pelo ID do Drive (mesmo arquivo listado mais de uma vez)
     itens=_dedupPorDriveId(itens.map(function(x){return {driveId:x.id,nome:x.nome,modificado:x.modificado};})).map(function(x){return {id:x.driveId,nome:x.nome,modificado:x.modificado};});
-    if(!itens.length){lista.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">Nenhum orçamento no Drive.</div>';return;}
+    if(!itens.length){
+      _aprovTodos=[]; _listaAprov=[]; _aprovadosCache=[];
+      var bf=document.getElementById('aprov-filtro'); if(bf) bf.style.display='none';
+      lista.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">Nenhum orçamento no Drive.</div>';
+      return;
+    }
 
     var total=itens.length;
     lista.innerHTML='<div id="aprov-progress" style="text-align:center;padding:16px;color:var(--text-muted);font-size:12px">'
@@ -7546,18 +7561,113 @@ async function carregarListaAprov(aba){
     validos=_dedupPorDriveId(validos);
 
     if(aba==='pend'){
-      var pendentes=validos.filter(function(x){return x.st!=='aprovado'&&x.st!=='rascunho';});
-      _listaAprov=pendentes;
-      if(!pendentes.length){lista.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">✅ Nenhum orçamento pendente!</div>';return;}
-      lista.innerHTML=pendentes.map(function(orc,idx){return buildOrcCard(orc,idx);}).join('');
+      _aprovTodos=validos.filter(function(x){return x.st!=='aprovado'&&x.st!=='rascunho';});
     }else{
-      _aprovadosCache=validos.filter(function(x){return x.st==='aprovado';});
-      _listaAprov=_aprovadosCache;
-      if(!_aprovadosCache.length){lista.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">Nenhum orçamento aprovado ainda.</div>';return;}
-      renderAprovados();
+      _aprovTodos=validos.filter(function(x){return x.st==='aprovado';});
     }
-  }catch(e){lista.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">⚠️ Erro: '+e.message+'</div>';}
+    aprovPopularConsultores();
+    aprovRenderizarLista();
+  }catch(e){
+    _aprovTodos=[]; _listaAprov=[]; _aprovadosCache=[];
+    var bfe=document.getElementById('aprov-filtro'); if(bfe) bfe.style.display='none';
+    lista.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">⚠️ Erro: '+e.message+'</div>';
+  }
   finally{_carregandoAprov=false;}
+}
+
+/* ── FILTRO POR CONSULTOR ───────────────────────────────────────────────────
+   Pedido do Fabiano: filtrar as Aprovações por consultor.
+
+   O filtro trabalha sobre o que JÁ foi carregado (_aprovTodos) — trocar de
+   consultor não refaz a busca no servidor, que é a parte lenta.
+
+   Cuidado que faz a coisa funcionar: os botões de ação de cada card chamam
+   _listaAprov[idx], e o idx é a posição no array que foi renderizado. Então
+   _listaAprov (e, nos aprovados, _aprovadosCache, que pagina) precisam ser
+   SEMPRE o array já filtrado — senão o botão "Aprovar" de um card agiria
+   sobre o orçamento de outro consultor.
+   ────────────────────────────────────────────────────────────────────────── */
+var _aprovTodos=[];
+var _aprovFiltroCons='';
+
+function _aprovConsDoOrc(o){
+  return ((o&&o.form&&o.form['f-cons'])||'').trim();
+}
+
+function aprovPopularConsultores(){
+  var sel=document.getElementById('aprov-filtro-cons');
+  if(!sel) return;
+  var nomes={};
+  _aprovTodos.forEach(function(o){
+    var c=_aprovConsDoOrc(o);
+    nomes[c||'(sem consultor)']=(nomes[c||'(sem consultor)']||0)+1;
+  });
+  var ordem=Object.keys(nomes).sort(function(a,b){ return a.localeCompare(b,'pt-BR',{sensitivity:'base'}); });
+  sel.innerHTML='<option value="">Todos os consultores ('+_aprovTodos.length+')</option>'
+    +ordem.map(function(c){
+      return '<option value="'+eh(c)+'">'+eh(c)+' ('+nomes[c]+')</option>';
+    }).join('');
+  // Se o consultor escolhido não tem mais nada nesta aba, volta pra "Todos"
+  // em vez de mostrar uma lista vazia sem explicação.
+  if(_aprovFiltroCons && ordem.indexOf(_aprovFiltroCons)<0) _aprovFiltroCons='';
+  sel.value=_aprovFiltroCons;
+}
+
+function aprovFiltrar(cons){
+  _aprovFiltroCons=cons||'';
+  var sel=document.getElementById('aprov-filtro-cons');
+  if(sel) sel.value=_aprovFiltroCons;
+  _aprovadosOffset=0;
+  aprovRenderizarLista();
+}
+
+function _aprovFiltrados(){
+  if(!_aprovFiltroCons) return _aprovTodos.slice();
+  var semCons=(_aprovFiltroCons==='(sem consultor)');
+  return _aprovTodos.filter(function(o){
+    var c=_aprovConsDoOrc(o);
+    return semCons ? !c : (c===_aprovFiltroCons);
+  });
+}
+
+function aprovRenderizarLista(){
+  var lista=document.getElementById('aprov-lista');
+  if(!lista) return;
+  var barra=document.getElementById('aprov-filtro');
+  var info=document.getElementById('aprov-filtro-info');
+  var limpar=document.getElementById('aprov-filtro-limpar');
+  if(barra) barra.style.display=_aprovTodos.length?'flex':'none';
+  if(limpar) limpar.style.display=_aprovFiltroCons?'inline-block':'none';
+
+  var filtrados=_aprovFiltrados();
+  if(info){
+    info.textContent=_aprovFiltroCons
+      ? ('Mostrando '+filtrados.length+' de '+_aprovTodos.length)
+      : (_aprovTodos.length+' orçamento(s)');
+  }
+
+  // Estes dois são a fonte que os botões de ação consultam por índice.
+  _listaAprov=filtrados;
+
+  if(!_aprovTodos.length){
+    lista.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">'
+      +(abaAprovAtual==='pend'?'✅ Nenhum orçamento pendente!':'Nenhum orçamento aprovado ainda.')+'</div>';
+    return;
+  }
+  if(!filtrados.length){
+    lista.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">'
+      +'Nenhum orçamento de <b>'+eh(_aprovFiltroCons)+'</b> nesta aba.'
+      +'<div style="margin-top:10px"><button class="btn btn-o btn-sm" onclick="aprovFiltrar(\'\')">Ver todos os consultores</button></div></div>';
+    return;
+  }
+
+  if(abaAprovAtual==='pend'){
+    lista.innerHTML=filtrados.map(function(orc,idx){return buildOrcCard(orc,idx);}).join('');
+  }else{
+    _aprovadosCache=filtrados;
+    _aprovadosOffset=0;
+    renderAprovados();
+  }
 }
 
 function renderAprovados(){
