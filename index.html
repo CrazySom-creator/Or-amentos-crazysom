@@ -3263,6 +3263,8 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
   <div id="anx-lista"></div>
 </div>
 
+<div id="aditivo-info" style="display:none;border:1px solid #9fa8da;border-radius:7px;padding:10px 14px;margin-bottom:10px"></div>
+
 <div class="card">
   <div class="st" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
     <span>🎛️ Itens do Orçamento</span>
@@ -3466,6 +3468,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     <button class="btn btn-o" onclick="abrirHome()" title="Voltar ao Menu">☰ Menu</button>
     <button class="btn btn-o" onclick="limpar()" title="Começar um orçamento novo em branco">📄 Novo</button>
     <button class="btn btn-o" id="btn-clonar" onclick="clonarOrcamento()" title="Clonar este orçamento para um novo">📋 Clonar</button>
+    <button class="btn btn-o" id="btn-aditivo" onclick="criarAditivo()" title="Criar um orçamento aditivo deste evento — mesmo número com /1, /2… O cliente pediu itens novos perto da data e tudo tem que cair na MESMA OS">➕ Aditivo</button>
     <button class="btn btn-o" onclick="abrirTipo()" title="Gerar PDF do orçamento">📄 PDF</button>
     <button class="btn btn-o" id="btn-download" onclick="downloadPDF()" title="Baixar o PDF gerado">⬇️ Download</button>
     <button class="btn btn-o" id="btn-contrato" onclick="abrirPreviewContrato()" title="Pré-visualizar e editar dados antes de gerar o contrato em PDF">📝 Contrato</button>
@@ -4141,6 +4144,8 @@ var finNumVenda='';
 // quando o desconto é só um arredondamento que não precisa aparecer pro
 // cliente. Controlado pelo checkbox "Discriminar desconto no PDF".
 var descDiscriminarPDF=true;
+// Marca do aditivo: {driveId, numero, base, seq} do orçamento de origem.
+var aditivoDe=null;
 var driveIdAtual=null;
 // Lembra de qual tela o orçamento atual foi aberto (Aprovações, Funil,
 // Dashboards, Clientes...), pra o botão flutuante "voltar" retornar pra lá
@@ -7133,7 +7138,7 @@ async function logout(forcado){
     }catch(e4){}
   }
   try{await fbAuth.signOut();}catch(e7){}
-  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();comExtAtiva=true;comExtPct=0;(function(){try{renderComissaoExterna();}catch(e){}})();driveIdAtual=null;driveNumAtual=null;
+  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();comExtAtiva=true;comExtPct=0;aditivoDe=null;(function(){try{renderComissaoExterna();renderAditivoInfo();}catch(e){}})();driveIdAtual=null;driveNumAtual=null;
   _atualizarBtnClonar();
   // Limpa o formulário e fecha qualquer tela sobreposta — senão o próximo
   // login (ou a volta depois de uma queda de sessão) encontra o último
@@ -8888,7 +8893,8 @@ function getDadosCompletos(){
     finNumVenda:finNumVenda,
     descDiscriminarPDF:descDiscriminarPDF,
     comExtAtiva:comExtAtiva,
-    comExtPct:comExtPct
+    comExtPct:comExtPct,
+    aditivoDe:aditivoDe
   };
 }
 
@@ -9988,6 +9994,17 @@ function _aplicarDadosOrcamento(dados){
   comExtAtiva=(dados.comExtAtiva!==undefined)?!!dados.comExtAtiva:true;
   comExtPct=Number(dados.comExtPct)||0;
   try{ renderComissaoExterna(); }catch(e){}
+  // Aditivo: se o documento não trouxer a marca, deduz do próprio número —
+  // assim um aditivo continua se reconhecendo mesmo que a marca se perca.
+  aditivoDe=dados.aditivoDe||null;
+  if(!aditivoDe && _ehAditivoNum(dados.form&&dados.form['f-num'])){
+    aditivoDe={driveId:'', numero:_aditivoBaseNum(dados.form['f-num']),
+               base:_aditivoBaseNum(dados.form['f-num']), seq:_aditivoSeq(dados.form['f-num'])};
+  }
+  try{ renderAditivoInfo(); }catch(e){}
+  // A faixa do orçamento base só sabe dos aditivos depois de consultar o
+  // servidor — roda em segundo plano, sem travar a abertura.
+  setTimeout(function(){ try{ aditivoConferirFamilia(); }catch(e){} }, 900);
   _limparCamposComercialDOM();
   // Orçamento que já chegou do servidor marcado "aprovado" mas com conteúdo
   // diferente do aprovado: alguém alterou por um caminho que escapou da
@@ -10247,7 +10264,7 @@ async function limpar(){
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
   snapshotAprovado=null;
-  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();comExtAtiva=true;comExtPct=0;(function(){try{renderComissaoExterna();}catch(e){}})();
+  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();comExtAtiva=true;comExtPct=0;aditivoDe=null;(function(){try{renderComissaoExterna();renderAditivoInfo();}catch(e){}})();
   buildTabs();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   _atualizarBtnClonar();
   // Gerar número automático para o novo orçamento
@@ -10257,6 +10274,353 @@ async function limpar(){
 // ════════════════════════════════════════════════════════
 //  CLONAR ORÇAMENTO
 // ════════════════════════════════════════════════════════
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ORÇAMENTO ADITIVO
+   ──────────────────────────────────────────────────────────────────────────
+   Problema do Fabiano: o cliente aprova o orçamento e, perto da data, começa
+   a pedir coisas novas. O consultor abre OUTRO orçamento, e o evento acaba
+   com duas ou três OS — a equipe de montagem não sabe qual vale.
+
+   O aditivo resolve amarrando os pedidos extras ao evento original:
+
+   • NÚMERO — o mesmo do original com sufixo: 20266347/1, /2, /3…
+     A numeração automática continua intacta porque ela só aceita 8 dígitos
+     puros (ver gerarNumeroAuto), e "20266347/1" não casa com esse formato.
+   • CLONA TUDO MENOS OS ITENS — cliente, evento, datas, local, contatos,
+     condições. Os equipamentos entram zerados, porque são justamente os
+     novos pedidos.
+   • APROVAÇÃO — fluxo normal, começando em Rascunho (decisão do Fabiano):
+     o aditivo tem valor próprio e precisa passar pelo mesmo caminho.
+   • OS — uma só por evento. A OS do original (ou de qualquer aditivo) traz
+     os itens de todos os aditivos que estiverem em VENDA GANHA, cada um
+     marcado com a sua origem, pra montagem saber o que entrou depois.
+   • AGENDA — o aditivo NÃO cria evento novo: herda os IDs dos eventos do
+     original e os ATUALIZA, pra lista de equipamentos na descrição ficar em
+     dia sem duplicar a agenda da equipe.
+
+   A ligação é derivável do número (tudo antes da "/"), e ainda assim fica
+   gravada em dados.aditivoDe — número é o que o usuário enxerga, e o
+   registro explícito é o que o sistema confere.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+var ADITIVO_SEP='/';
+
+function _aditivoBaseNum(num){
+  return String(num||'').split(ADITIVO_SEP)[0].trim();
+}
+function _aditivoSeq(num){
+  var p=String(num||'').split(ADITIVO_SEP);
+  if(p.length<2) return 0;
+  var n=parseInt(p[1],10);
+  return isNaN(n)?0:n;
+}
+function _ehAditivoNum(num){ return _aditivoSeq(num)>0; }
+function _aditivoRotulo(num){
+  var s=_aditivoSeq(num);
+  return s?('ADITIVO '+s):'';
+}
+
+// Carrega os orçamentos da família (o base e todos os aditivos). Usa o
+// endpoint de lista filtrando pelo número, e só então carrega cada um.
+// `excluirDriveId` evita recarregar o que já está aberto na tela.
+var _aditivoCacheFamilia={};
+async function aditivosCarregarFamilia(numBase, forcar){
+  numBase=_aditivoBaseNum(numBase);
+  if(!numBase) return [];
+  if(!forcar && _aditivoCacheFamilia[numBase]) return _aditivoCacheFamilia[numBase];
+  var achados=[];
+  try{
+    var r=await fetch(SCRIPT_URL+'?action=list&q='+encodeURIComponent(numBase));
+    var d=await r.json();
+    if(!d.ok) throw new Error(d.erro||'não foi possível listar');
+    var candidatos=(d.lista||[]).filter(function(x){
+      var parte=String(x.nome||'').split(' - ')[0].trim();
+      return _aditivoBaseNum(parte)===numBase;
+    });
+    for(var i=0;i<candidatos.length;i++){
+      try{
+        var rl=await fetch(SCRIPT_URL+'?action=load&id='+candidatos[i].id);
+        var dl=await rl.json();
+        if(!dl.ok) continue;
+        achados.push({driveId:candidatos[i].id, nome:candidatos[i].nome, dados:dl.dados||{},
+                      form:(dl.dados&&dl.dados.form)||{}});
+      }catch(e){ console.warn('aditivosCarregarFamilia (load):',e); }
+    }
+  }catch(e){ console.warn('aditivosCarregarFamilia:',e); return []; }
+  achados.sort(function(a,b){ return _aditivoSeq(a.form['f-num'])-_aditivoSeq(b.form['f-num']); });
+  _aditivoCacheFamilia[numBase]=achados;
+  return achados;
+}
+function aditivosLimparCache(numBase){
+  if(numBase) delete _aditivoCacheFamilia[_aditivoBaseNum(numBase)];
+  else _aditivoCacheFamilia={};
+}
+
+// Próximo sufixo livre da família.
+function _aditivoProximoSeq(familia){
+  var max=0;
+  (familia||[]).forEach(function(x){
+    var s=_aditivoSeq(x.form&&x.form['f-num']);
+    if(s>max) max=s;
+  });
+  return max+1;
+}
+
+/* ── CRIAR ─────────────────────────────────────────────────────────────── */
+async function criarAditivo(){
+  var numAtual=gv('f-num')||'';
+  var numBase=_aditivoBaseNum(numAtual);
+  if(!numBase){
+    alert('⚠️ Este orçamento ainda não tem número.\n\nSalve o orçamento antes de criar um aditivo — é o número dele que amarra os dois.');
+    return;
+  }
+  if(!driveIdAtual){
+    alert('⚠️ Salve o orçamento antes de criar um aditivo.\n\nAssim o aditivo nasce ligado a um orçamento que existe no servidor.');
+    return;
+  }
+  if(_naoSalvo && !confirm('⚠️ Este orçamento tem alterações não salvas.\n\nElas NÃO vão para o aditivo. Continuar mesmo assim?')) return;
+
+  driveStatus('🔢 Procurando aditivos já existentes de '+numBase+'...','');
+  var familia=await aditivosCarregarFamilia(numBase, true);
+  var seq=_aditivoProximoSeq(familia);
+  var numNovo=numBase+ADITIVO_SEP+seq;
+
+  var cli=gv('f-cliente')||'este cliente';
+  var jaTem=familia.filter(function(x){ return _ehAditivoNum(x.form['f-num']); }).length;
+  if(!confirm('➕ CRIAR ORÇAMENTO ADITIVO\n\n'
+    +'Cliente: '+cli+'\n'
+    +'Evento: '+(gv('f-nome-evento')||'—')+'\n'
+    +'Número do aditivo: '+numNovo+(jaTem?('   (já existem '+jaTem+' aditivo(s))'):'')+'\n\n'
+    +'✅ Copia: cliente, evento, datas, local, contatos, condições de pagamento e observações\n'
+    +'🚫 NÃO copia: os itens — eles entram zerados, porque o aditivo é justamente o que foi pedido depois\n\n'
+    +'📋 A OS continua sendo UMA só: quando este aditivo for Venda Ganha, os itens dele entram na OS do '+numBase+'.\n'
+    +'📅 A agenda não ganha evento novo — o evento do '+numBase+' é atualizado.\n\n'
+    +'Criar agora?')) return;
+
+  var formAtual=getForm();
+  var agendaOriginal=Object.assign({}, orcAtualGoogleAgenda||{});
+  var origemId=driveIdAtual, origemNum=numAtual;
+
+  // Libera a trava do orçamento que está aberto.
+  if(origemId && !_modoLeitura){
+    lockPararHeartbeat();
+    desativarModoLeitura();
+    await lockLiberar(origemId);
+  }
+
+  driveIdAtual=null; driveNumAtual=null; _naoSalvo=true; _versaoAtual=null;
+
+  // Itens zerados — é o ponto do aditivo.
+  SECS.forEach(function(s){
+    state[s].ambientes=[{id:'default',nome:'Geral'}];
+    state[s].ambAtiva='default';
+    state[s].rows={default:[]};
+  });
+
+  // Form: mantém tudo, troca número e data, renova a validade.
+  var CAMPOS_ZERAR=['f-val','desc-pct','desc-rs','arred-rs','val-liq','val-liq-si','f-bv'];
+  CAMPOS_ZERAR.forEach(function(id){ formAtual[id]=''; });
+  formAtual['f-num']=numNovo;
+  formAtual['f-data']=new Date().toISOString().split('T')[0];
+  var vd=new Date(); vd.setDate(vd.getDate()+7);
+  formAtual['f-val']=vd.toISOString().split('T')[0];
+  setForm(formAtual);
+  sv('orc-disp','—');
+
+  ['desc-pct','desc-rs','arred-rs'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=0; });
+  ['val-liq','val-liq-si','f-bv'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  _bvStorage=0; _clienteHistLista=[];
+  var histEl=document.getElementById('f-cliente-hist-status'); if(histEl) histEl.innerHTML='';
+
+  // Começa do zero no fluxo de aprovação e no comercial (decisão do Fabiano).
+  aprovStatus='rascunho'; aprovHist=[];
+  comercialStatus=''; comercialHist=[]; contratoStatus=''; contratoHist=[];
+  creditoStatus=''; creditoHist=[];
+  montagemLiberacaoManual=false; montagemLiberacaoManualHist=[];
+  equipReservadoManual=false; atividades=[]; followupData='';
+  anexosOrc=[]; orcCriadoEmISO='';
+  snapshotAnterior=null; snapshotAprovado=null;
+  finParcelas=[]; finObs=''; finImposto='cimp'; finNumVenda='';
+  descDiscriminarPDF=true;
+  var _cd=document.getElementById('chk-desc-discriminar'); if(_cd) _cd.checked=true;
+  comExtAtiva=true; comExtPct=0;
+  _limparCamposComercialDOM();
+  _ultimoDEquipAuto=null; _ultimoDiasAuto=null;
+
+  // Herda os IDs dos eventos do original: enviar à agenda daqui ATUALIZA os
+  // mesmos eventos em vez de criar outros para a mesma data.
+  orcAtualGoogleAgenda=agendaOriginal;
+
+  // A marca do aditivo — é ela que o resto do sistema consulta.
+  aditivoDe={driveId:origemId, numero:origemNum, base:numBase, seq:seq};
+
+  buildTabs(); setDS(); setDSFim(); calcDiariasAuto(); calc();
+  renderStatusOrc(); renderAprovInline(); renderComercial(); renderContrato();
+  renderCreditoPanel(); renderMontagemGate(); renderFinanceiroInline();
+  if(typeof anxRenderizar==='function') anxRenderizar();
+  try{ renderComissaoExterna(); }catch(e){}
+  renderAditivoInfo();
+  setTimeout(function(){ selImpVenda('cimp'); _preencherValLiqCalculado(); },50);
+  setTimeout(aplicarPermissoes,150);
+  try{ _atualizarBtnClonar(); }catch(e){}
+
+  aditivosLimparCache(numBase);
+  driveStatus('➕ Aditivo '+numNovo+' criado — lance os itens novos e salve.','ok');
+  _toastMostrar('➕ Aditivo <b>'+eh(numNovo)+'</b> criado. Os itens estão zerados: lance só o que foi pedido agora. '
+    +'Ao marcar Venda Ganha, eles entram na OS do '+eh(numBase)+'.', 'ok', 11000);
+  var card=document.getElementById('f-num');
+  if(card){ var c=card.closest('.card'); if(c) c.scrollIntoView({behavior:'smooth',block:'center'}); }
+}
+
+/* ── FAIXA DE IDENTIFICAÇÃO NO ORÇAMENTO ───────────────────────────────── */
+function renderAditivoInfo(){
+  var box=document.getElementById('aditivo-info');
+  if(!box) return;
+  var num=gv('f-num')||'';
+  var seq=_aditivoSeq(num);
+  var base=_aditivoBaseNum(num);
+
+  if(seq>0){
+    box.style.display='block';
+    box.style.background='#e8eaf6';
+    box.style.borderColor='#9fa8da';
+    box.innerHTML='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+      +'<span style="background:#3949ab;color:#fff;font-size:10px;font-weight:900;letter-spacing:.6px;padding:3px 9px;border-radius:4px">ADITIVO '+seq+'</span>'
+      +'<span style="font-size:12px;color:#1a237e;font-weight:700">Complementa o orçamento '+eh(base)+'</span>'
+      +((aditivoDe&&aditivoDe.driveId)?'<button class="btn btn-o btn-sm" onclick="aditivoAbrirOriginal()" style="margin-left:auto">↗ Abrir o '+eh(base)+'</button>':'')
+      +'</div>'
+      +'<div style="font-size:10.5px;color:#283593;margin-top:5px;line-height:1.55">'
+      +'Lance aqui <b>apenas os itens pedidos depois</b>. Quando este aditivo for <b>Venda Ganha</b>, '
+      +'os equipamentos e serviços entram na <b>mesma OS</b> do '+eh(base)+', marcados como ADITIVO '+seq+'. '
+      +'A agenda não ganha evento novo — o evento do '+eh(base)+' é atualizado.'
+      +'</div>';
+    return;
+  }
+
+  // Orçamento base: mostra os aditivos que existem, se houver.
+  var lista=(_aditivoCacheFamilia[base]||[]).filter(function(x){ return _ehAditivoNum(x.form['f-num']); });
+  if(!lista.length){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='block';
+  box.style.background='#e8eaf6';
+  box.style.borderColor='#9fa8da';
+  box.innerHTML='<div style="font-size:12px;color:#1a237e;font-weight:700">➕ Este evento tem '+lista.length+' aditivo(s)</div>'
+    +'<div style="font-size:10.5px;color:#283593;margin-top:4px;line-height:1.6">'
+    +lista.map(function(x){
+      var cs=(x.dados&&x.dados.comercialStatus)||'';
+      var ganha=(cs==='ganha');
+      return '<span style="display:inline-block;margin-right:10px">'
+        +'<b>'+eh(x.form['f-num']||'—')+'</b> '
+        +'<span style="color:'+(ganha?'#2e7d32':'#e65100')+';font-weight:700">'+(ganha?'✅ na OS':'⏳ ainda não fechado')+'</span>'
+        +'</span>';
+    }).join('')
+    +'<div style="margin-top:4px">Os itens dos aditivos <b>fechados</b> entram automaticamente na OS deste orçamento.</div>'
+    +'</div>';
+}
+
+async function aditivoAbrirOriginal(){
+  if(!aditivoDe||!aditivoDe.driveId){ alert('O orçamento original não está identificado neste aditivo.'); return; }
+  if(!confirm('Abrir o orçamento original '+(aditivoDe.numero||aditivoDe.base||'')+'?\n\nAlterações não salvas deste aditivo serão perdidas.')) return;
+  _fecharTudoParaAbrirOrc();
+  await driveCarregar(aditivoDe.driveId, (aditivoDe.numero||'')+' - '+(gv('f-cliente')||''));
+}
+
+// Atualiza a faixa do orçamento base buscando a família no servidor. Chamado
+// sob demanda (não trava a abertura do orçamento).
+async function aditivoConferirFamilia(){
+  var num=gv('f-num')||'';
+  if(!num || _ehAditivoNum(num)) return;
+  try{
+    await aditivosCarregarFamilia(_aditivoBaseNum(num), true);
+    renderAditivoInfo();
+  }catch(e){ console.warn('aditivoConferirFamilia:',e); }
+}
+
+/* ── MESCLA PARA A OS ──────────────────────────────────────────────────── */
+// Junta no state do orçamento base os itens dos aditivos em Venda Ganha,
+// marcando cada linha com a origem. Não altera nada no disco — é uma cópia
+// usada só para montar o documento.
+function mesclarStateComAditivos(stBase, familia, numAtual){
+  var fora={};
+  var st={};
+  Object.keys(stBase||{}).forEach(function(sec){
+    var b=stBase[sec]||{};
+    st[sec]={
+      ambientes:(b.ambientes||[{id:'default',nome:'Geral'}]).map(function(a){ return Object.assign({},a); }),
+      ambAtiva:b.ambAtiva||'default',
+      rows:{}
+    };
+    Object.keys(b.rows||{}).forEach(function(aid){
+      st[sec].rows[aid]=(b.rows[aid]||[]).map(function(r){ return Object.assign({},r); });
+    });
+  });
+
+  var entraram=[];
+  (familia||[]).forEach(function(x){
+    var n=x.form&&x.form['f-num'];
+    if(!_ehAditivoNum(n)) return;                 // o base já está em stBase
+    if(numAtual && n===numAtual) return;          // é o que está aberto na tela
+    var cs=(x.dados&&x.dados.comercialStatus)||'';
+    if(cs!=='ganha'){ fora[n]=true; return; }     // só entra o que foi fechado
+    var rotulo=_aditivoRotulo(n);
+    var stAd=(x.dados&&x.dados.state)||{};
+    var algum=false;
+    Object.keys(stAd).forEach(function(sec){
+      var s2=stAd[sec]; if(!s2||!s2.rows) return;
+      if(!st[sec]) st[sec]={ambientes:[{id:'default',nome:'Geral'}],ambAtiva:'default',rows:{}};
+      Object.keys(s2.rows).forEach(function(aid){
+        var linhas=(s2.rows[aid]||[]).map(function(r){
+          var c=Object.assign({},r);
+          c._adit=rotulo;          // é o que a OS imprime ao lado do item
+          c._aditNum=n;
+          return c;
+        });
+        if(!linhas.length) return;
+        algum=true;
+        // Ambiente que não existe no base entra junto, pra não perder o item.
+        var destino=aid;
+        if(!st[sec].rows[destino]){
+          st[sec].rows[destino]=[];
+          var amb=(s2.ambientes||[]).find(function(a){ return a.id===aid; });
+          if(amb && !st[sec].ambientes.some(function(a){ return a.id===aid; })) st[sec].ambientes.push(Object.assign({},amb));
+        }
+        st[sec].rows[destino]=st[sec].rows[destino].concat(linhas);
+      });
+    });
+    if(algum) entraram.push(n);
+  });
+
+  return {state:st, entraram:entraram, foraPorNaoGanha:Object.keys(fora)};
+}
+
+// Monta form+dados para a OS do evento inteiro, a partir do orçamento aberto.
+function dadosOSComAditivos(form, dados, familia){
+  var num=(form&&form['f-num'])||'';
+  var base=_aditivoBaseNum(num);
+  var ehAd=_ehAditivoNum(num);
+
+  // A OS é sempre a do evento: parte do orçamento BASE quando ele está na
+  // família (o aditivo sozinho não tem os itens originais).
+  var reg=(familia||[]).find(function(x){ return _aditivoBaseNum(x.form['f-num'])===base && !_ehAditivoNum(x.form['f-num']); });
+  var formBase=(ehAd && reg)?Object.assign({},reg.form):Object.assign({},form||{});
+  var dadosBase=(ehAd && reg)?Object.assign({},reg.dados):Object.assign({},dados||{});
+
+  // O orçamento aberto é sempre a versão mais fresca de si mesmo.
+  var familiaEf=(familia||[]).map(function(x){
+    if(x.form && x.form['f-num']===num) return {driveId:x.driveId, nome:x.nome, form:form, dados:dados};
+    return x;
+  });
+  var temEu=familiaEf.some(function(x){ return x.form && x.form['f-num']===num; });
+  if(!temEu) familiaEf.push({driveId:driveIdAtual||'', nome:'', form:form, dados:dados});
+
+  var m=mesclarStateComAditivos(dadosBase.state||{}, familiaEf, (ehAd&&reg)?null:num);
+  var dadosOS=Object.assign({}, dadosBase, {state:m.state});
+  // A OS sai sempre com o número do evento (o base), nunca com o do aditivo.
+  var formOS=Object.assign({}, formBase);
+  formOS['f-num']=base;
+  return {form:formOS, dados:dadosOS, entraram:m.entraram, fora:m.foraPorNaoGanha, base:base};
+}
+
 async function clonarOrcamento(){
   if(!gv('f-cliente')&&!driveIdAtual){
     alert('Não há orçamento aberto para clonar.');
@@ -10331,7 +10695,7 @@ async function clonarOrcamento(){
   _limparCamposComercialDOM();
   snapshotAnterior=null;
   snapshotAprovado=null;
-  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();comExtAtiva=true;comExtPct=0;(function(){try{renderComissaoExterna();}catch(e){}})();
+  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();comExtAtiva=true;comExtPct=0;aditivoDe=null;(function(){try{renderComissaoExterna();renderAditivoInfo();}catch(e){}})();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
 
   // ── Manter forma de pagamento padrão se não havia (campo f-pgto já copiado do form original)
@@ -10355,6 +10719,10 @@ async function clonarOrcamento(){
 
 // Controla visibilidade do botão Clonar (só aparece quando há orçamento carregado)
 function _atualizarBtnClonar(){
+  // O Aditivo segue a mesma regra do Clonar, mas exige orçamento JÁ SALVO:
+  // é o número e o id do original que amarram os dois.
+  var bAd=document.getElementById('btn-aditivo');
+  if(bAd) bAd.style.display=(driveIdAtual&&gv('f-num'))?'':'none';
   var btn=document.getElementById('btn-clonar');
   if(!btn)return;
   var temOrc=!!(driveIdAtual||gv('f-cliente')||gv('f-num'));
@@ -11278,7 +11646,7 @@ async function _resetarEstadoOrcamento(){
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
   snapshotAprovado=null;
-  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();comExtAtiva=true;comExtPct=0;(function(){try{renderComissaoExterna();}catch(e){}})();
+  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();comExtAtiva=true;comExtPct=0;aditivoDe=null;(function(){try{renderComissaoExterna();renderAditivoInfo();}catch(e){}})();
   buildTabs();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   _atualizarBtnClonar();
 }
@@ -11776,7 +12144,7 @@ function downloadPDF(){
   w.document.close();
 }
 
-function gerarOS(){
+async function gerarOS(){
   if(_bloqueadoSemAprovacao())return;
   // A partir daqui a Liberação de Montagem NÃO bloqueia mais a emissão da
   // OS (pedido do usuário) — quando pendente, uma tarja é inserida no topo
@@ -11798,9 +12166,32 @@ function gerarOS(){
     return;
   }
 
-  var osHTML=_montarOSHtml(getForm(), getDadosCompletos());
-  var w=window.open('','_blank');if(!w){alert('⚠️ Pop-up bloqueado!');return;}
+  // A janela abre AGORA, dentro do clique: se eu buscasse os aditivos antes,
+  // o navegador trataria o window.open como pop-up não solicitado e bloquearia
+  // (foi o que aconteceu com a autorização do Google).
+  var w=window.open('','_blank');
+  if(!w){alert('⚠️ Pop-up bloqueado!');return;}
+  w.document.open();
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>OS – Crazy Som</title></head>'
+    +'<body style="font-family:Segoe UI,Arial,sans-serif;padding:34px;text-align:center;color:#555">'
+    +'<div style="font-size:15px">⏳ Montando a Ordem de Serviço...</div>'
+    +'<div style="font-size:12px;margin-top:8px;color:#999">Conferindo se este evento tem aditivos fechados.</div></body></html>');
+
+  var formOS=getForm(), dadosOS=getDadosCompletos(), avisoAd='';
+  try{
+    var familia=await aditivosCarregarFamilia(_aditivoBaseNum(gv('f-num')), true);
+    var r=dadosOSComAditivos(getForm(), getDadosCompletos(), familia);
+    formOS=r.form; dadosOS=r.dados;
+    if(r.entraram.length) avisoAd='Inclui os itens do(s) aditivo(s) '+r.entraram.join(', ')+'.';
+    if(r.fora.length) avisoAd+=(avisoAd?' ':'')+'Fora da OS por ainda não estarem em Venda Ganha: '+r.fora.join(', ')+'.';
+  }catch(e){
+    console.warn('gerarOS (aditivos):',e);
+    avisoAd='⚠️ Não foi possível conferir os aditivos deste evento — a OS saiu só com os itens deste orçamento.';
+  }
+
+  var osHTML=_montarOSHtml(formOS, dadosOS, avisoAd);
   w.document.open();w.document.write(osHTML);w.document.close();
+  if(avisoAd) driveStatus('📋 OS gerada. '+avisoAd, 'ok');
 }
 
 // Monta o HTML completo da OS (Ordem de Serviço) para impressão — SEM
@@ -11813,7 +12204,7 @@ function gerarOS(){
 // getForm()/getDadosCompletos() do orçamento atualmente aberto; a Logística
 // chama com o form/dados de um item de _dashDados (que não precisa estar
 // aberto na tela).
-function _montarOSHtml(form, dadosCompletos){
+function _montarOSHtml(form, dadosCompletos, avisoAditivos){
   form=form||{};
   dadosCompletos=dadosCompletos||{};
   var st=dadosCompletos.state||{};
@@ -11831,9 +12222,12 @@ function _montarOSHtml(form, dadosCompletos){
   SECS_OS.forEach(function(s){((st[s]&&st[s].ambientes)||[]).forEach(function(a){if(!ambIds3[a.id]){ambIds3[a.id]=true;todosAmb.push({id:a.id,nome:a.nome});}});});
   function bRow(r){
     var isPal=r.palco||isPalco(r.name);var desc=r.name||'';
+    // Item que veio de aditivo leva a marca: a montagem precisa saber o que
+    // foi pedido depois do fechamento.
+    var selo=r._adit?('<span class="selo-adit">'+eh(r._adit)+'</span> '):'';
     if(r.painel){var pxW=Math.round(r.larg*getPx(r.name)),pxH=Math.round(r.alt*getPx(r.name));desc+=' – '+Number(r.larg).toFixed(2)+'×'+Number(r.alt).toFixed(2)+'m ['+pxW+'×'+pxH+'px]';}
     else if(isPal){desc='Palco '+Number(r.larg).toFixed(2)+'×'+Number(r.prof).toFixed(2)+'m – Elev: '+(r.elObj?r.elObj.l:'—');if(r.carp)desc+=' | Carpete '+(r.carpT==='novo'?'Novo':'Usado')+(r.carpC?' – '+r.carpC:'');}
-    return'<tr><td class="qtd">'+r.qty+'x</td><td class="item">'+desc+'</td><td class="chk">☐</td></tr>';
+    return'<tr><td class="qtd">'+r.qty+'x</td><td class="item">'+selo+desc+'</td><td class="chk">☐</td></tr>';
   }
   var corpoOS='';var multiAmb=todosAmb.length>1||todosAmb.some(function(a){return a.id!=='default';});
   if(multiAmb){
@@ -11863,10 +12257,11 @@ function _montarOSHtml(form, dadosCompletos){
     });
   }
   var extras=Array(15).fill('<tr><td colspan="3" style="height:23px;border-bottom:1px solid var(--border)">&nbsp;</td></tr>').join('');
-  return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><style>*{box-sizing:border-box;margin:0;padding:0;font-family:Calibri,Arial,sans-serif}body{background:#eee;padding:18px}.bar{background:#111;padding:9px 14px;border-radius:5px;display:flex;gap:9px;align-items:center;margin-bottom:14px}.bar span{color:#aaa;font-size:12px;flex:1}.bar button{padding:7px 15px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700}.br{background:#c0001a;color:#fff}.bd{background:#444;color:#fff}.page{background:#fff;width:210mm;margin:0 auto;padding:13mm 13mm 17mm;box-shadow:0 4px 18px rgba(0,0,0,.2)}.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:9px;border-bottom:3px solid #c0001a;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.hdr h1{font-size:21px;font-weight:900;color:#c0001a}.hr{text-align:right}.hr .os{font-size:17px;font-weight:900}.hr .osn{font-size:14px;font-weight:bold;color:#c0001a}.hr .osd{font-size:11px;color:#888}.info{background:#f7f7f7;border:1px solid #ddd;border-radius:3px;padding:7px 11px;margin-bottom:11px}.info table{width:100%;border-collapse:collapse}.info td{padding:2px 5px;font-size:11px;vertical-align:top}.info .lbl{font-weight:bold;color:#555;width:125px;white-space:nowrap}table.eq{width:100%;border-collapse:collapse;margin-bottom:3px}table.eq th{background:#111;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.qtd{width:46px;padding:3px 7px;border:1px solid #e0e0e0;font-weight:bold;text-align:center;font-size:12px;vertical-align:top}.item{padding:3px 7px;border:1px solid #e0e0e0;font-size:11px}.chk{width:30px;padding:3px 7px;border:1px solid #e0e0e0;text-align:center;font-size:13px}.xt{font-size:12px;font-weight:bold;color:#c0001a;border-bottom:2px solid #c0001a;padding-bottom:3px;margin:16px 0 4px;text-transform:uppercase}.obs-os{background:#fff8e1;border:2px solid #ff6f00;border-radius:5px;padding:9px 13px;margin:12px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.obs-os .obs-os-title{font-size:10px;font-weight:900;color:#ff6f00;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;display:flex;align-items:center;gap:5px}.obs-os .obs-os-body{font-size:11px;color:#3e2000;white-space:pre-wrap;line-height:1.6}.xh{font-size:11px;color:#888;margin-bottom:5px}table.ext{width:100%;border-collapse:collapse}table.ext th{background:#555;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.assin{display:flex;gap:18px;margin-top:26px}.assin-box{flex:1;text-align:center}.aline{border-top:1px solid #444;padding-top:4px;font-size:11px;color:#555;margin-top:30px}.foot{margin-top:14px;border-top:1px solid #ddd;padding-top:5px;font-size:11px;color:#aaa;text-align:center}.tarja-montagem-pendente{background:#ff6f00;color:#fff;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:.5px;text-align:center;padding:8px 12px;border-radius:4px;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{body{background:#fff;padding:0}.bar{display:none}.page{box-shadow:none;margin:0;padding:11mm 11mm 14mm;width:100%}.tarja-montagem-pendente{-webkit-print-color-adjust:exact;print-color-adjust:exact}}'+ANX_OS_CSS+'</style></head><body>'
+  return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><style>*{box-sizing:border-box;margin:0;padding:0;font-family:Calibri,Arial,sans-serif}body{background:#eee;padding:18px}.bar{background:#111;padding:9px 14px;border-radius:5px;display:flex;gap:9px;align-items:center;margin-bottom:14px}.bar span{color:#aaa;font-size:12px;flex:1}.bar button{padding:7px 15px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700}.br{background:#c0001a;color:#fff}.bd{background:#444;color:#fff}.page{background:#fff;width:210mm;margin:0 auto;padding:13mm 13mm 17mm;box-shadow:0 4px 18px rgba(0,0,0,.2)}.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:9px;border-bottom:3px solid #c0001a;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.hdr h1{font-size:21px;font-weight:900;color:#c0001a}.hr{text-align:right}.hr .os{font-size:17px;font-weight:900}.hr .osn{font-size:14px;font-weight:bold;color:#c0001a}.hr .osd{font-size:11px;color:#888}.info{background:#f7f7f7;border:1px solid #ddd;border-radius:3px;padding:7px 11px;margin-bottom:11px}.info table{width:100%;border-collapse:collapse}.info td{padding:2px 5px;font-size:11px;vertical-align:top}.info .lbl{font-weight:bold;color:#555;width:125px;white-space:nowrap}table.eq{width:100%;border-collapse:collapse;margin-bottom:3px}table.eq th{background:#111;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.qtd{width:46px;padding:3px 7px;border:1px solid #e0e0e0;font-weight:bold;text-align:center;font-size:12px;vertical-align:top}.item{padding:3px 7px;border:1px solid #e0e0e0;font-size:11px}.chk{width:30px;padding:3px 7px;border:1px solid #e0e0e0;text-align:center;font-size:13px}.xt{font-size:12px;font-weight:bold;color:#c0001a;border-bottom:2px solid #c0001a;padding-bottom:3px;margin:16px 0 4px;text-transform:uppercase}.obs-os{background:#fff8e1;border:2px solid #ff6f00;border-radius:5px;padding:9px 13px;margin:12px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.obs-os .obs-os-title{font-size:10px;font-weight:900;color:#ff6f00;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;display:flex;align-items:center;gap:5px}.obs-os .obs-os-body{font-size:11px;color:#3e2000;white-space:pre-wrap;line-height:1.6}.xh{font-size:11px;color:#888;margin-bottom:5px}table.ext{width:100%;border-collapse:collapse}table.ext th{background:#555;color:#fff;padding:4px 7px;font-size:11px;text-transform:uppercase;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}.assin{display:flex;gap:18px;margin-top:26px}.assin-box{flex:1;text-align:center}.aline{border-top:1px solid #444;padding-top:4px;font-size:11px;color:#555;margin-top:30px}.foot{margin-top:14px;border-top:1px solid #ddd;padding-top:5px;font-size:11px;color:#aaa;text-align:center}.tarja-montagem-pendente{background:#ff6f00;color:#fff;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:.5px;text-align:center;padding:8px 12px;border-radius:4px;margin-bottom:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{body{background:#fff;padding:0}.bar{display:none}.page{box-shadow:none;margin:0;padding:11mm 11mm 14mm;width:100%}.tarja-montagem-pendente{-webkit-print-color-adjust:exact;print-color-adjust:exact}}.selo-adit{background:#3949ab;color:#fff;font-size:9px;font-weight:900;letter-spacing:.4px;padding:1px 5px;border-radius:3px;margin-right:3px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.faixa-adit{background:#e8eaf6;border:1px solid #9fa8da;border-left:4px solid #3949ab;color:#1a237e;font-size:11px;padding:7px 11px;border-radius:4px;margin-bottom:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+ANX_OS_CSS+'</style></head><body>'
     +'<div class="bar"><span>📋 OS – Crazy Som</span><button class="br" onclick="window.print()">🖨️ Imprimir</button><button class="bd" onclick="window.close()">✕</button></div>'
     +'<div class="page">'
     +(_montagemTarjaTextoDe(form,dadosCompletos)?'<div class="tarja-montagem-pendente">⚠️ LIBERAÇÃO DE MONTAGEM PENDENTE — '+eh(_montagemTarjaTextoDe(form,dadosCompletos))+'</div>':'')
+    +(avisoAditivos?'<div class="faixa-adit"><b>➕ OS do evento, com aditivos.</b> '+eh(avisoAditivos)+'</div>':'')
     +'<div class="hdr"><div><h1>CRAZY SOM</h1><p style="font-size:11px;color:var(--text-muted);margin-top:2px">Audiovisual e Estrutura | (51) 3428-5053 | CNPJ: 10.909.827/0001-76</p></div><div class="hr"><div class="os">ORDEM DE SERVIÇO</div><div class="osn">'+(form['f-num']||'—')+'</div><div class="osd">Emissão: '+dataorc+'</div></div></div>'
     +'<div class="info"><table>'
     +(form['f-nome-evento']?'<tr><td class="lbl">Evento:</td><td colspan="3" style="font-size:13px;font-weight:900;color:#c0001a">'+eh(form['f-nome-evento'])+'</td></tr>':'')
@@ -12241,7 +12636,26 @@ function _gaRenderSwatches(containerId,colorIdAtual){
 // Descrição em texto simples do evento — inclui os mesmos dados que hoje são
 // preenchidos manualmente no evento da agenda (cliente, local, endereço,
 // contato, datas, consultor, lista de equipamentos por seção).
-function _gaMontarDescricao(){
+// stForcado: state já mesclado com os aditivos fechados. Quando vem, a
+// descrição do evento na agenda descreve o EVENTO inteiro, não só o
+// orçamento aberto — é o que o Fabiano pediu ao dizer que o aditivo deve
+// "atualizar o evento na agenda para atualizar a lista de equipamentos".
+// State do EVENTO (orçamento base + aditivos em Venda Ganha) para a
+// descrição do evento na agenda. Falhando a consulta, devolve null e a
+// descrição sai só com o orçamento aberto — melhor do que não enviar nada.
+async function _gaStateDoEvento(){
+  try{
+    var num=gv('f-num')||'';
+    if(!num) return null;
+    var familia=await aditivosCarregarFamilia(_aditivoBaseNum(num), true);
+    if(!familia.length) return null;
+    var r=dadosOSComAditivos(getForm(), getDadosCompletos(), familia);
+    return (r && r.dados && r.dados.state) || null;
+  }catch(e){ console.warn('_gaStateDoEvento:',e); return null; }
+}
+
+function _gaMontarDescricao(stForcado){
+  var _st=stForcado||state;
   var linhas=[];
   linhas.push('Cliente: '+(gv('f-cliente')||'—'));
   var localEv=[gv('f-nome-evento'),gv('f-local')].filter(Boolean).join(' — ');
@@ -12278,11 +12692,11 @@ function _gaMontarDescricao(){
   // evento da Agenda, já que é lido justamente pela equipe de montagem no
   // dia, e a Agenda costuma ser a primeira coisa que eles conferem no celular.
   if(gv('f-obs-os')) linhas.push('Observações da OS: '+gv('f-obs-os'));
-  var SECS_GA=secsPdf();
+  var SECS_GA=secsPdf().concat(Object.keys(_st||{}).filter(function(k){ return secsPdf().indexOf(k)<0 && ehCatExtra(k); }));
   SECS_GA.forEach(function(s){
     var todasRows=[];
-    if(!state[s]) return;
-    state[s].ambientes.forEach(function(a){ (state[s].rows[a.id]||[]).forEach(function(r){ if(!isOcult(r.name,r,s)) todasRows.push(r); }); });
+    if(!_st[s]) return;
+    (_st[s].ambientes||[{id:'default'}]).forEach(function(a){ (_st[s].rows[a.id]||[]).forEach(function(r){ if(!isOcult(r.name,r,s)) todasRows.push(r); }); });
     if(!todasRows.length) return;
     linhas.push('');
     linhas.push((SEC_LBL[s]||s).toUpperCase());
@@ -12299,7 +12713,7 @@ function _gaMontarDescricao(){
         desc='Palco '+Number(r.larg).toFixed(2)+'×'+Number(r.prof).toFixed(2)+'m – Elev: '+(r.elObj?r.elObj.l:'—');
         if(r.carp) desc+=' | Carpete '+(r.carpT==='novo'?'Novo':'Usado')+(r.carpC?' – '+r.carpC:'');
       }
-      linhas.push(r.qty+'x '+desc);
+      linhas.push(r.qty+'x '+(r._adit?('['+r._adit+'] '):'')+desc);
     });
   });
   return linhas.join('\n');
@@ -12691,7 +13105,7 @@ function _gaMontarDescricaoDe(form, state){
         desc='Palco '+Number(r.larg).toFixed(2)+'×'+Number(r.prof).toFixed(2)+'m – Elev: '+(r.elObj?r.elObj.l:'—');
         if(r.carp) desc+=' | Carpete '+(r.carpT==='novo'?'Novo':'Usado')+(r.carpC?' – '+r.carpC:'');
       }
-      linhas.push(r.qty+'x '+desc);
+      linhas.push(r.qty+'x '+(r._adit?('['+r._adit+'] '):'')+desc);
     });
   });
   return linhas.join('\n');
@@ -12783,8 +13197,20 @@ async function _gaRemoverEventosDoOrcamentoInterno(driveId, ids, opts){
 //    Standby/Negociação preservam a pré-reserva, que é justamente o "estou
 //    segurando a data" enquanto o cliente remarca.)
 // • entrando em Venda Ganha -> quem recria é _gaAutoEnviarSeGanha().
-function _gaAoMudarStatusComercial(statusAnterior, statusNovo, driveId, idsExternos){
+function _gaAoMudarStatusComercial(statusAnterior, statusNovo, driveId, idsExternos, numeroOrc){
   if(statusAnterior!=='ganha' || statusNovo==='ganha') return;
+  // ADITIVO: os IDs de evento que ele carrega são do orçamento ORIGINAL —
+  // apagar aqui derrubaria a agenda do evento inteiro por causa de um
+  // complemento que caiu. Só solta a referência local.
+  var _numOrc=numeroOrc||((driveId&&driveId===driveIdAtual)?gv('f-num'):'');
+  if(_ehAditivoNum(_numOrc)){
+    if(typeof orcAtualGoogleAgenda!=='undefined' && driveId===driveIdAtual){
+      ['montagemEventId','eventoEventId','desmontagemEventId','preReservaEventId'].forEach(function(k){ delete orcAtualGoogleAgenda[k]; });
+    }
+    _toastMostrar('🗓️ Este é um aditivo: os eventos da agenda pertencem ao orçamento '
+      +eh(_aditivoBaseNum(_numOrc))+' e foram mantidos. Só os itens deste aditivo saem da OS.','', 9000);
+    return;
+  }
   var ids=Object.assign({}, idsExternos || (typeof orcAtualGoogleAgenda!=='undefined'&&orcAtualGoogleAgenda) || {});
   var incluirPre=(statusNovo==='perdida');
   var chaves=['montagemEventId','eventoEventId','desmontagemEventId'].concat(incluirPre?['preReservaEventId']:[]);
@@ -13133,7 +13559,7 @@ async function googleAgendaEnviarPreReserva(){
   try{ token=await googleAgendaObterToken(); }
   catch(e){ driveStatus('⚠️ '+e.message,'err'); return; }
 
-  var descricao=_gaMontarDescricao();
+  var descricao=_gaMontarDescricao(await _gaStateDoEvento());
   var enderecoEvento=[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
   driveStatus('📌 Criando pré-reserva no Google Agenda...','');
 
@@ -13198,7 +13624,7 @@ async function googleAgendaEnviarOS(){
   try{ token=await googleAgendaObterToken(); }
   catch(e){ driveStatus('⚠️ '+e.message,'err'); return; }
 
-  var descricao=_gaMontarDescricao();
+  var descricao=_gaMontarDescricao(await _gaStateDoEvento());
   var eventosDisp=_gaEventosDisponiveis();
   var enderecoEvento=[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
   driveStatus('📅 Enviando '+eventosDisp.length+' evento(s) para o Google Agenda...','');
@@ -13965,7 +14391,7 @@ function salvarComercial(){
   if(comercialStatus==='ganha' && typeof _gaPreAutorizar==='function') _gaPreAutorizar();
 
   // Saindo de Venda Ganha (desistência/adiamento): limpa o Google Agenda.
-  _gaAoMudarStatusComercial(_statusAnterior, comercialStatus, driveIdAtual);
+  _gaAoMudarStatusComercial(_statusAnterior, comercialStatus, driveIdAtual, null, gv('f-num'));
 
   var _obsAgenda='';
   if(_statusAnterior==='ganha' && comercialStatus!=='ganha'){
@@ -17432,7 +17858,7 @@ async function _fkMudarEtapaRapido(driveId, novaEtapa){
     }]);
   });
   if(novoDados){
-    _gaAoMudarStatusComercial(_etapaAntes, novaEtapa, driveId, _idsAgenda);
+    _gaAoMudarStatusComercial(_etapaAntes, novaEtapa, driveId, _idsAgenda, (dados.form&&dados.form['f-num'])||'');
     funilFiltrarLista(); funilHomeFiltrarLista(); _fkAutoCriarTarefaEtapa(driveId, novaEtapa);
   }
 }
@@ -18002,7 +18428,7 @@ async function fkMudarEtapaComSalvamento(etapa, motivo, obs){
   });
   if(btn){ btn.disabled = false; btn.textContent = origTxt; }
   if(novoDados){
-    _gaAoMudarStatusComercial(_etapaAntesT, etapa, driveIdAlvo, _idsAgendaT);
+    _gaAoMudarStatusComercial(_etapaAntesT, etapa, driveIdAlvo, _idsAgendaT, (dados.form&&dados.form['f-num'])||'');
     funilFiltrarLista();
     funilHomeFiltrarLista();
     _fkAutoCriarTarefaEtapa(driveIdAlvo, etapa);
@@ -24446,7 +24872,22 @@ function logAbrirPreviewOS(driveId){
   if(!it){alert('Orçamento não encontrado na lista atual.');return;}
   var f=it.o.form||{};
   document.getElementById('log-os-titulo').textContent=eh(f['f-cliente']||'Orçamento')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+' — OS '+(f['f-num']||'');
-  document.getElementById('log-os-iframe').srcdoc=_montarOSHtml(it.o.form, it.o.dados);
+  var _frame=document.getElementById('log-os-iframe');
+  _frame.srcdoc=_montarOSHtml(it.o.form, it.o.dados);
+  // Mesma OS da impressão: busca os aditivos fechados e redesenha quando
+  // chegarem (a pré-visualização não pode mostrar menos que o documento).
+  (function(itLocal, frame){
+    aditivosCarregarFamilia(_aditivoBaseNum(itLocal.o.form&&itLocal.o.form['f-num']), true).then(function(familia){
+      try{
+        var r=dadosOSComAditivos(itLocal.o.form, itLocal.o.dados, familia);
+        if(!r.entraram.length && !r.fora.length) return;
+        var aviso='';
+        if(r.entraram.length) aviso='Inclui os itens do(s) aditivo(s) '+r.entraram.join(', ')+'.';
+        if(r.fora.length) aviso+=(aviso?' ':'')+'Fora da OS por ainda não estarem em Venda Ganha: '+r.fora.join(', ')+'.';
+        if(frame) frame.srcdoc=_montarOSHtml(r.form, r.dados, aviso);
+      }catch(e){ console.warn('preview OS (aditivos):',e); }
+    }).catch(function(e){ console.warn('preview OS (aditivos):',e); });
+  })(it, _frame);
   var btn=document.getElementById('log-os-abrir-btn');
   btn.onclick=function(){
     document.getElementById('log-os-ov').classList.remove('open');
