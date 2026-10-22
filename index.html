@@ -1582,6 +1582,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div class="rel-tab" onclick="admAba('enderecosproduto')">📍 Endereçamento</div>
       <div class="rel-tab" onclick="admAba('painelled')">🟥 Painéis de LED</div>
       <div class="rel-tab" onclick="admAba('estoqueeq')">📦 Estoque de Equipamento</div>
+      <div class="rel-tab" onclick="admAba('precos')">💵 Tabela de Preços</div>
       <div class="rel-tab" onclick="admAba('anexos')">📎 Anexos</div>
       <div class="rel-tab" onclick="admAba('googleagenda')">🗓️ Google Agenda</div>
     </div>
@@ -1692,6 +1693,16 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <button class="btn btn-o btn-sm" onclick="painelLedRestaurar()" title="Volta aos 5 tipos padrão com os m² originais">↺ Restaurar padrão</button>
         <span id="painelled-status" style="font-size:11px;color:var(--text-dim)"></span>
       </div>
+    </div>
+    <!-- ABA Tabela de Preços -->
+    <div class="rel-pane" id="admpane-precos">
+      <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">
+        Toda a tabela de preços do sistema, mais os <b>produtos cadastrados no Estoque</b> que não estão nela — numa tela só.
+        Edite preço a preço, ou use o <b>reajuste em lote</b> para aplicar um percentual.<br>
+        As alterações ficam em <b>rascunho</b> (linha amarela) até você clicar em <b>💾 Salvar tabela</b> — dá para aplicar o percentual, conferir e corrigir antes de publicar.<br>
+        <b>Orçamentos já existentes não mudam.</b> Cada orçamento guarda o preço de cada item no momento em que foi lançado; é isso que permite reabrir um orçamento antigo e ver exatamente os valores que o cliente recebeu. A tabela nova vale do próximo lançamento em diante.
+      </p>
+      <div id="precos-lista"></div>
     </div>
     <!-- ABA Estoque de Equipamento (provisorio) -->
     <div class="rel-pane" id="admpane-estoqueeq">
@@ -6885,6 +6896,385 @@ var PRECOS={
   extra:[{n:"Locação equipamento externo",v:0},{n:"Fornecedor terceiro",v:0},{n:"Consumíveis",v:0},{n:"Manutenção",v:0},{n:"Outros custos",v:0}]
 };
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TABELA DE PREÇOS (Admin)
+   ──────────────────────────────────────────────────────────────────────────
+   Até aqui a tabela de preços vivia escrita dentro do arquivo do sistema:
+   mudar um valor exigia mexer no código. Esta aba traz tudo numa tela só —
+   a tabela original mais todos os produtos cadastrados no Estoque — para
+   editar preço a preço ou aplicar um percentual no lote.
+
+   Duas origens, cada uma gravada no seu lugar (uma fonte da verdade por
+   item, nunca duas):
+   • ITEM DA TABELA → vira um ajuste em config/precos, aplicado por cima do
+     padrão do sistema na hora de carregar. Assim um item novo que o sistema
+     passe a trazer de fábrica continua aparecendo, e o que você mexeu
+     continua valendo.
+   • PRODUTO DO ESTOQUE → grava no próprio produto (campo preço), que é de
+     onde ele já tira o valor hoje.
+
+   IMPORTANTE: mexer aqui NÃO altera orçamento nenhum que já exista. Cada
+   orçamento guarda o preço de cada item no momento em que foi lançado — é
+   isso que permite reabrir um orçamento de três meses atrás e ver os valores
+   que o cliente recebeu. A tabela nova vale para o que for lançado daqui
+   em diante.
+
+   As alterações ficam em RASCUNHO na tela (destacadas em amarelo) até você
+   clicar em Salvar — dá para aplicar um percentual, conferir linha a linha,
+   corrigir o que não ficou bom e só então publicar.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+var PRECOS_PADRAO=null;          // cópia intocada do que vem de fábrica
+var PRECOS_AJUSTES={};           // {sec:{nomeNormalizado:valor}} publicado
+var _precoRascunho={};           // alterações ainda não salvas, por chave de linha
+// "Restaurar padrão" não gera linhas de rascunho (os valores voltam ao de
+// fábrica, então nada fica "diferente do atual"). Sem esta marca, o botão
+// Salvar ficaria desabilitado logo depois do restaurar e não haveria como
+// publicar a volta ao padrão.
+var _precoRestaurarPendente=false;
+var _precoBuscaTxt='';
+var _precoSecFiltro='';
+
+function _precoNorm(n){
+  return (typeof _normalizarNomeItem==='function')?_normalizarNomeItem(n):String(n||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+}
+function _precoFmt(v){
+  var n=Number(v)||0;
+  return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+// Guarda o padrão de fábrica na primeira chamada e reaplica os ajustes.
+function _precosAplicarAjustes(){
+  if(!PRECOS_PADRAO) PRECOS_PADRAO=JSON.parse(JSON.stringify(PRECOS));
+  Object.keys(PRECOS_PADRAO).forEach(function(sec){
+    PRECOS[sec]=PRECOS_PADRAO[sec].map(function(it){ return {n:it.n, v:it.v}; });
+    var aj=PRECOS_AJUSTES[sec]||{};
+    PRECOS[sec].forEach(function(it){
+      var k=_precoNorm(it.n);
+      if(aj[k]!==undefined && aj[k]!==null) it.v=Number(aj[k])||0;
+    });
+  });
+}
+
+async function precosCarregar(){
+  if(!PRECOS_PADRAO) PRECOS_PADRAO=JSON.parse(JSON.stringify(PRECOS));
+  try{
+    var snap=await fbDb.collection('config').doc('precos').get();
+    PRECOS_AJUSTES=(snap.exists && snap.data().ajustes)||{};
+  }catch(e){
+    console.warn('precosCarregar:',e);
+    PRECOS_AJUSTES={};
+  }
+  _precosAplicarAjustes();
+}
+
+async function _precosSalvarFirestore(){
+  try{
+    await fbDb.collection('config').doc('precos').set({
+      ajustes:PRECOS_AJUSTES,
+      atualizadoEm:new Date().toLocaleString('pt-BR'),
+      atualizadoPor:(usuarioAtual&&usuarioAtual.nome)||''
+    });
+    return true;
+  }catch(e){ console.warn('_precosSalvarFirestore:',e); return false; }
+}
+
+/* ── A lista mostrada ──────────────────────────────────────────────────── */
+// Uma linha por item: os da tabela de preços e os produtos do Estoque que
+// não estão nela (casados por nome normalizado, pra não duplicar).
+function precosLinhas(){
+  var linhas=[], vistos={};
+  SECS_BASE.forEach(function(sec){
+    (PRECOS[sec]||[]).forEach(function(it){
+      var k=_precoNorm(it.n);
+      vistos[sec+'|'+k]=true;
+      var padrao=((PRECOS_PADRAO&&PRECOS_PADRAO[sec])||[]).find(function(p){ return _precoNorm(p.n)===k; });
+      linhas.push({
+        chave:'t|'+sec+'|'+k,
+        origem:'tabela', sec:sec, nome:it.n, valor:Number(it.v)||0,
+        padrao:padrao?(Number(padrao.v)||0):null,
+        ajustado:(PRECOS_AJUSTES[sec]||{})[k]!==undefined
+      });
+    });
+  });
+  if(typeof PRODUTOS!=='undefined' && Array.isArray(PRODUTOS)){
+    PRODUTOS.forEach(function(p){
+      var cat=(typeof _categoriaProdutoNormalizada==='function')?_categoriaProdutoNormalizada(p.categoria):p.categoria;
+      var sec=SECAO_POR_CATEGORIA[cat]||'';
+      var k=_precoNorm(p.nome);
+      if(!k) return;
+      // Produto com o mesmo nome de um item da tabela: a linha da tabela já
+      // responde por ele (é dela que o orçamento tira o preço).
+      if(sec && vistos[sec+'|'+k]) return;
+      linhas.push({
+        chave:'p|'+p.id,
+        origem:'produto', sec:sec||'', nome:p.nome, valor:Number(p.preco)||0,
+        padrao:null, produtoId:p.id,
+        categoria:cat||'(sem categoria)'
+      });
+    });
+  }
+  linhas.sort(function(a,b){
+    var ia=SECS_BASE.indexOf(a.sec), ib=SECS_BASE.indexOf(b.sec);
+    if(ia<0) ia=99; if(ib<0) ib=99;
+    if(ia!==ib) return ia-ib;
+    return a.nome.localeCompare(b.nome,'pt-BR',{sensitivity:'base'});
+  });
+  return linhas;
+}
+
+function _precoValorAtual(l){
+  return (_precoRascunho[l.chave]!==undefined)?_precoRascunho[l.chave]:l.valor;
+}
+function _precoAlterado(l){
+  return _precoRascunho[l.chave]!==undefined && Math.abs(_precoRascunho[l.chave]-l.valor)>0.004;
+}
+
+function precosFiltradas(){
+  var busca=_precoNorm(_precoBuscaTxt);
+  return precosLinhas().filter(function(l){
+    if(_precoSecFiltro && l.sec!==_precoSecFiltro) return false;
+    if(busca && _precoNorm(l.nome).indexOf(busca)<0) return false;
+    return true;
+  });
+}
+
+/* ── Render ────────────────────────────────────────────────────────────── */
+function precosRenderAdmin(){
+  var box=document.getElementById('precos-lista');
+  if(!box) return;
+  var linhas=precosFiltradas();
+  var todas=precosLinhas();
+  var pendentes=todas.filter(_precoAlterado).length;
+
+  var topo='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'
+    +'<select id="precos-sec" onchange="precosFiltrarSec(this.value)" style="padding:6px 9px;background:var(--surface);border:1px solid var(--border-strong);border-radius:4px;color:var(--text);font-size:11.5px">'
+    +'<option value="">Todas as seções ('+todas.length+')</option>'
+    +SECS_BASE.map(function(s){
+      var n=todas.filter(function(l){ return l.sec===s; }).length;
+      return '<option value="'+s+'"'+(_precoSecFiltro===s?' selected':'')+'>'+(SEC_ICO_BASE[s]||'')+' '+eh(SEC_LBL_BASE[s]||s)+' ('+n+')</option>';
+    }).join('')
+    +(todas.some(function(l){ return !l.sec; })?'<option value="__sem"'+(_precoSecFiltro==='__sem'?' selected':'')+'>📦 Sem seção</option>':'')
+    +'</select>'
+    +'<input type="search" id="precos-busca" placeholder="🔍 filtrar item..." value="'+eh(_precoBuscaTxt)+'" oninput="precosBuscar(this.value)" style="flex:1;min-width:170px;padding:6px 10px;font-size:11.5px;background:var(--surface);border:1px solid var(--border-strong);border-radius:4px;color:var(--text)">'
+    +'<span style="font-size:11px;color:var(--text-dim)">'+linhas.length+' item(ns) na tela</span>'
+    +'</div>';
+
+  // Reajuste em lote
+  topo+='<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 13px;margin-bottom:11px">'
+    +'<div style="font-size:11px;font-weight:800;margin-bottom:6px">📈 Reajuste em lote</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    +'<span style="font-size:11.5px;color:var(--text-dim)">Aplicar</span>'
+    +'<input type="number" id="precos-pct" step="0.1" placeholder="10" style="width:85px;padding:6px 9px;font-size:12px;text-align:right;background:var(--surface);border:1px solid var(--border-strong);border-radius:4px;color:var(--text)">'
+    +'<span style="font-size:11.5px;color:var(--text-dim)">%</span>'
+    +'<button class="btn btn-g btn-sm" onclick="precosAplicarPct(1)">↑ Aumentar</button>'
+    +'<button class="btn btn-o btn-sm" onclick="precosAplicarPct(-1)">↓ Reduzir</button>'
+    +'<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer">'
+    +'<input type="checkbox" id="precos-arredondar" checked style="width:auto"> arredondar para real inteiro</label>'
+    +'</div>'
+    +'<div style="font-size:10px;color:var(--text-dim);margin-top:6px;line-height:1.5">'
+    +'O reajuste vale para os <b>'+linhas.length+' itens que estão na tela agora</b> — use o filtro de seção ou a busca para reajustar só uma parte. '
+    +'Nada é gravado ainda: as linhas mudam de cor e você confere antes de salvar.</div>'
+    +'</div>';
+
+  if(!linhas.length){
+    box.innerHTML=topo+'<div style="padding:22px;text-align:center;color:var(--text-muted);font-size:12px;border:1px dashed var(--border);border-radius:6px">Nenhum item com esse filtro.</div>'
+      +_precosRodape(pendentes);
+    return;
+  }
+
+  var corpo='<div style="border:1px solid var(--border);border-radius:6px;overflow:hidden">'
+    +'<div style="display:flex;gap:8px;padding:6px 12px;background:var(--surface-2);font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-dim);font-weight:800">'
+    +'<span style="flex:1">Item</span><span style="width:76px;text-align:right">Atual</span><span style="width:104px;text-align:right">Novo preço</span><span style="width:26px"></span></div>'
+    +'<div style="max-height:430px;overflow-y:auto">';
+
+  var secAtual=null;
+  linhas.forEach(function(l){
+    if(l.sec!==secAtual){
+      secAtual=l.sec;
+      corpo+='<div style="padding:5px 12px;background:var(--surface-3);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-dim);border-bottom:1px solid var(--border)">'
+        +(SEC_ICO_BASE[l.sec]||'📦')+' '+eh(SEC_LBL_BASE[l.sec]||'Sem seção')+'</div>';
+    }
+    var novo=_precoValorAtual(l);
+    var mudou=_precoAlterado(l);
+    var id='pr-'+btoa(unescape(encodeURIComponent(l.chave))).replace(/[^a-zA-Z0-9]/g,'');
+    corpo+='<div id="row-'+id+'" style="display:flex;gap:8px;align-items:center;padding:5px 12px;border-bottom:1px solid var(--border)'+(mudou?';background:#fff8e1':'')+'">'
+      +'<span style="flex:1;font-size:11.5px;color:var(--text)">'+eh(l.nome)
+        +(l.origem==='produto'?' <span style="font-size:9px;color:#1565c0;border:1px solid #90caf9;background:#e3f2fd;border-radius:3px;padding:0 4px">produto</span>':'')
+        +(l.ajustado&&!mudou?' <span style="font-size:9px;color:var(--text-muted)" title="Preço já ajustado por aqui (de fábrica: R$ '+_precoFmt(l.padrao)+')">✎</span>':'')
+      +'</span>'
+      +'<span style="width:76px;text-align:right;font-size:11px;color:'+(mudou?'var(--text-dim)':'var(--text)')+(mudou?';text-decoration:line-through':'')+'">'+_precoFmt(l.valor)+'</span>'
+      +'<input type="number" step="0.01" min="0" value="'+(Math.round(novo*100)/100)+'" '
+        +'oninput="precosEditar(\''+encodeURIComponent(l.chave)+'\',this.value)" '
+        +'style="width:104px;padding:4px 7px;font-size:11.5px;text-align:right;background:var(--surface);border:1px solid '+(mudou?'#ffb74d':'var(--border-strong)')+';border-radius:4px;color:'+(mudou?'#e65100':'var(--text)')+';font-weight:'+(mudou?'800':'500')+'">'
+      +'<button onclick="precosDesfazerLinha(\''+encodeURIComponent(l.chave)+'\')" title="Desfazer esta linha" '
+        +'style="width:26px;background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:13px;visibility:'+(mudou?'visible':'hidden')+'">↺</button>'
+      +'</div>';
+  });
+  corpo+='</div></div>';
+
+  box.innerHTML=topo+corpo+_precosRodape(pendentes);
+}
+
+function _precosRodape(pendentes){
+  var podeSalvar=pendentes>0 || _precoRestaurarPendente;
+  return '<div id="precos-rodape" style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:12px;padding-top:11px;border-top:1px solid var(--border)">'
+    +(pendentes
+      ? '<span style="background:#fff3e0;border:1px solid #ffb74d;color:#e65100;border-radius:14px;padding:5px 13px;font-size:11px;font-weight:800">⚠️ '+pendentes+' preço(s) alterado(s) e ainda não salvo(s)</span>'
+      : (_precoRestaurarPendente
+        ? '<span style="background:#fff3e0;border:1px solid #ffb74d;color:#e65100;border-radius:14px;padding:5px 13px;font-size:11px;font-weight:800">⚠️ Restauração do padrão pendente de publicação</span>'
+        : '<span style="font-size:11px;color:var(--text-dim)">Nenhuma alteração pendente.</span>'))
+    +'<button class="btn btn-r btn-sm" onclick="precosSalvar()"'+(podeSalvar?'':' disabled style="opacity:.45"')+'>💾 Salvar tabela</button>'
+    +(podeSalvar?'<button class="btn btn-o btn-sm" onclick="precosDescartar()">✕ Descartar alterações</button>':'')
+    +'<button class="btn btn-o btn-sm" onclick="precosRestaurarPadrao()" title="Devolve TODOS os itens da tabela aos valores de fábrica">↺ Restaurar padrão</button>'
+    +'<span id="precos-status" style="font-size:11px;color:var(--text-dim)"></span>'
+    +'</div>';
+}
+
+/* ── Interação ─────────────────────────────────────────────────────────── */
+function precosBuscar(v){ _precoBuscaTxt=String(v||''); precosRenderAdmin();
+  var el=document.getElementById('precos-busca'); if(el){ el.focus(); try{ el.setSelectionRange(el.value.length,el.value.length); }catch(e){} } }
+function precosFiltrarSec(s){ _precoSecFiltro=s||''; precosRenderAdmin(); }
+
+function precosEditar(chaveEnc, valor){
+  var chave=decodeURIComponent(chaveEnc);
+  var l=precosLinhas().find(function(x){ return x.chave===chave; });
+  if(!l) return;
+  var n=parseFloat(String(valor).replace(',','.'));
+  if(isNaN(n)||n<0) n=0;
+  if(Math.abs(n-l.valor)<=0.004) delete _precoRascunho[chave];
+  else _precoRascunho[chave]=n;
+  _precosAtualizarRodape();
+}
+
+function precosDesfazerLinha(chaveEnc){
+  delete _precoRascunho[decodeURIComponent(chaveEnc)];
+  precosRenderAdmin();
+}
+
+function _precosAtualizarRodape(){
+  var pend=precosLinhas().filter(_precoAlterado).length;
+  var rod=document.getElementById('precos-rodape');
+  if(rod) rod.outerHTML=_precosRodape(pend);
+}
+
+function precosAplicarPct(sinal){
+  var el=document.getElementById('precos-pct');
+  var pct=parseFloat(String((el&&el.value)||'').replace(',','.'));
+  if(isNaN(pct)||pct===0){ alert('Informe o percentual do reajuste.'); if(el) el.focus(); return; }
+  if(pct<0){ alert('Informe o percentual sem o sinal — use os botões Aumentar ou Reduzir.'); if(el) el.focus(); return; }
+  var arred=!!(document.getElementById('precos-arredondar')||{}).checked;
+  var alvo=precosFiltradas();
+  if(!alvo.length){ alert('Não há itens na tela para reajustar.'); return; }
+  var rotulo=(sinal>0?'AUMENTAR':'REDUZIR')+' '+pct+'%';
+  var onde=_precoSecFiltro?('da seção '+(SEC_LBL_BASE[_precoSecFiltro]||_precoSecFiltro)):'da tela';
+  if(_precoBuscaTxt) onde+=' (filtro "'+_precoBuscaTxt+'")';
+  if(!confirm('📈 '+rotulo+'\n\nSerá aplicado aos '+alvo.length+' item(ns) '+onde+'.'
+    +(arred?'\nOs valores serão arredondados para real inteiro.':'')
+    +'\n\nNada é gravado agora: você confere na tela e clica em Salvar depois.\n\nAplicar?')) return;
+
+  var fator=1+(sinal>0?pct:-pct)/100;
+  alvo.forEach(function(l){
+    var base=_precoValorAtual(l);
+    var novo=base*fator;
+    novo=arred?Math.round(novo):(Math.round(novo*100)/100);
+    if(novo<0) novo=0;
+    if(Math.abs(novo-l.valor)<=0.004) delete _precoRascunho[l.chave];
+    else _precoRascunho[l.chave]=novo;
+  });
+  precosRenderAdmin();
+  _toastMostrar('📈 Reajuste de '+(sinal>0?'+':'−')+pct+'% aplicado a '+alvo.length+' item(ns) — <b>confira e clique em Salvar</b>.','',8000);
+}
+
+async function precosDescartar(){
+  var n=precosLinhas().filter(_precoAlterado).length;
+  if(!n && !_precoRestaurarPendente) return;
+  if(!confirm('Descartar as alterações de preço que ainda não foram salvas'
+    +(_precoRestaurarPendente?' (inclusive a restauração do padrão)':'')+'?')) return;
+  _precoRascunho={};
+  if(_precoRestaurarPendente){
+    // Volta a ler do servidor: é lá que está o que de fato está publicado.
+    _precoRestaurarPendente=false;
+    await precosCarregar();
+  }
+  precosRenderAdmin();
+}
+
+function precosRestaurarPadrao(){
+  if(!Object.keys(PRECOS_AJUSTES).length && !_precoRestaurarPendente){
+    alert('A tabela já está nos valores de fábrica — não há ajuste para remover.');
+    return;
+  }
+  if(!confirm('↺ RESTAURAR A TABELA DE FÁBRICA\n\nTodos os ajustes de preço feitos por aqui serão removidos e os itens voltam aos valores originais do sistema.\n\n'
+    +'Os produtos cadastrados no Estoque mantêm o preço deles (são editados no próprio cadastro).\n\n'
+    +'Orçamentos já existentes não mudam.\n\nContinuar?')) return;
+  PRECOS_AJUSTES={};
+  _precoRascunho={};
+  _precoRestaurarPendente=true;
+  _precosAplicarAjustes();
+  precosRenderAdmin();
+  _precosStatus('Tabela voltou ao padrão na tela — clique em 💾 Salvar tabela para publicar.','warn');
+}
+
+function _precosStatus(msg, tipo){
+  var st=document.getElementById('precos-status');
+  if(!st) return;
+  st.style.color=(tipo==='err')?'#ff5555':(tipo==='warn'?'#e65100':'#4caf50');
+  st.textContent=msg;
+  if(tipo!=='err') setTimeout(function(){ if(st.textContent===msg) st.textContent=''; }, 6000);
+}
+
+async function precosSalvar(){
+  var linhas=precosLinhas();
+  var mudadas=linhas.filter(_precoAlterado);
+  if(!mudadas.length && !Object.keys(_precoRascunho).length){
+    // pode ser só um "restaurar padrão" pendente
+  }
+  _precosStatus('⏳ Salvando...','warn');
+
+  // 1) Itens da tabela → ajustes em config/precos
+  mudadas.filter(function(l){ return l.origem==='tabela'; }).forEach(function(l){
+    var k=_precoNorm(l.nome);
+    if(!PRECOS_AJUSTES[l.sec]) PRECOS_AJUSTES[l.sec]={};
+    var novo=_precoRascunho[l.chave];
+    // Voltou ao valor de fábrica: some o ajuste em vez de gravar o mesmo número.
+    if(l.padrao!==null && Math.abs(novo-l.padrao)<=0.004) delete PRECOS_AJUSTES[l.sec][k];
+    else PRECOS_AJUSTES[l.sec][k]=novo;
+  });
+  Object.keys(PRECOS_AJUSTES).forEach(function(sec){
+    if(!Object.keys(PRECOS_AJUSTES[sec]).length) delete PRECOS_AJUSTES[sec];
+  });
+
+  var okTabela=await _precosSalvarFirestore();
+  _precosAplicarAjustes();
+
+  // 2) Produtos → no próprio cadastro, que é de onde eles tiram o preço
+  var prods=mudadas.filter(function(l){ return l.origem==='produto'; });
+  var errosProd=0;
+  for(var i=0;i<prods.length;i++){
+    var l=prods[i];
+    var p=PRODUTOS.find(function(x){ return x.id===l.produtoId; });
+    if(!p){ errosProd++; continue; }
+    p.preco=_precoRascunho[l.chave];
+    p.atualizadoEm=new Date().toLocaleString('pt-BR');
+    p.atualizadoPor=(usuarioAtual&&usuarioAtual.nome)||'';
+    var ok=await _produtoSalvarFirestore(p);
+    if(!ok) errosProd++;
+  }
+
+  _precoRascunho={};
+  _precoRestaurarPendente=false;
+  precosRenderAdmin();
+
+  if(okTabela && !errosProd){
+    _precosStatus('✅ Tabela salva — vale para todos os usuários. Orçamentos já existentes não mudaram.','ok');
+  }else{
+    _precosStatus('⚠️ '+(!okTabela?'A tabela não foi gravada no servidor. ':'')
+      +(errosProd?(errosProd+' produto(s) não foram gravados. '):'')+'Tente de novo.','err');
+  }
+}
+
 // Consultor Externo: acrescenta o percentual de comissão pessoal do usuário
 // logado em cima de toda a tabela de preços (cadastrado por usuário na
 // aba Usuários do Admin). Itens personalizados (valor digitado à mão)
@@ -7050,6 +7440,7 @@ async function _entrarNoSistema(email, perfil, opts){
   tiposEventoCarregar();
   painelLedCarregar();
   eqCarregar();
+  precosCarregar();
   // A caixa da comissão só existe para quem tem percentual cadastrado.
   try{ renderComissaoExterna(); }catch(e){}
   cargosCarregar();
@@ -10871,6 +11262,7 @@ async function atualizarDadosAgora(){
   await passo('tipos de evento', function(){ return tiposEventoCarregar(); });
   await passo('painéis de LED', function(){ return painelLedCarregar(); });
   await passo('estoque de equipamento', function(){ return eqCarregar(); });
+  await passo('tabela de preços', function(){ return precosCarregar(); });
   await passo('cargos', function(){ return cargosCarregar(); });
   await passo('tarefas', function(){ return tarefasCarregarStorage().then(function(){ if(typeof atualizarBadgeTarefas==='function') atualizarBadgeTarefas(); }); });
   await passo('metas', function(){ return typeof metasCarregar==='function'?metasCarregar():null; });
@@ -25675,7 +26067,7 @@ function dashTemAcesso(dashId){
 
 function admAba(aba){
   document.querySelectorAll('#adm-ov .rel-tab').forEach(function(t,i){
-    var abas=['usuarios','cargos','permissoes','dashboards','tiposevento','tipostarefa','categoriasproduto','gruposproduto','subgruposproduto','enderecosproduto','painelled','estoqueeq','anexos','googleagenda'];
+    var abas=['usuarios','cargos','permissoes','dashboards','tiposevento','tipostarefa','categoriasproduto','gruposproduto','subgruposproduto','enderecosproduto','painelled','estoqueeq','precos','anexos','googleagenda'];
     t.classList.toggle('active',abas[i]===aba);
   });
   document.querySelectorAll('#adm-ov .rel-pane').forEach(function(p){p.classList.remove('active');});
@@ -25692,6 +26084,7 @@ function admAba(aba){
   if(aba==='enderecosproduto') enderecosProdutoRenderAdmin();
   if(aba==='painelled') painelLedRenderAdmin();
   if(aba==='estoqueeq') eqAdminRenderizar();
+  if(aba==='precos'){ _precoRascunho={}; _precoRestaurarPendente=false; precosRenderAdmin(); }
   if(aba==='anexos') anxDiagRenderAdmin();
   if(aba==='googleagenda') googleAgendaRenderAdmin();
 }
