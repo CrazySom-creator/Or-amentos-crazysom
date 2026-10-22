@@ -1529,6 +1529,40 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
   </div>
 </div>
 
+<div class="ov" id="bancodiag-ov">
+  <div class="modal-box" style="max-width:680px">
+    <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div><h2 style="margin-bottom:2px">🔐 Meu acesso ao banco</h2>
+        <p class="sub" style="margin:0">Descobre o que o banco libera para o seu login</p></div>
+      <button class="btn btn-o btn-sm" onclick="document.getElementById('bancodiag-ov').classList.remove('open')">✕</button>
+    </div>
+    <div id="bancodiag-quem" style="font-size:11.5px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:10px"></div>
+    <p style="font-size:11px;color:var(--text-muted);line-height:1.6;margin-bottom:10px">
+      A mensagem <i>"Missing or insufficient permissions"</i> vem das <b>Regras de Segurança</b> do banco, que decidem quem pode gravar o quê.
+      Não é senha, não é internet e não é o seu computador. Este teste grava e apaga um registrinho em cada lugar
+      para mostrar exatamente onde o seu login é recusado — <b>nada do seu trabalho é tocado</b>.
+    </p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:11px">
+      <button class="btn btn-r btn-sm" id="bancodiag-btn" onclick="bancoDiagTestar()">▶️ Testar meu acesso</button>
+      <span style="font-size:10px;color:var(--text-dim)">Leva poucos segundos</span>
+    </div>
+    <div id="bancodiag-resultado"></div>
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:11px">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);font-weight:800;margin-bottom:6px">Texto pronto para o administrador</div>
+      <p style="font-size:10.5px;color:var(--text-muted);line-height:1.6;margin-bottom:7px">
+        No <b>console.firebase.google.com</b> › projeto <b>crazysom-sistema</b> › <b>Firestore Database</b> › aba <b>Regras</b>,
+        cole este bloco <b>dentro</b> de <code>match /databases/{database}/documents {</code> — sem apagar o que já existe lá
+        e sem repetir a linha de abertura.
+      </p>
+      <textarea id="bancodiag-regra" readonly style="width:100%;min-height:150px;font-family:ui-monospace,Consolas,monospace;font-size:10.5px;padding:9px;background:var(--surface-3);border:1px solid var(--border-strong);border-radius:5px;color:var(--text);resize:vertical"></textarea>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:7px;flex-wrap:wrap">
+        <button class="btn btn-o btn-sm" onclick="bancoDiagCopiarRegra()">📋 Copiar regra</button>
+        <span id="bancodiag-copia-status" style="font-size:10.5px;color:var(--text-dim)"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="ov" id="adm-ov">
   <div class="modal-box" style="max-width:780px">
     <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -1692,6 +1726,16 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <span id="anx-diag-status" style="font-size:11px;color:var(--text-dim)"></span>
       </div>
       <div id="anx-diag-resultado" style="margin-bottom:14px"></div>
+      <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:6px;padding:12px 14px;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:800;margin-bottom:6px;color:#e65100">🔐 Erro ao SALVAR orçamento ("insufficient permissions")?</div>
+        <p style="font-size:10.5px;color:var(--text-dim);margin:0 0 8px;line-height:1.6">
+          Isso não é problema de anexo: é a regra do banco recusando a gravação do <b>orçamento</b> para aquele perfil —
+          acontece tipicamente com <b>usuário novo</b>. O teste abaixo confere, uma a uma, todas as coleções que o sistema usa,
+          <b>com o login de quem estiver na tela</b>, e entrega o texto pronto da regra.
+          Peça para a pessoa que está com o erro abrir e rodar — a diferença aparece na hora.
+        </p>
+        <button class="btn btn-r btn-sm" onclick="bancoDiagAbrir()">🔐 Testar todas as permissões do banco</button>
+      </div>
       <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:12px 14px">
         <div style="font-size:11px;font-weight:800;margin-bottom:6px">📋 Regra para liberar anexos para TODOS os usuários</div>
         <p style="font-size:10.5px;color:var(--text-muted);margin:0 0 8px;line-height:1.6">
@@ -8997,8 +9041,13 @@ function autoSaveMostrarErro(){
   var quando=_autoSaveErroEm?new Date(_autoSaveErroEm).toLocaleTimeString('pt-BR'):'';
   var dica='';
   var m=msg.toLowerCase();
-  if(m.indexOf('permission')>=0||m.indexOf('insufficient')>=0||m.indexOf('permiss')>=0)
-    dica='Parece falta de permissão no banco. Sua sessão pode ter expirado — saia e entre no sistema de novo.';
+  var ehPermissao=(m.indexOf('permission')>=0||m.indexOf('insufficient')>=0||m.indexOf('permiss')>=0);
+  if(ehPermissao)
+    dica='O BANCO RECUSOU A GRAVAÇÃO PARA O SEU LOGIN.\n\n'
+        +'Isso vem das Regras de Segurança do banco — não é senha, internet nem o seu computador. '
+        +'Costuma acontecer com usuário novo, cujo perfil ainda não foi liberado nas regras.\n\n'
+        +'Antes de mais nada, tente sair e entrar no sistema (a sessão pode ter expirado). '
+        +'Se o erro continuar, use o teste "🔐 Meu acesso ao banco" e mande o print para um administrador.';
   else if(m.indexOf('grande demais')>=0||m.indexOf('longer than')>=0||m.indexOf('bytes')>=0)
     dica='O orçamento passou do tamanho máximo que o banco aceita por documento.';
   else if(m.indexOf('undefined')>=0||m.indexOf('unsupported field')>=0)
@@ -9015,9 +9064,24 @@ function autoSaveMostrarErro(){
     +'Tentar salvar agora?';
   if(confirm(txt)){
     salvarNoDrive({mostrarStatus:true}).catch(function(e){
-      alert('⚠️ Ainda não foi possível salvar.\n\nMOTIVO:\n'+((e&&e.message)||'desconhecido')
+      var msg2=(e&&e.message)||'desconhecido';
+      var perm2=/permiss|insufficient/i.test(msg2);
+      if(perm2 && confirm('⚠️ Ainda não foi possível salvar.\n\nMOTIVO:\n'+msg2
+        +'\n\nO banco está recusando a gravação para o seu login.\n\n'
+        +'Quer rodar agora o teste que mostra exatamente o que o banco libera para você? '
+        +'O resultado é um print para mandar ao administrador.\n\n'
+        +'(Seu trabalho continua na tela — nada foi perdido.)')){
+        try{ bancoDiagAbrir(); }catch(eD){}
+        return;
+      }
+      if(!perm2) alert('⚠️ Ainda não foi possível salvar.\n\nMOTIVO:\n'+msg2
         +'\n\nUse "💾 Salvar Local" para guardar um arquivo no computador e não perder o trabalho.');
     });
+  }else if(ehPermissao){
+    if(confirm('Quer rodar o teste que mostra o que o banco libera para o seu login?\n\n'
+      +'Ele gera um relatório para você mandar ao administrador — e não mexe em nada do seu trabalho.')){
+      try{ bancoDiagAbrir(); }catch(eD){}
+    }
   }
 }
 
@@ -9841,9 +9905,20 @@ async function driveSalvar(){
     _autoSaveErroEm=Date.now();
     _autoSaveEstado='erro';
     if(typeof _autoSaveChip==='function') _autoSaveChip();
-    alert('⚠️ NÃO FOI POSSÍVEL SALVAR NO SERVIDOR\n\nMOTIVO:\n'+_autoSaveUltimoErro
+    var _permErr=/permiss|insufficient/i.test(String(_autoSaveUltimoErro||''));
+    var _txtErr='⚠️ NÃO FOI POSSÍVEL SALVAR NO SERVIDOR\n\nMOTIVO:\n'+_autoSaveUltimoErro
       +'\n\n✅ Seu trabalho continua na tela e há uma cópia local guardada neste navegador.'
-      +'\n\nSe o erro insistir, use "💾 Salvar Local" para gerar um arquivo no computador antes de fechar a página.');
+      +'\n\nSe o erro insistir, use "💾 Salvar Local" para gerar um arquivo no computador antes de fechar a página.';
+    if(_permErr){
+      // Erro de permissão tem um caminho de solução próprio — e não é "tentar
+      // de novo", é liberar o perfil nas regras do banco.
+      if(confirm(_txtErr+'\n\n🔐 Este erro é das REGRAS DE SEGURANÇA do banco, que ainda não liberam o seu perfil.'
+        +'\n\nAbrir agora o teste que mostra o que o banco libera para o seu login?')){
+        try{ bancoDiagAbrir(); }catch(eD){}
+      }
+    }else{
+      alert(_txtErr);
+    }
   }
 }
 
@@ -15131,6 +15206,213 @@ var ANX_REGRA_AJUDA_USUARIO=''
   +'ainda não liberam anexos para o seu perfil.\n\n'
   +'Avise um administrador — a correção é em Administração > Anexos e leva 1 minuto.\n\n'
   +'Enquanto isso, nada do seu orçamento foi perdido.';
+
+
+/* ── DIAGNÓSTICO DE PERMISSÕES DO BANCO ────────────────────────────────────
+   "Missing or insufficient permissions" é a mensagem que o Firestore devolve
+   quando as REGRAS DE SEGURANÇA recusam a operação. Não é senha errada, não é
+   internet, não é o navegador: é uma regra publicada no console do Firebase
+   que não contempla aquele login.
+
+   O problema é que a mensagem não diz ONDE. Este diagnóstico roda com o login
+   de quem está na tela e testa, uma a uma, cada coleção que o sistema usa —
+   leitura e gravação — e mostra onde passa e onde é recusado. Quem não
+   consegue salvar roda o teste, tira um print e manda para o administrador,
+   que já sabe qual regra publicar.
+
+   Mesma ideia do diagnóstico de anexos, generalizada para todo o banco depois
+   que o Luiz Fonseca (usuário novo) passou a receber o erro ao salvar.
+   ────────────────────────────────────────────────────────────────────────── */
+
+// Tudo que o sistema grava ou lê. "critico" = sem isso a pessoa não consegue
+// trabalhar (é o que explica um erro ao salvar).
+var BANCO_COLECOES=[
+  {col:'orcamentos',            label:'Orçamentos',                   critico:true,  nota:'Salvar e abrir orçamento'},
+  {col:'orcamentos/_diag/anexos',label:'Anexos do orçamento',          critico:false, nota:'Arquivos anexados ao orçamento', sub:true},
+  {col:'anexos',                label:'Anexos (coleção própria)',      critico:false, nota:'Caminho alternativo dos anexos'},
+  {col:'system',                label:'Sistema (travas e numeração)',  critico:true,  nota:'Trava de edição, sessão e reserva de número'},
+  {col:'clientes',              label:'Clientes',                      critico:false, nota:'Cadastro de clientes'},
+  {col:'eventos',               label:'Eventos',                       critico:false, nota:'Cadastro de eventos'},
+  {col:'leads',                 label:'Leads (CRM)',                   critico:false, nota:'Funil de vendas'},
+  {col:'tarefas',               label:'Tarefas',                       critico:false, nota:'Agenda de tarefas'},
+  {col:'produtos',              label:'Produtos',                      critico:false, nota:'Cadastro de produtos'},
+  {col:'produtoFotos',          label:'Fotos de produto',              critico:false, nota:'Imagens do cadastro'},
+  {col:'unidadesEstoque',       label:'Unidades de estoque',           critico:false, nota:'Etiquetas e QR'},
+  {col:'movimentacoesEstoque',  label:'Movimentações de estoque',      critico:false, nota:'Entradas e saídas'},
+  {col:'comprovantes',          label:'Comprovantes financeiros',      critico:false, nota:'Anexos do financeiro'},
+  {col:'historicoRD',           label:'Histórico importado (RD)',      critico:false, nota:'Importação do RD Station'},
+  {col:'usuarios',              label:'Usuários',                      critico:false, nota:'Só administrador precisa gravar'},
+  {col:'config',                label:'Configurações',                 critico:false, nota:'Só administrador precisa gravar'}
+];
+
+var BANCO_REGRA_TEXTO=''
+  +'// Cole DENTRO de  match /databases/{database}/documents {\n'
+  +'// Qualquer pessoa autenticada no sistema pode trabalhar:\n'
+  +'match /orcamentos/{doc} {\n'
+  +'  allow read, write: if request.auth != null;\n'
+  +'  match /{sub=**} {\n'
+  +'    allow read, write: if request.auth != null;\n'
+  +'  }\n'
+  +'}\n'
+  +'match /system/{doc}            { allow read, write: if request.auth != null; }\n'
+  +'match /anexos/{doc}            { allow read, write: if request.auth != null; }\n'
+  +'match /clientes/{doc}          { allow read, write: if request.auth != null; }\n'
+  +'match /eventos/{doc}           { allow read, write: if request.auth != null; }\n'
+  +'match /leads/{doc}             { allow read, write: if request.auth != null; }\n'
+  +'match /tarefas/{doc}           { allow read, write: if request.auth != null; }\n'
+  +'match /produtos/{doc}          { allow read, write: if request.auth != null; }\n'
+  +'match /produtoFotos/{doc}      { allow read, write: if request.auth != null; }\n'
+  +'match /unidadesEstoque/{doc}   { allow read, write: if request.auth != null; }\n'
+  +'match /movimentacoesEstoque/{doc} { allow read, write: if request.auth != null; }\n'
+  +'match /comprovantes/{doc}      { allow read, write: if request.auth != null; }\n'
+  +'match /historicoRD/{doc}       { allow read, write: if request.auth != null; }\n'
+  +'match /usuarios/{doc}          { allow read: if request.auth != null; allow write: if request.auth != null; }\n'
+  +'match /config/{doc}            { allow read: if request.auth != null; allow write: if request.auth != null; }';
+
+// Código e mensagem juntos: o código ajuda o administrador, a mensagem é a
+// mesma que a pessoa viu na tela de erro e faz a ligação entre as duas coisas.
+function _bancoErroTxt(e){
+  if(!e) return '';
+  var cod=e.code||'', msg=e.message||String(e);
+  if(cod && msg && msg.indexOf(cod)<0) return cod+' — '+msg;
+  return msg||cod;
+}
+
+function _bancoRefTeste(col, idTeste){
+  if(col.indexOf('/')>=0){
+    var p=col.split('/');
+    return fbDb.collection(p[0]).doc(p[1]).collection(p[2]).doc(idTeste);
+  }
+  return fbDb.collection(col).doc(idTeste);
+}
+
+function bancoDiagAbrir(){
+  _abrirOv('bancodiag-ov');
+  var ta=document.getElementById('bancodiag-regra');
+  if(ta) ta.value=BANCO_REGRA_TEXTO;
+  var res=document.getElementById('bancodiag-resultado');
+  if(res && !res.innerHTML.trim()){
+    res.innerHTML='<div style="font-size:11px;color:var(--text-muted);padding:12px 14px;border:1px dashed var(--border);border-radius:6px">'
+      +'Clique em <b>▶️ Testar meu acesso</b>. O teste grava e apaga um registrinho em cada lugar — nada do seu trabalho é tocado.</div>';
+  }
+  var quem=document.getElementById('bancodiag-quem');
+  if(quem){
+    var email=(usuarioAtual&&usuarioAtual.id)||'(não identificado)';
+    var nome=(usuarioAtual&&usuarioAtual.nome)||'';
+    var uid='';
+    try{ uid=(fbAuth&&fbAuth.currentUser&&fbAuth.currentUser.uid)||''; }catch(e){}
+    quem.innerHTML='<b>'+eh(nome)+'</b> · '+eh(email)
+      +(uid?'<div style="font-size:10px;color:var(--text-dim);margin-top:2px">Identificador no Firebase (auth.uid): <code>'+eh(uid)+'</code></div>'
+           :'<div style="font-size:10px;color:#c62828;margin-top:2px">⚠️ Sem sessão ativa no Firebase — o banco vai recusar tudo. Saia e entre no sistema de novo.</div>');
+  }
+}
+
+async function bancoDiagTestar(){
+  var btn=document.getElementById('bancodiag-btn');
+  var res=document.getElementById('bancodiag-resultado');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Testando...'; }
+  if(res) res.innerHTML='<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:12px">⏳ Testando cada coleção...</div>';
+
+  var idTeste='_diagperm_'+Date.now();
+  var linhas=[];
+  for(var i=0;i<BANCO_COLECOES.length;i++){
+    var c=BANCO_COLECOES[i];
+    var leu=false, gravou=false, erroL='', erroG='';
+    var ref=null;
+    try{ ref=_bancoRefTeste(c.col, idTeste); }catch(e){ erroL=erroG=(e&&e.message)||String(e); }
+    if(ref){
+      try{ await ref.get(); leu=true; }
+      catch(e){ erroL=_bancoErroTxt(e); }
+      try{
+        await ref.set({diagnostico:true, quando:new Date().toISOString()});
+        gravou=true;
+        try{ await ref.delete(); }catch(eDel){}
+      }catch(e){ erroG=_bancoErroTxt(e); }
+    }
+    linhas.push({c:c, leu:leu, gravou:gravou, erroL:erroL, erroG:erroG});
+  }
+
+  // O usuário existe na coleção de usuários? É onde muita regra se apoia.
+  var usuarioDoc=null;
+  try{
+    var email=(usuarioAtual&&usuarioAtual.id)||'';
+    if(email){
+      var snap=await fbDb.collection('usuarios').doc(email).get();
+      usuarioDoc=snap.exists?'existe':'NÃO EXISTE';
+    }
+  }catch(e){ usuarioDoc='não foi possível conferir ('+((e&&e.code)||e.message||e)+')'; }
+
+  var criticosRuins=linhas.filter(function(l){ return l.c.critico && !l.gravou; });
+  var todosRuins=linhas.every(function(l){ return !l.gravou; });
+  var essencialOk=linhas.filter(function(l){ return l.c.critico; }).every(function(l){ return l.gravou; });
+  // "Grava em tudo" só pode ser dito quando NADA foi recusado — senão o
+  // relatório afirmaria estar tudo certo com um ⛔ visível na tabela abaixo.
+  var tudoOk=essencialOk && linhas.every(function(l){ return l.gravou; });
+
+  var cab, cor, bg, bd;
+  if(todosRuins){
+    cab='⛔ Este login não consegue gravar em NENHUMA parte do banco.';
+    cor='#c62828'; bg='#ffebee'; bd='#ef9a9a';
+  }else if(criticosRuins.length){
+    cab='⛔ Este login é recusado em '+criticosRuins.length+' lugar(es) essencial(is) — é por isso que o salvamento falha.';
+    cor='#c62828'; bg='#ffebee'; bd='#ef9a9a';
+  }else if(tudoOk){
+    cab='✅ Este login grava em tudo que precisa para trabalhar.';
+    cor='#2e7d32'; bg='#e8f5e9'; bd='#a5d6a7';
+  }else{
+    var recusadas=linhas.filter(function(l){ return !l.gravou; });
+    cab='⚠️ Dá para trabalhar: o essencial está liberado. Mas '+recusadas.length+' coleção(ões) foram recusadas — '
+       +recusadas.map(function(l){ return l.c.label; }).join(', ')+'.';
+    cor='#e65100'; bg='#fff3e0'; bd='#ffb74d';
+  }
+
+  var h='<div style="background:'+bg+';border:1px solid '+bd+';border-left:5px solid '+cor+';border-radius:7px;padding:11px 14px;margin-bottom:11px">'
+    +'<div style="font-size:12.5px;font-weight:900;color:'+cor+'">'+cab+'</div>'
+    +(criticosRuins.length?'<div style="font-size:11px;color:var(--text-dim);margin-top:4px">Recusado em: <b>'
+      +criticosRuins.map(function(l){ return eh(l.c.label); }).join(', ')+'</b></div>':'')
+    +'<div style="font-size:10.5px;color:var(--text-dim);margin-top:5px">Cadastro deste e-mail na coleção <b>usuarios</b>: <b>'+eh(usuarioDoc||'—')+'</b></div>'
+    +'</div>';
+
+  h+='<div style="border:1px solid var(--border);border-radius:6px;overflow:hidden">'
+    +'<div style="display:flex;gap:10px;padding:6px 12px;background:var(--surface-2);font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-dim);font-weight:800">'
+    +'<span style="flex:1">Onde</span><span style="width:52px;text-align:center">Lê</span><span style="width:62px;text-align:center">Grava</span></div>';
+  linhas.forEach(function(l){
+    var ruim=l.c.critico && !l.gravou;
+    h+='<div style="display:flex;gap:10px;align-items:baseline;padding:7px 12px;border-bottom:1px solid var(--border);font-size:11px'+(ruim?';background:#ffebee':'')+'">'
+      +'<span style="flex:1"><b>'+eh(l.c.label)+'</b>'+(l.c.critico?' <span style="font-size:9px;color:#c62828;border:1px solid #ef9a9a;border-radius:3px;padding:0 4px">essencial</span>':'')
+      +'<div style="font-size:9.5px;color:var(--text-dim)">'+eh(l.c.nota)+' · <code>'+eh(l.c.col)+'</code></div>'
+      +((l.erroG&&!l.gravou)?'<div style="font-size:9.5px;color:#c62828">'+eh(l.erroG)+'</div>':'')
+      +'</span>'
+      +'<span style="width:52px;text-align:center">'+(l.leu?'✅':'⛔')+'</span>'
+      +'<span style="width:62px;text-align:center;font-weight:800;color:'+(l.gravou?'#2e7d32':'#c62828')+'">'+(l.gravou?'✅':'⛔')+'</span>'
+      +'</div>';
+  });
+  h+='</div>';
+
+  h+='<div style="margin-top:11px;font-size:10.5px;color:var(--text-dim);line-height:1.6">'
+    +'<b>O que fazer com isto:</b> se houver ⛔ em algo marcado como <b>essencial</b>, a correção é nas '
+    +'<b>Regras de Segurança</b> do Firebase — não adianta mexer no sistema nem no computador. '
+    +'Tire um print desta tela e mande para um administrador, ou use o texto pronto abaixo.'
+    +'</div>';
+
+  if(res) res.innerHTML=h;
+  if(btn){ btn.disabled=false; btn.textContent='▶️ Testar meu acesso'; }
+  return {linhas:linhas, criticosRuins:criticosRuins.length, tudoOk:tudoOk, usuarioDoc:usuarioDoc};
+}
+
+function bancoDiagCopiarRegra(){
+  var ta=document.getElementById('bancodiag-regra');
+  if(!ta) return;
+  ta.select();
+  var ok=false;
+  try{ ok=document.execCommand('copy'); }catch(e){}
+  if(!ok && navigator.clipboard){ try{ navigator.clipboard.writeText(ta.value); ok=true; }catch(e){} }
+  var st=document.getElementById('bancodiag-copia-status');
+  if(st){
+    st.textContent=ok?'✅ Copiado — cole no console do Firebase.':'Selecione o texto e copie com Ctrl+C.';
+    setTimeout(function(){ st.textContent=''; }, 4000);
+  }
+}
 
 /* ── Diagnóstico de anexos (Admin) ──────────────────────────────────────
    Transforma um problema invisível (regra do banco) em algo conferível em
