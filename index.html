@@ -1087,9 +1087,6 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;display:block;margin-bottom:4px">Consultor</label>
         <select id="funil-home-filtro-cons" onchange="funilHomeFiltrarLista()" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--text);background:var(--surface-2)">
           <option value="">Todos</option>
-          <option>Fabiano Santos</option><option>Giovana Borges</option>
-          <option>Jessica Elisandra</option><option>Rafael Oliveira</option>
-          <option>Wagner Wolff</option>
         </select>
       </div>
       <div style="min-width:150px">
@@ -2767,9 +2764,6 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
           <label style="font-size:9px;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:3px">Consultor</label>
           <select id="os-filtro-cons" style="padding:6px 9px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px">
             <option value="">Todos</option>
-            <option>Fabiano Santos</option><option>Giovana Borges</option>
-            <option>Jéssica Elisandra</option><option>Rafael Oliveira</option>
-            <option>Wagner Wolff</option>
           </select>
         </div>
         <div style="display:flex;gap:5px;flex-wrap:wrap">
@@ -3230,6 +3224,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     <span>🎛️ Itens do Orçamento</span>
     <button type="button" class="btn btn-o btn-sm" style="font-weight:700" onclick="abrirFaltantesOrcamento()">⚠️ Itens Faltantes deste Orçamento</button>
   </div>
+  <div id="com-ext-box" style="display:none;background:var(--surface-2);border:1px solid var(--border);border-left:4px solid var(--R);border-radius:6px;padding:9px 13px;margin-bottom:9px"></div>
   <div class="tabs" id="tabs-wrap"></div>
   <div id="panes-wrap"></div>
 </div>
@@ -3461,9 +3456,6 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <label>Consultor</label>
       <select id="funil-filtro-cons" onchange="funilFiltrarLista()" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--text);background:var(--surface)">
         <option value="">Todos</option>
-        <option>Fabiano Santos</option><option>Giovana Borges</option>
-        <option>Jéssica Elisandra</option><option>Rafael Oliveira</option>
-        <option>Wagner Wolff</option>
       </select>
     </div>
     <div style="min-width:150px">
@@ -6848,12 +6840,50 @@ var PRECOS={
 // logado em cima de toda a tabela de preços (cadastrado por usuário na
 // aba Usuários do Admin). Itens personalizados (valor digitado à mão)
 // não passam por aqui — só os selecionados da tabela.
-function precoComMarkup(v){
-  if(usuarioAtual && usuarioAtual.cargo==='Consultor Externo' && usuarioAtual.comissaoPercentual){
-    var pct=Number(usuarioAtual.comissaoPercentual)||0;
-    return v*(1+pct/100);
-  }
-  return v;
+/* ── COMISSÃO DO CONSULTOR EXTERNO ─────────────────────────────────────────
+   O Consultor Externo tem um percentual próprio (cadastrado em Admin >
+   Usuários) que entra por cima da tabela de preços. Dois pedidos do Fabiano:
+
+   1) "algumas negociações acordamos valores diferenciados" → uma caixa para
+      desmarcar a comissão neste orçamento. Ao desmarcar, TUDO que já está
+      lançado é recalculado; marcar de novo devolve o acréscimo.
+   2) "tire totalmente os 30% do custo extra" → a seção Custos Extra nunca
+      recebe a comissão, com a caixa marcada ou não. Custo extra é repasse,
+      não locação.
+
+   Como o valor é guardado: a comissão é aplicada no momento em que o item
+   entra, então o que fica em r.val já vem acrescido. Para a caixa poder
+   ligar e desligar sem erro de arredondamento, cada linha guarda também
+   r.valBase — o preço limpo. A conta é sempre val = valBase × (1 + pct/100),
+   nunca val ÷ 1,3 em cima de um val que já foi mexido.
+
+   Linhas antigas (lançadas antes disto) não têm valBase. Nelas o valBase é
+   deduzido na primeira vez que a caixa é usada, e o usuário é avisado — é
+   uma dedução, não um dado, e mexe em dinheiro.
+   ────────────────────────────────────────────────────────────────────────── */
+
+// Seções que nunca recebem comissão.
+var COM_EXT_SECS_FORA={extra:1};
+
+var comExtAtiva=true;   // estado da caixa neste orçamento
+var comExtPct=0;        // percentual gravado junto, pra o orçamento não mudar
+                        // de valor se o percentual do usuário for alterado depois
+
+function _comExtPctUsuario(){
+  if(usuarioAtual && usuarioAtual.cargo==='Consultor Externo') return Number(usuarioAtual.comissaoPercentual)||0;
+  return 0;
+}
+function _comExtDisponivel(){ return _comExtPctUsuario()>0; }
+// Percentual que vale para ESTE orçamento.
+function _comExtPctVigente(){ return comExtPct || _comExtPctUsuario(); }
+function _comExtSecRecebe(sec){ return !COM_EXT_SECS_FORA[sec]; }
+
+function precoComMarkup(v, sec){
+  if(sec!==undefined && !_comExtSecRecebe(sec)) return v;
+  if(!comExtAtiva) return v;
+  var pct=_comExtPctUsuario();
+  if(!pct) return v;
+  return v*(1+pct/100);
 }
 
 async function doLogin(){
@@ -6971,6 +7001,8 @@ async function _entrarNoSistema(email, perfil, opts){
   tiposEventoCarregar();
   painelLedCarregar();
   eqCarregar();
+  // A caixa da comissão só existe para quem tem percentual cadastrado.
+  try{ renderComissaoExterna(); }catch(e){}
   cargosCarregar();
   tarefasCarregarStorage().then(atualizarBadgeTarefas);
   tiposTarefaCarregar();
@@ -7057,7 +7089,7 @@ async function logout(forcado){
     }catch(e4){}
   }
   try{await fbAuth.signOut();}catch(e7){}
-  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();driveIdAtual=null;driveNumAtual=null;
+  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();comExtAtiva=true;comExtPct=0;(function(){try{renderComissaoExterna();}catch(e){}})();driveIdAtual=null;driveNumAtual=null;
   _atualizarBtnClonar();
   // Limpa o formulário e fecha qualquer tela sobreposta — senão o próximo
   // login (ou a volta depois de uma queda de sessão) encontra o último
@@ -8067,7 +8099,7 @@ function _popularSelecaoComSinaleira(s,sel){
   var valorAtual=sel.value;
   sel.innerHTML='<option value="">— Selecione da tabela —</option>';
   _itensDisponiveisSecao(s).forEach(function(it){
-    var vAj=precoComMarkup(it.v);
+    var vAj=precoComMarkup(it.v, s);
     var o=document.createElement('option');
     o.value=JSON.stringify({n:it.n,v:vAj});
     var rotulo=it.n+(vAj?' – R$ '+fmtN(vAj):'');
@@ -8091,9 +8123,104 @@ function addRow(s,name,val,custom){
   var st=state[s],aid=st.ambAtiva;if(!st.rows[aid])st.rows[aid]=[];
   var painel=s==='video'&&isPainel(name),palco=s==='estrutura'&&isPalco(name);
   var dAuto=s==='servico'?getDiasEvento():s==='logistica'?1:getDiariasEquip();
-  st.rows[aid].push({id:uid(),name:name,val:val,qty:1,diaria:dAuto,diaria_auto:true,custom:custom,painel:painel,larg:painel?3:palco?4:null,alt:painel?2:null,prof:palco?2:null,elev:painel?0:null,elObj:palco?ELEV[0]:null,palco:palco,carp:palco?false:null,carpT:palco?'novo':null,carpC:palco?'':null,marg:20});
+  var _pctN=(comExtAtiva && _comExtSecRecebe(s))?_comExtPctUsuario():0;
+  var _baseN=_pctN?((parseFloat(val)||0)/(1+_pctN/100)):(parseFloat(val)||0);
+  st.rows[aid].push({id:uid(),name:name,val:val,valBase:_baseN,comPct:_pctN,qty:1,diaria:dAuto,diaria_auto:true,custom:custom,painel:painel,larg:painel?3:palco?4:null,alt:painel?2:null,prof:palco?2:null,elev:painel?0:null,elObj:palco?ELEV[0]:null,palco:palco,carp:palco?false:null,carpT:palco?'novo':null,carpC:palco?'':null,marg:20});
   renderRows(s);calc();marcarAlterado();
 }
+// Recalcula o valor de todas as linhas a partir do preço limpo (valBase),
+// aplicando a comissão só onde ela vale. Devolve quantas linhas mudaram e
+// quantas precisaram ter o valBase DEDUZIDO (linhas antigas).
+function comExtRecalcular(){
+  var pct=_comExtPctVigente();
+  var mudou=0, deduzidas=0;
+  SECS.forEach(function(sec){
+    var st=state[sec];
+    if(!st||!st.rows) return;
+    Object.keys(st.rows).forEach(function(aid){
+      (st.rows[aid]||[]).forEach(function(r){
+        if(!r) return;
+        var valAtual=parseFloat(r.val)||0;
+        if(r.valBase===undefined || r.valBase===null){
+          // Linha antiga: o que está embutido tem que ser deduzido do que o
+          // sistema fazia antes — comissão em todas as seções.
+          var pctEmbutido=(_comExtPctUsuario()||pct);
+          r.valBase=pctEmbutido?(valAtual/(1+pctEmbutido/100)):valAtual;
+          r.comPct=pctEmbutido;
+          deduzidas++;
+        }
+        var pctNovo=(comExtAtiva && _comExtSecRecebe(sec))?pct:0;
+        var novo=pctNovo?(r.valBase*(1+pctNovo/100)):r.valBase;
+        if(Math.abs(novo-valAtual)>0.004){ r.val=novo; mudou++; }
+        else { r.val=novo; }
+        r.comPct=pctNovo;
+      });
+    });
+  });
+  return {mudou:mudou, deduzidas:deduzidas};
+}
+
+function _comExtTemLinhasAntigas(){
+  var n=0;
+  SECS.forEach(function(sec){
+    var st=state[sec];
+    if(!st||!st.rows) return;
+    Object.keys(st.rows).forEach(function(aid){
+      (st.rows[aid]||[]).forEach(function(r){
+        if(r && (r.valBase===undefined||r.valBase===null)) n++;
+      });
+    });
+  });
+  return n;
+}
+
+function renderComissaoExterna(){
+  var box=document.getElementById('com-ext-box');
+  if(!box) return;
+  if(!_comExtDisponivel()){ box.style.display='none'; return; }
+  var pct=_comExtPctVigente();
+  box.style.display='block';
+  box.innerHTML='<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">'
+    +'<input type="checkbox" id="chk-com-ext" '+(comExtAtiva?'checked':'')+' onchange="comExtMudar(this.checked)" style="width:15px;height:15px;accent-color:var(--R);cursor:pointer;flex:none">'
+    +'<span style="font-size:11.5px;font-weight:700;color:'+(comExtAtiva?'var(--text)':'var(--text-dim)')+'">'
+      +'Aplicar minha comissão de '+_comExtFmtPct(pct)+'% nos itens</span>'
+    +'</label>'
+    +'<div style="font-size:10px;color:var(--text-dim);margin-top:4px;line-height:1.5">'
+    +(comExtAtiva
+      ? 'Os itens estão com os '+_comExtFmtPct(pct)+'% somados. <b>Desmarque</b> quando o valor deste evento foi acordado sem a comissão — todos os itens já lançados são recalculados na hora.'
+      : '<b style="color:#e65100">Comissão desligada neste orçamento.</b> Os itens estão pelo preço de tabela. Marque de volta para somar os '+_comExtFmtPct(pct)+'% outra vez.')
+    +'<br>💰 <b>Custos Extra nunca recebem a comissão</b>, marcada ou não.'
+    +'</div>';
+}
+function _comExtFmtPct(p){
+  var n=Number(p)||0;
+  return (Math.round(n*100)/100).toLocaleString('pt-BR');
+}
+
+function comExtMudar(ligada){
+  var antigas=_comExtTemLinhasAntigas();
+  if(!ligada && antigas>0){
+    if(!confirm('⚠️ '+antigas+' item(ns) deste orçamento foram lançados antes deste controle.\n\n'
+      +'O sistema vai considerar que eles INCLUEM a comissão e removê-la.\n'
+      +'Se este orçamento não foi montado com a sua comissão, os valores vão baixar indevidamente — '
+      +'basta marcar a caixa de volta para desfazer.\n\nContinuar?')){
+      var cb=document.getElementById('chk-com-ext');
+      if(cb) cb.checked=true;
+      return;
+    }
+  }
+  comExtAtiva=!!ligada;
+  if(!comExtPct) comExtPct=_comExtPctUsuario();
+  var r=comExtRecalcular();
+  SECS.forEach(function(sec){ try{ renderRows(sec); }catch(e){} });
+  calc();
+  renderComissaoExterna();
+  marcarAlterado();
+  _toastMostrar(ligada
+    ? '✅ Comissão de '+_comExtFmtPct(_comExtPctVigente())+'% aplicada — '+r.mudou+' item(ns) recalculado(s).'
+    : '✅ Comissão removida — '+r.mudou+' item(ns) voltaram ao preço de tabela.', 'ok', 6000);
+}
+
 // ── Helper: célula de diária com toggle automático/manual ──────────────────
 function diariaCell(s,aid,r){
   var isAuto = (r.diaria_auto !== false); // padrão true para itens antigos sem a flag
@@ -8272,7 +8399,14 @@ function updRow(s,aid,id,field,val){
     // Item personalizado: o valor digitado é sempre um preço "cru" novo (não
     // existe base de catálogo aqui), então a comissão do Consultor Externo
     // entra do mesmo jeito que entra nos itens escolhidos da tabela.
-    if(field==='val'&&r.custom) parsed=precoComMarkup(parsed);
+    if(field==='val'&&r.custom) parsed=precoComMarkup(parsed, s);
+    // Guarda o preço limpo junto, pra caixa de comissão poder ligar/desligar
+    // depois sem ter que adivinhar o que estava embutido.
+    if(field==='val'){
+      var pctR=(comExtAtiva && _comExtSecRecebe(s))?_comExtPctUsuario():0;
+      r.valBase=pctR?(parsed/(1+pctR/100)):parsed;
+      r.comPct=pctR;
+    }
     r[field]=parsed;
   }
   else if(field==='diaria'){r[field]=parseFloat(val)||0.5; r.diaria_auto=false;}
@@ -8708,7 +8842,9 @@ function getDadosCompletos(){
     finObs:finObs,
     finImposto:finImposto,
     finNumVenda:finNumVenda,
-    descDiscriminarPDF:descDiscriminarPDF
+    descDiscriminarPDF:descDiscriminarPDF,
+    comExtAtiva:comExtAtiva,
+    comExtPct:comExtPct
   };
 }
 
@@ -9772,6 +9908,11 @@ function _aplicarDadosOrcamento(dados){
   aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();contratoStatus=dados.contratoStatus||'';contratoHist=(dados.contratoHist||[]).slice();creditoStatus=dados.creditoStatus||'';creditoHist=(dados.creditoHist||[]).slice();montagemLiberacaoManual=!!dados.montagemLiberacaoManual;montagemLiberacaoManualHist=(dados.montagemLiberacaoManualHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcAtualGoogleAgenda=Object.assign({},dados.googleAgenda||{});anexosOrc=(dados.anexos||[]).map(function(a){return Object.assign({},a);});orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
   descDiscriminarPDF=(dados.descDiscriminarPDF!==undefined)?!!dados.descDiscriminarPDF:true;
   var _chkDescDiscr=document.getElementById('chk-desc-discriminar');if(_chkDescDiscr)_chkDescDiscr.checked=descDiscriminarPDF;
+  // Orçamento salvo antes deste controle não tem a marca: assume LIGADA, que
+  // era o único comportamento possível até aqui.
+  comExtAtiva=(dados.comExtAtiva!==undefined)?!!dados.comExtAtiva:true;
+  comExtPct=Number(dados.comExtPct)||0;
+  try{ renderComissaoExterna(); }catch(e){}
   _limparCamposComercialDOM();
   // Orçamento que já chegou do servidor marcado "aprovado" mas com conteúdo
   // diferente do aprovado: alguém alterou por um caminho que escapou da
@@ -10031,7 +10172,7 @@ async function limpar(){
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
   snapshotAprovado=null;
-  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();
+  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();comExtAtiva=true;comExtPct=0;(function(){try{renderComissaoExterna();}catch(e){}})();
   buildTabs();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   _atualizarBtnClonar();
   // Gerar número automático para o novo orçamento
@@ -10115,7 +10256,7 @@ async function clonarOrcamento(){
   _limparCamposComercialDOM();
   snapshotAnterior=null;
   snapshotAprovado=null;
-  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();
+  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();comExtAtiva=true;comExtPct=0;(function(){try{renderComissaoExterna();}catch(e){}})();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
 
   // ── Manter forma de pagamento padrão se não havia (campo f-pgto já copiado do form original)
@@ -11062,7 +11203,7 @@ async function _resetarEstadoOrcamento(){
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
   snapshotAprovado=null;
-  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();
+  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();comExtAtiva=true;comExtPct=0;(function(){try{renderComissaoExterna();}catch(e){}})();
   buildTabs();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   _atualizarBtnClonar();
 }
@@ -16206,6 +16347,13 @@ function funilRenderKanban(kanbanId, filtroConsElId, statusElId, alertaElId){
   var kEl = document.getElementById(kanbanId);
   if(!kEl) return;
   _fkOrdemSincronizarSelects();
+  // Nomes vindos do cadastro + os que aparecem nos próprios dados do quadro.
+  try{
+    var _extras=[];
+    (_funilCache||[]).forEach(function(o){ var c=o.form&&o.form['f-cons']; if(c) _extras.push(c); });
+    (typeof LEADS!=='undefined'?LEADS:[]).forEach(function(l){ if(l.consultor) _extras.push(l.consultor); });
+    _popularFiltroConsultores(filtroConsElId, _extras);
+  }catch(e){ console.warn('filtro de consultor do funil:',e); }
   var filtroConsEl = document.getElementById(filtroConsElId);
   var cons = (filtroConsEl||{}).value || '';
   // Cargo sem permissão "Ver Funil de Toda a Equipe" -> força ver só os
@@ -18021,15 +18169,11 @@ function fecharFunilHome(){
 }
 
 function funilHomePopularConsultores(){
-  var sel = document.getElementById('funil-home-filtro-cons');
-  if(!sel || !usuarioAtual) return;
-  // Sincronizar lista de consultores com o filtro do funil principal
-  var selOriginal = document.getElementById('funil-filtro-cons');
-  if(selOriginal){
-    var atualVal = sel.value;
-    sel.innerHTML = selOriginal.innerHTML;
-    sel.value = atualVal || '';
-  }
+  if(!usuarioAtual) return;
+  var extras=[];
+  (_funilCache||[]).forEach(function(o){ var c=o.form&&o.form['f-cons']; if(c) extras.push(c); });
+  (typeof LEADS!=='undefined'?LEADS:[]).forEach(function(l){ if(l.consultor) extras.push(l.consultor); });
+  _popularFiltroConsultores('funil-home-filtro-cons', extras);
 }
 
 function funilHomeRecarregar(){
@@ -27613,6 +27757,31 @@ async function _salvarNomesConsultoresPublico(){
   }catch(e){ console.warn('_salvarNomesConsultoresPublico:',e); }
 }
 
+// Nomes publicados em config/consultoresNomes, guardados em memória para os
+// filtros de Consultor das outras telas (funil, OS). Antes essas listas eram
+// <option> escritas à mão no HTML — foi assim que o Luiz Fonseca, admitido
+// depois, simplesmente não aparecia em nenhum filtro.
+var CONSULTORES_NOMES=[];
+
+// Popula um <select> de filtro por consultor. "extras" são nomes que aparecem
+// nos próprios dados da tela (ex.: o consultor de um orçamento antigo de
+// alguém que saiu da empresa) — entram mesmo sem estar na lista oficial, pra
+// que nenhum registro fique inacessível pelo filtro.
+function _popularFiltroConsultores(selId, extras, rotuloTodos){
+  var sel=document.getElementById(selId);
+  if(!sel) return;
+  var atual=sel.value;
+  var base=(CONSULTORES_NOMES||[]).slice();
+  if(!base.length && Array.isArray(USUARIOS)) base=USUARIOS.map(function(u){return u.nome;});
+  (extras||[]).forEach(function(n){ if(n) base.push(n); });
+  if(atual) base.push(atual);
+  base=base.filter(function(n,i){ return n && base.indexOf(n)===i; })
+           .sort(function(a,b){ return a.localeCompare(b,'pt-BR',{sensitivity:'base'}); });
+  sel.innerHTML='<option value="">'+(rotuloTodos||'Todos')+'</option>'
+    +base.map(function(n){ return '<option'+(n===atual?' selected':'')+'>'+eh(n)+'</option>'; }).join('');
+  sel.value=atual||'';
+}
+
 async function popularConsultores(){
   var sel=document.getElementById('f-cons');
   if(!sel) return;
@@ -27628,6 +27797,7 @@ async function popularConsultores(){
   // coleção completa).
   if(!nomes.length && Array.isArray(USUARIOS)) nomes=USUARIOS.map(function(u){return u.nome;});
   nomes=nomes.filter(function(n,i){return n&&nomes.indexOf(n)===i;}).sort(function(a,b){return a.localeCompare(b,'pt-BR');});
+  CONSULTORES_NOMES=nomes.slice();
   // Preserva o consultor de um orçamento antigo mesmo se a pessoa não estiver mais na lista ativa
   if(atual && nomes.indexOf(atual)<0) nomes.push(atual);
   sel.innerHTML='<option value="">Selecione...</option>'+nomes.map(function(n){return '<option'+(n===atual?' selected':'')+'>'+eh(n)+'</option>';}).join('');
@@ -28379,6 +28549,11 @@ function osModAtalho(tipo){
 }
 
 async function osModBuscar(){
+  try{
+    var _ex=[];
+    (_osModDados||[]).forEach(function(o){ var c=o.form&&o.form['f-cons']; if(c) _ex.push(c); });
+    _popularFiltroConsultores('os-filtro-cons', _ex);
+  }catch(e){ console.warn('filtro de consultor da OS:',e); }
   var de  =document.getElementById('os-filtro-de').value;
   var ate =document.getElementById('os-filtro-ate').value;
   var cons=document.getElementById('os-filtro-cons').value;
