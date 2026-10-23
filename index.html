@@ -2736,8 +2736,13 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <input type="date" id="esc-data" onchange="escMudarData(this.value)" style="font-size:11px;padding:5px 7px">
         <span id="esc-titulo" style="font-size:13px;font-weight:900;color:var(--text);text-transform:uppercase"></span>
         <div style="flex:1"></div>
-        <button class="btn btn-b btn-sm" onclick="escGerarDaAgenda()" title="Cria as etapas deste dia a partir dos eventos da Agenda — não duplica o que já existe">⚡ Gerar etapas da Agenda</button>
-        <button class="btn btn-o btn-sm" onclick="escNovoCard('')" title="Cria um card em branco">➕ Etapa avulsa</button>
+        <button class="btn btn-b btn-sm" id="esc-btn-gerar" onclick="escGerarDaAgenda()" title="Cria as etapas deste dia a partir dos eventos da Agenda — não duplica o que já existe">⚡ Gerar etapas da Agenda</button>
+        <button class="btn btn-o btn-sm" id="esc-btn-avulsa" onclick="escNovoCard('')" title="Cria um card em branco">➕ Etapa avulsa</button>
+      </div>
+
+      <div id="esc-aviso-leitura" style="display:none;background:rgba(144,202,249,.1);border:1px solid #1565c0;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#90caf9">
+        🔒 <b>Somente leitura</b> — você pode consultar a escala e exportar em PDF/Excel, mas não alterá-la.
+        Para montar e editar, peça a liberação em <b>Admin › Permissões por Cargo › 🚚 Logística</b>.
       </div>
 
       <!-- Faixa de dias: solte um card aqui para movê-lo de dia -->
@@ -2772,18 +2777,21 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
 
     <!-- ── ABA CADASTROS ─────────────────────────────────────────────── -->
     <div id="esc-pane-cad" style="display:none">
+      <div id="esc-aviso-cad" style="display:none;background:rgba(144,202,249,.1);border:1px solid #1565c0;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#90caf9">
+        🔒 <b>Somente leitura</b> — você vê quem está cadastrado, mas não pode alterar.
+      </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px">
         <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:13px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px">
             <div style="font-size:12px;font-weight:900;color:var(--text)">👷 Colaboradores</div>
-            <button class="btn btn-r btn-sm" onclick="escCadNovo('equipe')">➕ Novo</button>
+            <button class="btn btn-r btn-sm" id="esc-cad-btn-equipe" onclick="escCadNovo('equipe')">➕ Novo</button>
           </div>
           <div id="esc-cad-equipe"></div>
         </div>
         <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:13px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px">
             <div style="font-size:12px;font-weight:900;color:var(--text)">🚐 Frota</div>
-            <button class="btn btn-r btn-sm" onclick="escCadNovo('frota')">➕ Novo</button>
+            <button class="btn btn-r btn-sm" id="esc-cad-btn-frota" onclick="escCadNovo('frota')">➕ Novo</button>
           </div>
           <div id="esc-cad-frota"></div>
         </div>
@@ -25918,6 +25926,29 @@ var _escSujos={};    // 'AAAA-MM' → true, meses com alteração não salva
 var _escArrasto=null;// {tipo:'chip'|'card', ...}
 var _escAbaAtual='quadro';
 
+/* ── Quem pode mexer ───────────────────────────────────────────────────────
+   O acesso ao módulo é o de sempre (mod-escala, em Acessos por Cargo). Estas
+   duas separam VER de MEXER, em Admin › Permissões por Cargo › 🚚 Logística.
+   Exportar PDF/Excel continua liberado para quem só visualiza: é leitura.   */
+function _escPodeEditar(){
+  return typeof permTemAcesso!=='function' || permTemAcesso('esc-editar');
+}
+function _escPodeCadastrar(){
+  return typeof permTemAcesso!=='function' || permTemAcesso('esc-cadastros');
+}
+// Guarda de verdade, não só visual: a tela esconde os botões, mas um card que
+// ficou na tela antes da permissão mudar não pode gravar escondido.
+function _escBloqueado(){
+  if(_escPodeEditar()) return false;
+  alert('🔒 Você pode consultar e exportar a escala, mas não alterá-la.\n\nPeça a um Gerente, Diretor ou Administrador para liberar em Admin › Permissões por Cargo › 🚚 Logística.');
+  return true;
+}
+function _escCadBloqueado(){
+  if(_escPodeCadastrar()) return false;
+  alert('🔒 Você não pode alterar o cadastro de colaboradores e veículos.\n\nPeça a um Gerente, Diretor ou Administrador para liberar em Admin › Permissões por Cargo › 🚚 Logística.');
+  return true;
+}
+
 /* ── Persistência ───────────────────────────────────────────────────────── */
 
 async function escCarregarCadastros(){
@@ -25957,6 +25988,7 @@ async function escCarregarMes(mesAno){
 }
 
 async function escSalvar(){
+  if(_escBloqueado()) return;
   var meses=Object.keys(_escSujos);
   if(!meses.length){ _toastMostrar('Nada para salvar — a escala já está gravada.','',4000); return; }
   var btn=document.getElementById('esc-btn-salvar');
@@ -26139,6 +26171,7 @@ function _escFreelancersUsados(){
 // pessoa cadastrada — caso contrário a mesma pessoa viraria duas na conta do
 // conflito, que é justamente o que não pode acontecer.
 function escAddFreelancer(cardId){
+  if(_escBloqueado()) return;
   var nome=prompt('Nome do freelancer:\n\nEle fica só nesta escala — não entra no cadastro.');
   if(nome===null) return;
   nome=String(nome).replace(/\s+/g,' ').trim();
@@ -26161,6 +26194,7 @@ function escAddFreelancer(cardId){
 // Se o freelancer virou gente de casa, o 📌 passa ele para o cadastro e troca
 // a referência em todas as escalas carregadas — o histórico não quebra.
 function escPromoverFree(cardId,valor){
+  if(_escBloqueado()||_escCadBloqueado()) return;
   var nome=_escNomeFree(valor);
   if(!confirm('📌 Passar "'+nome+'" para o cadastro de colaboradores?\n\nAs escalas já montadas passam a apontar para o cadastro, e ele fica disponível em todas as etapas.')) return;
   var novo={id:uid(), nome:nome, funcao:'Freelancer', cor:ESC_CORES[ESC_EQUIPE.length%ESC_CORES.length], ativo:true};
@@ -26262,6 +26296,7 @@ function escCorPessoa(id){
 // presente naquele dia. Não duplica: se já existe card do mesmo orçamento e
 // do mesmo tipo, pula. Assim dá para clicar sem medo depois de ter editado.
 function escGerarDaAgenda(){
+  if(_escBloqueado()) return;
   var dia=_escData;
   // _logItens é montado por logRenderizar; se a Agenda não foi aberta nesta
   // sessão ele não existe. Monta aqui a partir do mesmo _dashDados.
@@ -26319,6 +26354,7 @@ function _escItensAgenda(){
 }
 
 function escNovoCard(tipo){
+  if(_escBloqueado()) return;
   var lista=escCards(_escData);
   lista.push({
     id:uid(), tipo:tipo||'separacao', evento:'', orcNum:'', driveId:'',
@@ -26332,6 +26368,7 @@ function escNovoCard(tipo){
 }
 
 function escExcluirCard(id){
+  if(_escBloqueado()) return;
   var c=escAcharCard(id);
   if(!c) return;
   if(!confirm('Excluir a etapa '+_escTipo(c.tipo).label+(c.evento?' de "'+c.evento+'"':'')+'?\n\nIsso não mexe no orçamento nem na Agenda — só tira o card da escala.')) return;
@@ -26348,6 +26385,7 @@ function escExcluirCard(id){
 // campo no meio da digitação. Só os horários disparam o recálculo dos
 // conflitos, que é leve e não mexe nos inputs.
 function escSet(id,campo,valor){
+  if(!_escPodeEditar()) return;
   var c=escAcharCard(id);
   if(!c) return;
   c[campo]=valor;
@@ -26356,6 +26394,7 @@ function escSet(id,campo,valor){
   if(campo==='saida'||campo==='local'||campo==='termino') escAtualizarConflitos();
 }
 function escSetTipo(id,valor){
+  if(_escBloqueado()) return;
   var c=escAcharCard(id);
   if(!c) return;
   c.tipo=valor;
@@ -26364,6 +26403,7 @@ function escSetTipo(id,valor){
   escRenderizar();
 }
 function escSetVeiculo(id,slot,valor){
+  if(_escBloqueado()) return;
   var c=escAcharCard(id);
   if(!c) return;
   if(!c.veiculos) c.veiculos=['',''];
@@ -26376,6 +26416,7 @@ function escSetVeiculo(id,slot,valor){
 // freelancer novo (que abre o prompt).
 function escEscalar(id,valor){
   if(!valor) return;
+  if(_escBloqueado()) return;
   if(valor==='__free__'){ escAddFreelancer(id); return; }
   escAddPessoa(id,valor);
 }
@@ -26390,6 +26431,7 @@ function escAddPessoa(id,valor){
   escRenderizar();
 }
 function escDelPessoa(id,valor){
+  if(_escBloqueado()) return;
   var c=escAcharCard(id);
   if(!c||!c.equipe) return;
   var i=c.equipe.indexOf(valor);
@@ -26404,11 +26446,13 @@ function escDelPessoa(id,valor){
 function escPermitir(ev){ ev.preventDefault(); if(ev.dataTransfer) ev.dataTransfer.dropEffect='move'; }
 
 function escDragChip(ev,cardId,kind,valor){
+  if(!_escPodeEditar()){ ev.preventDefault(); return; }
   _escArrasto={tipo:'chip', cardId:cardId, kind:kind, valor:valor};
   if(ev.dataTransfer){ ev.dataTransfer.effectAllowed='move'; try{ev.dataTransfer.setData('text/plain',valor);}catch(e){} }
   ev.stopPropagation();
 }
 function escDragCard(ev,cardId){
+  if(!_escPodeEditar()){ ev.preventDefault(); return; }
   _escArrasto={tipo:'card', cardId:cardId};
   if(ev.dataTransfer){ ev.dataTransfer.effectAllowed='move'; try{ev.dataTransfer.setData('text/plain',cardId);}catch(e){} }
 }
@@ -26418,6 +26462,7 @@ function escDragFim(){ _escArrasto=null; }
 // transfere a pessoa/veículo; se é um card, troca a ordem das colunas.
 function escDropNoCard(ev,cardId){
   ev.preventDefault(); ev.stopPropagation();
+  if(!_escPodeEditar()){ _escArrasto=null; return; }
   var a=_escArrasto; _escArrasto=null;
   if(!a) return;
   if(a.cardId===cardId) return;
@@ -26455,6 +26500,7 @@ function escDropNoCard(ev,cardId){
 // Soltar o card sobre um dia da faixa: move a etapa inteira para aquele dia.
 async function escDropNoDia(ev,iso){
   ev.preventDefault();
+  if(!_escPodeEditar()){ _escArrasto=null; return; }
   var a=_escArrasto; _escArrasto=null;
   if(!a||a.tipo!=='card'||iso===_escData) return;
   await escCarregarMes(iso.substring(0,7));
@@ -26489,9 +26535,49 @@ function escRenderizar(){
   if(tit) tit.textContent=_logTituloDia(_escData);
   escRenderFaixa();
   escRenderQuadro();
+  _escAplicarPermissoes();
   escAtualizarConflitos();
   escRelAtualizarInfo();
   escAtualizarBotaoSalvar();
+}
+
+// Modo leitura: em vez de montar duas versões de cada card (e fatalmente
+// esquecer um campo numa delas), desenha o quadro normal e desativa tudo o
+// que altera. Exportar continua liberado — é leitura.
+function _escAplicarPermissoes(){
+  var pode=_escPodeEditar();
+  ['esc-btn-salvar','esc-btn-gerar','esc-btn-avulsa'].forEach(function(id){
+    var b=document.getElementById(id);
+    if(b) b.style.display=pode?'':'none';
+  });
+  var aviso=document.getElementById('esc-aviso-leitura');
+  if(aviso) aviso.style.display=pode?'none':'';
+  if(pode) return;
+  var q=document.getElementById('esc-quadro');
+  if(!q) return;
+  q.querySelectorAll('input,select,textarea').forEach(function(el){ el.disabled=true; });
+  q.querySelectorAll('[draggable]').forEach(function(el){
+    el.removeAttribute('draggable');
+    el.style.cursor='default';
+  });
+  q.querySelectorAll('.esc-acao').forEach(function(el){ el.remove(); });
+}
+
+function _escAplicarPermissoesCad(){
+  var pode=_escPodeCadastrar();
+  var aviso=document.getElementById('esc-aviso-cad');
+  if(aviso) aviso.style.display=pode?'none':'';
+  ['esc-cad-btn-equipe','esc-cad-btn-frota'].forEach(function(id){
+    var b=document.getElementById(id);
+    if(b) b.style.display=pode?'':'none';
+  });
+  if(pode) return;
+  ['esc-cad-equipe','esc-cad-frota'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(!el) return;
+    el.querySelectorAll('input,select').forEach(function(x){ x.disabled=true; });
+    el.querySelectorAll('span[onclick]').forEach(function(x){ x.remove(); });
+  });
 }
 
 function escRenderFaixa(){
@@ -26555,8 +26641,8 @@ function _escCardHtml(c,cf){
       +'font-size:10px;font-weight:700;color:var(--text)">'
       +'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(cfl?(cfl==='grave'?'⛔ ':'⚠️ '):'')+(free?'✏️ ':'')+eh(escNomePessoa(pid))+'</span>'
       +'<span style="display:flex;gap:4px;flex:0 0 auto">'
-      +(free?'<span onclick="event.stopPropagation();escPromoverFree(\''+c.id+'\',\''+eh(pid)+'\')" title="Passar para o cadastro de colaboradores" style="cursor:pointer;color:#90caf9;font-weight:900">📌</span>':'')
-      +'<span onclick="event.stopPropagation();escDelPessoa(\''+c.id+'\',\''+eh(pid)+'\')" title="Tirar da escala" style="cursor:pointer;color:#ff8a8a;font-weight:900">✕</span>'
+      +(free?'<span class="esc-acao" onclick="event.stopPropagation();escPromoverFree(\''+c.id+'\',\''+eh(pid)+'\')" title="Passar para o cadastro de colaboradores" style="cursor:pointer;color:#90caf9;font-weight:900">📌</span>':'')
+      +'<span class="esc-acao" onclick="event.stopPropagation();escDelPessoa(\''+c.id+'\',\''+eh(pid)+'\')" title="Tirar da escala" style="cursor:pointer;color:#ff8a8a;font-weight:900">✕</span>'
       +'</span></div>';
   }).join('');
 
@@ -26604,7 +26690,7 @@ function _escCardHtml(c,cf){
     +'title="Arraste para trocar a ordem, ou solte num dia da faixa acima para mudar de dia" '
     +'style="display:flex;justify-content:space-between;align-items:center;gap:5px;padding:6px 8px;background:'+t.cor+'22;cursor:grab">'
     +'<span style="font-size:11px;font-weight:900;color:'+t.cor+'">⠿ '+t.ico+' '+t.label+'</span>'
-    +'<span onclick="escExcluirCard(\''+c.id+'\')" title="Excluir esta etapa" style="cursor:pointer;color:#ff8a8a;font-weight:900;font-size:12px">✕</span>'
+    +'<span class="esc-acao" onclick="escExcluirCard(\''+c.id+'\')" title="Excluir esta etapa" style="cursor:pointer;color:#ff8a8a;font-weight:900;font-size:12px">✕</span>'
     +'</div>'
 
     +'<div id="esccf-'+c.id+'"></div>'
@@ -26699,10 +26785,12 @@ function escRenderCadastros(){
         +'</div>';
     }).join(''):'<div style="font-size:11px;color:var(--text-muted)">Nenhum veículo cadastrado.</div>';
   }
+  _escAplicarPermissoesCad();
 }
 
 var _escCadTimer=null;
 function escCadSet(qual,i,campo,valor){
+  if(!_escPodeCadastrar()) return;
   var lista=qual==='equipe'?ESC_EQUIPE:ESC_FROTA;
   if(!lista[i]) return;
   lista[i][campo]=valor;
@@ -26713,6 +26801,7 @@ function escCadSet(qual,i,campo,valor){
 }
 
 function escCadNovo(qual){
+  if(_escCadBloqueado()) return;
   if(qual==='equipe') ESC_EQUIPE.push({id:uid(), nome:'', funcao:'', cor:ESC_CORES[ESC_EQUIPE.length%ESC_CORES.length], ativo:true});
   else ESC_FROTA.push({id:uid(), nome:'', placa:'', ativo:true});
   escRenderCadastros();
@@ -26720,6 +26809,7 @@ function escCadNovo(qual){
 }
 
 function escCadExcluir(qual,i){
+  if(_escCadBloqueado()) return;
   var lista=qual==='equipe'?ESC_EQUIPE:ESC_FROTA;
   if(!lista[i]) return;
   var nome=lista[i].nome||'(sem nome)';
@@ -27111,6 +27201,14 @@ var PERM_MODULOS = [
   ]},
   {id:'funil', label:'📊 Funil de Vendas', campos:[
     {id:'funil-ver-equipe', label:'Ver Funil/Tarefas de Toda a Equipe (desmarcado = vê só os próprios)'}
+  ]},
+  // Pedido do Fabiano: quem abre a Logística nem sempre é quem monta a
+  // escala. O acesso ao MÓDULO continua em "Acessos por Cargo" (mod-escala);
+  // aqui se separa ver de MEXER. Desmarcado, o cargo entra, consulta e
+  // exporta — mas não altera nada.
+  {id:'logistica', label:'🚚 Logística (escala do dia)', campos:[
+    {id:'esc-editar',    label:'Montar e editar a escala (desmarcado = só visualiza e exporta)'},
+    {id:'esc-cadastros', label:'Cadastrar colaboradores e veículos'}
   ]}
 ];
 
