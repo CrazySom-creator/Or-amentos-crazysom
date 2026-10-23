@@ -2351,7 +2351,8 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
           <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text-muted);pointer-events:none">R$</span>
           <input type="text" inputmode="decimal" id="meta-ev-total" placeholder="400.000,00" onfocus="metaMoedaFocarEditar(this)" onblur="metaMoedaFormatarExibir(this)" style="width:100%;padding:7px 10px 7px 32px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px">
         </div>
-        <p style="font-size:9px;color:var(--text-dim);margin:8px 0">Agrupa pela data em que o EVENTO acontece (não pela data em que a venda foi fechada). Distribua os 100% entre os 12 meses de realização. O detalhamento por consultor usa os % configurados na aba "Consultores".</p>
+        <p style="font-size:9px;color:var(--text-dim);margin:8px 0">Agrupa pela data em que o EVENTO acontece (não pela data em que a venda foi fechada). Distribua os 100% entre os 12 meses de realização. O detalhamento por consultor usa os % configurados na aba "Consultores".<br>
+        Abaixo aparecem <b>dois painéis da mesma meta</b>: o primeiro conta só os eventos que <b>já ocorreram</b> (data anterior a hoje); o segundo soma a esses o que já está <b>vendido e ainda vai acontecer</b> — é o quanto do ano já está garantido.</p>
         <div id="meta-ev-pct-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(85px,1fr));gap:6px"></div>
         <div id="meta-ev-pct-soma" style="font-size:10px;font-weight:800;margin-top:6px"></div>
         <button onclick="metasSalvar()" style="margin-top:8px;padding:7px 16px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Metas</button>
@@ -23132,14 +23133,28 @@ function _metaMesGanhoAuto(lista,mesAno,consultor){
 }
 
 // Igual acima, mas agrupando pela data do EVENTO (f-dia), não pela data de venda.
-function _metaMesEventoAuto(lista,mesAno,consultor){
+// corte: 'tudo' (padrão — tudo que está vendido para aquele mês, inclusive
+// o que ainda vai acontecer), 'realizado' (evento com data ANTERIOR a hoje,
+// ou seja já executado) ou 'arealizar' (vendido, data de hoje em diante).
+//
+// O padrão continua sendo 'tudo' de propósito: é o que o restante do sistema
+// (Resultados Mensais, Consultor × Eventos) já media, e mudar isso por baixo
+// alteraria números que ninguém pediu para alterar. Só a aba Meta de Eventos
+// passa o corte explicitamente.
+function _metaMesEventoAuto(lista,mesAno,consultor,corte){
+  var hoje=new Date().toISOString().split('T')[0];
   return (lista||[]).filter(function(o){
     if((o.dados&&o.dados.comercialStatus)!=='ganha') return false;
     var dtEv=(o.form&&o.form['f-dia'])||'';
     if(!dtEv||dtEv.substring(0,7)!==mesAno) return false;
     if(consultor&&(o.form&&o.form['f-cons'])!==consultor) return false;
+    if(corte==='realizado' && !(dtEv<hoje)) return false;
+    if(corte==='arealizar' && !(dtEv>=hoje)) return false;
     return true;
   });
+}
+function _metaValorEventoMes(lista,mesAno,corte){
+  return _metaMesEventoAuto(lista,mesAno,null,corte).reduce(function(t,o){ return t+dashValOrc(o); },0);
 }
 
 // Soma de dashValOrc de todos os orçamentos ganhos de um ANO inteiro (usado
@@ -23249,7 +23264,7 @@ function _metaResumoAno(cfg,ano,tipo,ganhosTodos){
   for(var m=1;m<=12;m++){
     var mm=(m<10?'0':'')+m;
     var mesAno=ano+'-'+mm;
-    var autoLista=tipo==='evento'?_metaMesEventoAuto(ganhosTodos,mesAno):_metaMesGanhoAuto(ganhosTodos,mesAno);
+    var autoLista=tipo==='evento'?_metaMesEventoAuto(ganhosTodos,mesAno,null,'realizado'):_metaMesGanhoAuto(ganhosTodos,mesAno);
     var autoValor=autoLista.reduce(function(t,o){return t+dashValOrc(o);},0);
     realizado+=_metaRealizadoMes(cfg,mesAno,autoValor);
   }
@@ -23648,7 +23663,9 @@ function metasRenderizarAba(aba){
 
   if(aba==='eventos'){
     metasRenderizarPctGrid('meta-ev-pct-grid','meta-ev-pct-soma',d.eventos,'meta-ev-pct-inp');
-    document.getElementById('metas-ev-resultado').innerHTML=_metasMontarTabelaMensal('evento',d.eventos,ano,ganhosTodos,'Meta de Eventos (mês de realização)');
+    document.getElementById('metas-ev-resultado').innerHTML=
+      _metasMontarTabelaMensal('evento',d.eventos,ano,ganhosTodos,'Meta de Eventos (mês de realização) — só eventos já ocorridos')
+      +_metasMontarTabelaEventosConsolidada(d.eventos,ano,ganhosTodos);
   }
 
   if(aba==='consevento'){
@@ -23671,7 +23688,9 @@ function _metasMontarTabelaMensal(tipo,cfg,ano,ganhosTodos,titulo){
     var mm=(m<10?'0':'')+m;
     var mesAno=ano+'-'+mm;
     var metaMes=_metaValorMes(cfg,mm);
-    var autoLista=tipo==='evento'?_metaMesEventoAuto(ganhosTodos,mesAno):_metaMesGanhoAuto(ganhosTodos,mesAno);
+    // 'evento' = Meta de Eventos: conta só evento com data já passada, que é
+    // o que o título e o rótulo "Realizado" sempre prometeram.
+    var autoLista=tipo==='evento'?_metaMesEventoAuto(ganhosTodos,mesAno,null,'realizado'):_metaMesGanhoAuto(ganhosTodos,mesAno);
     var autoValor=autoLista.reduce(function(t,o){return t+dashValOrc(o);},0);
     var realMes=_metaRealizadoMes(cfg,mesAno,autoValor);
     var isManual=cfg.realizadoManual&&cfg.realizadoManual[mesAno]!==undefined&&cfg.realizadoManual[mesAno]!==null;
@@ -23720,6 +23739,109 @@ function _metasMontarTabelaMensal(tipo,cfg,ano,ganhosTodos,titulo){
     +'<div style="margin-top:8px"><button onclick="metasSalvar()" style="padding:7px 16px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer">💾 Salvar Metas</button> <span class="metas-save-status-txt" style="font-size:10px;font-weight:700"></span></div>'
     +'</div>'
     :'<div class="dash-vazio">Preencha a meta total do ano acima e clique em Salvar.</div>');
+}
+
+
+/* ── META DE EVENTOS: REALIZADO + VENDIDO A REALIZAR ───────────────────────
+   O painel acima responde "quanto do ano já aconteceu". Este responde
+   "quanto do ano já está garantido" — soma o que já foi executado com o que
+   já está vendido e ainda vai acontecer.
+
+   Mesma meta anual e a mesma curva mensal do painel de cima: é a mesma meta
+   vista de outro ângulo, não uma segunda meta. Por isso aqui não há campo de
+   Realizado Manual: o valor manual lançado lá em cima já entra nesta conta,
+   e ter dois campos gravando na mesma chave só criaria conflito.
+   ────────────────────────────────────────────────────────────────────────── */
+function _metasMontarTabelaEventosConsolidada(cfg,ano,ganhosTodos){
+  var total=cfg.total||0;
+  if(!total) return '';
+  var hojeMes=new Date().toISOString().substring(0,7);
+  var linhas='', somaReal=0, somaFuturo=0;
+
+  for(var m=1;m<=12;m++){
+    var mm=(m<10?'0':'')+m;
+    var mesAno=ano+'-'+mm;
+    var metaMes=_metaValorMes(cfg,mm);
+    var vReal=_metaValorEventoMes(ganhosTodos,mesAno,'realizado');
+    var vFut =_metaValorEventoMes(ganhosTodos,mesAno,'arealizar');
+    // O manual lançado na tabela de cima é realizado — entra uma vez só.
+    var realComManual=_metaRealizadoMes(cfg,mesAno,vReal);
+    var manualAdd=realComManual-vReal;
+    var totalMes=realComManual+vFut;
+    somaReal+=realComManual; somaFuturo+=vFut;
+    var pct=metaMes>0?Math.round(totalMes/metaMes*100):0;
+    var cor=pct>=100?'#66bb6a':pct>=70?'#ffa726':'#ef5350';
+    var ehMesAtual=(mesAno===hojeMes);
+    linhas+='<tr style="border-bottom:1px solid var(--border-strong)'+(ehMesAtual?';background:rgba(144,202,249,.07)':'')+'">'
+      +'<td style="padding:6px 8px;color:#90caf9;font-weight:800">'+MESES_NOMES[m-1]+(ehMesAtual?' <span style="font-size:9px;color:var(--text-dim)">(mês atual)</span>':'')+'</td>'
+      +'<td style="text-align:right;color:var(--text-muted)">'+fmt(metaMes)+'</td>'
+      +'<td style="text-align:right;color:var(--text-dim)">'+(realComManual?fmt(realComManual):'—')
+        +(manualAdd>0?' <span title="inclui o Realizado Manual lançado na tabela acima" style="font-size:9px;color:#ffa726">✏️</span>':'')+'</td>'
+      +'<td style="text-align:right;color:'+(vFut?'#42a5f5':'var(--text-dim)')+'">'+(vFut?fmt(vFut):'—')+'</td>'
+      +'<td style="text-align:right;color:'+cor+';font-weight:800">'+fmt(totalMes)+'</td>'
+      +'<td style="text-align:center"><span style="padding:2px 8px;border-radius:10px;font-weight:900;font-size:11px;background:'+cor+'22;color:'+cor+';border:1px solid '+cor+'">'+pct+'%</span></td>'
+      +'</tr>';
+  }
+
+  var somaTotal=somaReal+somaFuturo;
+  var pctAno=total>0?Math.round(somaTotal/total*100):0;
+  var pctReal=total>0?Math.round(somaReal/total*100):0;
+  var corAno=pctAno>=100?'#66bb6a':pctAno>=70?'#ffa726':'#ef5350';
+  var faltam=total>somaTotal?total-somaTotal:0;
+  // Largura da parte azul (a realizar) dentro da mesma barra.
+  var larguraReal=Math.min(pctReal,100);
+  var larguraFut=Math.max(0,Math.min(pctAno,100)-larguraReal);
+
+  return '<div style="background:var(--surface-2);border:1px solid #1565c0;border-radius:8px;padding:16px;margin-bottom:12px">'
+    +'<div style="font-size:11px;font-weight:800;color:var(--text-dim);margin-bottom:8px">'
+      +'Realizado + Vendido a Realizar (mês de realização) '
+      +'<span style="font-size:10px;font-weight:600;color:var(--text-muted)">— quanto do ano já está garantido</span></div>'
+    +'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
+    +'<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:2px">Meta do Ano</div>'
+      +'<div style="font-size:22px;font-weight:900;color:var(--text)">'+fmt(total)+'</div></div>'
+    +'<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:2px">Realizado</div>'
+      +'<div style="font-size:22px;font-weight:900;color:#66bb6a">'+fmt(somaReal)+'</div>'
+      +'<div style="font-size:9px;color:var(--text-dim)">eventos já ocorridos</div></div>'
+    +'<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:2px">+ A Realizar</div>'
+      +'<div style="font-size:22px;font-weight:900;color:#42a5f5">'+fmt(somaFuturo)+'</div>'
+      +'<div style="font-size:9px;color:var(--text-dim)">vendido, data ainda por vir</div></div>'
+    +'<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:2px">Total Garantido</div>'
+      +'<div style="font-size:22px;font-weight:900;color:'+corAno+'">'+fmt(somaTotal)+'</div></div>'
+    +'<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:2px">Faltam Vender</div>'
+      +'<div style="font-size:22px;font-weight:900;color:'+(faltam>0?'#ef5350':'#66bb6a')+'">'+fmt(faltam)+'</div></div>'
+    +'<div style="text-align:center"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:800;margin-bottom:2px">Atingimento</div>'
+      +'<div style="font-size:28px;font-weight:900;color:'+corAno+'">'+pctAno+'%</div></div>'
+    +'</div>'
+    // Barra em duas cores: o que já aconteceu e o que está vendido pra frente.
+    +'<div style="background:var(--surface);border-radius:6px;overflow:hidden;height:20px;margin-bottom:6px;display:flex">'
+    +'<div style="width:'+larguraReal+'%;height:100%;background:linear-gradient(90deg,#2e7d32,#66bb6a);position:relative">'
+      +(larguraReal>=14?'<span style="position:absolute;right:7px;top:2px;font-size:10px;font-weight:900;color:#fff">'+pctReal+'%</span>':'')
+    +'</div>'
+    +'<div style="width:'+larguraFut+'%;height:100%;background:linear-gradient(90deg,#1565c0,#42a5f5);position:relative">'
+      +(larguraFut>=12?'<span style="position:absolute;right:7px;top:2px;font-size:10px;font-weight:900;color:#fff">+'+(pctAno-pctReal)+'%</span>':'')
+    +'</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:var(--text-dim);margin-bottom:12px">'
+      +'<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#66bb6a;margin-right:4px"></span>Realizado</span>'
+      +'<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#42a5f5;margin-right:4px"></span>Vendido a realizar</span>'
+      +'<span style="margin-left:auto">Total garantido: <b style="color:'+corAno+'">'+pctAno+'%</b> da meta do ano</span>'
+    +'</div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
+    +'<thead><tr style="border-bottom:2px solid #1565c0">'
+    +'<th style="text-align:left;padding:6px 8px;color:#42a5f5;font-size:10px;text-transform:uppercase">Mês</th>'
+    +'<th style="text-align:right;padding:6px 8px;color:var(--text-muted);font-size:10px">Meta</th>'
+    +'<th style="text-align:right;padding:6px 8px;color:var(--text-muted);font-size:10px">Realizado</th>'
+    +'<th style="text-align:right;padding:6px 8px;color:var(--text-muted);font-size:10px">A realizar</th>'
+    +'<th style="text-align:right;padding:6px 8px;color:var(--text-muted);font-size:10px">Total garantido</th>'
+    +'<th style="text-align:center;padding:6px 8px;color:var(--text-muted);font-size:10px">%</th>'
+    +'</tr></thead><tbody>'+linhas+'</tbody></table></div>'
+    +'<div style="margin-top:9px;font-size:10px;color:var(--text-dim);line-height:1.6">'
+    +'<b>Realizado</b> = Venda Ganha com data do evento anterior a hoje (já executado), igual ao painel de cima. '
+    +'<b>A realizar</b> = Venda Ganha com data de hoje em diante — já está vendido, ainda vai acontecer. '
+    +'Os valores lançados em <b>Realizado Manual</b> no painel acima entram aqui uma vez só, dentro de Realizado. '
+    +'Esta tabela é só de leitura: a meta e os valores manuais se editam no painel de cima.'
+    +'</div>'
+    +'</div>';
 }
 
 // Monta o conteúdo da aba Consultores: primeiro um resumo geral (meta/realizado
