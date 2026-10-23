@@ -2736,7 +2736,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <input type="date" id="esc-data" onchange="escMudarData(this.value)" style="font-size:11px;padding:5px 7px">
         <span id="esc-titulo" style="font-size:13px;font-weight:900;color:var(--text);text-transform:uppercase"></span>
         <div style="flex:1"></div>
-        <button class="btn btn-b btn-sm" id="esc-btn-gerar" onclick="escGerarDaAgenda()" title="Cria as etapas deste dia a partir dos eventos da Agenda — não duplica o que já existe">⚡ Gerar etapas da Agenda</button>
+        <button class="btn btn-b btn-sm" id="esc-btn-gerar" onclick="escGerarDaAgenda()" title="Cria as etapas dos eventos da Agenda no PERÍODO DOS RELATÓRIOS escolhido abaixo — não duplica o que já existe">⚡ Gerar etapas da Agenda</button>
         <button class="btn btn-o btn-sm" id="esc-btn-avulsa" onclick="escNovoCard('')" title="Cria um card em branco">➕ Etapa avulsa</button>
       </div>
 
@@ -26295,12 +26295,9 @@ function escCorPessoa(id){
 // Lê os eventos que ocupam o dia na Agenda de Eventos e cria um card por fase
 // presente naquele dia. Não duplica: se já existe card do mesmo orçamento e
 // do mesmo tipo, pula. Assim dá para clicar sem medo depois de ter editado.
-function escGerarDaAgenda(){
-  if(_escBloqueado()) return;
-  var dia=_escData;
-  // _logItens é montado por logRenderizar; se a Agenda não foi aberta nesta
-  // sessão ele não existe. Monta aqui a partir do mesmo _dashDados.
-  var itens=(window._logItens&&window._logItens.length)?window._logItens:_escItensAgenda();
+// Gera as etapas de UM dia. Não renderiza nem avisa — quem chama decide,
+// porque o botão agora pode varrer um período inteiro.
+function _escGerarNoDia(dia,itens){
   var achados=[];
   itens.forEach(function(it){
     if(dia<it.range.inicio || dia>it.range.fim) return;
@@ -26308,10 +26305,7 @@ function escGerarDaAgenda(){
       achados.push({it:it, fase:fase});
     });
   });
-  if(!achados.length){
-    alert('A Agenda não tem nenhum evento fechado ou pré-reservado em '+fD(dia)+'.\n\nSe o evento existe mas não aparece, confira em 📅 Agenda de Eventos se ele está como Venda Ganha (ou com pré-reserva criada no Google Agenda).');
-    return;
-  }
+  if(!achados.length) return {criados:0, pulados:0};
   var lista=escCards(dia);
   var criados=0, pulados=0;
   achados.forEach(function(a){
@@ -26341,8 +26335,48 @@ function escGerarDaAgenda(){
     criados++;
   });
   if(criados) _escMarcarSujo(dia);
+  return {criados:criados, pulados:pulados};
+}
+
+// ⚡ Gerar: usa o PERÍODO DOS RELATÓRIOS, não só o dia à vista (pedido do
+// Fabiano — escolher 01/11 a 15/11, gerar tudo e já exportar o período).
+// Com o período num dia só, é o comportamento de antes. Com mais de um dia
+// pergunta antes: criar duas semanas de etapas de uma vez sem avisar seria
+// uma surpresa desagradável de desfazer.
+async function escGerarDaAgenda(){
+  if(_escBloqueado()) return;
+  var p=_escRelFaixa();
+  var nDias=Math.round((new Date(p.ate+'T12:00:00')-new Date(p.de+'T12:00:00'))/86400000)+1;
+  if(nDias>1 && !confirm('⚡ GERAR ETAPAS DA AGENDA\n\nPeríodo: '+fD(p.de)+' a '+fD(p.ate)+' ('+nDias+' dias).\n\n'
+    +'Serão criadas as etapas de montagem, operação e desmontagem de todos os eventos fechados e pré-reservados nesse período. '
+    +'O que já existe não é duplicado.\n\nNada é gravado agora: você confere na tela e clica em Salvar depois.\n\nContinuar?')) return;
+
+  await _escCarregarFaixa(p.de,p.ate);
+  // _logItens é montado por logRenderizar; se a Agenda não foi aberta nesta
+  // sessão ele não existe. Monta aqui a partir do mesmo _dashDados.
+  var itens=(window._logItens&&window._logItens.length)?window._logItens:_escItensAgenda();
+
+  var criados=0, pulados=0, diasComEtapa=0, dia=p.de, guarda=0;
+  while(dia<=p.ate && guarda++<400){
+    var r=_escGerarNoDia(dia,itens);
+    criados+=r.criados; pulados+=r.pulados;
+    if(r.criados||r.pulados) diasComEtapa++;
+    dia=_logAddDias(dia,1);
+  }
+
+  if(!criados && !pulados){
+    alert('A Agenda não tem nenhum evento fechado ou pré-reservado entre '+fD(p.de)+' e '+fD(p.ate)+'.\n\n'
+      +'Se o evento existe mas não aparece, confira em 📅 Agenda de Eventos se ele está como Venda Ganha (ou com pré-reserva criada no Google Agenda).');
+    return;
+  }
+  // Leva a tela para o primeiro dia do período que ganhou etapa — gerar 15
+  // dias e continuar olhando um dia vazio pareceria que não funcionou.
+  if(criados && (_escData<p.de || _escData>p.ate)) _escData=p.de;
   escRenderizar();
-  _toastMostrar('⚡ '+criados+' etapa(s) criada(s) a partir da Agenda'+(pulados?' · '+pulados+' já existia(m)':'')+' — <b>confira e clique em Salvar</b>.','',8000);
+  _toastMostrar('⚡ '+criados+' etapa(s) criada(s) em '+diasComEtapa+' dia(s)'
+    +(pulados?' · '+pulados+' já existia(m)':'')
+    +(nDias>1?' · período '+fD(p.de)+' a '+fD(p.ate):'')
+    +' — <b>confira e clique em Salvar</b>.','',9000);
 }
 
 // Mesma regra da grade da Agenda (_logOcupaAgenda + _logRangeEvento), para o
@@ -26606,7 +26640,7 @@ function escRenderQuadro(){
   var lista=escCards(_escData);
   if(!lista.length){
     el.innerHTML='<div class="dash-vazio" style="padding:26px">Nenhuma etapa montada para '+fD(_escData)+'.'
-      +'<div style="margin-top:8px;font-size:11px;color:var(--text-dim)">Use <b>⚡ Gerar etapas da Agenda</b> para trazer montagem, operação e desmontagem dos eventos deste dia, ou <b>➕ Etapa avulsa</b> para criar a separação da véspera.</div></div>';
+      +'<div style="margin-top:8px;font-size:11px;color:var(--text-dim)">Use <b>⚡ Gerar etapas da Agenda</b> para trazer montagem, operação e desmontagem dos eventos do <b>período escolhido abaixo</b>, ou <b>➕ Etapa avulsa</b> para criar a separação da véspera.</div></div>';
     return;
   }
   var cf=escConflitos(_escData);
@@ -26952,6 +26986,47 @@ async function escExportarExcel(){
 
 /* ── PDF ───────────────────────────────────────────────────────────────── */
 
+// O card impresso é o mesmo da tela (pedido do Fabiano: "o PDF no mesmo
+// formato de visualização do sistema") — cabeçalho colorido pela etapa, os
+// mesmos rótulos, os três horários lado a lado, os chips de equipe nas cores
+// de cada pessoa. O que muda é só o que não faz sentido no papel: os campos
+// viram texto em vez de input, e o "MOVER PARA" sai fora.
+function _escCardImpresso(l){
+  var c=l.card, t=_escTipo(c.tipo);
+  var grav=l.conflitos.length?(l.conflitos.some(function(x){return x.grave;})?'grave':'possivel'):'';
+  var borda=grav==='grave'?'#ff5555':(grav==='possivel'?'#ffa726':'#ddd');
+
+  function campo(rot,val,largura){
+    return '<div class="cp"'+(largura?' style="width:'+largura+'"':'')+'>'
+      +'<div class="rot">'+rot+'</div>'
+      +'<div class="val">'+(val||'—')+'</div></div>';
+  }
+
+  var chips=(c.equipe||[]).map(function(pid){
+    var cor=escCorPessoa(pid), free=_escEhFree(pid);
+    var cfl='';
+    for(var i=0;i<l.conflitos.length;i++) if(l.conflitos[i].chave===_escChaveConflito(pid)) cfl=l.conflitos[i].grave?'grave':'possivel';
+    return '<div class="chip" style="background:'+cor+'22;border-left:3px '+(free?'dashed':'solid')+' '+cor
+      +(cfl?';box-shadow:0 0 0 1px '+(cfl==='grave'?'#ff5555':'#ffa726'):'')+'">'
+      +(cfl?(cfl==='grave'?'⛔ ':'⚠️ '):'')+(free?'✏️ ':'')+eh(escNomePessoa(pid))+'</div>';
+  }).join('');
+
+  var ve=(c.veiculos||[]);
+  return '<div class="card" style="border-color:'+borda+'">'
+    +'<div class="chd" style="background:'+t.cor+'22;color:'+t.cor+';border-top:3px solid '+t.cor+'">'+t.ico+' '+t.label+'</div>'
+    +(grav?'<div class="cfl" style="background:'+(grav==='grave'?'#ff5555':'#ffa726')+'22;color:'+(grav==='grave'?'#c62828':'#e65100')+'">'
+      +(grav==='grave'?'⛔ ':'⚠️ ')+'Conflito: '+eh(l.conflitos.map(function(x){return x.nome;}).join(', '))+'</div>':'')
+    +'<div class="cbd">'
+    +campo('EVENTO / CLIENTE',eh(c.evento))
+    +'<div class="lin">'+campo('SAÍDA',eh(c.saida),'33%')+campo('NO LOCAL',eh(c.local),'33%')+campo('TÉRMINO',eh(c.termino),'33%')+'</div>'
+    +campo('ENDEREÇO / LOCAL',eh(c.endereco))
+    +campo('OBSERVAÇÕES',eh(c.obs).replace(/\n/g,'<br>'))
+    +'<div class="lin">'+campo('VEÍCULO 1',eh(ve[0]?escNomeVeiculo(ve[0]):''),'50%')+campo('VEÍCULO 2',eh(ve[1]?escNomeVeiculo(ve[1]):''),'50%')+'</div>'
+    +'<div class="cp"><div class="rot">EQUIPE</div>'+(chips||'<div class="val">ninguém escalado</div>')+'</div>'
+    +(c.orcNum?'<div class="pe">Orç. '+eh(c.orcNum)+'</div>':'')
+    +'</div></div>';
+}
+
 async function escExportarPDF(){
   var p=_escRelFaixa();
   // A janela precisa abrir dentro do clique, antes de qualquer await, ou o
@@ -26971,8 +27046,9 @@ async function escExportarPDF(){
   var hoje=new Date().toLocaleString('pt-BR');
   var nomeArq='CrazySom_Escala_'+p.de.replace(/-/g,'')+(p.de!==p.ate?('_a_'+p.ate.replace(/-/g,'')):'');
 
-  // Um bloco por dia; dentro dele, uma tabela por etapa. Cada dia começa em
-  // página nova (menos o primeiro, pra não sair folha em branco na frente).
+  // Um bloco por dia; dentro dele, os cards lado a lado como na tela. Cada
+  // dia começa em página nova (menos o primeiro, pra não sair folha em
+  // branco na frente) — assim dá pra destacar a folha de cada dia e entregar.
   var porDia={}, ordemDias=[];
   linhas.forEach(function(l){
     if(!porDia[l.dia]){ porDia[l.dia]=[]; ordemDias.push(l.dia); }
@@ -26980,22 +27056,12 @@ async function escExportarPDF(){
   });
 
   var corpo=ordemDias.map(function(dia,iDia){
-    var blocos=porDia[dia].map(function(l){
-      var c=l.card, t=_escTipo(c.tipo);
-      var eq=_escLinhaEquipe(c), ve=_escLinhaVeiculos(c);
-      return '<table class="bloco"><thead><tr><th colspan="2" style="background:'+t.cor+';color:#fff">'+t.ico+' '+t.label+' — '+eh(c.evento||'(sem evento)')+'</th></tr></thead><tbody>'
-        +'<tr><td class="r">Saída</td><td>'+eh(c.saida||'—')+'</td></tr>'
-        +'<tr><td class="r">No local</td><td>'+eh(c.local||'—')+'</td></tr>'
-        +(c.termino?'<tr><td class="r">Término</td><td>'+eh(c.termino)+'</td></tr>':'')
-        +'<tr><td class="r">Endereço</td><td>'+eh(c.endereco||'—')+'</td></tr>'
-        +'<tr><td class="r">Veículos</td><td>'+(ve.length?eh(ve.join(' · ')):'—')+'</td></tr>'
-        +'<tr><td class="r">Equipe</td><td><b>'+(eq.length?eh(eq.join(' · ')):'—')+'</b></td></tr>'
-        +(c.obs?'<tr><td class="r">Observações</td><td>'+eh(c.obs).replace(/\n/g,'<br>')+'</td></tr>':'')
-        +(c.orcNum?'<tr><td class="r">Orçamento</td><td>'+eh(c.orcNum)+'</td></tr>':'')
-        +(l.conflitos.length?'<tr><td class="r" style="color:#c62828">Conflito</td><td style="color:#c62828">'+eh(l.conflitos.map(function(x){return x.nome;}).join(', '))+'</td></tr>':'')
-        +'</tbody></table>';
-    }).join('');
-    return '<div class="dia'+(iDia?' quebra':'')+'"><h2>'+eh(_logTituloDia(dia))+' <small>'+porDia[dia].length+' etapa(s)</small></h2>'+blocos+'</div>';
+    var cards=porDia[dia].map(_escCardImpresso).join('');
+    var cf=porDia[dia].filter(function(l){ return l.conflitos.length; }).length;
+    return '<div class="dia'+(iDia?' quebra':'')+'">'
+      +'<h2>'+eh(_logTituloDia(dia))+' <small>'+porDia[dia].length+' etapa(s)'
+      +(cf?' · <b style="color:#c62828">'+cf+' com conflito</b>':'')+'</small></h2>'
+      +'<div class="cards">'+cards+'</div></div>';
   }).join('');
 
   w.document.open();
@@ -27005,20 +27071,24 @@ async function escExportarPDF(){
     +'.hdr{background:#d63447;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-radius:6px}'
     +'.hdr h1{font-size:15px;font-weight:900}'
     +'.hdr span{font-size:10px;opacity:.85;text-align:right}'
-    +'h2{font-size:12px;color:#d63447;border-bottom:2px solid #d63447;padding-bottom:4px;margin:0 0 9px;text-transform:uppercase}'
+    +'h2{font-size:12px;color:#d63447;border-bottom:2px solid #d63447;padding-bottom:4px;margin:0 0 8px;text-transform:uppercase}'
     +'h2 small{font-weight:400;color:#888;text-transform:none}'
-    +'table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:10px}'
-    +'th{text-align:left;padding:6px;font-size:11px}'
-    +'td{padding:5px 6px;border-bottom:1px solid #eee;vertical-align:top}'
-    +'td.r{width:92px;color:#666;font-weight:700;background:#fafafa}'
-    // Nem uma linha nem um card inteiro podem ser fatiados na virada de
-    // página — sem isto a etapa sai pela metade e parece dado faltando.
-    +'tr{page-break-inside:avoid;break-inside:avoid}'
-    +'table.bloco{page-break-inside:avoid;break-inside:avoid}'
-    +'thead{display:table-header-group}'
-    +'tbody{display:table-row-group}'
-    // Cada dia começa em folha nova, pra escala de um dia não se misturar com
-    // a do outro na hora de distribuir para a equipe.
+    // Mesma leitura da tela: cards lado a lado. Três por folha A4 retrato é o
+    // que mantém o texto legível sem espremer o endereço.
+    +'.cards{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start}'
+    +'.card{width:32.4%;border:1px solid #ddd;border-radius:6px;overflow:hidden;background:#fff}'
+    // Um card nunca pode ser cortado na virada de página — metade da escala de
+    // alguém em cada folha é pior do que uma folha com sobra.
+    +'.card{page-break-inside:avoid;break-inside:avoid}'
+    +'.chd{padding:5px 7px;font-size:9.5px;font-weight:900}'
+    +'.cfl{padding:3px 7px;font-size:8px;font-weight:800}'
+    +'.cbd{padding:6px 7px}'
+    +'.cp{margin-bottom:5px}'
+    +'.lin{display:flex;gap:4px}'
+    +'.rot{font-size:7px;letter-spacing:.3px;color:#999;text-transform:uppercase;font-weight:800;margin-bottom:1px}'
+    +'.val{font-size:9px;color:#111;border-bottom:1px solid #eee;padding-bottom:2px;min-height:12px;word-break:break-word}'
+    +'.chip{font-size:8.5px;font-weight:700;padding:2px 5px;border-radius:3px;margin-bottom:2px}'
+    +'.pe{font-size:7.5px;color:#aaa;border-top:1px solid #eee;padding-top:3px;margin-top:3px}'
     +'.quebra{page-break-before:always;break-before:page}'
     +'.dia{margin-bottom:12px}'
     +'#pw{padding-bottom:8mm}'
@@ -27040,7 +27110,7 @@ async function escExportarPDF(){
     +'var opt={margin:[6,5,10,5],filename:"'+nomeArq+'.pdf",image:{type:"jpeg",quality:1},'
     +'html2canvas:{scale:2,useCORS:true,logging:false,backgroundColor:"#ffffff"},'
     +'jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},'
-    +'pagebreak:{mode:["css","legacy"],avoid:["tr","table"]}};'
+    +'pagebreak:{mode:["css","legacy"],avoid:".card"}};'
     +'html2pdf().set(opt).from(document.getElementById("pw")).save().then(function(){'
     +'document.getElementById("st").style.background="#2e7d32";'
     +'document.getElementById("st").textContent="PDF salvo! Pode fechar esta janela.";'
