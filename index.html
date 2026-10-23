@@ -26275,6 +26275,19 @@ function _escChipConflito(cf,cardId,valor,kind){
 /* ── Cadastros: nomes e listas ──────────────────────────────────────────── */
 
 function _escAtivo(x){ return x && x.ativo!==false; }
+// Os conflitos de um card vêm um por PAR: com a mesma pessoa cruzando três
+// etapas, o nome dela apareceria três vezes na tarja. Junta por chave antes
+// de mostrar.
+function _escNomesConflito(lista){
+  var vistos={}, out=[];
+  (lista||[]).forEach(function(x){
+    if(vistos[x.chave]) return;
+    vistos[x.chave]=1;
+    out.push((x.kind==='pessoa'?'👷 ':'🚐 ')+x.nome);
+  });
+  return out;
+}
+
 function escNomePessoa(id){
   if(_escEhFree(id)) return _escNomeFree(id);
   for(var i=0;i<ESC_EQUIPE.length;i++) if(ESC_EQUIPE[i].id===id) return ESC_EQUIPE[i].nome;
@@ -26784,7 +26797,7 @@ function escAtualizarConflitos(){
     if(card) card.style.borderColor=(g==='grave'?'#ff5555':(g==='possivel'?'#ffa726':_escTipo(c.tipo).cor));
     if(!box) return;
     if(!g){ box.innerHTML=''; return; }
-    var lista=(cf.porCard[c.id]||[]).map(function(x){ return (x.kind==='pessoa'?'👷 ':'🚐 ')+x.nome; });
+    var lista=_escNomesConflito(cf.porCard[c.id]);
     var cor2=g==='grave'?'#ff5555':'#ffa726';
     box.innerHTML='<div style="background:'+cor2+'22;color:'+cor2+';font-size:9px;font-weight:800;padding:4px 8px">'
       +(g==='grave'?'⛔ ':'⚠️ ')+'Conflito: '+eh(lista.join(', '))+'</div>';
@@ -26971,7 +26984,7 @@ async function escExportarExcel(){
       _escLinhaVeiculos(c).join(' · '),
       _escLinhaEquipe(c).join(' · '),
       c.obs||'',
-      l.conflitos.map(function(x){ return (x.grave?'CONFLITO: ':'possível: ')+x.nome; }).join(' · ')
+      (l.conflitos.length?(l.conflitos.some(function(x){return x.grave;})?'CONFLITO: ':'possível: ')+_escNomesConflito(l.conflitos).join(' · '):'')
     ].map(_escCsvCampo).join(';'));
   });
 
@@ -27015,7 +27028,7 @@ function _escCardImpresso(l){
   return '<div class="card" style="border-color:'+borda+'">'
     +'<div class="chd" style="background:'+t.cor+'22;color:'+t.cor+';border-top:3px solid '+t.cor+'">'+t.ico+' '+t.label+'</div>'
     +(grav?'<div class="cfl" style="background:'+(grav==='grave'?'#ff5555':'#ffa726')+'22;color:'+(grav==='grave'?'#c62828':'#e65100')+'">'
-      +(grav==='grave'?'⛔ ':'⚠️ ')+'Conflito: '+eh(l.conflitos.map(function(x){return x.nome;}).join(', '))+'</div>':'')
+      +(grav==='grave'?'⛔ ':'⚠️ ')+'Conflito: '+eh(_escNomesConflito(l.conflitos).join(', '))+'</div>':'')
     +'<div class="cbd">'
     +campo('EVENTO / CLIENTE',eh(c.evento))
     +'<div class="lin">'+campo('SAÍDA',eh(c.saida),'33%')+campo('NO LOCAL',eh(c.local),'33%')+campo('TÉRMINO',eh(c.termino),'33%')+'</div>'
@@ -27055,13 +27068,28 @@ async function escExportarPDF(){
     porDia[l.dia].push(l);
   });
 
+  // Os cards saem em LINHAS de 3 montadas aqui, não num flex-wrap solto. O
+  // "avoid" do html2pdf sabe empurrar um elemento inteiro para a próxima
+  // folha, mas não sabe reflowar: com três cards lado a lado ele tratava
+  // cada um por si e acabava cortando os vizinhos no meio (relato do
+  // Fabiano: "está cortando"). Sendo a LINHA o bloco indivisível, a quebra
+  // só pode cair entre linhas.
+  var POR_LINHA=3;
   var corpo=ordemDias.map(function(dia,iDia){
-    var cards=porDia[dia].map(_escCardImpresso).join('');
-    var cf=porDia[dia].filter(function(l){ return l.conflitos.length; }).length;
+    var ls=porDia[dia], linhasHtml='';
+    for(var i=0;i<ls.length;i+=POR_LINHA){
+      var naLinha=ls.slice(i,i+POR_LINHA);
+      // Completa a última linha com espaços vazios para os cards não
+      // esticarem e ficarem de larguras diferentes das demais linhas.
+      var vazios='';
+      for(var k=naLinha.length;k<POR_LINHA;k++) vazios+='<div class="card vazio"></div>';
+      linhasHtml+='<div class="linha">'+naLinha.map(_escCardImpresso).join('')+vazios+'</div>';
+    }
+    var cf=ls.filter(function(l){ return l.conflitos.length; }).length;
     return '<div class="dia'+(iDia?' quebra':'')+'">'
-      +'<h2>'+eh(_logTituloDia(dia))+' <small>'+porDia[dia].length+' etapa(s)'
+      +'<h2>'+eh(_logTituloDia(dia))+' <small>'+ls.length+' etapa(s)'
       +(cf?' · <b style="color:#c62828">'+cf+' com conflito</b>':'')+'</small></h2>'
-      +'<div class="cards">'+cards+'</div></div>';
+      +linhasHtml+'</div>';
   }).join('');
 
   w.document.open();
@@ -27075,11 +27103,16 @@ async function escExportarPDF(){
     +'h2 small{font-weight:400;color:#888;text-transform:none}'
     // Mesma leitura da tela: cards lado a lado. Três por folha A4 retrato é o
     // que mantém o texto legível sem espremer o endereço.
-    +'.cards{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start}'
+    // A LINHA é a unidade que não pode ser partida — ver o comentário na
+    // montagem do corpo. align-items:stretch deixa os três da mesma altura,
+    // o que também dá uma borda de corte limpa entre uma linha e outra.
+    +'.linha{display:flex;gap:6px;align-items:stretch;margin-bottom:6px}'
+    +'.linha{page-break-inside:avoid;break-inside:avoid}'
     +'.card{width:32.4%;border:1px solid #ddd;border-radius:6px;overflow:hidden;background:#fff}'
-    // Um card nunca pode ser cortado na virada de página — metade da escala de
-    // alguém em cada folha é pior do que uma folha com sobra.
-    +'.card{page-break-inside:avoid;break-inside:avoid}'
+    +'.card.vazio{border:none;background:none}'
+    // Título de dia sozinho no pé da folha, com a escala só na seguinte, é
+    // tão ruim quanto o card cortado.
+    +'h2{page-break-after:avoid;break-after:avoid}'
     +'.chd{padding:5px 7px;font-size:9.5px;font-weight:900}'
     +'.cfl{padding:3px 7px;font-size:8px;font-weight:800}'
     +'.cbd{padding:6px 7px}'
@@ -27110,7 +27143,7 @@ async function escExportarPDF(){
     +'var opt={margin:[6,5,10,5],filename:"'+nomeArq+'.pdf",image:{type:"jpeg",quality:1},'
     +'html2canvas:{scale:2,useCORS:true,logging:false,backgroundColor:"#ffffff"},'
     +'jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},'
-    +'pagebreak:{mode:["css","legacy"],avoid:".card"}};'
+    +'pagebreak:{mode:["css","legacy"],avoid:[".linha",".card"]}};'
     +'html2pdf().set(opt).from(document.getElementById("pw")).save().then(function(){'
     +'document.getElementById("st").style.background="#2e7d32";'
     +'document.getElementById("st").textContent="PDF salvo! Pode fechar esta janela.";'
