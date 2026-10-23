@@ -2751,6 +2751,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         arraste o <b>⠿ topo do card</b> sobre outro card para trocar a ordem, ou sobre um dia da faixa acima para mover de dia ·
         <span style="color:#ff5555;font-weight:800">vermelho</span> = a mesma pessoa/veículo em duas etapas com horário cruzado ·
         <span style="color:#ffa726;font-weight:800">amarelo</span> = possível conflito (falta horário para ter certeza).
+        <b>✏️ Freelancer</b> no "+ Add" escala alguém só digitando o nome, sem cadastrar — ele conta no conflito igual aos demais, e o <b>📌</b> no chip passa ele para o cadastro quando virar gente de casa.
         Nada é gravado até clicar em <b>💾 Salvar</b>.
       </div>
     </div>
@@ -26076,6 +26077,93 @@ function _escJanela(c){
   return {ini:ini, fim:fim, exato:exato, semHora:false};
 }
 
+/* ── Freelancers: escalados sem passar pelo cadastro ───────────────────────
+   Pedido do Fabiano: "preciso inserir colaboradores freelancer sem
+   necessidade de cadastro". Um freelancer é guardado no card como
+   'free:<nome>' em vez de um id do cadastro — não cria registro nenhum, some
+   junto com a escala. Para o resto do módulo ele é um colaborador normal:
+   entra na equipe, arrasta entre cards e CONTA NO CONFLITO de horário, que é
+   o motivo de existir o aviso.                                               */
+var ESC_FREE_PREFIX='free:';
+function _escEhFree(v){ return String(v||'').indexOf(ESC_FREE_PREFIX)===0; }
+function _escNomeFree(v){ return String(v||'').substring(ESC_FREE_PREFIX.length); }
+
+// Chave usada para juntar as escalas da MESMA pessoa na hora de procurar
+// conflito. Do cadastro, é o id. Freelancer, é o nome sem acento, sem espaço
+// sobrando e sem caixa — senão "João" num card e "joao " noutro passariam por
+// duas pessoas diferentes e o conflito não seria visto.
+function _escChaveConflito(v){
+  if(!_escEhFree(v)) return 'id|'+v;
+  return 'fl|'+_normalizarNomeItem(_escNomeFree(v));
+}
+
+// Freelancers já usados nas escalas carregadas — vira sugestão no "+ Add"
+// para não ter de redigitar o nome a cada dia.
+function _escFreelancersUsados(){
+  var vistos={}, lista=[];
+  Object.keys(_escMeses).forEach(function(m){
+    var dias=_escMeses[m].dias||{};
+    Object.keys(dias).forEach(function(d){
+      (dias[d]||[]).forEach(function(c){
+        (c.equipe||[]).forEach(function(v){
+          if(!_escEhFree(v)) return;
+          var k=_escChaveConflito(v);
+          if(vistos[k]) return;
+          vistos[k]=1; lista.push(v);
+        });
+      });
+    });
+  });
+  return lista.sort(function(a,b){ return _escNomeFree(a).localeCompare(_escNomeFree(b),'pt-BR'); });
+}
+
+// Digita o nome e pronto. Se o nome bater com alguém do cadastro, usa a
+// pessoa cadastrada — caso contrário a mesma pessoa viraria duas na conta do
+// conflito, que é justamente o que não pode acontecer.
+function escAddFreelancer(cardId){
+  var nome=prompt('Nome do freelancer:\n\nEle fica só nesta escala — não entra no cadastro.');
+  if(nome===null) return;
+  nome=String(nome).replace(/\s+/g,' ').trim();
+  if(!nome) return;
+  var norm=_normalizarNomeItem(nome);
+  var jaCad=ESC_EQUIPE.filter(_escAtivo).find(function(p){ return _normalizarNomeItem(p.nome)===norm; });
+  if(jaCad){
+    escAddPessoa(cardId, jaCad.id);
+    _toastMostrar('👷 <b>'+eh(jaCad.nome)+'</b> já está no cadastro — escalei a pessoa cadastrada.','',6000);
+    return;
+  }
+  var c=escAcharCard(cardId);
+  if(c && (c.equipe||[]).some(function(v){ return _escChaveConflito(v)===('fl|'+norm); })){
+    alert(nome+' já está escalado nesta etapa.');
+    return;
+  }
+  escAddPessoa(cardId, ESC_FREE_PREFIX+nome);
+}
+
+// Se o freelancer virou gente de casa, o 📌 passa ele para o cadastro e troca
+// a referência em todas as escalas carregadas — o histórico não quebra.
+function escPromoverFree(cardId,valor){
+  var nome=_escNomeFree(valor);
+  if(!confirm('📌 Passar "'+nome+'" para o cadastro de colaboradores?\n\nAs escalas já montadas passam a apontar para o cadastro, e ele fica disponível em todas as etapas.')) return;
+  var novo={id:uid(), nome:nome, funcao:'Freelancer', cor:ESC_CORES[ESC_EQUIPE.length%ESC_CORES.length], ativo:true};
+  ESC_EQUIPE.push(novo);
+  escSalvarCadastro('equipe');
+  var chave=_escChaveConflito(valor), tocou={};
+  Object.keys(_escMeses).forEach(function(m){
+    var dias=_escMeses[m].dias||{};
+    Object.keys(dias).forEach(function(d){
+      (dias[d]||[]).forEach(function(c){
+        var eq=c.equipe||[];
+        for(var i=0;i<eq.length;i++) if(_escChaveConflito(eq[i])===chave){ eq[i]=novo.id; tocou[m]=1; }
+      });
+    });
+  });
+  Object.keys(tocou).forEach(function(m){ _escSujos[m]=true; });
+  escAtualizarBotaoSalvar();
+  escRenderizar();
+  _toastMostrar('📌 <b>'+eh(nome)+'</b> entrou no cadastro — <b>confira e clique em Salvar</b>.','',8000);
+}
+
 // Conflitos do dia: a mesma pessoa (ou veículo) em duas etapas cujas janelas
 // de horário se cruzam. Horários distantes no mesmo dia NÃO são conflito —
 // foi a regra escolhida pelo Fabiano: "Alan às 10:00 na montagem e às 19:00
@@ -26087,16 +26175,19 @@ function escConflitos(dia){
   var alvos=[{campo:'equipe', kind:'pessoa'}, {campo:'veiculos', kind:'veiculo'}];
 
   alvos.forEach(function(al){
-    var mapa={}; // valor → [card]
+    // Agrupa por CHAVE, não pelo texto digitado: o mesmo freelancer escrito
+    // de dois jeitos tem de cair no mesmo balde, ou o conflito escapa.
+    var mapa={}; // chave → {valor, cards:[]}
     cards.forEach(function(c){
       (c[al.campo]||[]).forEach(function(v){
         if(!v) return;
-        if(!mapa[v]) mapa[v]=[];
-        if(mapa[v].indexOf(c)<0) mapa[v].push(c);
+        var k=al.kind==='pessoa'?_escChaveConflito(v):('id|'+v);
+        if(!mapa[k]) mapa[k]={valor:v, cards:[]};
+        if(mapa[k].cards.indexOf(c)<0) mapa[k].cards.push(c);
       });
     });
-    Object.keys(mapa).forEach(function(v){
-      var lista=mapa[v];
+    Object.keys(mapa).forEach(function(k){
+      var lista=mapa[k].cards, v=mapa[k].valor;
       if(lista.length<2) return;
       for(var i=0;i<lista.length;i++) for(var j=i+1;j<lista.length;j++){
         var a=lista[i], b=lista[j];
@@ -26108,7 +26199,7 @@ function escConflitos(dia){
         geral.push({txt:txt, grave:grave});
         [a,b].forEach(function(c){
           if(!porCard[c.id]) porCard[c.id]=[];
-          porCard[c.id].push({nome:nome, kind:al.kind, valor:v, grave:grave});
+          porCard[c.id].push({nome:nome, kind:al.kind, valor:v, chave:k, grave:grave});
         });
       }
     });
@@ -26122,9 +26213,10 @@ function _escCardGrave(cf,cardId){
   for(var i=0;i<l.length;i++) if(l[i].grave) return 'grave';
   return 'possivel';
 }
-function _escChipConflito(cf,cardId,valor){
+function _escChipConflito(cf,cardId,valor,kind){
   var l=cf.porCard[cardId]||[];
-  for(var i=0;i<l.length;i++) if(l[i].valor===valor) return l[i].grave?'grave':'possivel';
+  var k=(kind==='veiculo')?('id|'+valor):_escChaveConflito(valor);
+  for(var i=0;i<l.length;i++) if(l[i].chave===k) return l[i].grave?'grave':'possivel';
   return '';
 }
 
@@ -26132,6 +26224,7 @@ function _escChipConflito(cf,cardId,valor){
 
 function _escAtivo(x){ return x && x.ativo!==false; }
 function escNomePessoa(id){
+  if(_escEhFree(id)) return _escNomeFree(id);
   for(var i=0;i<ESC_EQUIPE.length;i++) if(ESC_EQUIPE[i].id===id) return ESC_EQUIPE[i].nome;
   return id; // escalas antigas com alguém removido do cadastro
 }
@@ -26140,6 +26233,7 @@ function escNomeVeiculo(id){
   return id;
 }
 function escCorPessoa(id){
+  if(_escEhFree(id)) return '#78909c'; // cinza: não é do cadastro
   for(var i=0;i<ESC_EQUIPE.length;i++) if(ESC_EQUIPE[i].id===id) return ESC_EQUIPE[i].cor||'#607d8b';
   return '#607d8b';
 }
@@ -26259,6 +26353,13 @@ function escSetVeiculo(id,slot,valor){
   c.editadoEm=new Date().toLocaleString('pt-BR');
   _escMarcarSujo(_escData);
   escRenderizar();
+}
+// Um ponto de entrada só para o "+ Add": cadastro, freelancer já usado, ou
+// freelancer novo (que abre o prompt).
+function escEscalar(id,valor){
+  if(!valor) return;
+  if(valor==='__free__'){ escAddFreelancer(id); return; }
+  escAddPessoa(id,valor);
 }
 function escAddPessoa(id,valor){
   if(!valor) return;
@@ -26424,28 +26525,40 @@ function _escCardHtml(c,cf){
   }
 
   var equipeHtml=(c.equipe||[]).map(function(pid){
-    var cfl=_escChipConflito(cf,c.id,pid);
+    var cfl=_escChipConflito(cf,c.id,pid,'pessoa');
     var cor=escCorPessoa(pid);
+    var free=_escEhFree(pid);
     return '<div draggable="true" ondragstart="escDragChip(event,\''+c.id+'\',\'pessoa\',\''+eh(pid)+'\')" ondragend="escDragFim()" '
-      +'title="Arraste para outra etapa para transferir'+(cfl?' — ⚠️ CONFLITO DE HORÁRIO':'')+'" '
+      +'title="'+(free?'Freelancer — não está no cadastro. ':'')+'Arraste para outra etapa para transferir'+(cfl?' — ⚠️ CONFLITO DE HORÁRIO':'')+'" '
       +'style="display:flex;justify-content:space-between;align-items:center;gap:5px;padding:4px 7px;border-radius:4px;margin-bottom:3px;cursor:grab;'
-      +'background:'+cor+'33;border-left:3px solid '+cor+';'
+      +'background:'+cor+'33;border-left:3px '+(free?'dashed':'solid')+' '+cor+';'
       +(cfl?'box-shadow:0 0 0 1px '+(cfl==='grave'?'#ff5555':'#ffa726')+';':'')
       +'font-size:10px;font-weight:700;color:var(--text)">'
-      +'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(cfl?(cfl==='grave'?'⛔ ':'⚠️ '):'')+eh(escNomePessoa(pid))+'</span>'
+      +'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(cfl?(cfl==='grave'?'⛔ ':'⚠️ '):'')+(free?'✏️ ':'')+eh(escNomePessoa(pid))+'</span>'
+      +'<span style="display:flex;gap:4px;flex:0 0 auto">'
+      +(free?'<span onclick="event.stopPropagation();escPromoverFree(\''+c.id+'\',\''+eh(pid)+'\')" title="Passar para o cadastro de colaboradores" style="cursor:pointer;color:#90caf9;font-weight:900">📌</span>':'')
       +'<span onclick="event.stopPropagation();escDelPessoa(\''+c.id+'\',\''+eh(pid)+'\')" title="Tirar da escala" style="cursor:pointer;color:#ff8a8a;font-weight:900">✕</span>'
-      +'</div>';
+      +'</span></div>';
   }).join('');
 
-  var livres=ESC_EQUIPE.filter(_escAtivo).filter(function(p){ return (c.equipe||[]).indexOf(p.id)<0; });
-  var addHtml='<select onchange="escAddPessoa(\''+c.id+'\',this.value);this.value=\'\'" style="width:100%;font-size:10px;padding:4px 5px;margin-top:2px">'
+  var jaNoCard=c.equipe||[];
+  var livres=ESC_EQUIPE.filter(_escAtivo).filter(function(p){ return jaNoCard.indexOf(p.id)<0; });
+  // Freelancers já usados em outras escalas entram como sugestão, para não ter
+  // de redigitar o nome todo dia.
+  var freeUsados=_escFreelancersUsados().filter(function(v){
+    var k=_escChaveConflito(v);
+    return !jaNoCard.some(function(x){ return _escChaveConflito(x)===k; });
+  });
+  var addHtml='<select onchange="escEscalar(\''+c.id+'\',this.value);this.value=\'\'" style="width:100%;font-size:10px;padding:4px 5px;margin-top:2px">'
     +'<option value="">+ Add</option>'
-    +livres.map(function(p){ return '<option value="'+eh(p.id)+'">'+eh(p.nome)+(p.funcao?' · '+eh(p.funcao):'')+'</option>'; }).join('')
+    +'<option value="__free__">✏️ Freelancer (digitar nome)...</option>'
+    +(livres.length?'<optgroup label="Cadastro">'+livres.map(function(p){ return '<option value="'+eh(p.id)+'">'+eh(p.nome)+(p.funcao?' · '+eh(p.funcao):'')+'</option>'; }).join('')+'</optgroup>':'')
+    +(freeUsados.length?'<optgroup label="Freelancers já usados">'+freeUsados.map(function(v){ return '<option value="'+eh(v)+'">✏️ '+eh(_escNomeFree(v))+'</option>'; }).join('')+'</optgroup>':'')
     +'</select>';
 
   function veicHtml(slot){
     var v=(c.veiculos||[])[slot]||'';
-    var cfl=v?_escChipConflito(cf,c.id,v):'';
+    var cfl=v?_escChipConflito(cf,c.id,v,'veiculo'):'';
     var sel='<select onchange="escSetVeiculo(\''+c.id+'\','+slot+',this.value)" style="width:100%;font-size:10px;padding:4px 5px'
       +(cfl?';box-shadow:0 0 0 1px '+(cfl==='grave'?'#ff5555':'#ffa726'):'')+'">'
       +'<option value="">—</option>'
