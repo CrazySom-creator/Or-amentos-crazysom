@@ -25103,24 +25103,40 @@ function _logRangeEvento(o){
   return {inicio:inicio, fim:fim};
 }
 
-// Em qual fase (montagem/evento/desmontagem) um orçamento está num dia
-// específico dentro da sua janela de ocupação — usado pra rotular o card na
-// visão Dia e ordenar (montagem antes de evento antes de desmontagem).
-function _logFaseNoDia(o,diaISO){
+// TODAS as fases (montagem/evento/desmontagem) que um orçamento tem num dia.
+//
+// Um dia pode ter mais de uma: é comum o último dia do evento ser também o
+// dia da desmontagem (evento termina 13:00, desmontagem 13:30). A versão
+// anterior devolvia UMA fase só, na ordem montagem→evento→desmontagem, e
+// parava na primeira que casasse — então nesse dia a desmontagem ficava
+// invisível, e filtrar por "Desmontagem" não trazia o evento (bug relatado:
+// evento com desmontagem em 24/10 não aparecia na Logística daquele dia).
+function _logFasesNoDia(o,diaISO){
   var f=(o&&o.form)||{};
+  var fases=[];
   if(f['f-dm']){
     var dmFim=f['f-dm-fim']||f['f-dm'];
-    if(diaISO>=f['f-dm']&&diaISO<=dmFim) return 'montagem';
+    if(diaISO>=f['f-dm']&&diaISO<=dmFim) fases.push('montagem');
   }
   if(f['f-dia']){
     var diaFim=f['f-dia-fim']||f['f-dia'];
-    if(diaISO>=f['f-dia']&&diaISO<=diaFim) return 'evento';
+    if(diaISO>=f['f-dia']&&diaISO<=diaFim) fases.push('evento');
   }
   if(f['f-dd']){
     var ddFim=f['f-dd-fim']||f['f-dd'];
-    if(diaISO>=f['f-dd']&&diaISO<=ddFim) return 'desmontagem';
+    if(diaISO>=f['f-dd']&&diaISO<=ddFim) fases.push('desmontagem');
   }
-  return 'evento';
+  return fases;
+}
+
+// A fase que REPRESENTA o item naquele dia (cor, horário, rótulo).
+// "preferida" é a fase do filtro ativo: quando o dia tem mais de uma, mostra
+// a que o usuário pediu para ver — senão a Logística diria "Evento" num
+// card que ele foi procurar justamente por ser a desmontagem.
+function _logFaseNoDia(o,diaISO,preferida){
+  var fases=_logFasesNoDia(o,diaISO);
+  if(preferida && fases.indexOf(preferida)>=0) return preferida;
+  return fases[0]||'evento';
 }
 
 var LOG_FASE_LABEL={montagem:'🔧 Montagem',evento:'🎪 Evento',desmontagem:'📦 Desmontagem'};
@@ -25243,17 +25259,56 @@ function _logItensDoDia(diaISO){
   var fv=elFase?(elFase.value||''):'';
   var doDia=(window._logItens||[]).filter(function(it){
     if(diaISO<it.range.inicio || diaISO>it.range.fim) return false;
-    if(fv && _logFaseNoDia(it.o,diaISO)!==fv) return false;
+    // Basta o dia TER a fase pedida — um mesmo dia pode ser fim de evento e
+    // desmontagem ao mesmo tempo.
+    if(fv && _logFasesNoDia(it.o,diaISO).indexOf(fv)<0) return false;
     return true;
   });
   var ORDEM_FASE={montagem:0,evento:1,desmontagem:2};
   doDia.sort(function(a,b){
-    var fa=_logFaseNoDia(a.o,diaISO), fb=_logFaseNoDia(b.o,diaISO);
+    var fa=_logFaseNoDia(a.o,diaISO,fv), fb=_logFaseNoDia(b.o,diaISO,fv);
     if(ORDEM_FASE[fa]!==ORDEM_FASE[fb]) return ORDEM_FASE[fa]-ORDEM_FASE[fb];
     var ha=_logHorarioFase(a.o,fa)||'99:99', hb=_logHorarioFase(b.o,fb)||'99:99';
     return ha<hb?-1:ha>hb?1:0;
   });
   return doDia;
+}
+
+// A fase acontece em algum dia dentro do intervalo? Usado pelo relatório,
+// que trabalha com período e não com um dia só.
+function _logFaseNoPeriodo(o, fase, de, ate){
+  var f=(o&&o.form)||{};
+  var ini='', fim='';
+  if(fase==='montagem'){ ini=f['f-dm']||''; fim=f['f-dm-fim']||ini; }
+  else if(fase==='evento'){ ini=f['f-dia']||''; fim=f['f-dia-fim']||ini; }
+  else if(fase==='desmontagem'){ ini=f['f-dd']||''; fim=f['f-dd-fim']||ini; }
+  if(!ini) return false;
+  if(de && fim<de) return false;
+  if(ate && ini>ate) return false;
+  return true;
+}
+
+// Fase do filtro ativo (vazio = sem filtro), para as visões mostrarem o card
+// na fase que o usuário pediu.
+function _logFaseFiltro(){
+  var el=document.getElementById('log-filtro-fase');
+  return el?(el.value||''):'';
+}
+
+// Rótulo do(s) chip(s) de fase de um item num dia: com filtro, só a fase
+// filtrada; sem filtro, todas as fases daquele dia.
+function _logChipsFase(o,diaISO,fv){
+  var fases=fv?[fv]:_logFasesNoDia(o,diaISO);
+  if(!fases.length) fases=['evento'];
+  return fases.map(function(fa){
+    var c=LOG_FASE_COR[fa]||'var(--text-muted)';
+    return '<span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:'+c+'22;color:'+c+'">'+LOG_FASE_LABEL[fa]+'</span>';
+  }).join(' ');
+}
+function _logTextoFases(o,diaISO,fv){
+  var fases=fv?[fv]:_logFasesNoDia(o,diaISO);
+  if(!fases.length) fases=['evento'];
+  return fases.map(function(fa){ return LOG_FASE_LABEL[fa]; }).join(' + ');
 }
 
 // ── Visão DIA: agenda vertical com um card detalhado por evento ativo
@@ -25274,7 +25329,8 @@ function _logRenderizarDia(){
 
 function _logCardDia(it,diaISO){
   var o=it.o, f=o.form||{}, st=it.status||{label:'',cor:'var(--text-muted)'};
-  var fase=_logFaseNoDia(o,diaISO);
+  var fv=_logFaseFiltro();
+  var fase=_logFaseNoDia(o,diaISO,fv);
   var corFase=LOG_FASE_COR[fase]||'var(--text-muted)';
   var hora=_logHorarioFase(o,fase);
   var endereco=[f['f-end-ev'],f['f-num-ev'],f['f-bairro-ev'],f['f-cid-ev']].filter(Boolean).join(', ');
@@ -25285,7 +25341,7 @@ function _logCardDia(it,diaISO){
     +'<div style="display:flex;gap:6px;align-items:center">'
     +(it.pendente?'<span class="log-pend-chip" title="'+eh(it.pendTexto)+'">⚠️ OS PENDENTE</span>':'')
     +'<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:10px;background:'+st.cor+'22;color:'+st.cor+'">'+st.label+'</span>'
-    +'<span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:'+corFase+'22;color:'+corFase+'">'+LOG_FASE_LABEL[fase]+'</span>'
+    +_logChipsFase(o,diaISO,fv)
     +'</div></div>'
     +(it.pendente?'<div style="font-size:9.5px;color:#ffb4b4;margin-top:4px">⚠️ Liberação de Montagem pendente — '+eh(it.pendTexto)+'</div>':'')
     +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">'+eh(f['f-tipo']||'')+(f['f-local']?' · '+eh(f['f-local']):'')+(endereco?' · '+eh(endereco):'')+'</div>'
@@ -25308,15 +25364,16 @@ function _logRenderizarSemana(){
     var dt=new Date(diaISO+'T12:00:00');
     var headerTxt=DIAS_SEMANA_ABREV[dt.getDay()]+' '+dt.getDate();
     var ehHoje=diaISO===hoje;
+    var fvSem=_logFaseFiltro();
     var chips=doDia.map(function(it){
       var f=it.o.form||{};
-      var fase=_logFaseNoDia(it.o,diaISO);
+      var fase=_logFaseNoDia(it.o,diaISO,fvSem);
       var corFase=LOG_FASE_COR[fase]||'var(--text-muted)';
       var dot=it.status&&it.status.label==='Fechado'?'🟢':'🟡';
       var av=it.pendente?'⚠️ ':'';
       return '<div style="font-size:9px;padding:3px 5px;border-radius:4px;background:'+corFase+'22;color:'+corFase+';margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer'+(it.pendente?';box-shadow:inset 2px 0 0 #ff5555':'')+'" '
         +(it.o.driveId?'onclick="logAbrirPreviewOS(\''+it.o.driveId+'\')"':'')
-        +' title="'+eh(f['f-cliente']||'')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+' — '+LOG_FASE_LABEL[fase]+(it.pendente?' — ⚠️ LIBERAÇÃO DE MONTAGEM PENDENTE: '+eh(it.pendTexto):'')+'">'+av+dot+' '+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+'</div>';
+        +' title="'+eh(f['f-cliente']||'')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+' — '+_logTextoFases(it.o,diaISO,fvSem)+(it.pendente?' — ⚠️ LIBERAÇÃO DE MONTAGEM PENDENTE: '+eh(it.pendTexto):'')+'">'+av+dot+' '+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+'</div>';
     }).join('');
     return '<div style="flex:1;min-width:0;border:1px solid var(--border);border-radius:6px;overflow:hidden'+(ehHoje?';border-color:var(--R)':'')+'">'
       +'<div style="background:var(--surface-2);padding:5px;text-align:center;font-size:10px;font-weight:800;color:'+(ehHoje?'var(--R)':'var(--text-dim)')+';cursor:pointer" onclick="logIrParaDia(\''+diaISO+'\')">'+headerTxt+'</div>'
@@ -25350,14 +25407,15 @@ function _logRenderizarMes(){
       var doDia=_logItensDoDia(dia.iso);
       var ehHoje=dia.iso===hoje;
       var numDia=parseInt(dia.iso.substring(8,10),10);
+      var fvMes=_logFaseFiltro();
       var chipsHtml=doDia.slice(0,maxChips).map(function(it){
         var f=it.o.form||{};
-        var fase=_logFaseNoDia(it.o,dia.iso);
+        var fase=_logFaseNoDia(it.o,dia.iso,fvMes);
         var corFase=LOG_FASE_COR[fase]||'var(--text-muted)';
         var dot=(it.pendente?'⚠️':'')+(it.status&&it.status.label==='Fechado'?'🟢':'🟡');
         return '<div style="font-size:8px;padding:1px 3px;border-radius:3px;background:'+corFase+'22;color:'+corFase+';margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer'+(it.pendente?';box-shadow:inset 2px 0 0 #ff5555':'')+'" '
           +(it.o.driveId?'onclick="logAbrirPreviewOS(\''+it.o.driveId+'\')"':'')
-          +' title="'+eh(f['f-cliente']||'')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+' — '+LOG_FASE_LABEL[fase]+(it.pendente?' — ⚠️ LIBERAÇÃO DE MONTAGEM PENDENTE: '+eh(it.pendTexto):'')+'">'+dot+' '+eh(f['f-cliente']||'—')+'</div>';
+          +' title="'+eh(f['f-cliente']||'')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+' — '+_logTextoFases(it.o,dia.iso,fvMes)+(it.pendente?' — ⚠️ LIBERAÇÃO DE MONTAGEM PENDENTE: '+eh(it.pendTexto):'')+'">'+dot+' '+eh(f['f-cliente']||'—')+'</div>';
       }).join('');
       var maisHtml=doDia.length>maxChips?('<div style="font-size:8px;color:var(--text-dim);cursor:pointer;text-decoration:underline" onclick="logAbrirDiaPopup(\''+dia.iso+'\')">+'+(doDia.length-maxChips)+' mais</div>'):'';
       corpoHtml+='<div style="border:1px solid var(--border);border-radius:4px;min-height:64px;padding:3px;opacity:'+(dia.noMes?'1':'.4')+(ehHoje?';border-color:var(--R)':'')+'">'
@@ -25506,13 +25564,7 @@ function logRelAtualizarInfo(){
 
 function _logLinhasExport(){
   var itens=window._logItens||[];
-  var elFase=document.getElementById('log-filtro-fase');
-  var fv=elFase?(elFase.value||''):'';
-  if(fv) itens=itens.filter(function(it){
-    return (it.o.form&&it.o.form['f-dm']&&fv==='montagem') ||
-           (it.o.form&&it.o.form['f-dia']&&fv==='evento') ||
-           (it.o.form&&it.o.form['f-dd']&&fv==='desmontagem');
-  });
+  var fv=_logFaseFiltro();
   // Recorte por período: entra no relatório todo evento cuja janela de
   // ocupação (montagem → desmontagem) encoste no intervalo escolhido, e não
   // apenas os que começam dentro dele — um evento que monta dia 28 e desmonta
@@ -25524,6 +25576,14 @@ function _logLinhasExport(){
     if(p.ate && r.inicio>p.ate) return false;
     if(p.de  && r.fim   <p.de ) return false;
     return true;
+  });
+  // Filtro de Fase: a fase precisa cair DENTRO do período do relatório, não
+  // bastar existir no orçamento. Antes, "Desmontagem" trazia todo orçamento
+  // que tivesse qualquer data de desmontagem — por isso o rodapé dizia
+  // "4 eventos entrarão no relatório" num dia em que a grade, corretamente,
+  // não mostrava nenhum. Agora os dois contam a mesma coisa.
+  if(fv) itens=itens.filter(function(it){
+    return _logFaseNoPeriodo(it.o, fv, p.de||(it.range&&it.range.inicio), p.ate||(it.range&&it.range.fim));
   });
   // Ordenação pela DATA DO EVENTO, no sentido escolhido no seletor "Ordem":
   // crescente (o que acontece primeiro aparece primeiro — bom pra escala de
