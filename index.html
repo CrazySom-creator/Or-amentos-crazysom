@@ -998,9 +998,15 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       </div>
 
       <div class="home-card orange" id="home-btn-log" onclick="abrirLogistica();fecharHome()">
-        <div class="home-card-ico">🚚</div>
-        <div class="home-card-title">Logística de Eventos</div>
+        <div class="home-card-ico">📅</div>
+        <div class="home-card-title">Agenda de Eventos</div>
         <div class="home-card-desc">Eventos fechados e pré-reservados em visão Dia/Semana/Mês — montagem, evento e desmontagem</div>
+      </div>
+
+      <div class="home-card orange" id="home-btn-escala" onclick="abrirEscala();fecharHome()">
+        <div class="home-card-ico">🚚</div>
+        <div class="home-card-title">Logística</div>
+        <div class="home-card-desc">Escala do dia por etapa — separação, montagem, operação e desmontagem — com equipe, veículos e aviso de conflito</div>
       </div>
 
       <div class="home-card blue" id="home-btn-fin" onclick="abrirDashFin();fecharHome()">
@@ -2593,7 +2599,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
   <div class="modal-box dash-modal" style="max-width:1200px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
       <div>
-        <h2 style="margin-bottom:2px">🚚 Logística de Eventos</h2>
+        <h2 style="margin-bottom:2px">📅 Agenda de Eventos</h2>
         <p class="sub" id="log-sub" style="margin:0">Carregando dados...</p>
       </div>
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
@@ -2687,6 +2693,91 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <button class="btn btn-o btn-sm" onclick="document.getElementById('log-dia-pop-ov').classList.remove('open')">✕</button>
     </div>
     <div id="log-dia-pop-corpo" style="max-height:70vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  LOGÍSTICA — ESCALA DO DIA                                               -->
+<!--  Pedido do Fabiano (out/2026): um quadro de etapas por dia, no formato   -->
+<!--  que a equipe já usa hoje numa planilha: uma coluna por etapa            -->
+<!--  (Separação / Montagem / Operação / Desmontagem), cada uma com horários, -->
+<!--  endereço, veículos e a equipe escalada. As etapas NASCEM da Agenda de   -->
+<!--  Eventos (o módulo que antes se chamava Logística) e ficam editáveis.    -->
+<!--  Arrastar colaborador/veículo entre cards, o card inteiro para outro     -->
+<!--  dia, e reordenar as colunas. Avisa quando a mesma pessoa (ou veículo)   -->
+<!--  está em duas etapas com horários que se cruzam.                         -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="esc-ov">
+  <div class="modal-box dash-modal" style="max-width:1400px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div>
+        <h2 style="margin-bottom:2px">🚚 Logística</h2>
+        <p class="sub" id="esc-sub" style="margin:0">Carregando...</p>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-o btn-sm" onclick="escImprimir()" title="Gera o PDF da escala do dia para enviar à equipe">📄 PDF do dia</button>
+        <button class="btn btn-r btn-sm" id="esc-btn-salvar" onclick="escSalvar()" title="Grava a escala no banco">💾 Salvar</button>
+        <button class="btn btn-o btn-sm" onclick="escFechar()">✕</button>
+      </div>
+    </div>
+
+    <div class="rel-tabs" style="margin-bottom:10px">
+      <div class="rel-tab active" id="esc-tab-quadro" onclick="escAba('quadro')">📋 Escala do dia</div>
+      <div class="rel-tab" id="esc-tab-cad" onclick="escAba('cad')">👷 Equipe &amp; Frota</div>
+    </div>
+
+    <!-- ── ABA QUADRO ────────────────────────────────────────────────── -->
+    <div id="esc-pane-quadro">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:9px 12px;margin-bottom:10px">
+        <button class="btn btn-o btn-sm" onclick="escNavegar(-1)" title="Dia anterior">◀</button>
+        <button class="btn btn-o btn-sm" onclick="escHoje()">Hoje</button>
+        <button class="btn btn-o btn-sm" onclick="escNavegar(1)" title="Próximo dia">▶</button>
+        <input type="date" id="esc-data" onchange="escMudarData(this.value)" style="font-size:11px;padding:5px 7px">
+        <span id="esc-titulo" style="font-size:13px;font-weight:900;color:var(--text);text-transform:uppercase"></span>
+        <div style="flex:1"></div>
+        <button class="btn btn-b btn-sm" onclick="escGerarDaAgenda()" title="Cria as etapas deste dia a partir dos eventos da Agenda — não duplica o que já existe">⚡ Gerar etapas da Agenda</button>
+        <button class="btn btn-o btn-sm" onclick="escNovoCard('')" title="Cria um card em branco">➕ Etapa avulsa</button>
+      </div>
+
+      <!-- Faixa de dias: solte um card aqui para movê-lo de dia -->
+      <div id="esc-faixa" style="display:flex;gap:4px;margin-bottom:10px"></div>
+
+      <div id="esc-conflitos"></div>
+
+      <div id="esc-quadro" style="overflow-x:auto;padding-bottom:8px"></div>
+
+      <div style="font-size:10px;color:var(--text-dim);margin-top:10px;line-height:1.7">
+        <b>Como usar:</b> arraste um nome ou veículo de um card para outro para transferir a escala ·
+        arraste o <b>⠿ topo do card</b> sobre outro card para trocar a ordem, ou sobre um dia da faixa acima para mover de dia ·
+        <span style="color:#ff5555;font-weight:800">vermelho</span> = a mesma pessoa/veículo em duas etapas com horário cruzado ·
+        <span style="color:#ffa726;font-weight:800">amarelo</span> = possível conflito (falta horário para ter certeza).
+        Nada é gravado até clicar em <b>💾 Salvar</b>.
+      </div>
+    </div>
+
+    <!-- ── ABA CADASTROS ─────────────────────────────────────────────── -->
+    <div id="esc-pane-cad" style="display:none">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px">
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:13px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px">
+            <div style="font-size:12px;font-weight:900;color:var(--text)">👷 Colaboradores</div>
+            <button class="btn btn-r btn-sm" onclick="escCadNovo('equipe')">➕ Novo</button>
+          </div>
+          <div id="esc-cad-equipe"></div>
+        </div>
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:13px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px">
+            <div style="font-size:12px;font-weight:900;color:var(--text)">🚐 Frota</div>
+            <button class="btn btn-r btn-sm" onclick="escCadNovo('frota')">➕ Novo</button>
+          </div>
+          <div id="esc-cad-frota"></div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-dim);margin-top:12px">
+        Quem for <b>inativado</b> some das listas de escala, mas continua nas escalas antigas — o histórico não muda.
+        Os cadastros são salvos na hora, independente do <b>💾 Salvar</b> da escala.
+      </div>
+    </div>
   </div>
 </div>
 
@@ -25758,6 +25849,828 @@ function logExportarPDF(){
   w.document.close();
 }
 
+
+// ════════════════════════════════════════════════════════
+//  LOGÍSTICA — ESCALA DO DIA
+//
+//  Pedido do Fabiano (out/2026): reproduzir no sistema o quadro que a equipe
+//  já monta hoje fora dele — uma coluna por ETAPA do dia (Separação,
+//  Montagem, Operação, Desmontagem), com horário de saída, horário no local,
+//  endereço, veículos e a equipe escalada; poder arrastar gente e veículo de
+//  uma etapa para outra; e ser avisado quando a mesma pessoa (ou o mesmo
+//  veículo) estiver escalada em duas etapas ao mesmo tempo.
+//
+//  De onde vêm as etapas: da AGENDA DE EVENTOS (o módulo que até então se
+//  chamava "Logística"). O botão ⚡ Gerar lê os eventos que ocupam o dia e
+//  cria um card por FASE presente naquele dia — reaproveitando exatamente a
+//  mesma semântica de fase já usada lá (_logFasesNoDia): montagem→MONTAGEM,
+//  evento→OPERAÇÃO, desmontagem→DESMONTAGEM. A SEPARAÇÃO não nasce sozinha
+//  porque não existe data de separação no orçamento: é a véspera que a
+//  logística define, então entra como etapa avulsa.
+//
+//  Onde fica gravado: em config/escala-AAAA-MM, um documento por mês
+//  ({dias:{'AAAA-MM-DD':[cards]}}). Um documento por mês — e não um único
+//  documento geral — para o arquivo não crescer sem fim e bater no limite de
+//  1 MiB do Firestore lá na frente. Usar a coleção 'config', que já é lida e
+//  gravada pelo sistema, evita ter de mexer nas regras do banco.
+// ════════════════════════════════════════════════════════
+
+var ESC_TIPOS=[
+  {id:'separacao',   label:'SEPARAÇÃO',   cor:'#e91e63', ico:'📦'},
+  {id:'montagem',    label:'MONTAGEM',    cor:'#f9a825', ico:'🔧'},
+  {id:'operacao',    label:'OPERAÇÃO',    cor:'#1e88e5', ico:'🎪'},
+  {id:'desmontagem', label:'DESMONTAGEM', cor:'#43a047', ico:'🚚'}
+];
+function _escTipo(id){
+  for(var i=0;i<ESC_TIPOS.length;i++) if(ESC_TIPOS[i].id===id) return ESC_TIPOS[i];
+  return ESC_TIPOS[1];
+}
+// Mapa fase da Agenda → etapa da Logística. É aqui que os dois módulos se
+// encaixam; mudou a fase lá, muda o de cá num lugar só.
+var ESC_FASE_PARA_TIPO={montagem:'montagem', evento:'operacao', desmontagem:'desmontagem'};
+
+// Sem horário de término não dá para saber se duas etapas se cruzam. Em vez
+// de ignorar o card (deixaria conflito passar) ou de acusar sempre (encheria
+// a tela de alarme falso), assume-se esta duração e o aviso sai como
+// "possível conflito" — amarelo, não vermelho.
+var ESC_DUR_PADRAO_MIN=240;
+
+var ESC_EQUIPE=[];   // [{id,nome,funcao,cor,ativo}]
+var ESC_FROTA=[];    // [{id,nome,placa,tipo,ativo}]
+var _escData='';     // dia à vista, ISO
+var _escMeses={};    // 'AAAA-MM' → {dias:{iso:[card]}}
+var _escSujos={};    // 'AAAA-MM' → true, meses com alteração não salva
+var _escArrasto=null;// {tipo:'chip'|'card', ...}
+var _escAbaAtual='quadro';
+
+/* ── Persistência ───────────────────────────────────────────────────────── */
+
+async function escCarregarCadastros(){
+  try{
+    var s1=await fbDb.collection('config').doc('logEquipe').get();
+    ESC_EQUIPE=(s1.exists && s1.data().lista)||[];
+  }catch(e){ console.warn('escCarregarCadastros/equipe:',e); ESC_EQUIPE=[]; }
+  try{
+    var s2=await fbDb.collection('config').doc('logFrota').get();
+    ESC_FROTA=(s2.exists && s2.data().lista)||[];
+  }catch(e){ console.warn('escCarregarCadastros/frota:',e); ESC_FROTA=[]; }
+}
+
+async function escSalvarCadastro(qual){
+  var doc=qual==='equipe'?'logEquipe':'logFrota';
+  var lista=qual==='equipe'?ESC_EQUIPE:ESC_FROTA;
+  try{
+    await fbDb.collection('config').doc(doc).set({
+      lista:lista,
+      atualizadoEm:new Date().toLocaleString('pt-BR'),
+      atualizadoPor:(usuarioAtual&&usuarioAtual.nome)||''
+    });
+    return true;
+  }catch(e){ console.warn('escSalvarCadastro:',e); return false; }
+}
+
+async function escCarregarMes(mesAno){
+  if(_escMeses[mesAno]) return _escMeses[mesAno];
+  try{
+    var snap=await fbDb.collection('config').doc('escala-'+mesAno).get();
+    _escMeses[mesAno]=(snap.exists && snap.data().dias)?{dias:snap.data().dias}:{dias:{}};
+  }catch(e){
+    console.warn('escCarregarMes:',e);
+    _escMeses[mesAno]={dias:{}};
+  }
+  return _escMeses[mesAno];
+}
+
+async function escSalvar(){
+  var meses=Object.keys(_escSujos);
+  if(!meses.length){ _toastMostrar('Nada para salvar — a escala já está gravada.','',4000); return; }
+  var btn=document.getElementById('esc-btn-salvar');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Salvando...'; }
+  var erros=0;
+  for(var i=0;i<meses.length;i++){
+    var m=meses[i];
+    // Navegar pelo calendário cria dias vazios em memória (escCards cria a
+    // lista na primeira leitura). Gravá-los encheria o documento de dias sem
+    // nada — limpa antes de salvar.
+    var dias=(_escMeses[m]||{dias:{}}).dias;
+    Object.keys(dias).forEach(function(d){ if(!dias[d]||!dias[d].length) delete dias[d]; });
+    try{
+      await fbDb.collection('config').doc('escala-'+m).set({
+        dias:dias,
+        atualizadoEm:new Date().toLocaleString('pt-BR'),
+        atualizadoPor:(usuarioAtual&&usuarioAtual.nome)||''
+      });
+      delete _escSujos[m];
+    }catch(e){ console.warn('escSalvar '+m+':',e); erros++; }
+  }
+  if(btn){ btn.disabled=false; btn.textContent='💾 Salvar'; }
+  if(erros) alert('Não consegui salvar '+erros+' mês(es) da escala.\n\nVeja o Diagnóstico de Permissões do Banco, no Admin.');
+  else _toastMostrar('💾 Escala salva.','',4000);
+  escAtualizarBotaoSalvar();
+}
+
+function escAtualizarBotaoSalvar(){
+  var btn=document.getElementById('esc-btn-salvar');
+  if(!btn) return;
+  var n=Object.keys(_escSujos).length;
+  btn.textContent=n?'💾 Salvar *':'💾 Salvar';
+  btn.title=n?'Há alterações não gravadas':'Tudo gravado';
+}
+
+function _escMarcarSujo(dia){
+  _escSujos[(dia||_escData).substring(0,7)]=true;
+  escAtualizarBotaoSalvar();
+}
+
+/* ── Acesso aos cards do dia ────────────────────────────────────────────── */
+
+function escCards(dia){
+  var m=_escMeses[dia.substring(0,7)];
+  if(!m) return [];
+  if(!m.dias[dia]) m.dias[dia]=[];
+  return m.dias[dia];
+}
+function escAcharCard(id){
+  var lista=escCards(_escData);
+  for(var i=0;i<lista.length;i++) if(lista[i].id===id) return lista[i];
+  // pode estar em outro dia carregado (caso de mover de dia)
+  var meses=Object.keys(_escMeses);
+  for(var j=0;j<meses.length;j++){
+    var dias=Object.keys(_escMeses[meses[j]].dias);
+    for(var k=0;k<dias.length;k++){
+      var arr=_escMeses[meses[j]].dias[dias[k]];
+      for(var n=0;n<arr.length;n++) if(arr[n].id===id) return arr[n];
+    }
+  }
+  return null;
+}
+
+/* ── Abrir / navegar ────────────────────────────────────────────────────── */
+
+async function abrirEscala(){
+  if(_moduloBloqueado('mod-escala')) return;
+  _abrirOv('esc-ov');
+  document.getElementById('esc-sub').textContent='Carregando...';
+  if(!_escData) _escData=_logISO(new Date());
+  await escCarregarCadastros();
+  await dashAtualizar(false);
+  await escCarregarMes(_escData.substring(0,7));
+  document.getElementById('esc-sub').textContent=ESC_EQUIPE.filter(_escAtivo).length+' colaborador(es) · '+ESC_FROTA.filter(_escAtivo).length+' veículo(s)';
+  escAba('quadro');
+  escRenderizar();
+}
+
+function escFechar(){
+  if(Object.keys(_escSujos).length && !confirm('Há alterações na escala que ainda não foram salvas.\n\nSair assim mesmo? As alterações serão perdidas.')) return;
+  _escSujos={};
+  // Descarta o que está em memória para a próxima abertura reler do banco e
+  // não mostrar alterações que o usuário acabou de abandonar.
+  _escMeses={};
+  document.getElementById('esc-ov').classList.remove('open');
+  voltarDoModulo();
+}
+
+function escAba(a){
+  _escAbaAtual=a;
+  ['quadro','cad'].forEach(function(x){
+    var t=document.getElementById('esc-tab-'+x), p=document.getElementById('esc-pane-'+x);
+    if(t) t.classList.toggle('active', x===a);
+    if(p) p.style.display=(x===a)?'':'none';
+  });
+  if(a==='cad') escRenderCadastros(); else escRenderizar();
+}
+
+async function escMudarData(iso){
+  if(!iso) return;
+  _escData=iso;
+  await escCarregarMes(iso.substring(0,7));
+  escRenderizar();
+}
+function escNavegar(d){ escMudarData(_logAddDias(_escData,d)); }
+function escHoje(){ escMudarData(_logISO(new Date())); }
+
+/* ── Horários e conflito ────────────────────────────────────────────────── */
+
+function _escMin(hhmm){
+  var m=/^(\d{1,2}):(\d{2})$/.exec(String(hhmm||'').trim());
+  if(!m) return null;
+  return parseInt(m[1],10)*60+parseInt(m[2],10);
+}
+function _escHhmm(min){
+  var h=Math.floor(min/60), m=min%60;
+  return (h<10?'0':'')+h+':'+(m<10?'0':'')+m;
+}
+
+// Janela de ocupação de um card. `exato` só é verdadeiro quando o usuário
+// informou início E término — é o que separa "conflito" de "possível
+// conflito".
+function _escJanela(c){
+  var ini=_escMin(c.saida);
+  if(ini===null) ini=_escMin(c.local);
+  var fim=_escMin(c.termino);
+  if(ini===null && fim===null) return {ini:0, fim:24*60, exato:false, semHora:true};
+  if(ini===null) ini=Math.max(0,fim-ESC_DUR_PADRAO_MIN);
+  var exato=true;
+  if(fim===null){ fim=ini+ESC_DUR_PADRAO_MIN; exato=false; }
+  if(fim<ini) fim=ini+ESC_DUR_PADRAO_MIN, exato=false;
+  return {ini:ini, fim:fim, exato:exato, semHora:false};
+}
+
+// Conflitos do dia: a mesma pessoa (ou veículo) em duas etapas cujas janelas
+// de horário se cruzam. Horários distantes no mesmo dia NÃO são conflito —
+// foi a regra escolhida pelo Fabiano: "Alan às 10:00 na montagem e às 19:00
+// na desmontagem não é conflito".
+function escConflitos(dia){
+  var cards=escCards(dia);
+  var porCard={}; // cardId → [{nome,quem,grave}]
+  var geral=[];
+  var alvos=[{campo:'equipe', kind:'pessoa'}, {campo:'veiculos', kind:'veiculo'}];
+
+  alvos.forEach(function(al){
+    var mapa={}; // valor → [card]
+    cards.forEach(function(c){
+      (c[al.campo]||[]).forEach(function(v){
+        if(!v) return;
+        if(!mapa[v]) mapa[v]=[];
+        if(mapa[v].indexOf(c)<0) mapa[v].push(c);
+      });
+    });
+    Object.keys(mapa).forEach(function(v){
+      var lista=mapa[v];
+      if(lista.length<2) return;
+      for(var i=0;i<lista.length;i++) for(var j=i+1;j<lista.length;j++){
+        var a=lista[i], b=lista[j];
+        var ja=_escJanela(a), jb=_escJanela(b);
+        if(ja.fim<=jb.ini || jb.fim<=ja.ini) continue; // não se cruzam
+        var grave=ja.exato && jb.exato && !ja.semHora && !jb.semHora;
+        var nome=al.kind==='pessoa'?escNomePessoa(v):escNomeVeiculo(v);
+        var txt=(al.kind==='pessoa'?'👷 ':'🚐 ')+nome+' — '+_escTipo(a.tipo).label+' ('+(a.saida||a.local||'sem horário')+') × '+_escTipo(b.tipo).label+' ('+(b.saida||b.local||'sem horário')+')';
+        geral.push({txt:txt, grave:grave});
+        [a,b].forEach(function(c){
+          if(!porCard[c.id]) porCard[c.id]=[];
+          porCard[c.id].push({nome:nome, kind:al.kind, valor:v, grave:grave});
+        });
+      }
+    });
+  });
+  return {porCard:porCard, geral:geral};
+}
+
+function _escCardGrave(cf,cardId){
+  var l=cf.porCard[cardId];
+  if(!l||!l.length) return '';
+  for(var i=0;i<l.length;i++) if(l[i].grave) return 'grave';
+  return 'possivel';
+}
+function _escChipConflito(cf,cardId,valor){
+  var l=cf.porCard[cardId]||[];
+  for(var i=0;i<l.length;i++) if(l[i].valor===valor) return l[i].grave?'grave':'possivel';
+  return '';
+}
+
+/* ── Cadastros: nomes e listas ──────────────────────────────────────────── */
+
+function _escAtivo(x){ return x && x.ativo!==false; }
+function escNomePessoa(id){
+  for(var i=0;i<ESC_EQUIPE.length;i++) if(ESC_EQUIPE[i].id===id) return ESC_EQUIPE[i].nome;
+  return id; // escalas antigas com alguém removido do cadastro
+}
+function escNomeVeiculo(id){
+  for(var i=0;i<ESC_FROTA.length;i++) if(ESC_FROTA[i].id===id) return ESC_FROTA[i].nome+(ESC_FROTA[i].placa?' ('+ESC_FROTA[i].placa+')':'');
+  return id;
+}
+function escCorPessoa(id){
+  for(var i=0;i<ESC_EQUIPE.length;i++) if(ESC_EQUIPE[i].id===id) return ESC_EQUIPE[i].cor||'#607d8b';
+  return '#607d8b';
+}
+
+/* ── Gerar etapas a partir da Agenda ────────────────────────────────────── */
+
+// Lê os eventos que ocupam o dia na Agenda de Eventos e cria um card por fase
+// presente naquele dia. Não duplica: se já existe card do mesmo orçamento e
+// do mesmo tipo, pula. Assim dá para clicar sem medo depois de ter editado.
+function escGerarDaAgenda(){
+  var dia=_escData;
+  // _logItens é montado por logRenderizar; se a Agenda não foi aberta nesta
+  // sessão ele não existe. Monta aqui a partir do mesmo _dashDados.
+  var itens=(window._logItens&&window._logItens.length)?window._logItens:_escItensAgenda();
+  var achados=[];
+  itens.forEach(function(it){
+    if(dia<it.range.inicio || dia>it.range.fim) return;
+    _logFasesNoDia(it.o,dia).forEach(function(fase){
+      achados.push({it:it, fase:fase});
+    });
+  });
+  if(!achados.length){
+    alert('A Agenda não tem nenhum evento fechado ou pré-reservado em '+fD(dia)+'.\n\nSe o evento existe mas não aparece, confira em 📅 Agenda de Eventos se ele está como Venda Ganha (ou com pré-reserva criada no Google Agenda).');
+    return;
+  }
+  var lista=escCards(dia);
+  var criados=0, pulados=0;
+  achados.forEach(function(a){
+    var o=a.it.o, f=o.form||{};
+    var tipo=ESC_FASE_PARA_TIPO[a.fase]||'operacao';
+    var num=f['f-num']||'';
+    var jaTem=lista.some(function(c){ return c.tipo===tipo && c.orcNum && c.orcNum===num; });
+    if(jaTem){ pulados++; return; }
+    var endereco=[f['f-end-ev'],f['f-num-ev'],f['f-bairro-ev'],f['f-cid-ev']].filter(Boolean).join(', ');
+    lista.push({
+      id:uid(),
+      tipo:tipo,
+      evento:(f['f-cliente']||'')+(f['f-nome-evento']?' — '+f['f-nome-evento']:''),
+      orcNum:num,
+      driveId:o.driveId||'',
+      saida:'',
+      local:_logHorarioFase(o,a.fase)||'',
+      termino:'',
+      endereco:f['f-local']?(f['f-local']+(endereco?' — '+endereco:'')):endereco,
+      obs:'',
+      veiculos:['',''],
+      equipe:[],
+      criadoEm:new Date().toLocaleString('pt-BR'),
+      editadoEm:'',
+      criadoPor:(usuarioAtual&&usuarioAtual.nome)||''
+    });
+    criados++;
+  });
+  if(criados) _escMarcarSujo(dia);
+  escRenderizar();
+  _toastMostrar('⚡ '+criados+' etapa(s) criada(s) a partir da Agenda'+(pulados?' · '+pulados+' já existia(m)':'')+' — <b>confira e clique em Salvar</b>.','',8000);
+}
+
+// Mesma regra da grade da Agenda (_logOcupaAgenda + _logRangeEvento), para o
+// botão ⚡ funcionar mesmo sem ter aberto a Agenda antes.
+function _escItensAgenda(){
+  return (_dashDados||[]).filter(_logOcupaAgenda).map(function(o){
+    return {o:o, range:_logRangeEvento(o)};
+  }).filter(function(it){ return it.range && it.range.inicio; });
+}
+
+function escNovoCard(tipo){
+  var lista=escCards(_escData);
+  lista.push({
+    id:uid(), tipo:tipo||'separacao', evento:'', orcNum:'', driveId:'',
+    saida:'', local:'', termino:'', endereco:'', obs:'',
+    veiculos:['',''], equipe:[],
+    criadoEm:new Date().toLocaleString('pt-BR'), editadoEm:'',
+    criadoPor:(usuarioAtual&&usuarioAtual.nome)||''
+  });
+  _escMarcarSujo(_escData);
+  escRenderizar();
+}
+
+function escExcluirCard(id){
+  var c=escAcharCard(id);
+  if(!c) return;
+  if(!confirm('Excluir a etapa '+_escTipo(c.tipo).label+(c.evento?' de "'+c.evento+'"':'')+'?\n\nIsso não mexe no orçamento nem na Agenda — só tira o card da escala.')) return;
+  var lista=escCards(_escData);
+  var i=lista.indexOf(c);
+  if(i>=0) lista.splice(i,1);
+  _escMarcarSujo(_escData);
+  escRenderizar();
+}
+
+/* ── Edição de campos ───────────────────────────────────────────────────── */
+
+// Campos de texto/hora não re-renderizam o quadro: isso tiraria o foco do
+// campo no meio da digitação. Só os horários disparam o recálculo dos
+// conflitos, que é leve e não mexe nos inputs.
+function escSet(id,campo,valor){
+  var c=escAcharCard(id);
+  if(!c) return;
+  c[campo]=valor;
+  c.editadoEm=new Date().toLocaleString('pt-BR');
+  _escMarcarSujo(_escData);
+  if(campo==='saida'||campo==='local'||campo==='termino') escAtualizarConflitos();
+}
+function escSetTipo(id,valor){
+  var c=escAcharCard(id);
+  if(!c) return;
+  c.tipo=valor;
+  c.editadoEm=new Date().toLocaleString('pt-BR');
+  _escMarcarSujo(_escData);
+  escRenderizar();
+}
+function escSetVeiculo(id,slot,valor){
+  var c=escAcharCard(id);
+  if(!c) return;
+  if(!c.veiculos) c.veiculos=['',''];
+  c.veiculos[slot]=valor;
+  c.editadoEm=new Date().toLocaleString('pt-BR');
+  _escMarcarSujo(_escData);
+  escRenderizar();
+}
+function escAddPessoa(id,valor){
+  if(!valor) return;
+  var c=escAcharCard(id);
+  if(!c) return;
+  if(!c.equipe) c.equipe=[];
+  if(c.equipe.indexOf(valor)<0) c.equipe.push(valor);
+  c.editadoEm=new Date().toLocaleString('pt-BR');
+  _escMarcarSujo(_escData);
+  escRenderizar();
+}
+function escDelPessoa(id,valor){
+  var c=escAcharCard(id);
+  if(!c||!c.equipe) return;
+  var i=c.equipe.indexOf(valor);
+  if(i>=0) c.equipe.splice(i,1);
+  c.editadoEm=new Date().toLocaleString('pt-BR');
+  _escMarcarSujo(_escData);
+  escRenderizar();
+}
+
+/* ── Arrastar e soltar ──────────────────────────────────────────────────── */
+
+function escPermitir(ev){ ev.preventDefault(); if(ev.dataTransfer) ev.dataTransfer.dropEffect='move'; }
+
+function escDragChip(ev,cardId,kind,valor){
+  _escArrasto={tipo:'chip', cardId:cardId, kind:kind, valor:valor};
+  if(ev.dataTransfer){ ev.dataTransfer.effectAllowed='move'; try{ev.dataTransfer.setData('text/plain',valor);}catch(e){} }
+  ev.stopPropagation();
+}
+function escDragCard(ev,cardId){
+  _escArrasto={tipo:'card', cardId:cardId};
+  if(ev.dataTransfer){ ev.dataTransfer.effectAllowed='move'; try{ev.dataTransfer.setData('text/plain',cardId);}catch(e){} }
+}
+function escDragFim(){ _escArrasto=null; }
+
+// Um único handler para a soltura em cima de um card: se o que vem é um chip,
+// transfere a pessoa/veículo; se é um card, troca a ordem das colunas.
+function escDropNoCard(ev,cardId){
+  ev.preventDefault(); ev.stopPropagation();
+  var a=_escArrasto; _escArrasto=null;
+  if(!a) return;
+  if(a.cardId===cardId) return;
+
+  if(a.tipo==='chip'){
+    var origem=escAcharCard(a.cardId), destino=escAcharCard(cardId);
+    if(!origem||!destino) return;
+    if(a.kind==='pessoa'){
+      var i=(origem.equipe||[]).indexOf(a.valor);
+      if(i>=0) origem.equipe.splice(i,1);
+      if(!destino.equipe) destino.equipe=[];
+      if(destino.equipe.indexOf(a.valor)<0) destino.equipe.push(a.valor);
+    }else{
+      var s=(origem.veiculos||[]).indexOf(a.valor);
+      if(s>=0) origem.veiculos[s]='';
+      if(!destino.veiculos) destino.veiculos=['',''];
+      var livre=destino.veiculos.indexOf('');
+      if(destino.veiculos.indexOf(a.valor)>=0){ /* já está lá */ }
+      else if(livre>=0) destino.veiculos[livre]=a.valor;
+      else { alert('A etapa '+_escTipo(destino.tipo).label+' já está com os dois veículos preenchidos.'); if(s>=0) origem.veiculos[s]=a.valor; return; }
+    }
+    origem.editadoEm=destino.editadoEm=new Date().toLocaleString('pt-BR');
+  }else{
+    var lista=escCards(_escData);
+    var ia=-1, ib=-1;
+    for(var k=0;k<lista.length;k++){ if(lista[k].id===a.cardId) ia=k; if(lista[k].id===cardId) ib=k; }
+    if(ia<0||ib<0) return;
+    var mov=lista.splice(ia,1)[0];
+    lista.splice(ib,0,mov);
+  }
+  _escMarcarSujo(_escData);
+  escRenderizar();
+}
+
+// Soltar o card sobre um dia da faixa: move a etapa inteira para aquele dia.
+async function escDropNoDia(ev,iso){
+  ev.preventDefault();
+  var a=_escArrasto; _escArrasto=null;
+  if(!a||a.tipo!=='card'||iso===_escData) return;
+  await escCarregarMes(iso.substring(0,7));
+  var lista=escCards(_escData);
+  var i=-1;
+  for(var k=0;k<lista.length;k++) if(lista[k].id===a.cardId) i=k;
+  if(i<0) return;
+  var c=lista.splice(i,1)[0];
+  c.editadoEm=new Date().toLocaleString('pt-BR');
+  escCards(iso).push(c);
+  _escMarcarSujo(_escData);
+  _escMarcarSujo(iso);
+  escRenderizar();
+  _toastMostrar('📅 Etapa movida para '+fD(iso)+'.','',4000);
+}
+
+// O select "MOVER PARA" faz o mesmo que arrastar — para quem prefere clicar,
+// e para mover para um dia fora da faixa visível.
+async function escMoverPara(id,iso){
+  if(!iso) return;
+  _escArrasto={tipo:'card', cardId:id};
+  await escDropNoDia({preventDefault:function(){}}, iso);
+}
+
+/* ── Render: faixa de dias, conflitos, quadro ───────────────────────────── */
+
+function escRenderizar(){
+  if(_escAbaAtual!=='quadro') return;
+  var inp=document.getElementById('esc-data');
+  if(inp) inp.value=_escData;
+  var tit=document.getElementById('esc-titulo');
+  if(tit) tit.textContent=_logTituloDia(_escData);
+  escRenderFaixa();
+  escRenderQuadro();
+  escAtualizarConflitos();
+  escAtualizarBotaoSalvar();
+}
+
+function escRenderFaixa(){
+  var el=document.getElementById('esc-faixa');
+  if(!el) return;
+  var dias=[];
+  for(var i=-3;i<=3;i++) dias.push(_logAddDias(_escData,i));
+  el.innerHTML=dias.map(function(iso){
+    var dt=new Date(iso+'T12:00:00');
+    var n=(_escMeses[iso.substring(0,7)]&&_escMeses[iso.substring(0,7)].dias[iso]||[]).length;
+    var atual=iso===_escData;
+    return '<div ondragover="escPermitir(event)" ondrop="escDropNoDia(event,\''+iso+'\')" onclick="escMudarData(\''+iso+'\')" '
+      +'title="'+(atual?'Dia à vista':'Clique para ir, ou solte um card aqui para mover a etapa para este dia')+'" '
+      +'style="flex:1;text-align:center;padding:5px 3px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:800;'
+      +'border:1px '+(atual?'solid var(--R)':'dashed var(--border-strong)')+';'
+      +'background:'+(atual?'rgba(214,52,71,.12)':'var(--surface-2)')+';color:'+(atual?'var(--R)':'var(--text-dim)')+'">'
+      +DIAS_SEMANA_ABREV[dt.getDay()]+' '+dt.getDate()
+      +'<div style="font-size:9px;font-weight:600;color:var(--text-muted)">'+(n?n+' etapa'+(n>1?'s':''):'—')+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function escRenderQuadro(){
+  var el=document.getElementById('esc-quadro');
+  if(!el) return;
+  var lista=escCards(_escData);
+  if(!lista.length){
+    el.innerHTML='<div class="dash-vazio" style="padding:26px">Nenhuma etapa montada para '+fD(_escData)+'.'
+      +'<div style="margin-top:8px;font-size:11px;color:var(--text-dim)">Use <b>⚡ Gerar etapas da Agenda</b> para trazer montagem, operação e desmontagem dos eventos deste dia, ou <b>➕ Etapa avulsa</b> para criar a separação da véspera.</div></div>';
+    return;
+  }
+  var cf=escConflitos(_escData);
+  el.innerHTML='<div style="display:flex;gap:9px;align-items:flex-start;min-width:min-content">'
+    +lista.map(function(c){ return _escCardHtml(c,cf); }).join('')+'</div>';
+}
+
+function _escCardHtml(c,cf){
+  var t=_escTipo(c.tipo);
+  var grav=_escCardGrave(cf,c.id);
+  var borda=grav==='grave'?'#ff5555':(grav==='possivel'?'#ffa726':t.cor);
+  var opcoesTipo=ESC_TIPOS.map(function(x){ return '<option value="'+x.id+'"'+(x.id===c.tipo?' selected':'')+'>'+x.ico+' '+x.label+'</option>'; }).join('');
+
+  // Dias para o "MOVER PARA" — a semana à volta, mesma faixa de arrastar.
+  var opcoesDia='<option value="">Dia...</option>';
+  for(var d=-3;d<=3;d++){
+    if(d===0) continue;
+    var iso=_logAddDias(_escData,d);
+    var dt=new Date(iso+'T12:00:00');
+    opcoesDia+='<option value="'+iso+'">'+DIAS_SEMANA_ABREV[dt.getDay()]+' '+fD(iso)+'</option>';
+  }
+
+  var equipeHtml=(c.equipe||[]).map(function(pid){
+    var cfl=_escChipConflito(cf,c.id,pid);
+    var cor=escCorPessoa(pid);
+    return '<div draggable="true" ondragstart="escDragChip(event,\''+c.id+'\',\'pessoa\',\''+eh(pid)+'\')" ondragend="escDragFim()" '
+      +'title="Arraste para outra etapa para transferir'+(cfl?' — ⚠️ CONFLITO DE HORÁRIO':'')+'" '
+      +'style="display:flex;justify-content:space-between;align-items:center;gap:5px;padding:4px 7px;border-radius:4px;margin-bottom:3px;cursor:grab;'
+      +'background:'+cor+'33;border-left:3px solid '+cor+';'
+      +(cfl?'box-shadow:0 0 0 1px '+(cfl==='grave'?'#ff5555':'#ffa726')+';':'')
+      +'font-size:10px;font-weight:700;color:var(--text)">'
+      +'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(cfl?(cfl==='grave'?'⛔ ':'⚠️ '):'')+eh(escNomePessoa(pid))+'</span>'
+      +'<span onclick="event.stopPropagation();escDelPessoa(\''+c.id+'\',\''+eh(pid)+'\')" title="Tirar da escala" style="cursor:pointer;color:#ff8a8a;font-weight:900">✕</span>'
+      +'</div>';
+  }).join('');
+
+  var livres=ESC_EQUIPE.filter(_escAtivo).filter(function(p){ return (c.equipe||[]).indexOf(p.id)<0; });
+  var addHtml='<select onchange="escAddPessoa(\''+c.id+'\',this.value);this.value=\'\'" style="width:100%;font-size:10px;padding:4px 5px;margin-top:2px">'
+    +'<option value="">+ Add</option>'
+    +livres.map(function(p){ return '<option value="'+eh(p.id)+'">'+eh(p.nome)+(p.funcao?' · '+eh(p.funcao):'')+'</option>'; }).join('')
+    +'</select>';
+
+  function veicHtml(slot){
+    var v=(c.veiculos||[])[slot]||'';
+    var cfl=v?_escChipConflito(cf,c.id,v):'';
+    var sel='<select onchange="escSetVeiculo(\''+c.id+'\','+slot+',this.value)" style="width:100%;font-size:10px;padding:4px 5px'
+      +(cfl?';box-shadow:0 0 0 1px '+(cfl==='grave'?'#ff5555':'#ffa726'):'')+'">'
+      +'<option value="">—</option>'
+      +ESC_FROTA.filter(function(x){ return _escAtivo(x)||x.id===v; }).map(function(x){
+        return '<option value="'+eh(x.id)+'"'+(x.id===v?' selected':'')+'>'+eh(x.nome)+(x.placa?' · '+eh(x.placa):'')+'</option>';
+      }).join('')
+      +(v && !ESC_FROTA.some(function(x){return x.id===v;})?'<option value="'+eh(v)+'" selected>'+eh(v)+' (removido)</option>':'')
+      +'</select>';
+    if(!v) return sel;
+    // A alça fica FORA do <select>: arrastar um select não dispara dragstart
+    // de forma confiável em todos os navegadores.
+    return '<div style="display:flex;gap:3px;align-items:center">'
+      +'<span draggable="true" ondragstart="escDragChip(event,\''+c.id+'\',\'veiculo\',\''+eh(v)+'\')" ondragend="escDragFim()" '
+      +'title="Arraste para outra etapa para transferir este veículo" '
+      +'style="cursor:grab;font-size:12px;color:var(--text-muted);flex:0 0 auto">⠿</span>'
+      +'<span style="flex:1;min-width:0">'+sel+'</span></div>';
+  }
+
+  return '<div id="esccard-'+c.id+'" ondragover="escPermitir(event)" ondrop="escDropNoCard(event,\''+c.id+'\')" '
+    +'style="width:238px;flex:0 0 238px;border:1px solid '+borda+';border-top:4px solid '+t.cor+';border-radius:7px;background:var(--surface-3);overflow:hidden">'
+
+    // cabeçalho = alça de arrasto do card inteiro
+    +'<div draggable="true" ondragstart="escDragCard(event,\''+c.id+'\')" ondragend="escDragFim()" '
+    +'title="Arraste para trocar a ordem, ou solte num dia da faixa acima para mudar de dia" '
+    +'style="display:flex;justify-content:space-between;align-items:center;gap:5px;padding:6px 8px;background:'+t.cor+'22;cursor:grab">'
+    +'<span style="font-size:11px;font-weight:900;color:'+t.cor+'">⠿ '+t.ico+' '+t.label+'</span>'
+    +'<span onclick="escExcluirCard(\''+c.id+'\')" title="Excluir esta etapa" style="cursor:pointer;color:#ff8a8a;font-weight:900;font-size:12px">✕</span>'
+    +'</div>'
+
+    +'<div id="esccf-'+c.id+'"></div>'
+
+    +'<div style="padding:8px">'
+    +_escCampo('MOVER PARA','<select onchange="escMoverPara(\''+c.id+'\',this.value);this.value=\'\'" style="width:100%;font-size:10px;padding:4px 5px">'+opcoesDia+'</select>')
+    +_escCampo('EVENTO / CLIENTE','<input value="'+eh(c.evento)+'" oninput="escSet(\''+c.id+'\',\'evento\',this.value)" style="width:100%;font-size:10px;padding:4px 5px">')
+    +_escCampo('TIPO','<select onchange="escSetTipo(\''+c.id+'\',this.value)" style="width:100%;font-size:10px;padding:4px 5px">'+opcoesTipo+'</select>')
+    +'<div style="display:flex;gap:5px">'
+      +'<div style="flex:1">'+_escCampo('SAÍDA','<input type="time" value="'+eh(c.saida)+'" onchange="escSet(\''+c.id+'\',\'saida\',this.value)" style="width:100%;font-size:10px;padding:4px 3px">')+'</div>'
+      +'<div style="flex:1">'+_escCampo('NO LOCAL','<input type="time" value="'+eh(c.local)+'" onchange="escSet(\''+c.id+'\',\'local\',this.value)" style="width:100%;font-size:10px;padding:4px 3px">')+'</div>'
+      +'<div style="flex:1">'+_escCampo('TÉRMINO','<input type="time" value="'+eh(c.termino)+'" onchange="escSet(\''+c.id+'\',\'termino\',this.value)" title="Opcional — mas é o término que permite dizer com certeza se duas etapas se cruzam" style="width:100%;font-size:10px;padding:4px 3px">')+'</div>'
+    +'</div>'
+    +_escCampo('ENDEREÇO / LOCAL','<input value="'+eh(c.endereco)+'" oninput="escSet(\''+c.id+'\',\'endereco\',this.value)" style="width:100%;font-size:10px;padding:4px 5px">')
+    +_escCampo('OBSERVAÇÕES','<textarea oninput="escSet(\''+c.id+'\',\'obs\',this.value)" style="width:100%;font-size:10px;padding:4px 5px;min-height:46px">'+eh(c.obs)+'</textarea>')
+    +'<div style="display:flex;gap:5px">'
+      +'<div style="flex:1;min-width:0">'+_escCampo('VEÍCULO 1',veicHtml(0))+'</div>'
+      +'<div style="flex:1;min-width:0">'+_escCampo('VEÍCULO 2',veicHtml(1))+'</div>'
+    +'</div>'
+    +_escCampo('EQUIPE',(equipeHtml||'<div style="font-size:9px;color:var(--text-muted);padding:2px 0">ninguém escalado</div>')+addHtml)
+    +'<div style="font-size:8.5px;color:var(--text-muted);margin-top:7px;border-top:1px solid var(--border);padding-top:5px">'
+      +(c.orcNum?'Orç. '+eh(c.orcNum)+(c.driveId?' · <span onclick="logAbrirPreviewOS(\''+eh(c.driveId)+'\')" style="cursor:pointer;text-decoration:underline;color:#90caf9">ver</span>':'')+'<br>':'')
+      +'Criado: '+eh(c.criadoEm||'—')+(c.editadoEm?'<br>Última edição: '+eh(c.editadoEm):'')
+    +'</div>'
+    +'</div></div>';
+}
+
+function _escCampo(rot,html){
+  return '<div style="margin-bottom:6px"><label style="font-size:8.5px;letter-spacing:.4px;color:var(--text-muted);text-transform:uppercase;font-weight:800;display:block;margin-bottom:2px">'+rot+'</label>'+html+'</div>';
+}
+
+// Recalcula só o painel de conflitos e as tarjas dentro dos cards. Não
+// redesenha o quadro — se redesenhasse, o campo de horário perderia o foco no
+// meio da digitação.
+function escAtualizarConflitos(){
+  var cf=escConflitos(_escData);
+  var el=document.getElementById('esc-conflitos');
+  if(el){
+    if(!cf.geral.length) el.innerHTML='';
+    else{
+      var graves=cf.geral.filter(function(x){return x.grave;});
+      var cor=graves.length?'#ff5555':'#ffa726';
+      el.innerHTML='<div style="background:'+cor+'1a;border:1px solid '+cor+';border-radius:6px;padding:9px 12px;margin-bottom:10px">'
+        +'<div style="font-size:11px;font-weight:900;color:'+cor+';margin-bottom:5px">'
+        +(graves.length?'⛔ '+graves.length+' conflito(s) de escala':'⚠️ '+cf.geral.length+' possível(is) conflito(s)')
+        +'</div>'
+        +cf.geral.map(function(x){
+          return '<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px">'+(x.grave?'⛔ ':'⚠️ ')+eh(x.txt)+(x.grave?'':' <span style="color:var(--text-muted)">— preencha o TÉRMINO das etapas para confirmar</span>')+'</div>';
+        }).join('')
+        +'</div>';
+    }
+  }
+  (escCards(_escData)||[]).forEach(function(c){
+    var box=document.getElementById('esccf-'+c.id);
+    var card=document.getElementById('esccard-'+c.id);
+    var g=_escCardGrave(cf,c.id);
+    if(card) card.style.borderColor=(g==='grave'?'#ff5555':(g==='possivel'?'#ffa726':_escTipo(c.tipo).cor));
+    if(!box) return;
+    if(!g){ box.innerHTML=''; return; }
+    var lista=(cf.porCard[c.id]||[]).map(function(x){ return (x.kind==='pessoa'?'👷 ':'🚐 ')+x.nome; });
+    var cor2=g==='grave'?'#ff5555':'#ffa726';
+    box.innerHTML='<div style="background:'+cor2+'22;color:'+cor2+';font-size:9px;font-weight:800;padding:4px 8px">'
+      +(g==='grave'?'⛔ ':'⚠️ ')+'Conflito: '+eh(lista.join(', '))+'</div>';
+  });
+}
+
+/* ── Cadastros de Equipe e Frota ────────────────────────────────────────── */
+
+var ESC_CORES=['#607d8b','#8e24aa','#43a047','#f9a825','#1e88e5','#e91e63','#6d4c41','#00897b'];
+
+function escRenderCadastros(){
+  var e=document.getElementById('esc-cad-equipe');
+  if(e){
+    e.innerHTML=ESC_EQUIPE.length?ESC_EQUIPE.map(function(p,i){
+      return '<div style="display:flex;gap:5px;align-items:center;margin-bottom:5px;opacity:'+(_escAtivo(p)?1:.45)+'">'
+        +'<input type="color" value="'+eh(p.cor||'#607d8b')+'" onchange="escCadSet(\'equipe\','+i+',\'cor\',this.value)" title="Cor do chip na escala" style="width:30px;height:28px;padding:1px;border-radius:4px">'
+        +'<input value="'+eh(p.nome)+'" oninput="escCadSet(\'equipe\','+i+',\'nome\',this.value)" placeholder="Nome" style="flex:2;min-width:0;font-size:11px;padding:5px 6px">'
+        +'<input value="'+eh(p.funcao||'')+'" oninput="escCadSet(\'equipe\','+i+',\'funcao\',this.value)" placeholder="Função" style="flex:1.4;min-width:0;font-size:11px;padding:5px 6px">'
+        +'<label style="font-size:9px;color:var(--text-dim);display:flex;align-items:center;gap:3px;white-space:nowrap"><input type="checkbox"'+(_escAtivo(p)?' checked':'')+' onchange="escCadSet(\'equipe\','+i+',\'ativo\',this.checked)"> ativo</label>'
+        +'<span onclick="escCadExcluir(\'equipe\','+i+')" title="Excluir do cadastro" style="cursor:pointer;color:#ff8a8a;font-weight:900">✕</span>'
+        +'</div>';
+    }).join(''):'<div style="font-size:11px;color:var(--text-muted)">Nenhum colaborador cadastrado.</div>';
+  }
+  var f=document.getElementById('esc-cad-frota');
+  if(f){
+    f.innerHTML=ESC_FROTA.length?ESC_FROTA.map(function(v,i){
+      return '<div style="display:flex;gap:5px;align-items:center;margin-bottom:5px;opacity:'+(_escAtivo(v)?1:.45)+'">'
+        +'<input value="'+eh(v.nome)+'" oninput="escCadSet(\'frota\','+i+',\'nome\',this.value)" placeholder="Veículo" style="flex:2;min-width:0;font-size:11px;padding:5px 6px">'
+        +'<input value="'+eh(v.placa||'')+'" oninput="escCadSet(\'frota\','+i+',\'placa\',this.value)" placeholder="Placa" style="flex:1.2;min-width:0;font-size:11px;padding:5px 6px">'
+        +'<label style="font-size:9px;color:var(--text-dim);display:flex;align-items:center;gap:3px;white-space:nowrap"><input type="checkbox"'+(_escAtivo(v)?' checked':'')+' onchange="escCadSet(\'frota\','+i+',\'ativo\',this.checked)"> ativo</label>'
+        +'<span onclick="escCadExcluir(\'frota\','+i+')" title="Excluir do cadastro" style="cursor:pointer;color:#ff8a8a;font-weight:900">✕</span>'
+        +'</div>';
+    }).join(''):'<div style="font-size:11px;color:var(--text-muted)">Nenhum veículo cadastrado.</div>';
+  }
+}
+
+var _escCadTimer=null;
+function escCadSet(qual,i,campo,valor){
+  var lista=qual==='equipe'?ESC_EQUIPE:ESC_FROTA;
+  if(!lista[i]) return;
+  lista[i][campo]=valor;
+  // Grava sozinho, mas só depois que a digitação para — não manda um write
+  // por tecla.
+  clearTimeout(_escCadTimer);
+  _escCadTimer=setTimeout(function(){ escSalvarCadastro(qual); }, 900);
+}
+
+function escCadNovo(qual){
+  if(qual==='equipe') ESC_EQUIPE.push({id:uid(), nome:'', funcao:'', cor:ESC_CORES[ESC_EQUIPE.length%ESC_CORES.length], ativo:true});
+  else ESC_FROTA.push({id:uid(), nome:'', placa:'', ativo:true});
+  escRenderCadastros();
+  escSalvarCadastro(qual);
+}
+
+function escCadExcluir(qual,i){
+  var lista=qual==='equipe'?ESC_EQUIPE:ESC_FROTA;
+  if(!lista[i]) return;
+  var nome=lista[i].nome||'(sem nome)';
+  if(!confirm('Excluir "'+nome+'" do cadastro?\n\nAs escalas já montadas continuam mostrando o nome — só não dá mais para escalar.\n\nSe for alguém que saiu, prefira desmarcar "ativo": some das listas e o histórico fica inteiro.')) return;
+  lista.splice(i,1);
+  escRenderCadastros();
+  escSalvarCadastro(qual);
+}
+
+/* ── PDF da escala do dia ───────────────────────────────────────────────── */
+
+function escImprimir(){
+  var lista=escCards(_escData);
+  if(!lista.length){ alert('Não há etapas montadas em '+fD(_escData)+' para imprimir.'); return; }
+  // A janela precisa abrir dentro do clique, antes de qualquer await, ou o
+  // navegador bloqueia como pop-up.
+  var w=window.open('','_blank');
+  if(!w){ alert('O navegador bloqueou a janela do relatório. Libere pop-ups para este site e tente de novo.'); return; }
+
+  var hoje=new Date().toLocaleString('pt-BR');
+  var nomeArq='CrazySom_Escala_'+_escData.replace(/-/g,'');
+  var cf=escConflitos(_escData);
+
+  var blocos=lista.map(function(c){
+    var t=_escTipo(c.tipo);
+    var eq=(c.equipe||[]).map(function(p){ return escNomePessoa(p); });
+    var ve=(c.veiculos||[]).filter(Boolean).map(function(v){ return escNomeVeiculo(v); });
+    var av=(cf.porCard[c.id]||[]);
+    return '<table class="bloco"><thead><tr><th colspan="2" style="background:'+t.cor+';color:#fff">'+t.ico+' '+t.label+' — '+eh(c.evento||'(sem evento)')+'</th></tr></thead><tbody>'
+      +'<tr><td class="r">Saída</td><td>'+eh(c.saida||'—')+'</td></tr>'
+      +'<tr><td class="r">No local</td><td>'+eh(c.local||'—')+'</td></tr>'
+      +(c.termino?'<tr><td class="r">Término</td><td>'+eh(c.termino)+'</td></tr>':'')
+      +'<tr><td class="r">Endereço</td><td>'+eh(c.endereco||'—')+'</td></tr>'
+      +'<tr><td class="r">Veículos</td><td>'+(ve.length?eh(ve.join(' · ')):'—')+'</td></tr>'
+      +'<tr><td class="r">Equipe</td><td><b>'+(eq.length?eh(eq.join(' · ')):'—')+'</b></td></tr>'
+      +(c.obs?'<tr><td class="r">Observações</td><td>'+eh(c.obs).replace(/\n/g,'<br>')+'</td></tr>':'')
+      +(c.orcNum?'<tr><td class="r">Orçamento</td><td>'+eh(c.orcNum)+'</td></tr>':'')
+      +(av.length?'<tr><td class="r" style="color:#c62828">Conflito</td><td style="color:#c62828">'+eh(av.map(function(x){return x.nome;}).join(', '))+'</td></tr>':'')
+      +'</tbody></table>';
+  }).join('');
+
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+nomeArq+'</title><style>'
+    +'*{margin:0;padding:0;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}'
+    +'body{background:#fff;color:#111;padding:0}'
+    +'.hdr{background:#d63447;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-radius:6px}'
+    +'.hdr h1{font-size:15px;font-weight:900}'
+    +'.hdr span{font-size:10px;opacity:.85;text-align:right}'
+    +'table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:10px}'
+    +'th{text-align:left;padding:6px;font-size:11px}'
+    +'td{padding:5px 6px;border-bottom:1px solid #eee;vertical-align:top}'
+    +'td.r{width:92px;color:#666;font-weight:700;background:#fafafa}'
+    // Uma linha nunca pode ser fatiada na virada de página, e cada etapa é uma
+    // tabela própria para não começar uma folha no meio de um card.
+    +'tr{page-break-inside:avoid;break-inside:avoid}'
+    +'table{page-break-inside:avoid;break-inside:avoid}'
+    +'thead{display:table-header-group}'
+    +'tbody{display:table-row-group}'
+    +'#pw{padding-bottom:8mm}'
+    +'#st{position:fixed;top:0;left:0;right:0;background:#d63447;color:#fff;text-align:center;padding:10px;font-size:13px;font-weight:bold;z-index:9999}'
+    +'@media print{#st{display:none}}'
+    +'</style>'
+    +'<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>'
+    +'</head><body>'
+    +'<div id="st">Gerando PDF...</div>'
+    +'<div id="pw">'
+    +'<div class="hdr"><h1>🚚 CRAZY SOM — ESCALA DE LOGÍSTICA</h1><span>'+eh(_logTituloDia(_escData))+'<br>'+lista.length+' etapa(s)<br>Gerado em: '+hoje+'</span></div>'
+    +blocos
+    +'<div style="margin-top:14px;font-size:9px;color:#aaa;text-align:center;border-top:1px solid #ddd;padding-top:6px">Crazy Som Audiovisuais – Sistema de Orçamentos – CNPJ: 10.909.827/0001-76</div>'
+    +'</div>'
+    +'<script>'
+    +'window.onload=function(){setTimeout(function(){'
+    +'var opt={margin:[6,5,10,5],filename:"'+nomeArq+'.pdf",image:{type:"jpeg",quality:1},'
+    +'html2canvas:{scale:2,useCORS:true,logging:false,backgroundColor:"#ffffff"},'
+    +'jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},'
+    +'pagebreak:{mode:["css","legacy"],avoid:["tr","table"]}};'
+    +'html2pdf().set(opt).from(document.getElementById("pw")).save().then(function(){'
+    +'document.getElementById("st").style.background="#2e7d32";'
+    +'document.getElementById("st").textContent="PDF salvo! Pode fechar esta janela.";'
+    +'});},600);};'
+    +'<\/script></body></html>');
+  w.document.close();
+}
+
 // ════════════════════════════════════════════════════════
 //  GERENCIAR USUÁRIOS — cargo (editável pelo Admin, mesmo padrão de
 //  Tipos de Evento / Categorias de Produto: documento público em
@@ -25938,7 +26851,8 @@ var DASH_MODULOS = [
   {id:'aprovacoes',     card:'home-btn-aprov',      label:'📋 Aprovações',                grupo:'Operacional'},
   {id:'funil-card',     card:'home-btn-funil',      label:'📊 CRM — Funil de Vendas',     grupo:'Operacional'},
   {id:'mod-tarefas',    card:'home-btn-tarefas',    label:'📋 Minhas Tarefas',            grupo:'Operacional'},
-  {id:'dash-log',       card:'home-btn-log',        label:'🚚 Logística de Eventos',      grupo:'Operacional'},
+  {id:'dash-log',       card:'home-btn-log',        label:'📅 Agenda de Eventos',         grupo:'Operacional'},
+  {id:'mod-escala',     card:'home-btn-escala',     label:'🚚 Logística (escala do dia)', grupo:'Operacional'},
   {id:'mod-led',        card:'home-btn-led',        label:'🟥 Disponibilidade de LED',     grupo:'Operacional'},
   {id:'mod-estoque-eq', card:'home-btn-estoque-eq', label:'📦 Disponibilidade de Equipamento', grupo:'Operacional'},
   {id:'mod-os',         card:'home-btn-os',         label:'🗂️ Ordens de Serviço',        grupo:'Operacional'},
