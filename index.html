@@ -3436,10 +3436,14 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div>
         <div class="drow"><label>Desconto %</label><input type="number" id="desc-pct" value="0" min="0" max="100" step="0.5" oninput="syncDesc('pct');marcarAlterado()"><span style="color:var(--text-muted);font-size:10px">= <span id="r-dv" style="color:#ff6060">R$ 0,00</span></span></div>
         <div class="drow"><label>Desconto R$</label><input type="number" id="desc-rs" value="0" min="0" step="1" oninput="syncDesc('rs');marcarAlterado()"></div>
-        <div class="drow"><label>Arredondamento (R$)</label><input type="number" id="arred-rs" value="0" min="-50" max="50" step="0.01" oninput="clampArredondamento();marcarAlterado();calc()" title="Ajusta o valor final para cima ou para baixo, até R$ 50,00, pra fechar num número redondo. Não conta como desconto (não entra no limite de desconto do cargo) e não aparece como linha separada no PDF — só o total final já sai ajustado."></div>
+        <div class="drow"><label>Arredondamento (R$)</label><input type="number" id="arred-rs" value="0" min="-50" max="50" step="0.01" oninput="clampArredondamento();marcarAlterado();calc()" title="Ajusta o valor final para cima ou para baixo, até R$ 50,00, pra fechar num número redondo. Não conta como desconto (não entra no limite de desconto do cargo). Marque a caixa abaixo se quiser que ele apareça como linha própria no PDF."></div>
         <div class="drow" style="align-items:center">
           <label for="chk-desc-discriminar" style="cursor:pointer">Discriminar desconto no PDF</label>
-          <input type="checkbox" id="chk-desc-discriminar" checked style="width:auto" onchange="descDiscriminarPDF=this.checked;marcarAlterado()" title="Desmarque quando não quiser mostrar a linha 'Desconto' no PDF enviado ao cliente — o PDF mostra apenas o total já com desconto embutido. Para só arredondar o total (sem desconto de verdade), use o campo Arredondamento acima, que nunca aparece como linha no PDF.">
+          <input type="checkbox" id="chk-desc-discriminar" checked style="width:auto" onchange="descDiscriminarPDF=this.checked;marcarAlterado()" title="Desmarque quando não quiser mostrar a linha 'Desconto' no PDF enviado ao cliente — o PDF mostra apenas o total já com desconto embutido.">
+        </div>
+        <div class="drow" style="align-items:center">
+          <label for="chk-arred-discriminar" style="cursor:pointer">Discriminar arredondamento no PDF</label>
+          <input type="checkbox" id="chk-arred-discriminar" style="width:auto" onchange="arredDiscriminarPDF=this.checked;marcarAlterado()" title="Marque para o arredondamento sair como linha própria no PDF, abaixo do Desconto. Desmarcado (padrão), ele continua invisível: entra calado no desconto quando há um, ou nas linhas quando não há — o total impresso é o mesmo nos dois casos.">
         </div>
       </div>
       <div class="tg2" style="gap:8px;margin:0">
@@ -4270,6 +4274,10 @@ var finNumVenda='';
 // quando o desconto é só um arredondamento que não precisa aparecer pro
 // cliente. Controlado pelo checkbox "Discriminar desconto no PDF".
 var descDiscriminarPDF=true;
+// Pedido do Fabiano: o arredondamento pode aparecer como linha no PDF, igual
+// ao desconto. Nasce DESMARCADO porque até aqui ele nunca aparecia — marcar
+// por padrão mudaria a cara de todo orçamento já existente.
+var arredDiscriminarPDF=false;
 // Marca do aditivo: {driveId, numero, base, seq} do orçamento de origem.
 var aditivoDe=null;
 var driveIdAtual=null;
@@ -7644,7 +7652,7 @@ async function logout(forcado){
     }catch(e4){}
   }
   try{await fbAuth.signOut();}catch(e7){}
-  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();comExtAtiva=true;comExtPct=0;aditivoDe=null;(function(){try{renderComissaoExterna();renderAditivoInfo();}catch(e){}})();driveIdAtual=null;driveNumAtual=null;
+  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();arredDiscriminarPDF=false;(function(){var _e=document.getElementById('chk-arred-discriminar');if(_e)_e.checked=false;})();comExtAtiva=true;comExtPct=0;aditivoDe=null;(function(){try{renderComissaoExterna();renderAditivoInfo();}catch(e){}})();driveIdAtual=null;driveNumAtual=null;
   _atualizarBtnClonar();
   // Limpa o formulário e fecha qualquer tela sobreposta — senão o próximo
   // login (ou a volta depois de uma queda de sessão) encontra o último
@@ -9417,6 +9425,7 @@ function getDadosCompletos(){
     finImposto:finImposto,
     finNumVenda:finNumVenda,
     descDiscriminarPDF:descDiscriminarPDF,
+    arredDiscriminarPDF:arredDiscriminarPDF,
     comExtAtiva:comExtAtiva,
     comExtPct:comExtPct,
     aditivoDe:aditivoDe
@@ -10513,6 +10522,8 @@ function _aplicarDadosOrcamento(dados){
   if(dados.form)setForm(dados.form);else setForm({});
   aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();contratoStatus=dados.contratoStatus||'';contratoHist=(dados.contratoHist||[]).slice();creditoStatus=dados.creditoStatus||'';creditoHist=(dados.creditoHist||[]).slice();montagemLiberacaoManual=!!dados.montagemLiberacaoManual;montagemLiberacaoManualHist=(dados.montagemLiberacaoManualHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcAtualGoogleAgenda=Object.assign({},dados.googleAgenda||{});anexosOrc=(dados.anexos||[]).map(function(a){return Object.assign({},a);});orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
   descDiscriminarPDF=(dados.descDiscriminarPDF!==undefined)?!!dados.descDiscriminarPDF:true;
+  arredDiscriminarPDF=!!dados.arredDiscriminarPDF;
+  (function(){var _e=document.getElementById('chk-arred-discriminar');if(_e)_e.checked=arredDiscriminarPDF;})();
   var _chkDescDiscr=document.getElementById('chk-desc-discriminar');if(_chkDescDiscr)_chkDescDiscr.checked=descDiscriminarPDF;
   // Orçamento salvo antes deste controle não tem a marca: assume LIGADA, que
   // era o único comportamento possível até aqui.
@@ -10789,7 +10800,7 @@ async function limpar(){
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
   snapshotAprovado=null;
-  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();comExtAtiva=true;comExtPct=0;aditivoDe=null;(function(){try{renderComissaoExterna();renderAditivoInfo();}catch(e){}})();
+  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();arredDiscriminarPDF=false;(function(){var _e=document.getElementById('chk-arred-discriminar');if(_e)_e.checked=false;})();comExtAtiva=true;comExtPct=0;aditivoDe=null;(function(){try{renderComissaoExterna();renderAditivoInfo();}catch(e){}})();
   buildTabs();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   _atualizarBtnClonar();
   // Gerar número automático para o novo orçamento
@@ -11220,7 +11231,7 @@ async function clonarOrcamento(){
   _limparCamposComercialDOM();
   snapshotAnterior=null;
   snapshotAprovado=null;
-  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();comExtAtiva=true;comExtPct=0;aditivoDe=null;(function(){try{renderComissaoExterna();renderAditivoInfo();}catch(e){}})();
+  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();arredDiscriminarPDF=false;(function(){var _e=document.getElementById('chk-arred-discriminar');if(_e)_e.checked=false;})();comExtAtiva=true;comExtPct=0;aditivoDe=null;(function(){try{renderComissaoExterna();renderAditivoInfo();}catch(e){}})();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
 
   // ── Manter forma de pagamento padrão se não havia (campo f-pgto já copiado do form original)
@@ -12172,7 +12183,7 @@ async function _resetarEstadoOrcamento(){
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
   snapshotAnterior=null;
   snapshotAprovado=null;
-  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();comExtAtiva=true;comExtPct=0;aditivoDe=null;(function(){try{renderComissaoExterna();renderAditivoInfo();}catch(e){}})();
+  finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();arredDiscriminarPDF=false;(function(){var _e=document.getElementById('chk-arred-discriminar');if(_e)_e.checked=false;})();comExtAtiva=true;comExtPct=0;aditivoDe=null;(function(){try{renderComissaoExterna();renderAditivoInfo();}catch(e){}})();
   buildTabs();calcDiariasAuto();calc();renderStatusOrc();renderAprovInline();renderComercial();renderContrato();renderCreditoPanel();renderMontagemGate();renderFinanceiroInline();if(typeof anxRenderizar==='function')anxRenderizar();
   _atualizarBtnClonar();
 }
@@ -12336,9 +12347,22 @@ function buildPDF(tipo){
   // O fator é calculado AQUI, antes de qualquer número ser impresso, para que
   // o corpo do PDF e o quadro final usem exatamente a mesma régua.
   var semDescPDF=modoSimpPDF?bruto:cImp;
+  var arredPdf=arredondValor();
+  // O arredondamento vira linha só quando o usuário marca a caixa. Fora
+  // disso ele continua invisível: entra no desconto quando há um, ou na
+  // linha de Logística quando não há.
+  var mostrarArredPDF=(arredDiscriminarPDF && Math.abs(arredPdf)>0.004);
+  // Desconto PURO, sem o arredondamento misturado. É o que a linha
+  // "Desconto" mostra quando o arredondamento tem linha própria; sem ela, o
+  // arredondamento é embutido no desconto (ver difDesc mais abaixo).
+  var descPuroPDF=semDescPDF+arredPdf-totalFinal;
   var temDescReal=(drs>0 || dpct>0);
   var mostrarDescPDF=(temDescReal && (semDescPDF-totalFinal)>0.01 && descDiscriminarPDF);
-  var descFatorPDF=(temDescReal && !mostrarDescPDF && semDescPDF>0) ? (totalFinal/semDescPDF) : 1;
+  // Quanto as linhas do quadro precisam somar para a conta impressa fechar:
+  // com a linha de Desconto, somam o valor cheio; sem ela, somam o total já
+  // líquido — menos o arredondamento, se ele for sair como linha depois.
+  var alvoSomaPDF=mostrarDescPDF?semDescPDF:(totalFinal-(mostrarArredPDF?arredPdf:0));
+  var descFatorPDF=(temDescReal && !mostrarDescPDF && semDescPDF>0) ? (alvoSomaPDF/semDescPDF) : 1;
 
   var incLines=getSvinc().split('\n').map(function(l){return l.trim();}).filter(Boolean);
   var endCli=[gv('f-end'),gv('f-endnum'),gv('f-bairro'),gv('f-cidade')].filter(Boolean).join(', ');
@@ -12520,14 +12544,14 @@ function buildPDF(tipo){
   if(logTot>0) linhasRes.push({rot:'🚚 LOGÍSTICA E SERVIÇOS', val:logTot, bv:true});
 
   // ── Fechamento das contas ──
-  // difDesc é a diferença REAL entre o valor cheio e o que o cliente paga.
-  // Antes o arredondamento era descontado de volta daqui para "não aparecer",
-  // e o resultado era uma subtração impressa que não dava o total de baixo.
-  // Um arredondamento invisível custa menos ao cliente do que uma conta
-  // errada: ele entra no desconto.
-  var difDesc=semDescPDF-totalFinal;
+  // Com o arredondamento em linha própria, a linha "Desconto" mostra o
+  // desconto puro. Sem ela, o arredondamento entra no desconto — porque uma
+  // subtração impressa que não dá o total de baixo é pior do que um
+  // arredondamento aparecendo embutido.
+  var difDesc=mostrarArredPDF?descPuroPDF:(semDescPDF-totalFinal);
   var mostrarDesc=mostrarDescPDF;
-  var alvoSoma=mostrarDesc?semDescPDF:totalFinal;
+  var mostrarArred=mostrarArredPDF;
+  var alvoSoma=alvoSomaPDF;
   // Arredonda cada linha para centavo e joga o resto (no máximo alguns
   // centavos) na linha de Logística — a mesma que carrega o BV e os custos
   // internos. Sem isto, 7 linhas arredondadas para cima somam alguns centavos
@@ -12559,10 +12583,15 @@ function buildPDF(tipo){
     });
   }
 
-  if(mostrarDesc){
-    res+='<tr class="trow"><td style="text-align:right">Valor Total</td><td class="r">'+fmt(semDescPDF)+'</td></tr>';
-    res+='<tr class="drow2"><td style="text-align:right">Desconto</td><td class="r">– '+fmt(difDesc)+'</td></tr>';
+  // O subtotal precisa aparecer sempre que houver alguma linha de ajuste
+  // abaixo dele — senão o Desconto ou o Arredondamento sairiam subtraindo de
+  // um número que não está escrito em lugar nenhum.
+  if(mostrarDesc || mostrarArred){
+    var subtotalRes=mostrarDesc?semDescPDF:alvoSoma;
+    res+='<tr class="trow"><td style="text-align:right">Valor Total</td><td class="r">'+fmt(subtotalRes)+'</td></tr>';
   }
+  if(mostrarDesc) res+='<tr class="drow2"><td style="text-align:right">Desconto</td><td class="r">– '+fmt(difDesc)+'</td></tr>';
+  if(mostrarArred) res+='<tr class="drow2"><td style="text-align:right">Arredondamento</td><td class="r">'+(arredPdf<0?'– ':'+ ')+fmt(Math.abs(arredPdf))+'</td></tr>';
 
   res+='<tr class="lrow">'
     +'<td>'+totalLabel+'</td>'
