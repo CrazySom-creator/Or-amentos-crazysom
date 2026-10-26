@@ -8353,12 +8353,20 @@ function _tirarSnapshotDeDados(dadosObj){
   }
   function baseSec(s){return rowsDe(s).reduce(function(t,r){return t+rowTot(r);},0);}
   var bvPct=parseFloat(form['f-bv'])||0;
-  var comItens=SECS6.filter(function(s){return baseSec(s)>0;});
   var bvBase=SECS6.reduce(function(t,s){return t+baseSec(s);},0)*(1+IMP);
   var bvVal=bvPct>0?bvBase*bvPct/100:0;
+  // Mesma regra de secTotAll(): o BV inteiro numa seção só, com o mesmo
+  // fallback. O snapshot precisa bater com a tela, senão o histórico de
+  // aprovação mostraria valores por seção diferentes dos do orçamento.
+  var bvDest=(function(){
+    if(baseSec('logistica')>0) return 'logistica';
+    if(baseSec('servico')>0) return 'servico';
+    for(var i=0;i<SECS6.length;i++) if(baseSec(SECS6[i])>0) return SECS6[i];
+    return null;
+  })();
   function totalSec(s){
     var base=baseSec(s);
-    if(bvVal>0&&comItens.indexOf(s)>=0) base+=(bvVal/(1+IMP))/comItens.length;
+    if(bvVal>0&&s===bvDest) base+=bvVal/(1+IMP);
     return base;
   }
   var totais={};
@@ -8821,24 +8829,35 @@ function bvValorCalculado(){
   return baseComImposto*pct/100;
 }
 
-// Total de uma seção PARA EXIBIÇÃO (orçamento, PDF, dashboards): já vem com
-// a fatia do BV somada, de forma invisível — dividida só entre as categorias
-// que TÊM itens (uma categoria vazia não recebe fatia nenhuma).
-// A fatia é diluída em valor SEM imposto (dividindo por 1+IMP) pra que,
-// quando o imposto for aplicado por cima na exibição com imposto, o total
-// com imposto suba exatamente o valor do BV — sem cobrar imposto duas vezes
-// sobre o próprio BV.
+// Onde o BV entra. Decisão do Fabiano (out/2026): INTEIRO em Logística e
+// Serviços — a seção que já carrega Montagem, Desmontagem e Transporte e que
+// sai no PDF como linha única, sem detalhamento. Antes ele era diluído entre
+// todas as seções com itens, o que inflava Sonorização/Vídeo/Iluminação e
+// deixava o preço do equipamento difícil de defender na conversa com o
+// cliente.
+//
+// O fallback existe para o BV nunca inventar uma seção na cara do cliente:
+// se o orçamento não tem Logística, ele vai para Operação Técnica; se não
+// tem nenhuma das duas, para a primeira seção que tenha itens. Sem itens em
+// lugar nenhum o BV é zero de qualquer forma (a base dele é o próprio valor
+// das seções).
+function _bvSecDestino(){
+  if(_secTotAllBase('logistica')>0) return 'logistica';
+  if(_secTotAllBase('servico')>0) return 'servico';
+  var secs=_bvSecs();
+  for(var i=0;i<secs.length;i++) if(_secTotAllBase(secs[i])>0) return secs[i];
+  return null;
+}
+
+// Total de uma seção PARA EXIBIÇÃO (orçamento, PDF, dashboards): a seção de
+// destino já vem com o BV somado, de forma invisível.
+// O BV é somado em valor SEM imposto (dividindo por 1+IMP) pra que, quando o
+// imposto for aplicado por cima na exibição com imposto, o total com imposto
+// suba exatamente o valor do BV — sem cobrar imposto duas vezes sobre ele.
 function secTotAll(s){
   var base=_secTotAllBase(s);
-  if(_bvSecs().indexOf(s)>=0){
-    var bv=bvValorCalculado();
-    if(bv>0){
-      var comItens=_bvSecs().filter(function(s2){return _secTotAllBase(s2)>0;});
-      if(comItens.length>0 && comItens.indexOf(s)>=0){
-        base+=(bv/(1+IMP))/comItens.length;
-      }
-    }
-  }
+  var bv=bvValorCalculado();
+  if(bv>0 && s===_bvSecDestino()) base+=bv/(1+IMP);
   return base;
 }
 
@@ -12308,6 +12327,19 @@ function buildPDF(tipo){
   // hora, incluindo o Arredondamento aqui também pra não ficar defasado.
   var fallbackArredPdf=aplicarArredondamento(vdsiPdf,vdciPdf,modoSimpPDF,arredondValor());
   var totalFinal=modoSimpPDF?(vlsi>0?vlsi:fallbackArredPdf.vdsi):(vl>0?vl:fallbackArredPdf.vdci);
+  // ── Desconto embutido ──────────────────────────────────────────────────
+  // Quando há desconto de verdade mas o usuário não quer a linha "Desconto"
+  // no PDF, o abatimento é embutido PROPORCIONALMENTE em todos os valores —
+  // é o que "mostrar só o total já líquido" tem de significar. Imprimir as
+  // linhas cheias e um total menor, sem explicação, era o caso em que a conta
+  // mais escancaradamente não fechava.
+  // O fator é calculado AQUI, antes de qualquer número ser impresso, para que
+  // o corpo do PDF e o quadro final usem exatamente a mesma régua.
+  var semDescPDF=modoSimpPDF?bruto:cImp;
+  var temDescReal=(drs>0 || dpct>0);
+  var mostrarDescPDF=(temDescReal && (semDescPDF-totalFinal)>0.01 && descDiscriminarPDF);
+  var descFatorPDF=(temDescReal && !mostrarDescPDF && semDescPDF>0) ? (totalFinal/semDescPDF) : 1;
+
   var incLines=getSvinc().split('\n').map(function(l){return l.trim();}).filter(Boolean);
   var endCli=[gv('f-end'),gv('f-endnum'),gv('f-bairro'),gv('f-cidade')].filter(Boolean).join(', ');
   var endEv=[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
@@ -12357,13 +12389,20 @@ function buildPDF(tipo){
   });
   var multiAmb2=todosAmb.length>1||todosAmb.some(function(a){return a.nome!=='Geral';});
 
-  function rTotF(r){return rowTot(r)*F;}
+  // Todo valor impresso passa por aqui: com o desconto embutido, o corpo
+  // desce junto com o quadro final em vez de contradizê-lo.
+  function rTotF(r){return rowTot(r)*F*descFatorPDF;}
 
   function secBlock(s,aid,det){
     if(s==='logistica')return'';
     if(!state[s]||!state[s].rows)return'';
     var rows2=(state[s].rows[aid]||[]).filter(function(r){return !isOcult(r.name,r,s);});if(!rows2.length)return'';
-    var secTotal=rows2.reduce(function(t,r){return t+rTotF(r);},0);
+    // O total da seção é o que está sendo COBRADO, não a soma das linhas
+    // visíveis: os custos ocultos (Montagem, Frete, Projeto…) estão dentro do
+    // preço, apenas não são listados item a item. Somar só o visível fazia o
+    // corpo do PDF contradizer o quadro Produto/Serviço do fim — foi uma das
+    // divergências que o cliente apontou.
+    var secTotal=(state[s].rows[aid]||[]).reduce(function(t,r){return t+rTotF(r);},0);
     if(det){
       var h='<div class="psec">'+SEC_ICO[s]+' '+SEC_LBL_PDF[s]+'</div>'
         +'<table class="pi">'
@@ -12440,14 +12479,17 @@ function buildPDF(tipo){
     SECS_PDF.forEach(function(s){corpo+=secBlock(s,'default',tipo==='det');});
   }
 
-  var logTot=secTotAll('logistica')*F;
+  var logTot=secTotAll('logistica')*F*descFatorPDF;
   var totalLabel='Valor Total'+(impAtual==='cimp'?' (impostos inclusos)':'');
 
-  var res='<table class="pres">'
-    +'<thead><tr>'
-    +'<th>Produto / Serviço</th>'
-    +'<th class="r" style="width:130px">Valor</th>'
-    +'</tr></thead><tbody>';
+  /* ── O quadro Produto / Serviço ────────────────────────────────────────
+     As linhas são montadas primeiro em memória e só depois impressas, para
+     poderem ser FECHADAS: o cliente soma o que está escrito e tem de chegar
+     exatamente no Valor Total. Antes cada número era impresso na hora e a
+     conta não fechava por três motivos diferentes (centavos do
+     arredondamento, desconto não discriminado e BV fora das linhas de
+     ambiente). Ver claude/somas-do-pdf.md.                                */
+  var linhasRes=[];
 
   if(multiAmb2){
     todosAmb.forEach(function(amb){
@@ -12455,7 +12497,7 @@ function buildPDF(tipo){
         if(!state[s]) return tot;
         return tot+amb.ids.reduce(function(tt,aid){return tt+(state[s].rows[aid]||[]).reduce(function(a,r){return a+rTotF(r);},0);},0);
       },0);
-      if(t2>0)res+='<tr><td>'+amb.nome+'</td><td class="r">'+fmt(t2)+'</td></tr>';
+      if(t2>0) linhasRes.push({rot:amb.nome, val:t2});
     });
   }else{
     // "Laudo Técnico + ART" sai do bucket de Operação Técnica e vira uma
@@ -12468,14 +12510,47 @@ function buildPDF(tipo){
     [{n:'SONORIZAÇÃO',s:'som'},{n:'VÍDEO',s:'video'},{n:'ILUMINAÇÃO',s:'luz'},{n:'ESTRUTURA',s:'estrutura'},{n:'OPERAÇÃO TÉCNICA',s:'servico'}]
       .concat(catExtras.map(function(c){ return {n:String(c.nome||'Categoria').toUpperCase(), s:c.id}; }))
       .forEach(function(x){
-        var vSec=secTotAll(x.s)*F;
+        var vSec=secTotAll(x.s)*F*descFatorPDF;
         if(x.s==='servico') vSec-=laudoTot;
-        if(vSec>0.004) res+='<tr><td>'+x.n+'</td><td class="r">'+fmt(vSec)+'</td></tr>';
+        if(vSec>0.004) linhasRes.push({rot:x.n, val:vSec});
       });
-    if(laudoTot>0.004) res+='<tr><td>🛠️ LAUDO TÉCNICO + ART</td><td class="r">'+fmt(laudoTot)+'</td></tr>';
+    if(laudoTot>0.004) linhasRes.push({rot:'🛠️ LAUDO TÉCNICO + ART', val:laudoTot});
   }
 
-  if(logTot>0)res+='<tr><td>🚚 LOGÍSTICA E SERVIÇOS</td><td class="r">'+fmt(logTot)+'</td></tr>';
+  if(logTot>0) linhasRes.push({rot:'🚚 LOGÍSTICA E SERVIÇOS', val:logTot, bv:true});
+
+  // ── Fechamento das contas ──
+  // difDesc é a diferença REAL entre o valor cheio e o que o cliente paga.
+  // Antes o arredondamento era descontado de volta daqui para "não aparecer",
+  // e o resultado era uma subtração impressa que não dava o total de baixo.
+  // Um arredondamento invisível custa menos ao cliente do que uma conta
+  // errada: ele entra no desconto.
+  var difDesc=semDescPDF-totalFinal;
+  var mostrarDesc=mostrarDescPDF;
+  var alvoSoma=mostrarDesc?semDescPDF:totalFinal;
+  // Arredonda cada linha para centavo e joga o resto (no máximo alguns
+  // centavos) na linha de Logística — a mesma que carrega o BV e os custos
+  // internos. Sem isto, 7 linhas arredondadas para cima somam alguns centavos
+  // a mais que o total, e é exatamente essa diferença que o cliente encontra
+  // na calculadora.
+  linhasRes.forEach(function(l){ l.val=Math.round(l.val*100)/100; });
+  var resto=Math.round((alvoSoma-linhasRes.reduce(function(t,l){return t+l.val;},0))*100)/100;
+  if(Math.abs(resto)>=0.01 && linhasRes.length){
+    var alvo=null;
+    for(var iA=0;iA<linhasRes.length;iA++) if(linhasRes[iA].bv) alvo=linhasRes[iA];
+    if(!alvo) alvo=linhasRes.reduce(function(a,b){ return b.val>a.val?b:a; });
+    alvo.val=Math.round((alvo.val+resto)*100)/100;
+  }
+
+  var res='<table class="pres">'
+    +'<thead><tr>'
+    +'<th>Produto / Serviço</th>'
+    +'<th class="r" style="width:130px">Valor</th>'
+    +'</tr></thead><tbody>';
+
+  linhasRes.forEach(function(l){
+    res+='<tr><td>'+l.rot+'</td><td class="r">'+fmt(l.val)+'</td></tr>';
+  });
 
   // Serviços inclusos no PDF (Montagem, Desmontagem, Transporte, etc.)
   if(incLines.length){
@@ -12484,19 +12559,7 @@ function buildPDF(tipo){
     });
   }
 
-  // Mostrar desconto APENAS se ha desconto real (comparando total sem desconto vs totalFinal)
-  // E somente se descDiscriminarPDF estiver marcado — desmarcado, o PDF some com
-  // a linha "Desconto" e mostra só o total já líquido (ex.: quando o desconto é
-  // só um arredondamento que não precisa aparecer pro cliente).
-  var semDescPDF=modoSimpPDF?bruto:cImp;
-  // totalFinal já inclui o Arredondamento (vem de val-liq/val-liq-si, que o
-  // calc() já grava com o ajuste embutido). Pra linha "Desconto" mostrar SÓ
-  // o desconto de verdade — e não confundir o cliente com o arredondamento,
-  // que é pra ficar invisível no PDF — subtrai o arredondamento de volta
-  // antes de calcular a diferença.
-  var arredPdf=arredondValor();
-  var difDesc=semDescPDF-(totalFinal-arredPdf);
-  if(difDesc>0.01&&descDiscriminarPDF){
+  if(mostrarDesc){
     res+='<tr class="trow"><td style="text-align:right">Valor Total</td><td class="r">'+fmt(semDescPDF)+'</td></tr>';
     res+='<tr class="drow2"><td style="text-align:right">Desconto</td><td class="r">– '+fmt(difDesc)+'</td></tr>';
   }
