@@ -2774,6 +2774,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
           <button class="btn btn-sm" id="esc-btn-view-dia" onclick="escMudarView('dia')" title="Um dia por vez, para montar a escala com calma">Dia</button>
           <button class="btn btn-sm" id="esc-btn-view-semana" onclick="escMudarView('semana')" title="A semana inteira, com os cards de cada dia">Semana</button>
           <button class="btn btn-sm" id="esc-btn-view-mes" onclick="escMudarView('mes')" title="O mês inteiro — só os dias que têm etapa">Mês</button>
+          <button class="btn btn-sm" id="esc-btn-view-periodo" onclick="escMudarView('periodo')" title="O intervalo exato escolhido no PERÍODO DOS RELATÓRIOS, abaixo — a tela passa a mostrar o mesmo que o PDF e o Excel">📆 Período</button>
         </div>
         <button class="btn btn-o btn-sm" onclick="escNavegar(-1)" title="Período anterior">◀</button>
         <button class="btn btn-o btn-sm" onclick="escHoje()">Hoje</button>
@@ -26671,6 +26672,17 @@ async function escMudarData(iso){
 }
 // O passo do ◀ ▶ acompanha a visão — na Semana anda uma semana, no Mês um mês.
 function escNavegar(d){
+  // No modo Período, ◀ ▶ deslocam o intervalo inteiro pelo seu próprio
+  // tamanho — um período de 10 dias anda 10 dias, não 1.
+  if(_escView==='periodo'){
+    var p=_escRelFaixa();
+    var n=Math.round((new Date(p.ate+'T12:00:00')-new Date(p.de+'T12:00:00'))/86400000)+1;
+    var elDe=document.getElementById('esc-rel-de'), elAte=document.getElementById('esc-rel-ate');
+    if(elDe) elDe.value=_logAddDias(p.de,d*n);
+    if(elAte) elAte.value=_logAddDias(p.ate,d*n);
+    escMudarData(_logAddDias(p.de,d*n));
+    return;
+  }
   var dt=new Date(_escData+'T12:00:00');
   if(_escView==='semana') dt.setDate(dt.getDate()+d*7);
   else if(_escView==='mes') dt.setMonth(dt.getMonth()+d);
@@ -27424,6 +27436,9 @@ function escGerarFaltantesDoDia(){
 // imediatamente anteriores continuarem completos quando alguém abre o
 // módulo no meio de um evento.
 var ESC_SINC_DIAS_ATRAS=15;
+// escRenderizar() chama escRelAtualizarInfo(), que na visão Período chama
+// escRenderizar() de volta. Esta trava corta o laço.
+var _escRelRedesenhando=false;
 
 // Põe na escala TODOS os eventos da Agenda, de hoje-15 até o último evento
 // marcado. Roda ao abrir o módulo e no 🔄 Atualizar — o botão ⚡ Gerar não
@@ -27518,6 +27533,14 @@ function escRenderFaixa(){
 var _escView='semana'; // 'dia' | 'semana' | 'mes'
 
 function _escRangeVisivel(){
+  // Pedido do Fabiano: poder determinar um período específico na tela, com
+  // o mesmo filtro do relatório. Em vez de um segundo par de datas, esta
+  // visão USA o De/Até dos relatórios — assim o que está na tela é
+  // exatamente o que sai no PDF e no Excel.
+  if(_escView==='periodo'){
+    var p=_escRelFaixa();
+    return {ini:p.de, fim:p.ate};
+  }
   if(_escView==='dia') return {ini:_escData, fim:_escData};
   if(_escView==='semana'){
     var dom=_logInicioSemana(_escData);
@@ -27532,13 +27555,18 @@ function _escRangeVisivel(){
 
 function _escDiasVisiveis(){
   var r=_escRangeVisivel(), dias=[], d=r.ini, guarda=0;
-  while(d<=r.fim && guarda++<40){ dias.push(d); d=_logAddDias(d,1); }
+  // A trava de 40 servia para Semana e Mês. A visão Período pode ser longa
+  // (um trimestre inteiro), então ali o limite é maior — 400 dias cobre
+  // mais de um ano e ainda protege de um período absurdo.
+  var max=(_escView==='periodo')?400:40;
+  while(d<=r.fim && guarda++<max){ dias.push(d); d=_logAddDias(d,1); }
   return dias;
 }
 
 function _escTituloVisao(){
   var r=_escRangeVisivel();
   if(_escView==='dia') return _logTituloDia(_escData);
+  if(_escView==='periodo') return fD(r.ini)+' a '+fD(r.fim);
   if(_escView==='semana') return fD(r.ini)+' a '+fD(r.fim);
   var dt=new Date(_escData+'T12:00:00');
   return MESES_NOMES[dt.getMonth()]+' / '+dt.getFullYear();
@@ -27552,7 +27580,7 @@ async function escMudarView(v){
 }
 
 function _escAtualizarBotoesView(){
-  ['dia','semana','mes'].forEach(function(v){
+  ['dia','semana','mes','periodo'].forEach(function(v){
     var b=document.getElementById('esc-btn-view-'+v);
     if(b) b.className='btn btn-sm '+(v===_escView?'btn-r':'btn-o');
   });
@@ -27576,7 +27604,10 @@ function escRenderQuadro(){
   var dias=_escDiasVisiveis();
   var comEtapa=dias.filter(function(d){ return escCards(d).length; });
   if(!comEtapa.length){
-    el.innerHTML=_escQuadroVazio(_escView==='semana'?'nesta semana':'neste mês');
+    el.innerHTML=_escQuadroVazio(
+      _escView==='semana' ? 'nesta semana'
+      : _escView==='periodo' ? ('entre '+fD(dias[0])+' e '+fD(dias[dias.length-1]))
+      : 'neste mês');
     return;
   }
   // Mês mostra só os dias com etapa; Semana mostra os sete, para a folga no
@@ -27585,9 +27616,61 @@ function escRenderQuadro(){
   el.innerHTML=aDesenhar.map(_escBlocoDia).join('');
 }
 
+// Primeiro e último dia com etapa, em tudo que está carregado. É o que
+// permite dizer ONDE estão os eventos quando a tela está vazia.
+function _escFaixaComEtapas(){
+  var ini='', fim='';
+  Object.keys(_escMeses).forEach(function(m){
+    var dias=_escMeses[m].dias||{};
+    Object.keys(dias).forEach(function(d){
+      if(!dias[d]||!dias[d].length) return;
+      if(!ini||d<ini) ini=d;
+      if(!fim||d>fim) fim=d;
+    });
+  });
+  return ini?{ini:ini, fim:fim}:null;
+}
+
+// O dia com etapa mais próximo do que está à vista — para o botão de levar
+// o usuário de volta aos eventos.
+function _escDiaComEtapaMaisProximo(ref){
+  var alvo='', melhor=Infinity;
+  Object.keys(_escMeses).forEach(function(m){
+    var dias=_escMeses[m].dias||{};
+    Object.keys(dias).forEach(function(d){
+      if(!dias[d]||!dias[d].length) return;
+      var dist=Math.abs(new Date(d+'T12:00:00')-new Date(ref+'T12:00:00'));
+      if(dist<melhor){ melhor=dist; alvo=d; }
+    });
+  });
+  return alvo;
+}
+
+function escIrParaEtapasMaisProximas(){
+  var d=_escDiaComEtapaMaisProximo(_escData);
+  if(!d) return;
+  if(_escView==='periodo') _escView='semana';   // período fixo não "vai" para lugar nenhum
+  return escMudarData(d);
+}
+
+// Vazio NÃO é só "não há nada": o Fabiano navegou até novembro/2027, viu a
+// tela limpa e achou que os eventos tinham sumido. Quando existe escala em
+// outro lugar, a tela diz onde e oferece ir até lá.
 function _escQuadroVazio(onde){
-  return '<div class="dash-vazio" style="padding:26px">Nenhuma etapa montada '+onde+'.'
-    +'<div style="margin-top:8px;font-size:11px;color:var(--text-dim)">Os eventos da Agenda entram aqui sozinhos ao abrir o módulo e no <b>🔄 Atualizar</b>. Use <b>➕ Etapa avulsa</b> para criar a separação da véspera, que não tem data no orçamento.</div></div>';
+  var faixa=_escFaixaComEtapas();
+  var proximo=faixa?_escDiaComEtapaMaisProximo(_escData):'';
+  var h='<div class="dash-vazio" style="padding:26px">Nenhuma etapa montada '+onde+'.';
+  if(faixa){
+    h+='<div style="margin-top:10px;font-size:12px;color:var(--text)">'
+      +'A escala montada vai de <b>'+fD(faixa.ini)+'</b> a <b>'+fD(faixa.fim)+'</b>.</div>'
+      +(proximo?'<div style="margin-top:9px"><button class="btn btn-r btn-sm" onclick="escIrParaEtapasMaisProximas()">📍 Ir para '+fD(proximo)+'</button> '
+        +'<button class="btn btn-o btn-sm" onclick="escHoje()">Hoje</button></div>':'')
+      +'<div style="margin-top:9px;font-size:11px;color:var(--text-dim)">Você está olhando um período sem eventos — nada foi perdido.</div>';
+  }else{
+    h+='<div style="margin-top:8px;font-size:11px;color:var(--text-dim)">Os eventos da Agenda entram aqui sozinhos ao abrir o módulo e no <b>🔄 Atualizar</b>.</div>';
+  }
+  h+='<div style="margin-top:8px;font-size:11px;color:var(--text-dim)">Use <b>➕ Etapa avulsa</b> para criar a separação da véspera, que não tem data no orçamento.</div></div>';
+  return h;
 }
 
 function _escBlocoDia(dia){
@@ -27911,6 +27994,11 @@ function escLinhasPeriodo(de,ate){
 function escRelAtualizarInfo(){
   var el=document.getElementById('esc-rel-info');
   if(!el) return;
+  // Na visão Período o quadro É o período: mexer nas datas redesenha.
+  if(_escView==='periodo' && !_escRelRedesenhando){
+    _escRelRedesenhando=true;
+    try{ escRenderizar(); } finally { _escRelRedesenhando=false; }
+  }
   var p=_escRelFaixa();
   var linhas=escLinhasPeriodo(p.de,p.ate);
   var dias={};
