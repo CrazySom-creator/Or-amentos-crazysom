@@ -3412,6 +3412,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     <div><label>Fim Desmontagem</label><input type="date" id="f-dd-fim" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc();atualizarBadgeEqOrc()"></div>
     <div><label>Agenda</label><button type="button" class="btn btn-o btn-sm" id="btn-agenda-contador" onclick="abrirAgendaLogisticaDoOrcamento()" title="Ver a agenda da Logística pra esse período — eventos fechados e pré-reservados que se sobrepõem" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px">📅 Agenda <span id="agenda-contador-badge" style="background:var(--surface-3);border-radius:10px;padding:1px 8px;font-weight:800;font-size:11px;color:var(--text-dim)">—</span></button></div>
   </div>
+  <div id="datas-aviso" style="display:none;background:rgba(255,167,38,.12);border:1px solid #ffa726;border-radius:6px;padding:8px 12px;margin:0 0 8px;font-size:11px;color:#e65100"></div>
   <div class="g4" style="margin-bottom:8px">
     <div></div><div></div><div></div>
     <div><label>Equipamento disponível?</label><button type="button" class="btn btn-o btn-sm" id="btn-eq-disp" onclick="eqConsultarOrcamento()" title="Confere, na janela de montagem até desmontagem deste orçamento, se há equipamento livre em estoque — ou quanto falta sublocar" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px">📦 Equip. <span id="eq-badge" style="background:var(--surface-3);border-radius:10px;padding:1px 8px;font-weight:800;font-size:11px;color:var(--text-dim)">—</span></button></div>
@@ -5008,11 +5009,11 @@ var _agendaContadorCarregando=false;
 // _logRangeEvento(), só que lendo os campos ao vivo (gv()) em vez de um
 // form já salvo, pra refletir o que o consultor está digitando.
 function _agendaContadorPeriodoAtual(){
-  var inicio=gv('f-dm')||gv('f-dia')||'';
-  if(!inicio) return null;
-  var fim=gv('f-dd-fim')||gv('f-dd')||gv('f-dia-fim')||gv('f-dia')||inicio;
-  if(fim<inicio) fim=inicio;
-  return {inicio:inicio, fim:fim};
+  return _logRangeDeDatas({
+    'f-dm':gv('f-dm'), 'f-dm-fim':gv('f-dm-fim'),
+    'f-dia':gv('f-dia'), 'f-dia-fim':gv('f-dia-fim'),
+    'f-dd':gv('f-dd'), 'f-dd-fim':gv('f-dd-fim')
+  });
 }
 
 async function _agendaContadorGarantirDados(){
@@ -5055,7 +5056,28 @@ function _agendaContadorPintar(el,estado){
 // Atualiza o badge do botão "📅 Agenda" — chamada nas mudanças de data
 // (Início/Fim do Evento via calcDiariasAuto(), Montagem/Desmontagem via
 // oninput direto) e ao carregar um orçamento na tela.
+// Aviso ao vivo, enquanto o consultor digita. Fica no orçamento de
+// propósito: é o único lugar onde a data errada pode ser CORRIGIDA. Avisar
+// só na Agenda deixaria o erro circular até alguém reparar — foi o que
+// aconteceu com o 20266654, que saiu em OS com a desmontagem em setembro.
+function atualizarAvisoDatasOrc(){
+  var el=document.getElementById('datas-aviso');
+  if(!el) return;
+  var p=_logDatasInconsistentes({
+    'f-dm':gv('f-dm'), 'f-dm-fim':gv('f-dm-fim'),
+    'f-dia':gv('f-dia'), 'f-dia-fim':gv('f-dia-fim'),
+    'f-dd':gv('f-dd'), 'f-dd-fim':gv('f-dd-fim')
+  });
+  if(!p.length){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='';
+  el.innerHTML='<b>⚠️ Confira as datas</b> — '
+    +p.map(function(x){ return eh(x); }).join('; ')
+    +'.<div style="font-size:10px;color:var(--text-dim);margin-top:3px">'
+    +'O orçamento salva assim mesmo, mas com data trocada ele ocupa a agenda no período errado — e a equipe trabalha pela OS.</div>';
+}
+
 async function atualizarContadorAgendaOrc(){
+  atualizarAvisoDatasOrc();
   var el=document.getElementById('agenda-contador-badge');
   if(!el) return;
   var periodo=_agendaContadorPeriodoAtual();
@@ -25539,13 +25561,51 @@ function _logGridMes(anoMes){
 // f-dia-fim) quando Montagem/Desmontagem não estão preenchidas. Retorna
 // null quando não há NENHUMA data (não deveria acontecer com Venda Ganha/
 // pré-reservado, mas é tratado defensivamente).
+// Janela de ocupação: da PRIMEIRA à ÚLTIMA data preenchida no orçamento,
+// qualquer que seja a ordem em que foram digitadas.
+//
+// A versão anterior montava a janela como montagem→desmontagem e, quando as
+// datas vinham invertidas, "protegia-se" com `if(fim<inicio) fim=inicio`.
+// Essa proteção escondia o evento: o orçamento 20266654 (Unifertil) tinha a
+// desmontagem digitada como 29/09 em vez de 29/10, a janela virou
+// 28/10→28/10 e o evento, que é dia 29/10, sumiu da Agenda E da Logística —
+// uma venda já fechada invisível nas duas telas operacionais, sem um aviso
+// sequer. Pegar o mínimo e o máximo faz o erro de digitação ALARGAR a
+// janela em vez de apagar o evento; quem avisa que há data errada é
+// _logDatasInconsistentes(), abaixo.
 function _logRangeEvento(o){
-  var f=(o&&o.form)||{};
-  var inicio=f['f-dm']||f['f-dia']||'';
-  if(!inicio) return null;
-  var fim=f['f-dd-fim']||f['f-dd']||f['f-dia-fim']||f['f-dia']||inicio;
-  if(fim<inicio) fim=inicio; // segurança contra datas invertidas/inconsistentes
-  return {inicio:inicio, fim:fim};
+  return _logRangeDeDatas((o&&o.form)||{});
+}
+
+function _logRangeDeDatas(f){
+  var datas=[f['f-dm'],f['f-dm-fim'],f['f-dia'],f['f-dia-fim'],f['f-dd'],f['f-dd-fim']]
+    .filter(function(d){ return !!d; });
+  if(!datas.length) return null;
+  var ini=datas[0], fim=datas[0];
+  datas.forEach(function(d){ if(d<ini) ini=d; if(d>fim) fim=d; });
+  return {inicio:ini, fim:fim};
+}
+
+// Datas que não fazem sentido entre si. Devolve uma lista de frases prontas
+// — vazia quando está tudo certo. Usada pela tarja da Agenda, pelo aviso da
+// Logística e pelo alerta ao salvar o orçamento.
+function _logDatasInconsistentes(f){
+  f=f||{};
+  var p=[];
+  var dm=f['f-dm']||'', dmF=f['f-dm-fim']||dm;
+  var dia=f['f-dia']||'', diaF=f['f-dia-fim']||dia;
+  var dd=f['f-dd']||'', ddF=f['f-dd-fim']||dd;
+  function d(x){ return fD(x); }
+  if(dm&&dmF&&dmF<dm) p.push('o fim da montagem ('+d(dmF)+') é anterior ao início ('+d(dm)+')');
+  if(dia&&diaF&&diaF<dia) p.push('o fim do evento ('+d(diaF)+') é anterior ao início ('+d(dia)+')');
+  if(dd&&ddF&&ddF<dd) p.push('o fim da desmontagem ('+d(ddF)+') é anterior ao início ('+d(dd)+')');
+  if(dm&&dia&&dm>dia) p.push('a montagem ('+d(dm)+') começa depois do evento ('+d(dia)+')');
+  if(dd&&dia&&dd<dia) p.push('a desmontagem ('+d(dd)+') é anterior ao evento ('+d(dia)+')');
+  // Evento de um dia só: "anterior ao evento" já diz tudo. Só quando o fim
+  // é diferente do início vale falar dele separadamente.
+  else if(dd&&diaF&&diaF!==dia&&dd<diaF) p.push('a desmontagem ('+d(dd)+') é anterior ao fim do evento ('+d(diaF)+')');
+  // Sem repetir o mesmo aviso duas vezes quando o evento é de um dia só.
+  return p.filter(function(x,i){ return p.indexOf(x)===i; });
 }
 
 // TODAS as fases (montagem/evento/desmontagem) que um orçamento tem num dia.
@@ -25665,7 +25725,9 @@ function logRenderizar(){
     // (o orçamento não está aberto). Só faz sentido em venda fechada.
     var ehGanha=((o.dados&&o.dados.comercialStatus)||'')==='ganha';
     var pend=ehGanha ? !_montagemLiberadaDe(o.form||{}, o.dados||{}) : false;
+    var datasRuins=_logDatasInconsistentes(o.form||{});
     return {o:o, range:_logRangeEvento(o), status:_logStatus(o),
+            datasRuins:datasRuins,
             pendente:pend, pendTexto:pend?_montagemTarjaTextoDe(o.form||{}, o.dados||{}):''};
   });
 
@@ -25785,10 +25847,12 @@ function _logCardDia(it,diaISO){
     +'<div style="font-size:12px;font-weight:800;color:var(--text)">'+(hora?hora+' — ':'')+eh(f['f-cliente']||'—')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+'</div>'
     +'<div style="display:flex;gap:6px;align-items:center">'
     +(it.pendente?'<span class="log-pend-chip" title="'+eh(it.pendTexto)+'">⚠️ OS PENDENTE</span>':'')
+    +((it.datasRuins&&it.datasRuins.length)?'<span class="log-pend-chip" style="background:#e65100" title="'+eh('Datas inconsistentes: '+it.datasRuins.join('; ')+'. Abra o orçamento e corrija — com data trocada o evento ocupa a agenda no período errado.')+'">⚠️ DATAS</span>':'')
     +'<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:10px;background:'+st.cor+'22;color:'+st.cor+'">'+st.label+'</span>'
     +_logChipsFase(o,diaISO,fv)
     +'</div></div>'
     +(it.pendente?'<div style="font-size:9.5px;color:#ffb4b4;margin-top:4px">⚠️ Liberação de Montagem pendente — '+eh(it.pendTexto)+'</div>':'')
+    +((it.datasRuins&&it.datasRuins.length)?'<div style="font-size:9.5px;color:#ffb74d;margin-top:4px">⚠️ Datas inconsistentes: '+eh(it.datasRuins.join('; '))+' — abra o orçamento e corrija.</div>':'')
     +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">'+eh(f['f-tipo']||'')+(f['f-local']?' · '+eh(f['f-local']):'')+(endereco?' · '+eh(endereco):'')+'</div>'
     +'<div style="font-size:10px;color:var(--text-dim);margin-top:2px">'+eh(f['f-num']||'')+(f['f-cons']?' · Consultor: '+eh(f['f-cons']):'')+'</div>'
     +'</div>';
@@ -27116,13 +27180,41 @@ function _escFaltamNoDia(dia){
   return faltam;
 }
 
+// Orçamentos com data inconsistente que tocam o dia à vista. Entram no
+// mesmo aviso das etapas faltantes porque o sintoma é o mesmo para quem
+// olha a tela: alguma coisa está fora do lugar neste dia.
+function _escDatasRuinsNoDia(dia){
+  var out=[];
+  _escItensAgenda().forEach(function(it){
+    if(dia<it.range.inicio || dia>it.range.fim) return;
+    var p=_logDatasInconsistentes(it.o.form||{});
+    if(!p.length) return;
+    var f=it.o.form||{};
+    out.push({num:f['f-num']||'', nome:(f['f-cliente']||'')+(f['f-nome-evento']?' — '+f['f-nome-evento']:''), probs:p});
+  });
+  return out;
+}
+
 function escRenderFaltam(){
   var el=document.getElementById('esc-faltam');
   if(!el) return;
   var faltam=_escFaltamNoDia(_escData);
-  if(!faltam.length){ el.innerHTML=''; return; }
+  var ruins=_escDatasRuinsNoDia(_escData);
+  var html='';
+  if(ruins.length){
+    html+='<div style="background:rgba(230,81,0,.14);border:1px solid #e65100;border-radius:6px;padding:9px 12px;margin-bottom:10px">'
+      +'<div style="font-size:11px;font-weight:900;color:#ff9800;margin-bottom:5px">⚠️ '+ruins.length+' orçamento(s) com datas inconsistentes</div>'
+      +ruins.map(function(x){
+        return '<div style="font-size:10px;color:var(--text-dim)">• '+eh(x.nome||'(sem cliente)')
+          +(x.num?' <span style="color:var(--text-muted)">(orç. '+eh(x.num)+')</span>':'')
+          +' — '+eh(x.probs.join('; '))+'</div>';
+      }).join('')
+      +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">Abra o orçamento e corrija: com data trocada o evento ocupa a agenda no período errado.</div>'
+      +'</div>';
+  }
+  if(!faltam.length){ el.innerHTML=html; return; }
   var pode=_escPodeEditar();
-  el.innerHTML='<div style="background:rgba(255,167,38,.12);border:1px solid #ffa726;border-radius:6px;padding:9px 12px;margin-bottom:10px">'
+  el.innerHTML=html+'<div style="background:rgba(255,167,38,.12);border:1px solid #ffa726;border-radius:6px;padding:9px 12px;margin-bottom:10px">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:5px">'
       +'<div style="font-size:11px;font-weight:900;color:#ffa726">⚠️ '+faltam.length+' etapa(s) da Agenda sem card neste dia</div>'
       +(pode?'<button class="btn btn-b btn-sm" onclick="escGerarFaltantesDoDia()" title="Cria só estas, sem mexer no resto">⚡ Gerar as que faltam</button>':'')
