@@ -2781,7 +2781,6 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <input type="date" id="esc-data" onchange="escMudarData(this.value)" style="font-size:11px;padding:5px 7px">
         <span id="esc-titulo" style="font-size:13px;font-weight:900;color:var(--text);text-transform:uppercase"></span>
         <div style="flex:1"></div>
-        <button class="btn btn-b btn-sm" id="esc-btn-gerar" onclick="escGerarDaAgenda()" title="Cria as etapas dos eventos da Agenda no PERÍODO DOS RELATÓRIOS escolhido abaixo — não duplica o que já existe">⚡ Gerar etapas da Agenda</button>
         <button class="btn btn-o btn-sm" id="esc-btn-avulsa" onclick="escNovoCard('')" title="Cria um card em branco">➕ Etapa avulsa</button>
       </div>
 
@@ -2813,7 +2812,8 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div id="esc-quadro" style="overflow-x:auto;padding-bottom:8px"></div>
 
       <div style="font-size:10px;color:var(--text-dim);margin-top:10px;line-height:1.7">
-        <b>Como usar:</b> arraste um nome ou veículo de um card para outro para transferir a escala ·
+        <b>Como usar:</b> as etapas dos eventos entram sozinhas ao abrir e no 🔄 Atualizar ·
+        arraste um nome ou veículo de um card para outro para transferir a escala ·
         arraste o <b>⠿ topo do card</b> sobre outro card para trocar a ordem, ou sobre um dia da faixa acima para mover de dia ·
         <span style="color:#ff5555;font-weight:800">vermelho</span> = a mesma pessoa/veículo em duas etapas com horário cruzado ·
         <span style="color:#ffa726;font-weight:800">amarelo</span> = possível conflito (falta horário para ter certeza).
@@ -26460,7 +26460,7 @@ async function escCarregarTudo(){
       // ainda não salva.
       if(_escMeses[mes]) return;
       var dados=d.data()||{};
-      _escMeses[mes]={dias:dados.dias||{}};
+      _escMeses[mes]={dias:dados.dias||{}, removidos:dados.removidos||{}};
       n++;
     });
     _escTudoCarregado=true;
@@ -26487,7 +26487,8 @@ async function escCarregarMes(mesAno){
   if(_escTudoCarregado){ _escMeses[mesAno]={dias:{}}; return _escMeses[mesAno]; }
   try{
     var snap=await fbDb.collection('config').doc('escala-'+mesAno).get();
-    _escMeses[mesAno]=(snap.exists && snap.data().dias)?{dias:snap.data().dias}:{dias:{}};
+    var dd=(snap.exists&&snap.data())||{};
+    _escMeses[mesAno]={dias:dd.dias||{}, removidos:dd.removidos||{}};
   }catch(e){
     console.warn('escCarregarMes:',e);
     _escMeses[mesAno]={dias:{}};
@@ -26495,10 +26496,17 @@ async function escCarregarMes(mesAno){
   return _escMeses[mesAno];
 }
 
-async function escSalvar(){
-  if(_escBloqueado()) return;
+async function escSalvar(silencioso){
+  // A sincronização automática grava sozinha e não pode esbarrar na
+  // permissão de edição: ela não é o usuário editando, é o sistema mantendo
+  // a escala igual à Agenda. Quem só visualiza não dispara nada daqui porque
+  // _escSujos fica vazio para ele.
+  if(!silencioso && _escBloqueado()) return;
   var meses=Object.keys(_escSujos);
-  if(!meses.length){ _toastMostrar('Nada para salvar — a escala já está gravada.','',4000); return; }
+  if(!meses.length){
+    if(!silencioso) _toastMostrar('Nada para salvar — a escala já está gravada.','',4000);
+    return;
+  }
   var btn=document.getElementById('esc-btn-salvar');
   if(btn){ btn.disabled=true; btn.textContent='⏳ Salvando...'; }
   var erros=0;
@@ -26519,8 +26527,8 @@ async function escSalvar(){
     }catch(e){ console.warn('escSalvar '+m+':',e); erros++; }
   }
   if(btn){ btn.disabled=false; btn.textContent='💾 Salvar'; }
-  if(erros) alert('Não consegui salvar '+erros+' mês(es) da escala.\n\nVeja o Diagnóstico de Permissões do Banco, no Admin.');
-  else _toastMostrar('💾 Escala salva.','',4000);
+  if(erros && !silencioso) alert('Não consegui salvar '+erros+' mês(es) da escala.\n\nVeja o Diagnóstico de Permissões do Banco, no Admin.');
+  else if(!erros && !silencioso) _toastMostrar('💾 Escala salva.','',4000);
   escAtualizarBotaoSalvar();
 }
 
@@ -26583,9 +26591,16 @@ async function abrirEscala(){
   document.getElementById('esc-sub').textContent='Carregando...';
   if(!_escData) _escData=_logISO(new Date());
   await escCarregarCadastros();
-  await dashAtualizar(false);
+  // true, não false: com o cache a Logística mostrava a versão antiga dos
+  // orçamentos. Foi o que aconteceu com o 20266654 — o Fabiano corrigiu a
+  // data, abriu a Logística e continuou sem o evento, porque o que estava em
+  // memória ainda era o orçamento de antes. A Agenda sempre usou true.
+  await dashAtualizar(true);
   await escCarregarTudo();
+  document.getElementById('esc-sub').textContent='⚡ Sincronizando com a Agenda...';
+  var _sinc=await _escSincronizarEGravar();
   _escAtualizarSub();
+  if(_sinc.criados) _toastMostrar('⚡ '+_sinc.criados+' etapa(s) da Agenda entraram na escala, em '+_sinc.dias+' dia(s).','',7000);
   escAba('quadro');
   // Abre já com o dia à vista no período — é o recorte mais comum. Depois o
   // usuário alarga para semana/mês e a escolha dele fica: navegar o dia não
@@ -26873,13 +26888,15 @@ function _escGerarNoDia(dia,itens){
     });
   });
   if(!achados.length) return {criados:0, pulados:0};
-  var lista=escCards(dia);
+  var lista=escCards(dia), removidos=_escRemovidos(dia);
   var criados=0, pulados=0;
   achados.forEach(function(a){
     var o=a.it.o, f=o.form||{};
     var tipo=ESC_FASE_PARA_TIPO[a.fase]||'operacao';
     var num=f['f-num']||'';
     if(_escCardDaOrigem(lista,tipo,o)){ pulados++; return; }
+    // Etapa que o usuário excluiu de propósito não volta sozinha.
+    if(removidos.indexOf(_escChaveEtapa(tipo,o))>=0){ pulados++; return; }
     var endereco=[f['f-end-ev'],f['f-num-ev'],f['f-bairro-ev'],f['f-cid-ev']].filter(Boolean).join(', ');
     lista.push({
       id:uid(),
@@ -26904,61 +26921,8 @@ function _escGerarNoDia(dia,itens){
   return {criados:criados, pulados:pulados};
 }
 
-// ⚡ Gerar: usa o PERÍODO DOS RELATÓRIOS, não só o dia à vista (pedido do
-// Fabiano — escolher 01/11 a 15/11, gerar tudo e já exportar o período).
-// Com o período num dia só, é o comportamento de antes. Com mais de um dia
-// pergunta antes: criar duas semanas de etapas de uma vez sem avisar seria
-// uma surpresa desagradável de desfazer.
-async function escGerarDaAgenda(){
-  if(_escBloqueado()) return;
-  var p=_escRelFaixa();
-  var nDias=Math.round((new Date(p.ate+'T12:00:00')-new Date(p.de+'T12:00:00'))/86400000)+1;
-  if(nDias>1 && !confirm('⚡ GERAR ETAPAS DA AGENDA\n\nPeríodo: '+fD(p.de)+' a '+fD(p.ate)+' ('+nDias+' dias).\n\n'
-    +'Serão criadas as etapas de montagem, operação e desmontagem de todos os eventos fechados e pré-reservados nesse período. '
-    +'O que já existe não é duplicado.\n\nNada é gravado agora: você confere na tela e clica em Salvar depois.\n\nContinuar?')) return;
-
-  await _escCarregarFaixa(p.de,p.ate);
-  // SEMPRE monta a lista aqui. Antes reaproveitava window._logItens quando
-  // existia — e aquela lista é a da Agenda JÁ FILTRADA (consultor, 🟢
-  // Fechados, 🟡 Pré-reservados) e congelada na última vez que a Agenda foi
-  // desenhada. Resultado: um filtro esquecido na Agenda, ou um orçamento
-  // fechado depois, fazia a Logística gerar um subconjunto em silêncio.
-  var itens=_escItensAgenda();
-
-  var criados=0, pulados=0, diasComEtapa=0, dia=p.de, guarda=0;
-  while(dia<=p.ate && guarda++<400){
-    var r=_escGerarNoDia(dia,itens);
-    criados+=r.criados; pulados+=r.pulados;
-    if(r.criados||r.pulados) diasComEtapa++;
-    dia=_logAddDias(dia,1);
-  }
-
-  // Quantos eventos da Agenda tocam o período — é o número que o usuário
-  // consegue conferir contra a tela da Agenda. Sem ele, "0 criadas · 17 já
-  // existiam" não diz se um evento foi simplesmente ignorado.
-  var nEventos=itens.filter(function(it){
-    return !(it.range.fim<p.de || it.range.inicio>p.ate);
-  }).length;
-
-  if(!criados && !pulados){
-    alert('A Agenda não tem nenhum evento fechado ou pré-reservado entre '+fD(p.de)+' e '+fD(p.ate)+'.\n\n'
-      +'Se o evento existe mas não aparece:\n'
-      +'• confira em 📅 Agenda de Eventos se ele está como Venda Ganha (ou com pré-reserva criada no Google Agenda);\n'
-      +'• se foi fechado agora há pouco, clique em 🔄 Atualizar aqui em cima — a lista de orçamentos fica em cache.');
-    return;
-  }
-  // Leva a tela para o primeiro dia do período que ganhou etapa — gerar 15
-  // dias e continuar olhando um dia vazio pareceria que não funcionou.
-  if(criados && (_escData<p.de || _escData>p.ate)) _escData=p.de;
-  escRenderizar();
-  _toastMostrar('⚡ '+nEventos+' evento(s) da Agenda no período · '+criados+' etapa(s) criada(s) em '+diasComEtapa+' dia(s)'
-    +(pulados?' · '+pulados+' já existia(m)':'')
-    +(nDias>1?' · '+fD(p.de)+' a '+fD(p.ate):'')
-    +' — <b>confira e clique em Salvar</b>.','',9000);
-}
-
-// Mesma regra da grade da Agenda (_logOcupaAgenda + _logRangeEvento), para o
-// botão ⚡ funcionar mesmo sem ter aberto a Agenda antes.
+// Mesma regra da grade da Agenda (_logOcupaAgenda + _logRangeEvento), lida
+// direto de _dashDados — nunca da lista já filtrada que a Agenda guarda.
 function _escItensAgenda(){
   return (_dashDados||[]).filter(_logOcupaAgenda).map(function(o){
     return {o:o, range:_logRangeEvento(o)};
@@ -26988,6 +26952,9 @@ function escExcluirCard(id){
   var lista=escCards(dia);
   var i=lista.indexOf(c);
   if(i>=0) lista.splice(i,1);
+  // Registra que foi excluída de propósito, senão a sincronização automática
+  // a traria de volta na próxima abertura.
+  _escMarcarRemovido(dia,c);
   _escMarcarSujo(dia);
   escRenderizar();
 }
@@ -27174,7 +27141,7 @@ function escRenderizar(){
 // que altera. Exportar continua liberado — é leitura.
 function _escAplicarPermissoes(){
   var pode=_escPodeEditar();
-  ['esc-btn-salvar','esc-btn-gerar','esc-btn-avulsa'].forEach(function(id){
+  ['esc-btn-salvar','esc-btn-avulsa'].forEach(function(id){
     var b=document.getElementById(id);
     if(b) b.style.display=pode?'':'none';
   });
@@ -27208,6 +27175,34 @@ function _escAplicarPermissoesCad(){
   });
 }
 
+// Identidade de uma etapa gerada: tipo + o orçamento que a originou.
+// Pelo número quando há; pelo driveId quando não há.
+function _escChaveEtapa(tipo,o){
+  var num=((o&&o.form)||{})['f-num']||'';
+  return tipo+'|'+(num||('drive:'+((o&&o.driveId)||'')));
+}
+
+// Etapas que o usuário EXCLUIU de propósito. Sem esta lista, a sincronização
+// automática traria tudo de volta na próxima abertura e o botão de excluir
+// não significaria nada.
+function _escRemovidos(dia){
+  var m=_escMeses[dia.substring(0,7)];
+  if(!m) return [];
+  if(!m.removidos) m.removidos={};
+  if(!m.removidos[dia]) m.removidos[dia]=[];
+  return m.removidos[dia];
+}
+function _escMarcarRemovido(dia,c){
+  if(!c||!c.orcNum&&!c.driveId) return;   // etapa avulsa não tem origem
+  var k=c.tipo+'|'+(c.orcNum||('drive:'+(c.driveId||'')));
+  var lista=_escRemovidos(dia);
+  if(lista.indexOf(k)<0) lista.push(k);
+}
+function _escRestaurarRemovidos(dia){
+  var m=_escMeses[dia.substring(0,7)];
+  if(m&&m.removidos) delete m.removidos[dia];
+}
+
 // Casa um card com o orçamento que o originou. Pelo número, quando há; pelo
 // driveId quando não há — sem isso um orçamento ainda sem número seria
 // recriado a cada ⚡ e apareceria para sempre como "faltando".
@@ -27229,10 +27224,12 @@ function _escFaltamNoDia(dia){
   var faltam=[];
   _escItensAgenda().forEach(function(it){
     if(dia<it.range.inicio || dia>it.range.fim) return;
-    var lista=escCards(dia), f=it.o.form||{};
+    var lista=escCards(dia), f=it.o.form||{}, rem=_escRemovidos(dia);
     _logFasesNoDia(it.o,dia).forEach(function(fase){
       var tipo=ESC_FASE_PARA_TIPO[fase]||'operacao';
       if(_escCardDaOrigem(lista,tipo,it.o)) return;
+      // Excluída de propósito não é "faltando" — cobrar por ela seria errado.
+      if(rem.indexOf(_escChaveEtapa(tipo,it.o))>=0) return;
       faltam.push({
         tipo:tipo,
         num:f['f-num']||'',
@@ -27293,9 +27290,57 @@ function escRenderFaltam(){
 // que falta logo acima do botão.
 function escGerarFaltantesDoDia(){
   if(_escBloqueado()) return;
+  // Pedir explicitamente as que faltam desfaz as exclusões do dia — é o
+  // caminho de volta para quem excluiu sem querer.
+  _escRestaurarRemovidos(_escData);
   var r=_escGerarNoDia(_escData,_escItensAgenda());
   escRenderizar();
   _toastMostrar('⚡ '+r.criados+' etapa(s) criada(s) em '+fD(_escData)+' — <b>confira e clique em Salvar</b>.','',8000);
+}
+
+// Quantos dias para trás a sincronização automática olha. O que já passou
+// não precisa de escala; esta folga existe só para o dia de hoje e os
+// imediatamente anteriores continuarem completos quando alguém abre o
+// módulo no meio de um evento.
+var ESC_SINC_DIAS_ATRAS=15;
+
+// Põe na escala TODOS os eventos da Agenda, de hoje-15 até o último evento
+// marcado. Roda ao abrir o módulo e no 🔄 Atualizar — o botão ⚡ Gerar não
+// existe mais, porque pedir para o sistema fazer o que ele pode fazer
+// sozinho era só mais uma coisa para esquecer (e esquecer significava
+// caminhão sem escala).
+//
+// Não duplica o que já existe, não mexe no que foi editado à mão, e respeita
+// as etapas excluídas de propósito.
+async function escSincronizarAgenda(){
+  var itens=_escItensAgenda();
+  if(!itens.length) return {criados:0, dias:0};
+
+  var hoje=_logISO(new Date());
+  var de=_logAddDias(hoje,-ESC_SINC_DIAS_ATRAS), ate=de;
+  itens.forEach(function(it){ if(it.range.fim>ate) ate=it.range.fim; });
+  if(ate<de) return {criados:0, dias:0};
+
+  await _escCarregarFaixa(de,ate);
+
+  var criados=0, dias=0, dia=de, guarda=0;
+  // Trava de segurança: a janela vai até o evento mais distante, e um
+  // orçamento com data digitada errada pode jogar isso anos à frente.
+  while(dia<=ate && guarda++<800){
+    var r=_escGerarNoDia(dia,itens);
+    if(r.criados){ criados+=r.criados; dias++; }
+    dia=_logAddDias(dia,1);
+  }
+  return {criados:criados, dias:dias};
+}
+
+// Depois de sincronizar, grava sozinho. Sem isto o módulo abriria sempre com
+// "Salvar *" aceso e reclamaria de alterações pendentes na saída — por uma
+// alteração que o próprio sistema fez.
+async function _escSincronizarEGravar(){
+  var r=await escSincronizarAgenda();
+  if(r.criados) await escSalvar(true);
+  return r;
 }
 
 async function escAtualizar(){
@@ -27308,8 +27353,13 @@ async function escAtualizar(){
   _escMeses={}; _escSujos={}; _escTudoCarregado=false;
   await escCarregarCadastros();
   await escCarregarTudo();
+  if(sub) sub.textContent='⚡ Sincronizando com a Agenda...';
+  var r=await _escSincronizarEGravar();
   _escAtualizarSub();
   escRenderizar();
+  _toastMostrar(r.criados
+    ? ('🔄 Atualizado · ⚡ '+r.criados+' etapa(s) nova(s) da Agenda em '+r.dias+' dia(s).')
+    : '🔄 Atualizado · a escala já tinha todos os eventos da Agenda.','',7000);
 }
 
 function escRenderFaixa(){
@@ -27416,7 +27466,7 @@ function escRenderQuadro(){
 
 function _escQuadroVazio(onde){
   return '<div class="dash-vazio" style="padding:26px">Nenhuma etapa montada '+onde+'.'
-    +'<div style="margin-top:8px;font-size:11px;color:var(--text-dim)">Use <b>⚡ Gerar etapas da Agenda</b> para trazer montagem, operação e desmontagem dos eventos do <b>período escolhido abaixo</b>, ou <b>➕ Etapa avulsa</b> para criar a separação da véspera.</div></div>';
+    +'<div style="margin-top:8px;font-size:11px;color:var(--text-dim)">Os eventos da Agenda entram aqui sozinhos ao abrir o módulo e no <b>🔄 Atualizar</b>. Use <b>➕ Etapa avulsa</b> para criar a separação da véspera, que não tem data no orçamento.</div></div>';
 }
 
 function _escBlocoDia(dia){
