@@ -2770,9 +2770,14 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     <!-- ── ABA QUADRO ────────────────────────────────────────────────── -->
     <div id="esc-pane-quadro">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:9px 12px;margin-bottom:10px">
-        <button class="btn btn-o btn-sm" onclick="escNavegar(-1)" title="Dia anterior">◀</button>
+        <div style="display:flex;gap:5px;margin-right:4px">
+          <button class="btn btn-sm" id="esc-btn-view-dia" onclick="escMudarView('dia')" title="Um dia por vez, para montar a escala com calma">Dia</button>
+          <button class="btn btn-sm" id="esc-btn-view-semana" onclick="escMudarView('semana')" title="A semana inteira, com os cards de cada dia">Semana</button>
+          <button class="btn btn-sm" id="esc-btn-view-mes" onclick="escMudarView('mes')" title="O mês inteiro — só os dias que têm etapa">Mês</button>
+        </div>
+        <button class="btn btn-o btn-sm" onclick="escNavegar(-1)" title="Período anterior">◀</button>
         <button class="btn btn-o btn-sm" onclick="escHoje()">Hoje</button>
-        <button class="btn btn-o btn-sm" onclick="escNavegar(1)" title="Próximo dia">▶</button>
+        <button class="btn btn-o btn-sm" onclick="escNavegar(1)" title="Próximo período">▶</button>
         <input type="date" id="esc-data" onchange="escMudarData(this.value)" style="font-size:11px;padding:5px 7px">
         <span id="esc-titulo" style="font-size:13px;font-weight:900;color:var(--text);text-transform:uppercase"></span>
         <div style="flex:1"></div>
@@ -26301,8 +26306,58 @@ async function escSalvarCadastro(qual){
   }catch(e){ console.warn('escSalvarCadastro:',e); return false; }
 }
 
+// Pedido do Fabiano: "carregue todos os cards na logística quando abro,
+// assim como na agenda". A Agenda já abre com os 559 orçamentos na mão e
+// navegar nela é instantâneo; aqui cada mês era buscado só quando o usuário
+// chegava nele — a faixa de dias mostrava "—" em dia de outro mês, e o
+// relatório de um período longo parava para buscar mês a mês.
+//
+// As escalas são um documento por mês (config/escala-AAAA-MM). Esta consulta
+// traz todos de uma vez pelo ID do documento, sem arrastar junto os outros
+// documentos de config (preços, metas, permissões...). São documentos
+// pequenos: um mês cheio de escala dá alguns KB.
+var _escTudoCarregado=false;
+
+async function escCarregarTudo(){
+  if(_escTudoCarregado) return 0;
+  var n=0;
+  try{
+    var snap=await fbDb.collection('config')
+      .orderBy(firebase.firestore.FieldPath.documentId())
+      .startAt('escala-').endAt('escala-\uf8ff')
+      .get();
+    snap.forEach(function(d){
+      var mes=String(d.id).substring(7);
+      if(!/^\d{4}-\d{2}$/.test(mes)) return;
+      // Nunca sobrescreve um mês que já está em memória: pode ter alteração
+      // ainda não salva.
+      if(_escMeses[mes]) return;
+      var dados=d.data()||{};
+      _escMeses[mes]={dias:dados.dias||{}};
+      n++;
+    });
+    _escTudoCarregado=true;
+    return n;
+  }catch(e){
+    // Consulta por ID de documento não disponível (regra do banco, versão do
+    // SDK): cai para uma janela de meses em volta de hoje, que cobre o
+    // planejamento real, em vez de deixar o módulo sem nada.
+    console.warn('escCarregarTudo:',e);
+    var hoje=new Date();
+    for(var k=-2;k<=6;k++){
+      var d2=new Date(hoje.getFullYear(),hoje.getMonth()+k,1);
+      await escCarregarMes(_logISO(d2).substring(0,7));
+      n++;
+    }
+    return n;
+  }
+}
+
 async function escCarregarMes(mesAno){
   if(_escMeses[mesAno]) return _escMeses[mesAno];
+  // Com tudo carregado, um mês que não veio simplesmente não tem escala —
+  // não adianta ir ao banco de novo a cada vez que a faixa passa por ele.
+  if(_escTudoCarregado){ _escMeses[mesAno]={dias:{}}; return _escMeses[mesAno]; }
   try{
     var snap=await fbDb.collection('config').doc('escala-'+mesAno).get();
     _escMeses[mesAno]=(snap.exists && snap.data().dias)?{dias:snap.data().dias}:{dias:{}};
@@ -26363,6 +26418,21 @@ function escCards(dia){
   if(!m.dias[dia]) m.dias[dia]=[];
   return m.dias[dia];
 }
+// Em que dia este card está. Nas visões Semana e Mês há vários dias na tela
+// ao mesmo tempo, então excluir, reordenar ou mover não pode mais supor que
+// o card é do dia de referência.
+function _escDiaDoCard(id){
+  var meses=Object.keys(_escMeses);
+  for(var i=0;i<meses.length;i++){
+    var dias=_escMeses[meses[i]].dias||{};
+    var chaves=Object.keys(dias);
+    for(var j=0;j<chaves.length;j++){
+      if((dias[chaves[j]]||[]).some(function(c){ return c.id===id; })) return chaves[j];
+    }
+  }
+  return _escData;
+}
+
 function escAcharCard(id){
   var lista=escCards(_escData);
   for(var i=0;i<lista.length;i++) if(lista[i].id===id) return lista[i];
@@ -26387,8 +26457,8 @@ async function abrirEscala(){
   if(!_escData) _escData=_logISO(new Date());
   await escCarregarCadastros();
   await dashAtualizar(false);
-  await escCarregarMes(_escData.substring(0,7));
-  document.getElementById('esc-sub').textContent=ESC_EQUIPE.filter(_escAtivo).length+' colaborador(es) · '+ESC_FROTA.filter(_escAtivo).length+' veículo(s)';
+  await escCarregarTudo();
+  _escAtualizarSub();
   escAba('quadro');
   // Abre já com o dia à vista no período — é o recorte mais comum. Depois o
   // usuário alarga para semana/mês e a escolha dele fica: navegar o dia não
@@ -26397,12 +26467,33 @@ async function abrirEscala(){
   escRenderizar();
 }
 
+// Resumo do que está carregado — o equivalente ao "559 orçamentos
+// carregados" da Agenda.
+function _escAtualizarSub(){
+  var sub=document.getElementById('esc-sub');
+  if(!sub) return;
+  var meses=0, dias=0, etapas=0;
+  Object.keys(_escMeses).forEach(function(m){
+    var d=_escMeses[m].dias||{}, temAlgo=false;
+    Object.keys(d).forEach(function(x){
+      if(!d[x]||!d[x].length) return;
+      temAlgo=true; dias++; etapas+=d[x].length;
+    });
+    if(temAlgo) meses++;
+  });
+  sub.textContent=etapas
+    ? (etapas+' etapa(s) em '+dias+' dia(s) de '+meses+' mês(es) · '
+       +ESC_EQUIPE.filter(_escAtivo).length+' colaborador(es) · '+ESC_FROTA.filter(_escAtivo).length+' veículo(s)')
+    : (ESC_EQUIPE.filter(_escAtivo).length+' colaborador(es) · '+ESC_FROTA.filter(_escAtivo).length+' veículo(s) · nenhuma escala montada ainda');
+}
+
 function escFechar(){
   if(Object.keys(_escSujos).length && !confirm('Há alterações na escala que ainda não foram salvas.\n\nSair assim mesmo? As alterações serão perdidas.')) return;
   _escSujos={};
   // Descarta o que está em memória para a próxima abertura reler do banco e
   // não mostrar alterações que o usuário acabou de abandonar.
   _escMeses={};
+  _escTudoCarregado=false;
   document.getElementById('esc-ov').classList.remove('open');
   voltarDoModulo();
 }
@@ -26420,10 +26511,20 @@ function escAba(a){
 async function escMudarData(iso){
   if(!iso) return;
   _escData=iso;
-  await escCarregarMes(iso.substring(0,7));
+  // Carrega o período INTEIRO que vai aparecer, não só o mês do dia: uma
+  // semana a cavalo na virada do mês mostraria metade dos cards.
+  var r=_escRangeVisivel();
+  await _escCarregarFaixa(r.ini,r.fim);
   escRenderizar();
 }
-function escNavegar(d){ escMudarData(_logAddDias(_escData,d)); }
+// O passo do ◀ ▶ acompanha a visão — na Semana anda uma semana, no Mês um mês.
+function escNavegar(d){
+  var dt=new Date(_escData+'T12:00:00');
+  if(_escView==='semana') dt.setDate(dt.getDate()+d*7);
+  else if(_escView==='mes') dt.setMonth(dt.getMonth()+d);
+  else dt.setDate(dt.getDate()+d);
+  escMudarData(_logISO(dt));
+}
 function escHoje(){ escMudarData(_logISO(new Date())); }
 
 /* ── Horários e conflito ────────────────────────────────────────────────── */
@@ -26756,10 +26857,11 @@ function escExcluirCard(id){
   var c=escAcharCard(id);
   if(!c) return;
   if(!confirm('Excluir a etapa '+_escTipo(c.tipo).label+(c.evento?' de "'+c.evento+'"':'')+'?\n\nIsso não mexe no orçamento nem na Agenda — só tira o card da escala.')) return;
-  var lista=escCards(_escData);
+  var dia=_escDiaDoCard(id);
+  var lista=escCards(dia);
   var i=lista.indexOf(c);
   if(i>=0) lista.splice(i,1);
-  _escMarcarSujo(_escData);
+  _escMarcarSujo(dia);
   escRenderizar();
 }
 
@@ -26774,7 +26876,7 @@ function escSet(id,campo,valor){
   if(!c) return;
   c[campo]=valor;
   c.editadoEm=new Date().toLocaleString('pt-BR');
-  _escMarcarSujo(_escData);
+  _escMarcarSujo(_escDiaDoCard(id));
   if(campo==='saida'||campo==='local'||campo==='termino') escAtualizarConflitos();
 }
 function escSetTipo(id,valor){
@@ -26783,7 +26885,7 @@ function escSetTipo(id,valor){
   if(!c) return;
   c.tipo=valor;
   c.editadoEm=new Date().toLocaleString('pt-BR');
-  _escMarcarSujo(_escData);
+  _escMarcarSujo(_escDiaDoCard(id));
   escRenderizar();
 }
 function escSetVeiculo(id,slot,valor){
@@ -26793,7 +26895,7 @@ function escSetVeiculo(id,slot,valor){
   if(!c.veiculos) c.veiculos=['',''];
   c.veiculos[slot]=valor;
   c.editadoEm=new Date().toLocaleString('pt-BR');
-  _escMarcarSujo(_escData);
+  _escMarcarSujo(_escDiaDoCard(id));
   escRenderizar();
 }
 // Um ponto de entrada só para o "+ Add": cadastro, freelancer já usado, ou
@@ -26811,7 +26913,7 @@ function escAddPessoa(id,valor){
   if(!c.equipe) c.equipe=[];
   if(c.equipe.indexOf(valor)<0) c.equipe.push(valor);
   c.editadoEm=new Date().toLocaleString('pt-BR');
-  _escMarcarSujo(_escData);
+  _escMarcarSujo(_escDiaDoCard(id));
   escRenderizar();
 }
 function escDelPessoa(id,valor){
@@ -26821,7 +26923,7 @@ function escDelPessoa(id,valor){
   var i=c.equipe.indexOf(valor);
   if(i>=0) c.equipe.splice(i,1);
   c.editadoEm=new Date().toLocaleString('pt-BR');
-  _escMarcarSujo(_escData);
+  _escMarcarSujo(_escDiaDoCard(id));
   escRenderizar();
 }
 
@@ -26869,15 +26971,25 @@ function escDropNoCard(ev,cardId){
       else { alert('A etapa '+_escTipo(destino.tipo).label+' já está com os dois veículos preenchidos.'); if(s>=0) origem.veiculos[s]=a.valor; return; }
     }
     origem.editadoEm=destino.editadoEm=new Date().toLocaleString('pt-BR');
+    _escMarcarSujo(_escDiaDoCard(a.cardId));
   }else{
-    var lista=escCards(_escData);
+    // Mesmo dia: troca a ordem. Dias diferentes (só acontece nas visões
+    // Semana e Mês): move o card para o dia de destino, na posição onde foi
+    // solto — é o gesto que o usuário espera ao arrastar entre dois dias.
+    var diaA=_escDiaDoCard(a.cardId), diaB=_escDiaDoCard(cardId);
+    var origem=escCards(diaA), destino=escCards(diaB);
     var ia=-1, ib=-1;
-    for(var k=0;k<lista.length;k++){ if(lista[k].id===a.cardId) ia=k; if(lista[k].id===cardId) ib=k; }
+    for(var k=0;k<origem.length;k++) if(origem[k].id===a.cardId) ia=k;
+    for(var k2=0;k2<destino.length;k2++) if(destino[k2].id===cardId) ib=k2;
     if(ia<0||ib<0) return;
-    var mov=lista.splice(ia,1)[0];
-    lista.splice(ib,0,mov);
+    var mov=origem.splice(ia,1)[0];
+    if(diaA!==diaB) mov.editadoEm=new Date().toLocaleString('pt-BR');
+    destino.splice(ib,0,mov);
+    _escMarcarSujo(diaA); _escMarcarSujo(diaB);
+    escRenderizar();
+    return;
   }
-  _escMarcarSujo(_escData);
+  _escMarcarSujo(_escDiaDoCard(cardId));
   escRenderizar();
 }
 
@@ -26888,14 +27000,16 @@ async function escDropNoDia(ev,iso){
   var a=_escArrasto; _escArrasto=null;
   if(!a||a.tipo!=='card'||iso===_escData) return;
   await escCarregarMes(iso.substring(0,7));
-  var lista=escCards(_escData);
+  var diaOrigem=_escDiaDoCard(a.cardId);
+  if(diaOrigem===iso) return;
+  var lista=escCards(diaOrigem);
   var i=-1;
   for(var k=0;k<lista.length;k++) if(lista[k].id===a.cardId) i=k;
   if(i<0) return;
   var c=lista.splice(i,1)[0];
   c.editadoEm=new Date().toLocaleString('pt-BR');
   escCards(iso).push(c);
-  _escMarcarSujo(_escData);
+  _escMarcarSujo(diaOrigem);
   _escMarcarSujo(iso);
   escRenderizar();
   _toastMostrar('📅 Etapa movida para '+fD(iso)+'.','',4000);
@@ -26916,7 +27030,8 @@ function escRenderizar(){
   var inp=document.getElementById('esc-data');
   if(inp) inp.value=_escData;
   var tit=document.getElementById('esc-titulo');
-  if(tit) tit.textContent=_logTituloDia(_escData);
+  if(tit) tit.textContent=_escTituloVisao();
+  _escAtualizarBotoesView();
   escRenderFaixa();
   escRenderFaltam();
   escRenderQuadro();
@@ -26924,6 +27039,7 @@ function escRenderizar(){
   escAtualizarConflitos();
   escRelAtualizarInfo();
   escAtualizarBotaoSalvar();
+  _escAtualizarSub();
 }
 
 // Modo leitura: em vez de montar duas versões de cada card (e fatalmente
@@ -27028,10 +27144,16 @@ function escGerarFaltantesDoDia(){
 }
 
 async function escAtualizar(){
+  if(Object.keys(_escSujos).length && !confirm('Há alterações na escala que ainda não foram salvas.\n\nAtualizar vai descartá-las. Continuar?')) return;
   var sub=document.getElementById('esc-sub');
   if(sub) sub.textContent='🔄 Atualizando...';
   await dashAtualizar(true);
-  if(sub) sub.textContent=ESC_EQUIPE.filter(_escAtivo).length+' colaborador(es) · '+ESC_FROTA.filter(_escAtivo).length+' veículo(s) · '+(_dashDados||[]).length+' orçamentos';
+  // Relê as escalas também: quem clica aqui quer ver o que outra pessoa
+  // gravou, não só os orçamentos novos.
+  _escMeses={}; _escSujos={}; _escTudoCarregado=false;
+  await escCarregarCadastros();
+  await escCarregarTudo();
+  _escAtualizarSub();
   escRenderizar();
 }
 
@@ -27055,18 +27177,117 @@ function escRenderFaixa(){
   }).join('');
 }
 
+/* ── Dia / Semana / Mês ────────────────────────────────────────────────────
+   Pedido do Fabiano: "quero que carregue todos os cards na logística quando
+   abro assim como na agenda". Abrir num dia só obrigava a clicar dia a dia
+   para saber o que havia na semana.
+
+   Abre na SEMANA. Cada dia vira um bloco com cabeçalho próprio e a fileira
+   de cards daquele dia — não uma grade de 7 colunas, porque um card tem
+   238px e sete deles lado a lado ficariam ilegíveis.
+
+   No Mês só aparecem os dias QUE TÊM etapa: trinta cabeçalhos vazios
+   esconderiam os poucos dias que interessam.                                */
+
+var _escView='semana'; // 'dia' | 'semana' | 'mes'
+
+function _escRangeVisivel(){
+  if(_escView==='dia') return {ini:_escData, fim:_escData};
+  if(_escView==='semana'){
+    var dom=_logInicioSemana(_escData);
+    return {ini:dom, fim:_logAddDias(dom,6)};
+  }
+  var dt=new Date(_escData+'T12:00:00');
+  return {
+    ini:_logISO(new Date(dt.getFullYear(),dt.getMonth(),1)),
+    fim:_logISO(new Date(dt.getFullYear(),dt.getMonth()+1,0))
+  };
+}
+
+function _escDiasVisiveis(){
+  var r=_escRangeVisivel(), dias=[], d=r.ini, guarda=0;
+  while(d<=r.fim && guarda++<40){ dias.push(d); d=_logAddDias(d,1); }
+  return dias;
+}
+
+function _escTituloVisao(){
+  var r=_escRangeVisivel();
+  if(_escView==='dia') return _logTituloDia(_escData);
+  if(_escView==='semana') return fD(r.ini)+' a '+fD(r.fim);
+  var dt=new Date(_escData+'T12:00:00');
+  return MESES_NOMES[dt.getMonth()]+' / '+dt.getFullYear();
+}
+
+async function escMudarView(v){
+  _escView=v;
+  var r=_escRangeVisivel();
+  await _escCarregarFaixa(r.ini,r.fim);
+  escRenderizar();
+}
+
+function _escAtualizarBotoesView(){
+  ['dia','semana','mes'].forEach(function(v){
+    var b=document.getElementById('esc-btn-view-'+v);
+    if(b) b.className='btn btn-sm '+(v===_escView?'btn-r':'btn-o');
+  });
+}
+
+/* ── Quadro ───────────────────────────────────────────────────────────── */
+
 function escRenderQuadro(){
   var el=document.getElementById('esc-quadro');
   if(!el) return;
-  var lista=escCards(_escData);
-  if(!lista.length){
-    el.innerHTML='<div class="dash-vazio" style="padding:26px">Nenhuma etapa montada para '+fD(_escData)+'.'
-      +'<div style="margin-top:8px;font-size:11px;color:var(--text-dim)">Use <b>⚡ Gerar etapas da Agenda</b> para trazer montagem, operação e desmontagem dos eventos do <b>período escolhido abaixo</b>, ou <b>➕ Etapa avulsa</b> para criar a separação da véspera.</div></div>';
+
+  if(_escView==='dia'){
+    var lista=escCards(_escData);
+    if(!lista.length){ el.innerHTML=_escQuadroVazio('para '+fD(_escData)); return; }
+    var cf=escConflitos(_escData);
+    el.innerHTML='<div style="display:flex;gap:9px;align-items:flex-start;min-width:min-content">'
+      +lista.map(function(c){ return _escCardHtml(c,cf); }).join('')+'</div>';
     return;
   }
-  var cf=escConflitos(_escData);
-  el.innerHTML='<div style="display:flex;gap:9px;align-items:flex-start;min-width:min-content">'
-    +lista.map(function(c){ return _escCardHtml(c,cf); }).join('')+'</div>';
+
+  var dias=_escDiasVisiveis();
+  var comEtapa=dias.filter(function(d){ return escCards(d).length; });
+  if(!comEtapa.length){
+    el.innerHTML=_escQuadroVazio(_escView==='semana'?'nesta semana':'neste mês');
+    return;
+  }
+  // Mês mostra só os dias com etapa; Semana mostra os sete, para a folga no
+  // meio da semana ser visível (é informação, não vazio inútil).
+  var aDesenhar=(_escView==='semana')?dias:comEtapa;
+  el.innerHTML=aDesenhar.map(_escBlocoDia).join('');
+}
+
+function _escQuadroVazio(onde){
+  return '<div class="dash-vazio" style="padding:26px">Nenhuma etapa montada '+onde+'.'
+    +'<div style="margin-top:8px;font-size:11px;color:var(--text-dim)">Use <b>⚡ Gerar etapas da Agenda</b> para trazer montagem, operação e desmontagem dos eventos do <b>período escolhido abaixo</b>, ou <b>➕ Etapa avulsa</b> para criar a separação da véspera.</div></div>';
+}
+
+function _escBlocoDia(dia){
+  var lista=escCards(dia);
+  var dt=new Date(dia+'T12:00:00');
+  var hoje=(dia===_logISO(new Date()));
+  var cf=escConflitos(dia);
+  var nConf=Object.keys(cf.porCard).length;
+  var cab='<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:0 0 6px;padding-bottom:4px;border-bottom:1px solid var(--border-strong)">'
+    +'<span onclick="escIrParaDia(\''+dia+'\')" title="Abrir só este dia" style="cursor:pointer;font-size:11.5px;font-weight:900;color:'+(hoje?'var(--R)':'var(--text)')+';text-transform:uppercase">'
+      +DIAS_SEMANA_ABREV[dt.getDay()]+' '+fD(dia)+(hoje?' · hoje':'')+'</span>'
+    +'<span style="font-size:10px;color:var(--text-muted)">'+(lista.length?lista.length+' etapa'+(lista.length>1?'s':''):'sem etapa')+'</span>'
+    +(nConf?'<span style="font-size:10px;font-weight:800;color:#ff8a8a">⛔ '+nConf+' com conflito</span>':'')
+    +'</div>';
+  var corpo=lista.length
+    ? '<div style="display:flex;gap:9px;align-items:flex-start;min-width:min-content;overflow-x:auto;padding-bottom:6px">'
+        +lista.map(function(c){ return _escCardHtml(c,cf); }).join('')+'</div>'
+    : '<div style="font-size:10px;color:var(--text-muted);padding:2px 0 8px">—</div>';
+  // O bloco inteiro é alvo de soltura: arrastar um card para outro dia na
+  // visão Semana é o gesto natural, e sem isto só a faixa de cima aceitava.
+  return '<div ondragover="escPermitir(event)" ondrop="escDropNoDia(event,\''+dia+'\')" style="margin-bottom:12px">'+cab+corpo+'</div>';
+}
+
+function escIrParaDia(iso){
+  _escData=iso;
+  escMudarView('dia');
 }
 
 function _escCardHtml(c,cf){
