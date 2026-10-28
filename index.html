@@ -26012,8 +26012,17 @@ function _logRenderizarMes(){
 // usuário: "retire as informações financeiras") — a OS nunca teve preços,
 // é um documento técnico pra equipe de montagem/logística.
 function logAbrirPreviewOS(driveId){
+  // _logItens só existe depois que a Agenda foi desenhada, e é a lista DELA,
+  // já filtrada por consultor e pelas caixas de Fechados/Pré-reservados.
+  // Chamada da Logística (que não depende da Agenda), isso dava "Orçamento
+  // não encontrado" — ou encontrava menos do que existe. O cache do
+  // dashboard é a fonte completa.
   var it=(window._logItens||[]).find(function(x){ return x.o.driveId===driveId; });
-  if(!it){alert('Orçamento não encontrado na lista atual.');return;}
+  if(!it){
+    var o=(_dashDados||[]).find(function(x){ return x.driveId===driveId; });
+    if(o) it={o:o, range:_logRangeEvento(o), status:_logStatus(o)};
+  }
+  if(!it){alert('Orçamento não encontrado.\n\nClique em 🔄 Atualizar para rebuscar os orçamentos.');return;}
   var f=it.o.form||{};
   document.getElementById('log-os-titulo').textContent=eh(f['f-cliente']||'Orçamento')+(f['f-nome-evento']?' — '+eh(f['f-nome-evento']):'')+' — OS '+(f['f-num']||'');
   var _frame=document.getElementById('log-os-iframe');
@@ -27571,14 +27580,23 @@ function _escCardHtml(c,cf){
     +'title="Arraste para trocar a ordem, ou solte num dia da faixa acima para mudar de dia" '
     +'style="display:flex;justify-content:space-between;align-items:center;gap:5px;padding:6px 8px;background:'+t.cor+'22;cursor:grab">'
     +'<span style="font-size:11px;font-weight:900;color:'+t.cor+'">⠿ '+t.ico+' '+t.label+'</span>'
+    +'<span style="display:flex;gap:7px;align-items:center;flex:0 0 auto">'
+    // Mesma pré-visualização da Agenda, pedida pelo Fabiano: clicar no
+    // evento abre a OS. Fica aqui no cabeçalho, e não no card inteiro,
+    // porque o corpo do card é todo campo de edição — clicar nele é para
+    // digitar, não para abrir outra tela.
+    +(c.driveId?'<span onclick="event.stopPropagation();logAbrirPreviewOS(\''+eh(c.driveId)+'\')" title="Ver a Ordem de Serviço deste evento" style="cursor:pointer;font-size:12px">🗂️</span>':'')
     +'<span class="esc-acao" onclick="escExcluirCard(\''+c.id+'\')" title="Excluir esta etapa" style="cursor:pointer;color:#ff8a8a;font-weight:900;font-size:12px">✕</span>'
+    +'</span>'
     +'</div>'
 
     +'<div id="esccf-'+c.id+'"></div>'
 
     +'<div style="padding:8px">'
     +_escCampo('MOVER PARA','<select onchange="escMoverPara(\''+c.id+'\',this.value);this.value=\'\'" style="width:100%;font-size:10px;padding:4px 5px">'+opcoesDia+'</select>')
-    +_escCampo('EVENTO / CLIENTE','<input value="'+eh(c.evento)+'" oninput="escSet(\''+c.id+'\',\'evento\',this.value)" style="width:100%;font-size:10px;padding:4px 5px">')
+    +_escCampo('EVENTO / CLIENTE'
+      +(c.driveId?' <span onclick="logAbrirPreviewOS(\''+eh(c.driveId)+'\')" title="Ver a Ordem de Serviço deste evento" style="cursor:pointer;color:#90caf9;text-transform:none;letter-spacing:0;font-weight:700">🗂️ ver OS</span>':''),
+      '<input value="'+eh(c.evento)+'" oninput="escSet(\''+c.id+'\',\'evento\',this.value)" style="width:100%;font-size:10px;padding:4px 5px">')
     +_escCampo('TIPO','<select onchange="escSetTipo(\''+c.id+'\',this.value)" style="width:100%;font-size:10px;padding:4px 5px">'+opcoesTipo+'</select>')
     +'<div style="display:flex;gap:5px">'
       +'<div style="flex:1">'+_escCampo('SAÍDA','<input type="time" value="'+eh(c.saida)+'" onchange="escSet(\''+c.id+'\',\'saida\',this.value)" style="width:100%;font-size:10px;padding:4px 3px">')+'</div>'
@@ -27593,7 +27611,9 @@ function _escCardHtml(c,cf){
     +'</div>'
     +_escCampo('EQUIPE',(equipeHtml||'<div style="font-size:9px;color:var(--text-muted);padding:2px 0">ninguém escalado</div>')+addHtml)
     +'<div style="font-size:8.5px;color:var(--text-muted);margin-top:7px;border-top:1px solid var(--border);padding-top:5px">'
-      +(c.orcNum?'Orç. '+eh(c.orcNum)+(c.driveId?' · <span onclick="logAbrirPreviewOS(\''+eh(c.driveId)+'\')" style="cursor:pointer;text-decoration:underline;color:#90caf9">ver</span>':'')+'<br>':'')
+      +(c.orcNum?(c.driveId
+          ? '<span onclick="logAbrirPreviewOS(\''+eh(c.driveId)+'\')" title="Ver a Ordem de Serviço" style="cursor:pointer;text-decoration:underline;color:#90caf9">Orç. '+eh(c.orcNum)+'</span>'
+          : 'Orç. '+eh(c.orcNum))+'<br>':'')
       +'Criado: '+eh(c.criadoEm||'—')+(c.editadoEm?'<br>Última edição: '+eh(c.editadoEm):'')
     +'</div>'
     +'</div></div>';
