@@ -2754,6 +2754,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <p class="sub" id="esc-sub" style="margin:0">Carregando...</p>
       </div>
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-r btn-sm" onclick="escAtualizar()" title="Rebusca os orçamentos — use depois de fechar uma venda, porque a lista fica em cache">🔄 Atualizar</button>
         <button class="btn btn-o btn-sm" onclick="escExportarPDF()" title="Gera o PDF da escala do período escolhido abaixo">📄 PDF</button>
         <button class="btn btn-o btn-sm" onclick="escExportarExcel()" title="Exporta a escala do período escolhido abaixo em CSV/Excel">📊 Excel</button>
         <button class="btn btn-r btn-sm" id="esc-btn-salvar" onclick="escSalvar()" title="Grava a escala no banco">💾 Salvar</button>
@@ -2799,6 +2800,8 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <button class="btn btn-o btn-sm" onclick="escRelPeriodo('mes')" title="O mês inteiro do dia à vista">🗓️ Mês</button>
         <span id="esc-rel-info" style="font-size:10px;color:var(--text-muted);padding-bottom:7px"></span>
       </div>
+
+      <div id="esc-faltam"></div>
 
       <div id="esc-conflitos"></div>
 
@@ -26648,8 +26651,7 @@ function _escGerarNoDia(dia,itens){
     var o=a.it.o, f=o.form||{};
     var tipo=ESC_FASE_PARA_TIPO[a.fase]||'operacao';
     var num=f['f-num']||'';
-    var jaTem=lista.some(function(c){ return c.tipo===tipo && c.orcNum && c.orcNum===num; });
-    if(jaTem){ pulados++; return; }
+    if(_escCardDaOrigem(lista,tipo,o)){ pulados++; return; }
     var endereco=[f['f-end-ev'],f['f-num-ev'],f['f-bairro-ev'],f['f-cid-ev']].filter(Boolean).join(', ');
     lista.push({
       id:uid(),
@@ -26688,9 +26690,12 @@ async function escGerarDaAgenda(){
     +'O que já existe não é duplicado.\n\nNada é gravado agora: você confere na tela e clica em Salvar depois.\n\nContinuar?')) return;
 
   await _escCarregarFaixa(p.de,p.ate);
-  // _logItens é montado por logRenderizar; se a Agenda não foi aberta nesta
-  // sessão ele não existe. Monta aqui a partir do mesmo _dashDados.
-  var itens=(window._logItens&&window._logItens.length)?window._logItens:_escItensAgenda();
+  // SEMPRE monta a lista aqui. Antes reaproveitava window._logItens quando
+  // existia — e aquela lista é a da Agenda JÁ FILTRADA (consultor, 🟢
+  // Fechados, 🟡 Pré-reservados) e congelada na última vez que a Agenda foi
+  // desenhada. Resultado: um filtro esquecido na Agenda, ou um orçamento
+  // fechado depois, fazia a Logística gerar um subconjunto em silêncio.
+  var itens=_escItensAgenda();
 
   var criados=0, pulados=0, diasComEtapa=0, dia=p.de, guarda=0;
   while(dia<=p.ate && guarda++<400){
@@ -26700,18 +26705,27 @@ async function escGerarDaAgenda(){
     dia=_logAddDias(dia,1);
   }
 
+  // Quantos eventos da Agenda tocam o período — é o número que o usuário
+  // consegue conferir contra a tela da Agenda. Sem ele, "0 criadas · 17 já
+  // existiam" não diz se um evento foi simplesmente ignorado.
+  var nEventos=itens.filter(function(it){
+    return !(it.range.fim<p.de || it.range.inicio>p.ate);
+  }).length;
+
   if(!criados && !pulados){
     alert('A Agenda não tem nenhum evento fechado ou pré-reservado entre '+fD(p.de)+' e '+fD(p.ate)+'.\n\n'
-      +'Se o evento existe mas não aparece, confira em 📅 Agenda de Eventos se ele está como Venda Ganha (ou com pré-reserva criada no Google Agenda).');
+      +'Se o evento existe mas não aparece:\n'
+      +'• confira em 📅 Agenda de Eventos se ele está como Venda Ganha (ou com pré-reserva criada no Google Agenda);\n'
+      +'• se foi fechado agora há pouco, clique em 🔄 Atualizar aqui em cima — a lista de orçamentos fica em cache.');
     return;
   }
   // Leva a tela para o primeiro dia do período que ganhou etapa — gerar 15
   // dias e continuar olhando um dia vazio pareceria que não funcionou.
   if(criados && (_escData<p.de || _escData>p.ate)) _escData=p.de;
   escRenderizar();
-  _toastMostrar('⚡ '+criados+' etapa(s) criada(s) em '+diasComEtapa+' dia(s)'
+  _toastMostrar('⚡ '+nEventos+' evento(s) da Agenda no período · '+criados+' etapa(s) criada(s) em '+diasComEtapa+' dia(s)'
     +(pulados?' · '+pulados+' já existia(m)':'')
-    +(nDias>1?' · período '+fD(p.de)+' a '+fD(p.ate):'')
+    +(nDias>1?' · '+fD(p.de)+' a '+fD(p.ate):'')
     +' — <b>confira e clique em Salvar</b>.','',9000);
 }
 
@@ -26904,6 +26918,7 @@ function escRenderizar(){
   var tit=document.getElementById('esc-titulo');
   if(tit) tit.textContent=_logTituloDia(_escData);
   escRenderFaixa();
+  escRenderFaltam();
   escRenderQuadro();
   _escAplicarPermissoes();
   escAtualizarConflitos();
@@ -26948,6 +26963,76 @@ function _escAplicarPermissoesCad(){
     el.querySelectorAll('input,select').forEach(function(x){ x.disabled=true; });
     el.querySelectorAll('span[onclick]').forEach(function(x){ x.remove(); });
   });
+}
+
+// Casa um card com o orçamento que o originou. Pelo número, quando há; pelo
+// driveId quando não há — sem isso um orçamento ainda sem número seria
+// recriado a cada ⚡ e apareceria para sempre como "faltando".
+function _escCardDaOrigem(lista,tipo,o){
+  var num=((o&&o.form)||{})['f-num']||'';
+  var drive=(o&&o.driveId)||'';
+  return (lista||[]).some(function(c){
+    if(c.tipo!==tipo) return false;
+    if(num && c.orcNum===num) return true;
+    if(!num && drive && c.driveId===drive) return true;
+    return false;
+  });
+}
+
+// O que a Agenda tem neste dia e a escala não tem. É a resposta para o
+// relato do Fabiano ("o evento desta OS não está aparecendo na logística"):
+// em vez de ele descobrir conferindo OS por OS, a tela avisa.
+function _escFaltamNoDia(dia){
+  var faltam=[];
+  _escItensAgenda().forEach(function(it){
+    if(dia<it.range.inicio || dia>it.range.fim) return;
+    var lista=escCards(dia), f=it.o.form||{};
+    _logFasesNoDia(it.o,dia).forEach(function(fase){
+      var tipo=ESC_FASE_PARA_TIPO[fase]||'operacao';
+      if(_escCardDaOrigem(lista,tipo,it.o)) return;
+      faltam.push({
+        tipo:tipo,
+        num:f['f-num']||'',
+        nome:(f['f-cliente']||'')+(f['f-nome-evento']?' — '+f['f-nome-evento']:'')
+      });
+    });
+  });
+  return faltam;
+}
+
+function escRenderFaltam(){
+  var el=document.getElementById('esc-faltam');
+  if(!el) return;
+  var faltam=_escFaltamNoDia(_escData);
+  if(!faltam.length){ el.innerHTML=''; return; }
+  var pode=_escPodeEditar();
+  el.innerHTML='<div style="background:rgba(255,167,38,.12);border:1px solid #ffa726;border-radius:6px;padding:9px 12px;margin-bottom:10px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:5px">'
+      +'<div style="font-size:11px;font-weight:900;color:#ffa726">⚠️ '+faltam.length+' etapa(s) da Agenda sem card neste dia</div>'
+      +(pode?'<button class="btn btn-b btn-sm" onclick="escGerarFaltantesDoDia()" title="Cria só estas, sem mexer no resto">⚡ Gerar as que faltam</button>':'')
+    +'</div>'
+    +faltam.map(function(x){
+      return '<div style="font-size:10px;color:var(--text-dim)">• '+_escTipo(x.tipo).ico+' '+_escTipo(x.tipo).label
+        +' — '+eh(x.nome||'(sem cliente)')+(x.num?' <span style="color:var(--text-muted)">(orç. '+eh(x.num)+')</span>':'')+'</div>';
+    }).join('')
+    +'</div>';
+}
+
+// Gera só o dia à vista, sem perguntar — o usuário já está vendo a lista do
+// que falta logo acima do botão.
+function escGerarFaltantesDoDia(){
+  if(_escBloqueado()) return;
+  var r=_escGerarNoDia(_escData,_escItensAgenda());
+  escRenderizar();
+  _toastMostrar('⚡ '+r.criados+' etapa(s) criada(s) em '+fD(_escData)+' — <b>confira e clique em Salvar</b>.','',8000);
+}
+
+async function escAtualizar(){
+  var sub=document.getElementById('esc-sub');
+  if(sub) sub.textContent='🔄 Atualizando...';
+  await dashAtualizar(true);
+  if(sub) sub.textContent=ESC_EQUIPE.filter(_escAtivo).length+' colaborador(es) · '+ESC_FROTA.filter(_escAtivo).length+' veículo(s) · '+(_dashDados||[]).length+' orçamentos';
+  escRenderizar();
 }
 
 function escRenderFaixa(){
