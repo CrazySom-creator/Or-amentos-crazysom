@@ -13248,9 +13248,39 @@ async function googleAgendaTestarConexao(){
     var r=await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calendarId)+'/events?maxResults=1&fields=summary',{headers:{'Authorization':'Bearer '+token}});
     var d=await r.json();
     if(!r.ok) throw new Error((d.error&&d.error.message)||('HTTP '+r.status));
-    if(st){ st.style.color='#4caf50'; st.textContent='✅ Conectado! Calendário: "'+(d.summary||calendarId)+'".'; }
+    var nome=d.summary||calendarId;
+
+    // O teste antigo parava aqui — e só leitura. Com o calendário
+    // compartilhado apenas para VER, ele dizia "✅ Conectado" e o envio
+    // falhava depois com "writer access" (caso do consultor Luiz Fonseca,
+    // out/2026). Testar o que o sistema realmente faz: ESCREVER.
+    if(st){ st.style.color='var(--text-muted)'; st.textContent='⏳ Conectado. Testando permissão de escrita...'; }
+    var teste={
+      summary:'TESTE DE PERMISSÃO — Crazy Som (pode apagar)',
+      description:'Evento criado pelo teste de conexão do sistema de orçamentos e apagado em seguida.',
+      start:{dateTime:'2016-01-01T03:00:00Z'}, end:{dateTime:'2016-01-01T03:10:00Z'}
+    };
+    var rw=await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calendarId)+'/events',
+      {method:'POST',headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(teste)});
+    var dw=await rw.json();
+    if(!rw.ok) throw new Error((dw.error&&dw.error.message)||('HTTP '+rw.status));
+
+    // Apaga o evento de teste. Se a remoção falhar, avisa — melhor o usuário
+    // saber que ficou um evento de 2016 solto do que achar que não ficou.
+    var limpou=true;
+    try{
+      var rd=await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calendarId)+'/events/'+encodeURIComponent(dw.id),
+        {method:'DELETE',headers:{'Authorization':'Bearer '+token}});
+      limpou=rd.ok||rd.status===404||rd.status===410;
+    }catch(e2){ limpou=false; }
+
+    if(st){
+      st.style.color='#4caf50';
+      st.textContent='✅ Conectado e com permissão de escrita. Calendário: "'+nome+'".'
+        +(limpou?'':' ⚠️ O evento de teste (01/01/2016) não pôde ser apagado — remova manualmente.');
+    }
   }catch(e){
-    if(st){ st.style.color='#ff5555'; st.textContent='⚠️ Falha na conexão: '+e.message; }
+    if(st){ st.style.color='#ff5555'; st.textContent='⚠️ Falha na conexão: '+_gaErroAmigavel(e&&e.message); }
   }
 }
 
@@ -13642,8 +13672,20 @@ function _gaErroAmigavel(msg){
     return 'data ou hora inválida no orçamento. Confira as datas de montagem, evento e desmontagem.';
   if(/Not Found|notFound/i.test(msg))
     return 'o calendário configurado não foi encontrado. Confira a configuração do Google Agenda na Administração.';
+  // "You need to have writer access to this calendar" é o caso mais comum
+  // de todos: o calendário da empresa foi compartilhado com o consultor
+  // apenas para VER. O Google devolve isso em inglês, e um consultor olhando
+  // "writer access" não tem como saber o que fazer — e o problema não se
+  // resolve no sistema, se resolve no compartilhamento do calendário.
+  if(/writer access|owner access|readonly|read-only/i.test(msg))
+    return 'a conta do Google conectada consegue VER este calendário, mas não ESCREVER nele.\n'
+      +'    → No Google Agenda, quem é dono do calendário'+(GOOGLE_AGENDA_CONFIG.calendarId?' ('+GOOGLE_AGENDA_CONFIG.calendarId+')':'')+' precisa compartilhá-lo\n'
+      +'      com esta pessoa em "Fazer alterações nos eventos" — "Ver todos os detalhes" não basta.\n'
+      +'    → Confira também se a autorização do Google foi feita com a conta da empresa,\n'
+      +'      e não com um Gmail pessoal.';
   if(/Forbidden|insufficient|permission/i.test(msg))
-    return 'a conta conectada não tem permissão de escrita nesse calendário.';
+    return 'a conta conectada não tem permissão de escrita nesse calendário.'
+      +(GOOGLE_AGENDA_CONFIG.calendarId?' Calendário: '+GOOGLE_AGENDA_CONFIG.calendarId+'.':'');
   if(/Invalid Credentials|invalid_grant|Unauthorized|401/i.test(msg))
     return 'a autorização do Google expirou. Conecte a conta de novo na Administração.';
   if(/autorizacao-google-necessaria/i.test(msg))
