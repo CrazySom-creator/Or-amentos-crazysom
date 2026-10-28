@@ -2817,6 +2817,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         arraste o <b>⠿ topo do card</b> sobre outro card para trocar a ordem, ou sobre um dia da faixa acima para mover de dia ·
         <span style="color:#ff5555;font-weight:800">vermelho</span> = a mesma pessoa/veículo em duas etapas com horário cruzado ·
         <span style="color:#ffa726;font-weight:800">amarelo</span> = possível conflito (falta horário para ter certeza).
+        <b>🚚 Caminhão externo</b> no seletor de veículo escala um caminhão sublocado digitando motorista e placa ·
         <b>✏️ Freelancer</b> no "+ Add" escala alguém só digitando o nome, sem cadastrar — ele conta no conflito igual aos demais, e o <b>📌</b> no chip passa ele para o cadastro quando virar gente de casa.
         Nada é gravado até clicar em <b>💾 Salvar</b>.
       </div>
@@ -26716,6 +26717,106 @@ var ESC_FREE_PREFIX='free:';
 function _escEhFree(v){ return String(v||'').indexOf(ESC_FREE_PREFIX)===0; }
 function _escNomeFree(v){ return String(v||'').substring(ESC_FREE_PREFIX.length); }
 
+/* ── Caminhão externo: sublocado, sem passar pelo cadastro da frota ───────
+   Pedido do Fabiano: "incluir na logística a opção caminhão externo onde
+   posso colocar o nome do motorista e placa do caminhão". Mesma ideia do
+   freelancer: fica só na escala, não vira registro de frota, e conta no
+   conflito como qualquer veículo — é o motivo de o aviso existir.          */
+var ESC_VEIC_EXT_PREFIX='ext:';
+function _escEhVeicExt(v){ return String(v||'').indexOf(ESC_VEIC_EXT_PREFIX)===0; }
+// Guardado como 'ext:<motorista>|<placa>'. A barra é o separador porque não
+// aparece nem em nome nem em placa.
+function _escVeicExtPartes(v){
+  var corpo=String(v||'').substring(ESC_VEIC_EXT_PREFIX.length);
+  var i=corpo.indexOf('|');
+  if(i<0) return {motorista:corpo, placa:''};
+  return {motorista:corpo.substring(0,i), placa:corpo.substring(i+1)};
+}
+function _escVeicExtMontar(motorista,placa){
+  return ESC_VEIC_EXT_PREFIX+String(motorista||'').replace(/\|/g,'/')+'|'+String(placa||'').replace(/\|/g,'/');
+}
+
+// A PLACA é o que identifica o caminhão — o mesmo veículo pode vir com outro
+// motorista. Sem placa, cai no nome do motorista.
+function _escChaveVeiculo(v){
+  if(!_escEhVeicExt(v)) return 'id|'+v;
+  var p=_escVeicExtPartes(v);
+  return 'vx|'+_normalizarNomeItem(p.placa||p.motorista);
+}
+
+// Caminhões externos já usados nas escalas carregadas — vira sugestão, para
+// não redigitar motorista e placa a cada dia.
+function _escVeicExtUsados(){
+  var vistos={}, lista=[];
+  Object.keys(_escMeses).forEach(function(m){
+    var dias=_escMeses[m].dias||{};
+    Object.keys(dias).forEach(function(d){
+      (dias[d]||[]).forEach(function(c){
+        (c.veiculos||[]).forEach(function(v){
+          if(!_escEhVeicExt(v)) return;
+          var k=_escChaveVeiculo(v);
+          if(vistos[k]) return;
+          vistos[k]=1; lista.push(v);
+        });
+      });
+    });
+  });
+  return lista.sort(function(a,b){
+    return _escVeicExtPartes(a).motorista.localeCompare(_escVeicExtPartes(b).motorista,'pt-BR');
+  });
+}
+
+// Motorista e placa em duas perguntas. Se a placa bater com um veículo da
+// frota, usa o da frota — senão o mesmo caminhão viraria dois na conta do
+// conflito, que é justamente o que não pode escapar.
+function escAddVeicExterno(cardId,slot){
+  if(_escBloqueado()) return;
+  var motorista=prompt('🚚 CAMINHÃO EXTERNO\n\nNome do motorista:');
+  if(motorista===null) return;
+  motorista=String(motorista).replace(/\s+/g,' ').trim();
+  if(!motorista){ alert('Informe pelo menos o nome do motorista.'); return; }
+  var placa=prompt('🚚 CAMINHÃO EXTERNO — '+motorista+'\n\nPlaca do caminhão (pode deixar em branco):');
+  if(placa===null) return;
+  placa=String(placa).replace(/\s+/g,'').toUpperCase().trim();
+
+  if(placa){
+    var daFrota=ESC_FROTA.filter(_escAtivo).find(function(x){
+      return x.placa && _normalizarNomeItem(x.placa)===_normalizarNomeItem(placa);
+    });
+    if(daFrota){
+      escSetVeiculo(cardId,slot,daFrota.id);
+      _toastMostrar('🚐 A placa '+eh(placa)+' é do <b>'+eh(daFrota.nome)+'</b>, que está na frota — escalei o veículo cadastrado.','',7000);
+      return;
+    }
+  }
+  escSetVeiculo(cardId,slot,_escVeicExtMontar(motorista,placa));
+}
+
+// Virou parceiro de sempre: o 📌 passa o caminhão para a frota e troca a
+// referência em todas as escalas carregadas.
+function escPromoverVeicExt(cardId,slot,valor){
+  if(_escBloqueado()||_escCadBloqueado()) return;
+  var p=_escVeicExtPartes(valor);
+  if(!confirm('📌 Passar o caminhão de "'+p.motorista+'"'+(p.placa?' (placa '+p.placa+')':'')+' para o cadastro da frota?\n\nAs escalas já montadas passam a apontar para o cadastro.')) return;
+  var novo={id:uid(), nome:p.motorista, placa:p.placa, ativo:true};
+  ESC_FROTA.push(novo);
+  escSalvarCadastro('frota');
+  var chave=_escChaveVeiculo(valor), tocou={};
+  Object.keys(_escMeses).forEach(function(m){
+    var dias=_escMeses[m].dias||{};
+    Object.keys(dias).forEach(function(d){
+      (dias[d]||[]).forEach(function(c){
+        var ve=c.veiculos||[];
+        for(var i=0;i<ve.length;i++) if(ve[i]&&_escChaveVeiculo(ve[i])===chave){ ve[i]=novo.id; tocou[m]=1; }
+      });
+    });
+  });
+  Object.keys(tocou).forEach(function(m){ _escSujos[m]=true; });
+  escAtualizarBotaoSalvar();
+  escRenderizar();
+  _toastMostrar('📌 Caminhão de <b>'+eh(p.motorista)+'</b> entrou na frota — <b>confira e clique em Salvar</b>.','',8000);
+}
+
 // Chave usada para juntar as escalas da MESMA pessoa na hora de procurar
 // conflito. Do cadastro, é o id. Freelancer, é o nome sem acento, sem espaço
 // sobrando e sem caixa — senão "João" num card e "joao " noutro passariam por
@@ -26811,7 +26912,7 @@ function escConflitos(dia){
     cards.forEach(function(c){
       (c[al.campo]||[]).forEach(function(v){
         if(!v) return;
-        var k=al.kind==='pessoa'?_escChaveConflito(v):('id|'+v);
+        var k=al.kind==='pessoa'?_escChaveConflito(v):_escChaveVeiculo(v);
         if(!mapa[k]) mapa[k]={valor:v, cards:[]};
         if(mapa[k].cards.indexOf(c)<0) mapa[k].cards.push(c);
       });
@@ -26845,7 +26946,7 @@ function _escCardGrave(cf,cardId){
 }
 function _escChipConflito(cf,cardId,valor,kind){
   var l=cf.porCard[cardId]||[];
-  var k=(kind==='veiculo')?('id|'+valor):_escChaveConflito(valor);
+  var k=(kind==='veiculo')?_escChaveVeiculo(valor):_escChaveConflito(valor);
   for(var i=0;i<l.length;i++) if(l[i].chave===k) return l[i].grave?'grave':'possivel';
   return '';
 }
@@ -26872,6 +26973,10 @@ function escNomePessoa(id){
   return id; // escalas antigas com alguém removido do cadastro
 }
 function escNomeVeiculo(id){
+  if(_escEhVeicExt(id)){
+    var p=_escVeicExtPartes(id);
+    return p.motorista+(p.placa?' ('+p.placa+')':'')+' — externo';
+  }
   for(var i=0;i<ESC_FROTA.length;i++) if(ESC_FROTA[i].id===id) return ESC_FROTA[i].nome+(ESC_FROTA[i].placa?' ('+ESC_FROTA[i].placa+')':'');
   return id;
 }
@@ -26991,6 +27096,13 @@ function escSetTipo(id,valor){
   _escMarcarSujo(_escDiaDoCard(id));
   escRenderizar();
 }
+// Ponto único do seletor de veículo: frota, externo já usado, ou externo
+// novo (que abre as duas perguntas).
+function escEscolherVeiculo(id,slot,valor){
+  if(valor==='__ext__'){ escAddVeicExterno(id,slot); return; }
+  escSetVeiculo(id,slot,valor);
+}
+
 function escSetVeiculo(id,slot,valor){
   if(_escBloqueado()) return;
   var c=escAcharCard(id);
@@ -27554,22 +27666,33 @@ function _escCardHtml(c,cf){
   function veicHtml(slot){
     var v=(c.veiculos||[])[slot]||'';
     var cfl=v?_escChipConflito(cf,c.id,v,'veiculo'):'';
-    var sel='<select onchange="escSetVeiculo(\''+c.id+'\','+slot+',this.value)" style="width:100%;font-size:10px;padding:4px 5px'
+    var ehExt=_escEhVeicExt(v);
+    // Externos já usados viram sugestão; o que está escalado neste slot sai
+    // da lista para não aparecer duas vezes.
+    var extUsados=_escVeicExtUsados().filter(function(x){ return _escChaveVeiculo(x)!==_escChaveVeiculo(v); });
+    var sel='<select onchange="escEscolherVeiculo(\''+c.id+'\','+slot+',this.value)" style="width:100%;font-size:10px;padding:4px 5px'
       +(cfl?';box-shadow:0 0 0 1px '+(cfl==='grave'?'#ff5555':'#ffa726'):'')+'">'
       +'<option value="">—</option>'
+      +'<option value="__ext__">🚚 Caminhão externo (digitar)...</option>'
+      +(ehExt?'<option value="'+eh(v)+'" selected>🚚 '+eh(escNomeVeiculo(v))+'</option>':'')
       +ESC_FROTA.filter(function(x){ return _escAtivo(x)||x.id===v; }).map(function(x){
         return '<option value="'+eh(x.id)+'"'+(x.id===v?' selected':'')+'>'+eh(x.nome)+(x.placa?' · '+eh(x.placa):'')+'</option>';
       }).join('')
-      +(v && !ESC_FROTA.some(function(x){return x.id===v;})?'<option value="'+eh(v)+'" selected>'+eh(v)+' (removido)</option>':'')
+      +(extUsados.length?'<optgroup label="Externos já usados">'+extUsados.map(function(x){
+        return '<option value="'+eh(x)+'">🚚 '+eh(escNomeVeiculo(x))+'</option>';
+      }).join('')+'</optgroup>':'')
+      +(v && !ehExt && !ESC_FROTA.some(function(x){return x.id===v;})?'<option value="'+eh(v)+'" selected>'+eh(v)+' (removido)</option>':'')
       +'</select>';
     if(!v) return sel;
     // A alça fica FORA do <select>: arrastar um select não dispara dragstart
     // de forma confiável em todos os navegadores.
-    return '<div style="display:flex;gap:3px;align-items:center">'
+    return '<div style="display:flex;gap:3px;align-items:center'+(ehExt?';box-shadow:inset 3px 0 0 #78909c;padding-left:3px':'')+'">'
       +'<span draggable="true" ondragstart="escDragChip(event,\''+c.id+'\',\'veiculo\',\''+eh(v)+'\')" ondragend="escDragFim()" '
       +'title="Arraste para outra etapa para transferir este veículo" '
       +'style="cursor:grab;font-size:12px;color:var(--text-muted);flex:0 0 auto">⠿</span>'
-      +'<span style="flex:1;min-width:0">'+sel+'</span></div>';
+      +'<span style="flex:1;min-width:0">'+sel+'</span>'
+      +(ehExt?'<span class="esc-acao" onclick="escPromoverVeicExt(\''+c.id+'\','+slot+',\''+eh(v)+'\')" title="Passar este caminhão para o cadastro da frota" style="cursor:pointer;color:#90caf9;font-weight:900;flex:0 0 auto">📌</span>':'')
+      +'</div>';
   }
 
   return '<div id="esccard-'+c.id+'" ondragover="escPermitir(event)" ondrop="escDropNoCard(event,\''+c.id+'\')" '
