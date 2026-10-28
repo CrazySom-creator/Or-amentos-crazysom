@@ -2707,6 +2707,45 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
 <!--  dia, e reordenar as colunas. Avisa quando a mesma pessoa (ou veículo)   -->
 <!--  está em duas etapas com horários que se cruzam.                         -->
 <!-- ═══════════════════════════════════════════════════════ -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  VISUALIZADOR DE ANEXOS                                                  -->
+<!--  Pedido do Fabiano: "quando clico em visualizar arquivo não quero que    -->
+<!--  abra somente a imagem e que apareça setas para visualizar a próxima e   -->
+<!--  anterior tipo Google Drive. Para fazer o download deve ser outro botão" -->
+<!--  Antes, 👁️ Abrir mandava o arquivo para uma aba nova — o navegador       -->
+<!--  muitas vezes tratava como download e abria a janela "Salvar como".      -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="anx-vis-ov" style="z-index:9600;background:#0a0a0a;align-items:center">
+  <div style="position:relative;width:100%;height:100%;display:flex;flex-direction:column;background:#0a0a0a">
+
+    <!-- barra de cima: nome, posição e ações -->
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;background:rgba(0,0,0,.55);flex-wrap:wrap;flex:0 0 auto">
+      <div style="min-width:0">
+        <div id="anx-vis-nome" style="font-size:13px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+        <div id="anx-vis-meta" style="font-size:10.5px;color:rgba(255,255,255,.6)"></div>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+        <span id="anx-vis-pos" style="font-size:11px;color:rgba(255,255,255,.75);font-weight:700;margin-right:4px"></span>
+        <button type="button" class="btn btn-b btn-sm" onclick="anxVisBaixar()" title="Salvar este arquivo no computador">⬇️ Baixar</button>
+        <button type="button" class="btn btn-o btn-sm" onclick="anxVisNovaAba()" title="Abrir numa aba separada do navegador">↗️ Nova aba</button>
+        <button type="button" class="btn btn-o btn-sm" onclick="anxVisFechar()" title="Fechar (Esc)">✕</button>
+      </div>
+    </div>
+
+    <!-- palco -->
+    <div style="flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;padding:8px">
+      <button type="button" id="anx-vis-prev" onclick="anxVisNavegar(-1)" title="Anterior (←)"
+        style="position:absolute;left:8px;top:50%;transform:translateY(-50%);z-index:3;border:none;border-radius:50%;width:44px;height:44px;font-size:22px;font-weight:900;cursor:pointer;background:rgba(0,0,0,.55);color:#fff">‹</button>
+      <button type="button" id="anx-vis-next" onclick="anxVisNavegar(1)" title="Próximo (→)"
+        style="position:absolute;right:8px;top:50%;transform:translateY(-50%);z-index:3;border:none;border-radius:50%;width:44px;height:44px;font-size:22px;font-weight:900;cursor:pointer;background:rgba(0,0,0,.55);color:#fff">›</button>
+      <div id="anx-vis-palco" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:auto"></div>
+    </div>
+
+    <!-- tira de miniaturas -->
+    <div id="anx-vis-tira" style="flex:0 0 auto;display:flex;gap:5px;padding:7px 10px;background:rgba(0,0,0,.55);overflow-x:auto"></div>
+  </div>
+</div>
+
 <div class="ov" id="esc-ov">
   <div class="modal-box dash-modal" style="max-width:1400px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
@@ -16682,9 +16721,10 @@ function anxRenderizar(){
   }
   var podeExcluir=_anxPodeExcluir();
   lista.innerHTML=anexosOrc.map(function(a,i){
+    // A miniatura também abre o visualizador: é onde a pessoa clica primeiro.
     var visual=_anxEhImagem(a.tipo,a.nome)
-      ? '<img class="anx-thumb" src="'+eh(a.url)+'" alt="'+eh(a.nome)+'" loading="lazy">'
-      : '<div class="anx-ico">'+_anxIcone(a.tipo,a.nome)+'</div>';
+      ? '<img class="anx-thumb" src="'+eh(a.url)+'" alt="'+eh(a.nome)+'" loading="lazy" style="cursor:pointer" title="Visualizar" onclick="anxVisualizar('+i+')">'
+      : '<div class="anx-ico" style="cursor:pointer" title="Visualizar" onclick="anxVisualizar('+i+')">'+_anxIcone(a.tipo,a.nome)+'</div>';
     var quando=a.dataISO?new Date(a.dataISO).toLocaleString('pt-BR'):'';
     return '<div class="anx-item">'
       +visual
@@ -16695,7 +16735,8 @@ function anxRenderizar(){
       +'<input class="anx-legenda" type="text" maxlength="120" placeholder="Legenda (ex.: Planta baixa do salão principal)" value="'+eh(a.legenda||'')+'" oninput="anxLegenda('+i+',this.value)">'
       +'<div class="anx-acoes">'
       +'<label class="anx-chk" title="Quando marcado, a OS avisa que este orçamento tem anexos e lista o nome deste arquivo"><input type="checkbox" '+(a.naOS?'checked':'')+' onchange="anxAlternarOS('+i+',this.checked)" style="width:13px;height:13px;cursor:pointer"> Mostrar na OS</label>'
-      +'<button type="button" class="anx-mini" onclick="anxAbrir('+i+')">👁️ Abrir</button>'
+      +'<button type="button" class="anx-mini" onclick="anxVisualizar('+i+')">👁️ Visualizar</button>'
+      +'<button type="button" class="anx-mini" onclick="anxBaixar('+i+')" title="Salvar o arquivo no computador">⬇️ Baixar</button>'
       +(podeExcluir?('<button type="button" class="anx-mini" style="color:#ef5350;border-color:#c62828" onclick="anxExcluir('+i+')">🗑️ Excluir</button>'):'')
       +'</div></div></div>';
   }).join('');
@@ -16734,6 +16775,196 @@ async function anxAbrir(i){
   }catch(e){
     anxStatus('⚠️ '+_anxErroAmigavel(e),'err');
     alert('⚠️ Não foi possível abrir o anexo:\n\n'+_anxErroAmigavel(e));
+  }
+}
+
+/* ── VISUALIZADOR DE ANEXOS ────────────────────────────────────────────────
+   Pedido do Fabiano: o 👁️ abria o arquivo numa aba nova e o navegador quase
+   sempre tratava como download — caía na janela "Salvar como" em vez de
+   mostrar a imagem. Agora abre aqui dentro, com setas para o próximo e o
+   anterior, e baixar virou botão separado.
+
+   O que é mostrado por tipo: imagem vira <img>; PDF vira <iframe>; o resto
+   não tem como ser exibido dentro da página, então mostra o ícone e oferece
+   baixar ou abrir em outra aba — dizer "não dá para pré-visualizar" é melhor
+   do que forçar um download que o usuário não pediu.
+
+   As setas percorrem TODOS os anexos, não só as imagens: o usuário está
+   folheando a lista do orçamento, e pular arquivos faria a contagem
+   ("3 de 7") não bater com o que ele vê na tela.                           */
+
+var _anxVisIdx=-1;
+// Anexos guardados no banco em pedaços precisam ser remontados. Guardamos a
+// URL do blob por índice para folhear ida e volta não rebaixar tudo de novo.
+var _anxVisCache={};
+
+function _anxEhPdf(tipo,nome){
+  if(tipo && tipo.indexOf('application/pdf')===0) return true;
+  return /\.pdf$/i.test(nome||'');
+}
+
+async function anxVisualizar(i){
+  if(!anexosOrc || !anexosOrc[i]) return;
+  _anxVisIdx=i;
+  _abrirOv('anx-vis-ov');
+  document.addEventListener('keydown', _anxVisTecla);
+  await anxVisRenderizar();
+}
+
+function anxVisFechar(){
+  document.removeEventListener('keydown', _anxVisTecla);
+  var ov=document.getElementById('anx-vis-ov');
+  if(ov) ov.classList.remove('open');
+  // Solta o palco para um PDF grande não ficar carregado atrás da tela.
+  var p=document.getElementById('anx-vis-palco');
+  if(p) p.innerHTML='';
+  Object.keys(_anxVisCache).forEach(function(k){
+    try{ URL.revokeObjectURL(_anxVisCache[k]); }catch(e){}
+  });
+  _anxVisCache={};
+  _anxVisIdx=-1;
+}
+
+function _anxVisTecla(ev){
+  if(ev.key==='Escape'){ anxVisFechar(); return; }
+  if(ev.key==='ArrowLeft'){ ev.preventDefault(); anxVisNavegar(-1); return; }
+  if(ev.key==='ArrowRight'){ ev.preventDefault(); anxVisNavegar(1); return; }
+}
+
+// Dá a volta nas pontas (do último vai para o primeiro), como no Drive.
+function anxVisNavegar(d){
+  var n=(anexosOrc||[]).length;
+  if(n<2) return;
+  _anxVisIdx=((_anxVisIdx+d)%n+n)%n;
+  anxVisRenderizar();
+}
+function anxVisIr(i){
+  if(i===_anxVisIdx) return;
+  _anxVisIdx=i;
+  anxVisRenderizar();
+}
+
+// A URL que o palco consegue exibir. Para o que está no Storage é a própria
+// url do anexo; para o que está no banco em pedaços, remonta e guarda.
+async function _anxVisUrl(i){
+  var a=anexosOrc[i];
+  if(!a) return '';
+  if(a.url) return a.url;
+  if(_anxVisCache[i]) return _anxVisCache[i];
+  var blob=await _anxBaixarFirestore(a);
+  _anxVisCache[i]=URL.createObjectURL(blob);
+  return _anxVisCache[i];
+}
+
+async function anxVisRenderizar(){
+  var a=anexosOrc[_anxVisIdx];
+  if(!a) return;
+  var n=anexosOrc.length;
+  var quando=a.dataISO?new Date(a.dataISO).toLocaleString('pt-BR'):'';
+
+  var elNome=document.getElementById('anx-vis-nome');
+  if(elNome) elNome.innerHTML=_anxIcone(a.tipo,a.nome)+' '+eh(a.nome);
+  var elMeta=document.getElementById('anx-vis-meta');
+  if(elMeta) elMeta.innerHTML=_anxTamanho(a.tamanho)
+    +(a.usuarioNome?(' · '+eh(a.usuarioNome)):'')+(quando?(' · '+quando):'')
+    +(a.legenda?(' · <i>'+eh(a.legenda)+'</i>'):'');
+  var elPos=document.getElementById('anx-vis-pos');
+  if(elPos) elPos.textContent=(_anxVisIdx+1)+' de '+n;
+  ['anx-vis-prev','anx-vis-next'].forEach(function(id){
+    var b=document.getElementById(id);
+    if(b) b.style.display=(n>1)?'':'none';
+  });
+
+  // Tira de miniaturas — o destaque mostra onde o usuário está.
+  var tira=document.getElementById('anx-vis-tira');
+  if(tira){
+    tira.style.display=(n>1)?'flex':'none';
+    tira.innerHTML=anexosOrc.map(function(x,j){
+      var atual=(j===_anxVisIdx);
+      var mini=(_anxEhImagem(x.tipo,x.nome)&&x.url)
+        ? '<img src="'+eh(x.url)+'" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">'
+        : '<span style="font-size:17px">'+_anxIcone(x.tipo,x.nome)+'</span>';
+      return '<div onclick="anxVisIr('+j+')" title="'+eh(x.nome)+'" '
+        +'style="flex:0 0 auto;width:48px;height:48px;border-radius:4px;overflow:hidden;cursor:pointer;display:flex;align-items:center;justify-content:center;'
+        +'background:rgba(255,255,255,.08);border:2px solid '+(atual?'var(--R)':'transparent')+';opacity:'+(atual?1:.6)+'">'+mini+'</div>';
+    }).join('');
+    var ativo=tira.children[_anxVisIdx];
+    if(ativo && ativo.scrollIntoView) try{ ativo.scrollIntoView({block:'nearest',inline:'nearest'}); }catch(e){}
+  }
+
+  var palco=document.getElementById('anx-vis-palco');
+  if(!palco) return;
+  var ehImg=_anxEhImagem(a.tipo,a.nome), ehPdf=_anxEhPdf(a.tipo,a.nome);
+
+  if(!ehImg && !ehPdf){
+    palco.innerHTML='<div style="text-align:center;color:rgba(255,255,255,.8);padding:30px">'
+      +'<div style="font-size:54px;margin-bottom:10px">'+_anxIcone(a.tipo,a.nome)+'</div>'
+      +'<div style="font-size:13px;font-weight:700;margin-bottom:5px">'+eh(a.nome)+'</div>'
+      +'<div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:14px">Este tipo de arquivo não abre aqui dentro.</div>'
+      +'<button type="button" class="btn btn-b btn-sm" onclick="anxVisBaixar()">⬇️ Baixar</button> '
+      +'<button type="button" class="btn btn-o btn-sm" onclick="anxVisNovaAba()">↗️ Abrir em nova aba</button>'
+      +'</div>';
+    return;
+  }
+
+  // O índice é guardado antes do await: se o usuário apertar a seta enquanto
+  // um PDF grande ainda está sendo remontado, a resposta antiga não pode
+  // sobrescrever o arquivo que ele já está vendo.
+  var idxPedido=_anxVisIdx;
+  palco.innerHTML='<div style="color:rgba(255,255,255,.7);font-size:12px">⏳ Carregando '+eh(a.nome)+'...</div>';
+  var url;
+  try{ url=await _anxVisUrl(idxPedido); }
+  catch(e){
+    if(idxPedido!==_anxVisIdx) return;
+    palco.innerHTML='<div style="text-align:center;color:#ff8a8a;padding:30px;font-size:12px">⚠️ Não foi possível abrir este anexo.<br>'
+      +'<span style="color:rgba(255,255,255,.6)">'+eh(_anxErroAmigavel(e))+'</span></div>';
+    return;
+  }
+  if(idxPedido!==_anxVisIdx) return;
+
+  palco.innerHTML=ehImg
+    ? '<img src="'+eh(url)+'" alt="'+eh(a.nome)+'" style="max-width:100%;max-height:100%;object-fit:contain;display:block">'
+    : '<iframe src="'+eh(url)+'" style="width:100%;height:100%;border:none;background:#fff" title="'+eh(a.nome)+'"></iframe>';
+}
+
+function anxVisNovaAba(){
+  var a=anexosOrc[_anxVisIdx];
+  if(!a) return;
+  var url=a.url||_anxVisCache[_anxVisIdx];
+  if(url) window.open(url,'_blank','noopener');
+  else anxAbrir(_anxVisIdx);
+}
+function anxVisBaixar(){ anxBaixar(_anxVisIdx); }
+
+// Baixar é ação à parte — antes não existia: o 👁️ fazia as duas coisas (mal).
+// Passa pelo fetch para o nome do arquivo ser respeitado: num link direto para
+// outro domínio o navegador ignora o atributo download e o arquivo chega com
+// o nome do Storage.
+async function anxBaixar(i){
+  var a=anexosOrc&&anexosOrc[i];
+  if(!a) return;
+  anxStatus('⏳ Preparando o download de '+a.nome+'...','');
+  try{
+    var blob;
+    if(a.url){
+      var resp=await fetch(a.url);
+      if(!resp.ok) throw new Error('HTTP '+resp.status);
+      blob=await resp.blob();
+    }else{
+      blob=await _anxBaixarFirestore(a);
+    }
+    var url=URL.createObjectURL(blob);
+    var link=document.createElement('a');
+    link.href=url; link.download=a.nome||'anexo';
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 30000);
+    anxStatus('','');
+  }catch(e){
+    // Sem conseguir o blob (CORS, rede), abrir a url direto ainda resolve
+    // para o usuário, mesmo que o nome do arquivo venha do servidor.
+    if(a.url){ window.open(a.url,'_blank','noopener'); anxStatus('',''); return; }
+    anxStatus('⚠️ '+_anxErroAmigavel(e),'err');
+    alert('⚠️ Não foi possível baixar o anexo:\n\n'+_anxErroAmigavel(e));
   }
 }
 
