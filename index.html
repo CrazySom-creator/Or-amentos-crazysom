@@ -3389,9 +3389,9 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
 <div class="card">
   <div class="st">🗓️ Datas e Horários</div>
   <div class="g4" style="margin-bottom:8px">
-    <div><label>Início do Evento</label><input type="date" id="f-dia" oninput="setDS();calcDiariasAuto();marcarAlterado()"></div>
+    <div><label>Início do Evento</label><input type="date" id="f-dia" oninput="setDS();calcDiariasAuto();marcarAlterado();atualizarDatasOrc()"></div>
     <div><label>Dia da Semana</label><input id="f-sem" readonly placeholder="Auto"></div>
-    <div><label>Fim do Evento</label><input type="date" id="f-dia-fim" oninput="setDSFim();calcDiariasAuto();marcarAlterado()"></div>
+    <div><label>Fim do Evento</label><input type="date" id="f-dia-fim" oninput="setDSFim();calcDiariasAuto();marcarAlterado();atualizarDatasOrc()"></div>
     <div><label>Dia da Semana (fim)</label><input id="f-sem-fim" readonly placeholder="Auto"></div>
   </div>
   <div class="g4" style="margin-bottom:8px">
@@ -5056,6 +5056,56 @@ function _agendaContadorPintar(el,estado){
 // Atualiza o badge do botão "📅 Agenda" — chamada nas mudanças de data
 // (Início/Fim do Evento via calcDiariasAuto(), Montagem/Desmontagem via
 // oninput direto) e ao carregar um orçamento na tela.
+// As datas do orçamento aberto, como o detector espera recebê-las.
+function _datasDoOrcAberto(){
+  return {
+    'f-dm':gv('f-dm'), 'f-dm-fim':gv('f-dm-fim'),
+    'f-dia':gv('f-dia'), 'f-dia-fim':gv('f-dia-fim'),
+    'f-dd':gv('f-dd'), 'f-dd-fim':gv('f-dd-fim')
+  };
+}
+
+// Trava de fechamento. Enquanto se elabora, data fora de ordem é só avisada
+// — travar a cada tecla brigaria com quem está remarcando um evento (ao
+// mover a data do evento, a desmontagem fica fora de ordem por um instante).
+// Aqui é diferente: Venda Ganha manda o evento para a agenda do Google e a
+// OS é o papel pelo qual a equipe trabalha. Uma data errada que passe deste
+// ponto vira caminhão no dia errado.
+function _travaDatasOrc(acao){
+  var p=_logDatasInconsistentes(_datasDoOrcAberto());
+  if(!p.length) return false;
+  alert('🔒 DATAS FORA DE ORDEM\n\n• '+p.join('\n• ')
+    +'\n\nCorrija as datas antes de '+acao+'.\n\n'
+    +'Montagem → Evento → Desmontagem: a montagem não pode começar depois do evento, '
+    +'e a desmontagem não pode ser antes dele.');
+  var alvo=document.getElementById('f-dd')||document.getElementById('f-dia');
+  if(alvo){ try{ alvo.focus(); }catch(e){} }
+  var av=document.getElementById('datas-aviso');
+  if(av&&av.scrollIntoView) try{ av.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){}
+  return true;
+}
+
+// Limites no próprio seletor de data: o calendário já abre sem os dias que
+// quebrariam a ordem. Guia sem impedir de digitar em qualquer ordem — é o
+// que separa "guiar" de "brigar".
+function _aplicarLimitesDatasOrc(){
+  function lim(id,min,max){
+    var e=document.getElementById(id);
+    if(!e) return;
+    if(min) e.setAttribute('min',min); else e.removeAttribute('min');
+    if(max) e.setAttribute('max',max); else e.removeAttribute('max');
+  }
+  var dm=gv('f-dm'), dmF=gv('f-dm-fim');
+  var dia=gv('f-dia'), diaF=gv('f-dia-fim');
+  var dd=gv('f-dd');
+  lim('f-dm','',dia||'');
+  lim('f-dm-fim',dm||'',dia||'');
+  lim('f-dia',dmF||dm||'','');
+  lim('f-dia-fim',dia||'','');
+  lim('f-dd',diaF||dia||'','');
+  lim('f-dd-fim',dd||'','');
+}
+
 // Aviso ao vivo, enquanto o consultor digita. Fica no orçamento de
 // propósito: é o único lugar onde a data errada pode ser CORRIGIDA. Avisar
 // só na Agenda deixaria o erro circular até alguém reparar — foi o que
@@ -5063,11 +5113,7 @@ function _agendaContadorPintar(el,estado){
 function atualizarAvisoDatasOrc(){
   var el=document.getElementById('datas-aviso');
   if(!el) return;
-  var p=_logDatasInconsistentes({
-    'f-dm':gv('f-dm'), 'f-dm-fim':gv('f-dm-fim'),
-    'f-dia':gv('f-dia'), 'f-dia-fim':gv('f-dia-fim'),
-    'f-dd':gv('f-dd'), 'f-dd-fim':gv('f-dd-fim')
-  });
+  var p=_logDatasInconsistentes(_datasDoOrcAberto());
   if(!p.length){ el.style.display='none'; el.innerHTML=''; return; }
   el.style.display='';
   el.innerHTML='<b>⚠️ Confira as datas</b> — '
@@ -5076,8 +5122,15 @@ function atualizarAvisoDatasOrc(){
     +'O orçamento salva assim mesmo, mas com data trocada ele ocupa a agenda no período errado — e a equipe trabalha pela OS.</div>';
 }
 
-async function atualizarContadorAgendaOrc(){
+// Ponto único: aviso + limites do seletor. Chamado por todos os seis campos
+// de data, para mexer em qualquer um reajustar os limites dos outros.
+function atualizarDatasOrc(){
   atualizarAvisoDatasOrc();
+  _aplicarLimitesDatasOrc();
+}
+
+async function atualizarContadorAgendaOrc(){
+  atualizarDatasOrc();
   var el=document.getElementById('agenda-contador-badge');
   if(!el) return;
   var periodo=_agendaContadorPeriodoAtual();
@@ -12833,6 +12886,10 @@ async function gerarOS(){
     alert('⚠️ DADOS INCOMPLETOS PARA EMISSÃO DA OS\n\nOs seguintes campos precisam ser preenchidos:\n\n• ' + camposFaltandoOS.join('\n• ') + '\n\nPreencha os dados e tente novamente.');
     return;
   }
+  // A OS é o papel pelo qual a equipe trabalha: data fora de ordem aqui vira
+  // caminhão no dia errado. Foi o que aconteceu com o 20266654, que saiu com
+  // a desmontagem em setembro.
+  if(_travaDatasOrc('emitir a OS')) return;
 
   // A janela abre AGORA, dentro do clique: se eu buscasse os aditivos antes,
   // o navegador trataria o window.open como pop-up não solicitado e bloquearia
@@ -15046,6 +15103,12 @@ function salvarComercial(){
       return;
     }
   }
+
+  // Venda Ganha manda o evento para o Google Agenda e o libera para a
+  // Logística. Com data fora de ordem, ocupa o período errado — então a
+  // trava fica ANTES de o status mudar, senão o orçamento já teria virado
+  // ganho quando o aviso aparecesse.
+  if(statusParaSalvar==='ganha' && _travaDatasOrc('registrar a Venda Ganha')) return;
 
   // CONFIRMAR o status agora — único ponto onde comercialStatus muda
   var _statusAnterior=comercialStatus;
