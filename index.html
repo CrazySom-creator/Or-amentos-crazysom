@@ -13496,24 +13496,24 @@ function _gaEventosDisponiveis(){
   var labelEvento=cfg.labelEvento||'';
   var labelDesmontagem=cfg.labelDesmontagem||'';
   var eventos=[];
-  var cliente=gv('f-cliente')||'Sem cliente';
+  var titulo=_gaTituloEventoAoVivo();
   if(gv('f-dm')){
     // Montagem pode levar mais de um dia (campo "Fim Montagem", f-dm-fim) —
     // quando preenchido e diferente do início, cria um evento de intervalo
     // (igual ao Evento), cobrindo todos os dias de montagem na agenda; sem
     // fim, mantém o comportamento antigo de um bloco fixo de 2h no dia único.
-    var evM={tipo:'montagem',summary:'MONTAGEM: '+cliente,colorId:corMontagem,eventLabelId:labelMontagem,inicio:gv('f-dm')+'T'+(gv('f-hm')||'08:00')+':00'};
+    var evM={tipo:'montagem',summary:'MONTAGEM: '+titulo,colorId:corMontagem,eventLabelId:labelMontagem,inicio:gv('f-dm')+'T'+(gv('f-hm')||'08:00')+':00'};
     var dmFim=gv('f-dm-fim');
     if(dmFim&&dmFim!==gv('f-dm')){ evM.fim=dmFim+'T23:59:00'; } else { evM.duracaoHoras=2; }
     eventos.push(evM);
   }
   if(gv('f-dia')){
     var fimE=gv('f-dia-fim')||gv('f-dia');
-    eventos.push({tipo:'evento',summary:'EVENTO: '+cliente,colorId:corEvento,eventLabelId:labelEvento,inicio:gv('f-dia')+'T'+(gv('f-hi')||'08:00')+':00',fim:fimE+'T'+(gv('f-hf')||'23:59')+':00'});
+    eventos.push({tipo:'evento',summary:'EVENTO: '+titulo,colorId:corEvento,eventLabelId:labelEvento,inicio:gv('f-dia')+'T'+(gv('f-hi')||'08:00')+':00',fim:fimE+'T'+(gv('f-hf')||'23:59')+':00'});
   }
   if(gv('f-dd')){
     // Mesma lógica de intervalo da Montagem, usando "Fim Desmontagem" (f-dd-fim).
-    var evD={tipo:'desmontagem',summary:'DESMONTAGEM: '+cliente,colorId:corDesmontagem,eventLabelId:labelDesmontagem,inicio:gv('f-dd')+'T'+(gv('f-hd')||'08:00')+':00'};
+    var evD={tipo:'desmontagem',summary:'DESMONTAGEM: '+titulo,colorId:corDesmontagem,eventLabelId:labelDesmontagem,inicio:gv('f-dd')+'T'+(gv('f-hd')||'08:00')+':00'};
     var ddFim=gv('f-dd-fim');
     if(ddFim&&ddFim!==gv('f-dd')){ evD.fim=ddFim+'T23:59:00'; } else { evD.duracaoHoras=2; }
     eventos.push(evD);
@@ -13787,19 +13787,19 @@ function _gaEventosDisponiveisDe(form, dadosCompletos){
   var labelEvento=cfg.labelEvento||'';
   var labelDesmontagem=cfg.labelDesmontagem||'';
   var eventos=[];
-  var cliente=form['f-cliente']||'Sem cliente';
+  var titulo=_gaTituloEvento(form);
   if(form['f-dm']){
-    var evM={tipo:'montagem',summary:'MONTAGEM: '+cliente,colorId:corMontagem,eventLabelId:labelMontagem,inicio:form['f-dm']+'T'+(form['f-hm']||'08:00')+':00'};
+    var evM={tipo:'montagem',summary:'MONTAGEM: '+titulo,colorId:corMontagem,eventLabelId:labelMontagem,inicio:form['f-dm']+'T'+(form['f-hm']||'08:00')+':00'};
     var dmFim=form['f-dm-fim'];
     if(dmFim&&dmFim!==form['f-dm']){ evM.fim=dmFim+'T23:59:00'; } else { evM.duracaoHoras=2; }
     eventos.push(evM);
   }
   if(form['f-dia']){
     var fimE=form['f-dia-fim']||form['f-dia'];
-    eventos.push({tipo:'evento',summary:'EVENTO: '+cliente,colorId:corEvento,eventLabelId:labelEvento,inicio:form['f-dia']+'T'+(form['f-hi']||'08:00')+':00',fim:fimE+'T'+(form['f-hf']||'23:59')+':00'});
+    eventos.push({tipo:'evento',summary:'EVENTO: '+titulo,colorId:corEvento,eventLabelId:labelEvento,inicio:form['f-dia']+'T'+(form['f-hi']||'08:00')+':00',fim:fimE+'T'+(form['f-hf']||'23:59')+':00'});
   }
   if(form['f-dd']){
-    var evD={tipo:'desmontagem',summary:'DESMONTAGEM: '+cliente,colorId:corDesmontagem,eventLabelId:labelDesmontagem,inicio:form['f-dd']+'T'+(form['f-hd']||'08:00')+':00'};
+    var evD={tipo:'desmontagem',summary:'DESMONTAGEM: '+titulo,colorId:corDesmontagem,eventLabelId:labelDesmontagem,inicio:form['f-dd']+'T'+(form['f-hd']||'08:00')+':00'};
     var ddFim=form['f-dd-fim'];
     if(ddFim&&ddFim!==form['f-dd']){ evD.fim=ddFim+'T23:59:00'; } else { evD.duracaoHoras=2; }
     eventos.push(evD);
@@ -14276,17 +14276,40 @@ async function _gaAutoEnviarSeGanha(driveId, dadosCompletos){
   }
 }
 
+// Como o evento se chama na agenda do Google. Pedido do Fabiano (out/2026):
+// "coloque primeiro o nome do evento seguido do nome do cliente. Ex.: Natal
+// Luz - Cena B Creative".
+//
+// O motivo é de leitura: a equipe conhece os trabalhos pelo NOME DO EVENTO,
+// e na grade do Google só cabem os primeiros caracteres do título. Com o
+// cliente na frente, três eventos diferentes do mesmo cliente apareciam
+// como "EVENTO: ICH ADMINISTRACAO DE HOTEI…" e eram indistinguíveis.
+//
+// Sem nome de evento, fica só o cliente — não dá para inventar o que não
+// foi preenchido, e repetir o cliente duas vezes seria pior.
+function _gaTituloEvento(form){
+  var f=form||{};
+  var nome=String(f['f-nome-evento']||'').trim();
+  var cliente=String(f['f-cliente']||'').trim();
+  if(nome&&cliente) return nome+' - '+cliente;
+  return nome||cliente||'Sem cliente';
+}
+function _gaTituloEventoAoVivo(){
+  return _gaTituloEvento({'f-nome-evento':gv('f-nome-evento'),'f-cliente':gv('f-cliente')});
+}
+
 // Monta o evento único de Pré-Reserva (negociação avançada, ainda não
 // fechada) — cobre a data principal do evento (f-dia a f-dia-fim), com título
-// "PRÉ-RESERVA: Cliente" e cor própria configurável em Admin > Google Agenda.
+// "PRÉ-RESERVA: Nome do Evento - Cliente" e cor própria configurável em
+// Admin > Google Agenda.
 function _gaEventoPreReserva(){
   var cfg=(typeof GOOGLE_AGENDA_CONFIG!=='undefined'&&GOOGLE_AGENDA_CONFIG)||{};
-  var cliente=gv('f-cliente')||'Sem cliente';
+  var titulo=_gaTituloEventoAoVivo();
   var dia=gv('f-dia');
   var fimE=gv('f-dia-fim')||dia;
   return {
     tipo:'preReserva',
-    summary:'PRÉ-RESERVA: '+cliente,
+    summary:'PRÉ-RESERVA: '+titulo,
     colorId:cfg.corPreReserva||'9',
     eventLabelId:cfg.labelPreReserva||'',
     inicio:dia+'T'+(gv('f-hi')||'08:00')+':00',
