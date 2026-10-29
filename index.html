@@ -967,6 +967,12 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <div class="home-card-desc">Acompanhamento de metas por consultor</div>
       </div>
 
+      <div class="home-card green" id="home-btn-abc" onclick="abrirCurvaABC();fecharHome()">
+        <div class="home-card-ico">📊</div>
+        <div class="home-card-title">Curva ABC de Eventos</div>
+        <div class="home-card-desc">De onde vem o faturamento — porte dos eventos por faixa, consultor, mês, cliente e tipo</div>
+      </div>
+
       <div class="home-card orange" id="home-btn-resultados" onclick="abrirResultados();fecharHome()">
         <div class="home-card-ico">🏆</div>
         <div class="home-card-title">Resultados Mensais</div>
@@ -2743,6 +2749,56 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
 
     <!-- tira de miniaturas -->
     <div id="anx-vis-tira" style="flex:0 0 auto;display:flex;gap:5px;padding:7px 10px;background:rgba(0,0,0,.55);overflow-x:auto"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  CURVA ABC DE EVENTOS                                                    -->
+<!--  Pedido do Fabiano (out/2026): analisar quantidade de eventos por        -->
+<!--  TAMANHO (faturamento), nas faixas E/D/C/B/A que ele definiu. Responde   -->
+<!--  "de onde vem o faturamento": se a empresa vive de muitos eventos        -->
+<!--  pequenos ou de poucos grandes — e como isso se distribui entre          -->
+<!--  consultores, meses, clientes e tipos de evento.                         -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="ov" id="abc-ov">
+  <div class="modal-box dash-modal" style="max-width:1280px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div>
+        <h2 style="margin-bottom:2px">📊 Curva ABC de Eventos</h2>
+        <p class="sub" id="abc-sub" style="margin:0">Carregando dados...</p>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-r btn-sm" onclick="abcAtualizar()" title="Rebusca os orçamentos antes de recalcular">🔄 Atualizar</button>
+        <button class="btn btn-o btn-sm" onclick="abcExportarPDF()" title="Gera o relatório em PDF, para a reunião">📄 PDF</button>
+        <button class="btn btn-o btn-sm" onclick="abcExportarExcel()" title="Exporta a lista de eventos do período em CSV/Excel">📊 Excel</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('abc-ov').classList.remove('open');voltarDoModulo()">✕</button>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 13px;margin-bottom:12px">
+      <div><label style="font-size:9px">De</label><input type="date" id="abc-de" onchange="abcRenderizar()" style="font-size:11px;padding:5px 7px"></div>
+      <div><label style="font-size:9px">Até</label><input type="date" id="abc-ate" onchange="abcRenderizar()" style="font-size:11px;padding:5px 7px"></div>
+      <button class="btn btn-o btn-sm" onclick="abcPeriodo('ano')">Este ano</button>
+      <button class="btn btn-o btn-sm" onclick="abcPeriodo('ano-1')">Ano passado</button>
+      <button class="btn btn-o btn-sm" onclick="abcPeriodo('12m')">Últimos 12 meses</button>
+      <div><label style="font-size:9px">Consultor</label>
+        <select id="abc-cons" onchange="abcRenderizar()" style="font-size:11px;padding:5px 7px"><option value="">Todos</option></select>
+      </div>
+      <span id="abc-aviso" style="font-size:10px;color:var(--text-muted);padding-bottom:7px"></span>
+    </div>
+
+    <div id="abc-resumo"></div>
+    <div id="abc-grafico"></div>
+    <div id="abc-tabela"></div>
+
+    <div class="rel-tabs" style="margin:14px 0 10px">
+      <div class="rel-tab active" id="abc-tab-consultor" onclick="abcAba('consultor')">👤 Por consultor</div>
+      <div class="rel-tab" id="abc-tab-mes" onclick="abcAba('mes')">📅 Mês a mês</div>
+      <div class="rel-tab" id="abc-tab-cliente" onclick="abcAba('cliente')">🏢 Por cliente</div>
+      <div class="rel-tab" id="abc-tab-tipo" onclick="abcAba('tipo')">🎪 Por tipo</div>
+      <div class="rel-tab" id="abc-tab-eventos" onclick="abcAba('eventos')">📋 Eventos</div>
+    </div>
+    <div id="abc-detalhe"></div>
   </div>
 </div>
 
@@ -28445,6 +28501,600 @@ var PERM_MODULOS = [
   ]}
 ];
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CURVA ABC DE EVENTOS
+
+   Pedido do Fabiano (out/2026): "analisar quantidade de eventos por tamanho,
+   ou seja faturamento", nas faixas que ele definiu. A pergunta que o módulo
+   responde é de onde vem o faturamento — se a empresa vive de muitos eventos
+   pequenos ou de poucos grandes — e como isso se distribui entre consultores,
+   meses, clientes e tipos de evento.
+
+   Decisões, combinadas com ele:
+   • Só VENDA GANHA. Pré-reserva e negociação ficam de fora: proposta que pode
+     não fechar distorce a leitura de porte.
+   • A data que vale é a DO EVENTO, não a do fechamento — casa com a Meta de
+     Eventos e com a Agenda, e é como a operação enxerga o ano.
+   • O valor é o dashValOrc(), o mesmo do Dashboard e das Metas. Nunca
+     recalcular por fora: seria mais um número para divergir.
+   ════════════════════════════════════════════════════════════════════════ */
+
+// Faixas na ordem da curva — do maior para o menor, que é a convenção de
+// Pareto e a ordem em que a leitura faz sentido ("os A fazem X% do total").
+// Limite superior INCLUSIVO: "5k a 15k" quer dizer até 15.000 inclusive.
+var ABC_FAIXAS=[
+  {id:'A', rot:'A', min:45000, max:Infinity, cor:'#2e7d32', desc:'acima de R$ 45 mil'},
+  {id:'B', rot:'B', min:25000, max:45000,    cor:'#558b2f', desc:'R$ 25 mil a R$ 45 mil'},
+  {id:'C', rot:'C', min:15000, max:25000,    cor:'#f9a825', desc:'R$ 15 mil a R$ 25 mil'},
+  {id:'D', rot:'D', min:5000,  max:15000,    cor:'#ef6c00', desc:'R$ 5 mil a R$ 15 mil'},
+  {id:'E', rot:'E', min:0,     max:5000,     cor:'#c62828', desc:'até R$ 5 mil'}
+];
+function _abcFaixa(v){
+  for(var i=0;i<ABC_FAIXAS.length;i++){
+    var f=ABC_FAIXAS[i];
+    if(v>f.min && v<=f.max) return f;
+  }
+  // Valor zero ou negativo cai em E — é o menor porte que existe, e deixar
+  // de fora esconderia evento fechado sem valor lançado.
+  return ABC_FAIXAS[ABC_FAIXAS.length-1];
+}
+
+var _abcAba='consultor';
+
+function _abcISO(d){ return d.toISOString().substring(0,10); }
+
+function abcPeriodo(qual){
+  var hoje=new Date(), de, ate;
+  if(qual==='ano'){ de=new Date(hoje.getFullYear(),0,1); ate=new Date(hoje.getFullYear(),11,31); }
+  else if(qual==='ano-1'){ de=new Date(hoje.getFullYear()-1,0,1); ate=new Date(hoje.getFullYear()-1,11,31); }
+  else { de=new Date(hoje.getFullYear(),hoje.getMonth()-11,1); ate=new Date(hoje.getFullYear(),hoje.getMonth()+1,0); }
+  var elDe=document.getElementById('abc-de'), elAte=document.getElementById('abc-ate');
+  if(elDe) elDe.value=_abcISO(de);
+  if(elAte) elAte.value=_abcISO(ate);
+  abcRenderizar();
+}
+
+async function abrirCurvaABC(){
+  if(_moduloBloqueado('dash-abc')) return;
+  _abrirOv('abc-ov');
+  document.getElementById('abc-sub').textContent='Carregando dados...';
+  await metasCarregarConsultoresNomes();
+  await dashAtualizar(true);
+  var elC=document.getElementById('abc-cons');
+  if(elC) elC.innerHTML='<option value="">Todos</option>'+_metasNomes.map(function(n){return '<option value="'+eh(n)+'">'+eh(n)+'</option>';}).join('');
+  if(!document.getElementById('abc-de').value) abcPeriodo('ano');
+  else abcRenderizar();
+}
+
+async function abcAtualizar(){
+  document.getElementById('abc-sub').textContent='🔄 Atualizando...';
+  await dashAtualizar(true);
+  abcRenderizar();
+}
+
+function abcAba(a){
+  _abcAba=a;
+  ['consultor','mes','cliente','tipo','eventos'].forEach(function(x){
+    var t=document.getElementById('abc-tab-'+x);
+    if(t) t.classList.toggle('active', x===a);
+  });
+  abcRenderDetalhe();
+}
+
+/* ── Os dados ─────────────────────────────────────────────────────────── */
+
+// Um registro por evento fechado no período. Guarda o orçamento inteiro
+// porque o clique no nome abre a OS.
+function abcDados(){
+  var de=(document.getElementById('abc-de')||{}).value||'';
+  var ate=(document.getElementById('abc-ate')||{}).value||'';
+  var cons=(document.getElementById('abc-cons')||{}).value||'';
+  var out=[];
+  (_dashDados||[]).forEach(function(o){
+    if(((o.dados&&o.dados.comercialStatus)||'')!=='ganha') return;
+    var f=o.form||{};
+    var dia=f['f-dia']||'';
+    if(!dia) return;                       // sem data do evento não há em que mês contar
+    if(de && dia<de) return;
+    if(ate && dia>ate) return;
+    if(cons && (f['f-cons']||'')!==cons) return;
+    var v=dashValOrc(o);
+    out.push({
+      o:o, valor:v, faixa:_abcFaixa(v),
+      dia:dia, mes:dia.substring(0,7),
+      num:f['f-num']||'', cliente:f['f-cliente']||'(sem cliente)',
+      evento:f['f-nome-evento']||'', consultor:f['f-cons']||'(sem consultor)',
+      tipo:f['f-tipo']||'(sem tipo)', driveId:o.driveId||''
+    });
+  });
+  out.sort(function(a,b){ return b.valor-a.valor; });
+  return out;
+}
+
+// Totais por faixa, já com o acumulado de Pareto. A ordem é a de ABC_FAIXAS
+// (do maior porte para o menor), que é o que faz o acumulado significar
+// "os maiores respondem por tanto".
+function abcPorFaixa(lista){
+  var tot=lista.reduce(function(t,x){return t+x.valor;},0);
+  var n=lista.length;
+  var acQtd=0, acVal=0;
+  return ABC_FAIXAS.map(function(f){
+    var dela=lista.filter(function(x){ return x.faixa.id===f.id; });
+    var v=dela.reduce(function(t,x){return t+x.valor;},0);
+    acQtd+=dela.length; acVal+=v;
+    return {
+      faixa:f, qtd:dela.length, valor:v,
+      pctQtd:n?dela.length/n*100:0,
+      pctVal:tot?v/tot*100:0,
+      acQtd:n?acQtd/n*100:0,
+      acVal:tot?acVal/tot*100:0,
+      ticket:dela.length?v/dela.length:0
+    };
+  });
+}
+
+/* ── Render ───────────────────────────────────────────────────────────── */
+
+function abcRenderizar(){
+  var lista=abcDados();
+  var porFaixa=abcPorFaixa(lista);
+  var tot=lista.reduce(function(t,x){return t+x.valor;},0);
+  var sub=document.getElementById('abc-sub');
+  if(sub) sub.textContent=lista.length
+    ? (lista.length+' evento(s) fechado(s) · '+fmt(tot)+' no período')
+    : 'Nenhum evento fechado no período escolhido';
+
+  abcRenderResumo(lista,porFaixa,tot);
+  abcRenderGrafico(porFaixa,tot);
+  abcRenderTabela(porFaixa,tot,lista.length);
+  abcRenderDetalhe();
+}
+
+// A leitura de Pareto: quantos % dos eventos fazem 80% do faturamento. É a
+// frase que o relatório existe para responder, então vai no topo, escrita,
+// e não só desenhada num gráfico.
+function _abcPareto(lista){
+  var tot=lista.reduce(function(t,x){return t+x.valor;},0);
+  if(!tot||!lista.length) return null;
+  var ac=0, n=0;
+  for(var i=0;i<lista.length;i++){
+    ac+=lista[i].valor; n++;
+    if(ac/tot>=0.8) break;
+  }
+  return {nEventos:n, pctEventos:n/lista.length*100, pctFat:Math.min(100,ac/tot*100)};
+}
+
+function _abcTile(rot,val,sub,cor){
+  return '<div style="flex:1;min-width:140px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:10px 13px">'
+    +'<div style="font-size:9.5px;color:var(--text-muted);text-transform:uppercase;font-weight:800;letter-spacing:.4px">'+rot+'</div>'
+    +'<div style="font-size:20px;font-weight:900;color:'+(cor||'var(--text)')+';margin-top:2px">'+val+'</div>'
+    +(sub?'<div style="font-size:9.5px;color:var(--text-dim);margin-top:1px">'+sub+'</div>':'')
+    +'</div>';
+}
+
+function abcRenderResumo(lista,porFaixa,tot){
+  var el=document.getElementById('abc-resumo');
+  if(!el) return;
+  if(!lista.length){ el.innerHTML=''; return; }
+  var p=_abcPareto(lista);
+  var ab=porFaixa.filter(function(x){ return x.faixa.id==='A'||x.faixa.id==='B'; });
+  var qtdAB=ab.reduce(function(t,x){return t+x.qtd;},0);
+  var valAB=ab.reduce(function(t,x){return t+x.valor;},0);
+  el.innerHTML='<div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:12px">'
+    +_abcTile('Eventos fechados', String(lista.length), 'no período escolhido')
+    +_abcTile('Faturamento', fmt(tot), '')
+    +_abcTile('Ticket médio', fmt(tot/lista.length), 'por evento')
+    +_abcTile('Maior evento', fmt(lista[0].valor), eh(lista[0].cliente))
+    +_abcTile('Faixas A + B', qtdAB+' evento(s)', (tot?Math.round(valAB/tot*100):0)+'% do faturamento', '#2e7d32')
+    +'</div>'
+    +(p?'<div style="background:rgba(46,125,50,.12);border:1px solid #2e7d32;border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text)">'
+      +'📌 <b>'+p.nEventos+' evento(s)</b> — '+p.pctEventos.toFixed(0)+'% do total — respondem por <b>'+p.pctFat.toFixed(0)+'% do faturamento</b> do período.'
+      +'<div style="font-size:10px;color:var(--text-dim);margin-top:3px">Quanto menor esse percentual de eventos, mais o resultado depende de poucos negócios.</div>'
+      +'</div>':'');
+}
+
+/* ── Gráfico: barras de faturamento + linha acumulada (Pareto) ─────────
+   SVG escrito à mão de propósito: o sistema é um arquivo único que precisa
+   abrir sem depender de biblioteca externa, como o resto dos relatórios.  */
+function abcRenderGrafico(porFaixa,tot){
+  var el=document.getElementById('abc-grafico');
+  if(!el) return;
+  if(!tot){ el.innerHTML=''; return; }
+  var W=820, H=300, mE=70, mD=50, mT=24, mB=52;
+  var larg=W-mE-mD, alt=H-mT-mB;
+  var maxV=Math.max.apply(null,porFaixa.map(function(x){return x.valor;}))||1;
+  var passo=larg/porFaixa.length;
+  var bw=Math.min(78,passo*0.55);
+
+  var barras='', linha='', pontos='', rotulos='';
+  porFaixa.forEach(function(x,i){
+    var cx=mE+passo*i+passo/2;
+    var h=Math.round(x.valor/maxV*alt);
+    var y=mT+alt-h;
+    barras+='<rect x="'+(cx-bw/2)+'" y="'+y+'" width="'+bw+'" height="'+Math.max(h,1)+'" rx="3" fill="'+x.faixa.cor+'"></rect>';
+    if(x.valor>0) barras+='<text x="'+cx+'" y="'+(y-5)+'" text-anchor="middle" font-size="11" font-weight="800" fill="#444">'+fmtN(x.valor)+'</text>';
+    var yAc=mT+alt-Math.round(x.acVal/100*alt);
+    linha+=(i?' L':'M')+cx+' '+yAc;
+    // Pastilha branca atrás do número: sobre a barra escura o texto azul
+    // sumia. O ponto da curva é justamente o que precisa ser lido.
+    var txt=x.acVal.toFixed(0)+'%';
+    var lw=txt.length*6.5+8;
+    pontos+='<rect x="'+(cx-lw/2)+'" y="'+(yAc-21)+'" width="'+lw+'" height="15" rx="7" fill="#fff" stroke="#1565c0" stroke-width="1"></rect>'
+      +'<text x="'+cx+'" y="'+(yAc-10)+'" text-anchor="middle" font-size="10" font-weight="800" fill="#1565c0">'+txt+'</text>'
+      +'<circle cx="'+cx+'" cy="'+yAc+'" r="4" fill="#1565c0"></circle>';
+    rotulos+='<text x="'+cx+'" y="'+(mT+alt+18)+'" text-anchor="middle" font-size="14" font-weight="900" fill="'+x.faixa.cor+'">'+x.faixa.rot+'</text>'
+      +'<text x="'+cx+'" y="'+(mT+alt+32)+'" text-anchor="middle" font-size="9" fill="#888">'+eh(x.faixa.desc)+'</text>'
+      +'<text x="'+cx+'" y="'+(mT+alt+45)+'" text-anchor="middle" font-size="10" font-weight="700" fill="#666">'+x.qtd+' evento'+(x.qtd===1?'':'s')+'</text>';
+  });
+
+  // Linha dos 80% — a régua de Pareto, para o olho achar onde a curva cruza.
+  var y80=mT+alt-Math.round(0.8*alt);
+  var grade='';
+  [0,25,50,75,100].forEach(function(p){
+    var y=mT+alt-Math.round(p/100*alt);
+    grade+='<line x1="'+mE+'" y1="'+y+'" x2="'+(W-mD)+'" y2="'+y+'" stroke="#e8e8e8"></line>'
+      +'<text x="'+(W-mD+6)+'" y="'+(y+4)+'" font-size="9" fill="#1565c0">'+p+'%</text>';
+  });
+
+  el.innerHTML='<div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:12px;overflow-x:auto">'
+    +'<div style="font-size:11px;font-weight:800;color:#444;margin:2px 0 4px">Faturamento por faixa · linha azul = acumulado (Pareto)</div>'
+    +'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;min-width:620px;height:auto;display:block">'
+    +grade
+    +'<line x1="'+mE+'" y1="'+y80+'" x2="'+(W-mD)+'" y2="'+y80+'" stroke="#1565c0" stroke-dasharray="5 4" stroke-width="1.5"></line>'
+    +'<text x="'+(W-mD-4)+'" y="'+(y80-5)+'" text-anchor="end" font-size="9.5" font-weight="800" fill="#1565c0">80% do faturamento</text>'
+    +barras
+    +'<path d="'+linha+'" fill="none" stroke="#1565c0" stroke-width="2.5"></path>'
+    +pontos+rotulos
+    +'<text x="'+(mE-8)+'" y="'+(mT+8)+'" text-anchor="end" font-size="9" fill="#888">'+fmtN(maxV)+'</text>'
+    +'<text x="'+(mE-8)+'" y="'+(mT+alt)+'" text-anchor="end" font-size="9" fill="#888">0</text>'
+    +'</svg></div>';
+}
+
+function abcRenderTabela(porFaixa,tot,n){
+  var el=document.getElementById('abc-tabela');
+  if(!el) return;
+  if(!n){
+    el.innerHTML='<div class="dash-vazio" style="padding:26px">Nenhum evento com Venda Ganha e data dentro do período.'
+      +'<div style="margin-top:7px;font-size:11px;color:var(--text-dim)">A curva considera a <b>data do evento</b>, não a do fechamento.</div></div>';
+    return;
+  }
+  el.innerHTML='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+    +'<thead><tr style="border-bottom:2px solid var(--R)">'
+    +['Faixa','Intervalo','Eventos','% dos eventos','Faturamento','% do fat.','% acumulado','Ticket médio']
+      .map(function(h,i){ return '<th style="padding:6px 8px;color:var(--text-muted);font-size:10px;text-transform:uppercase;text-align:'+(i<2?'left':'right')+'">'+h+'</th>'; }).join('')
+    +'</tr></thead><tbody>'
+    +porFaixa.map(function(x){
+      return '<tr style="border-bottom:1px solid var(--border)'+(x.qtd?'':';opacity:.45')+'">'
+        +'<td style="padding:6px 8px"><span style="display:inline-block;width:22px;text-align:center;border-radius:4px;background:'+x.faixa.cor+';color:#fff;font-weight:900">'+x.faixa.rot+'</span></td>'
+        +'<td style="padding:6px 8px;color:var(--text-dim)">'+eh(x.faixa.desc)+'</td>'
+        +'<td style="padding:6px 8px;text-align:right;font-weight:800">'+x.qtd+'</td>'
+        +'<td style="padding:6px 8px;text-align:right;color:var(--text-dim)">'+x.pctQtd.toFixed(1)+'%</td>'
+        +'<td style="padding:6px 8px;text-align:right;font-weight:800;color:'+x.faixa.cor+'">'+fmt(x.valor)+'</td>'
+        +'<td style="padding:6px 8px;text-align:right;color:var(--text-dim)">'+x.pctVal.toFixed(1)+'%</td>'
+        +'<td style="padding:6px 8px;text-align:right;font-weight:700;color:#1565c0">'+x.acVal.toFixed(1)+'%</td>'
+        +'<td style="padding:6px 8px;text-align:right;color:var(--text-dim)">'+fmt(x.ticket)+'</td>'
+        +'</tr>';
+    }).join('')
+    +'<tr style="border-top:2px solid var(--R);font-weight:900">'
+    +'<td colspan="2" style="padding:7px 8px">TOTAL</td>'
+    +'<td style="padding:7px 8px;text-align:right">'+n+'</td><td style="padding:7px 8px;text-align:right">100%</td>'
+    +'<td style="padding:7px 8px;text-align:right;color:var(--R)">'+fmt(tot)+'</td>'
+    +'<td style="padding:7px 8px;text-align:right">100%</td><td></td>'
+    +'<td style="padding:7px 8px;text-align:right">'+fmt(n?tot/n:0)+'</td>'
+    +'</tr></tbody></table></div>';
+}
+
+/* ── Abas de detalhe ──────────────────────────────────────────────────── */
+
+// Tabela "dimensão × faixa": quantas e quanto em cada faixa, por consultor,
+// por tipo, por mês. É o cruzamento que transforma a curva em conversa —
+// "o Wagner traz volume, o Luiz traz porte".
+function _abcCruzamento(lista, chave, rotuloCol, ordenarPor){
+  var grupos={};
+  lista.forEach(function(x){
+    var k=x[chave]||'—';
+    if(!grupos[k]) grupos[k]={k:k, itens:[], valor:0};
+    grupos[k].itens.push(x); grupos[k].valor+=x.valor;
+  });
+  var linhas=Object.keys(grupos).map(function(k){ return grupos[k]; });
+  linhas.sort(function(a,b){
+    return ordenarPor==='chave' ? String(a.k).localeCompare(String(b.k),'pt-BR') : b.valor-a.valor;
+  });
+  var totGeral=lista.reduce(function(t,x){return t+x.valor;},0);
+
+  return '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+    +'<thead><tr style="border-bottom:2px solid var(--R)">'
+    +'<th style="padding:6px 8px;text-align:left;color:var(--text-muted);font-size:10px;text-transform:uppercase">'+rotuloCol+'</th>'
+    +ABC_FAIXAS.map(function(f){ return '<th style="padding:6px 6px;text-align:center;font-size:10px;color:'+f.cor+'">'+f.rot+'</th>'; }).join('')
+    +'<th style="padding:6px 8px;text-align:right;color:var(--text-muted);font-size:10px">Eventos</th>'
+    +'<th style="padding:6px 8px;text-align:right;color:var(--text-muted);font-size:10px">Faturamento</th>'
+    +'<th style="padding:6px 8px;text-align:right;color:var(--text-muted);font-size:10px">% do total</th>'
+    +'<th style="padding:6px 8px;text-align:right;color:var(--text-muted);font-size:10px">Ticket médio</th>'
+    +'</tr></thead><tbody>'
+    +linhas.map(function(g){
+      return '<tr style="border-bottom:1px solid var(--border)">'
+        +'<td style="padding:6px 8px;font-weight:700">'+eh(g.k)+'</td>'
+        +ABC_FAIXAS.map(function(f){
+          var q=g.itens.filter(function(x){ return x.faixa.id===f.id; }).length;
+          return '<td style="padding:6px 6px;text-align:center;'+(q?'font-weight:800;color:'+f.cor:'color:var(--text-muted)')+'">'+(q||'–')+'</td>';
+        }).join('')
+        +'<td style="padding:6px 8px;text-align:right;font-weight:800">'+g.itens.length+'</td>'
+        +'<td style="padding:6px 8px;text-align:right;font-weight:800;color:var(--R)">'+fmt(g.valor)+'</td>'
+        +'<td style="padding:6px 8px;text-align:right;color:var(--text-dim)">'+(totGeral?(g.valor/totGeral*100).toFixed(1):'0.0')+'%</td>'
+        +'<td style="padding:6px 8px;text-align:right;color:var(--text-dim)">'+fmt(g.valor/g.itens.length)+'</td>'
+        +'</tr>';
+    }).join('')
+    +'</tbody></table></div>';
+}
+
+// Mês a mês com barra empilhada por faixa: mostra sazonalidade DE TAMANHO,
+// não só de volume — dezembro pode ter poucos eventos e ser o maior mês.
+function _abcPorMes(lista){
+  var meses={};
+  lista.forEach(function(x){ (meses[x.mes]=meses[x.mes]||[]).push(x); });
+  var ordem=Object.keys(meses).sort();
+  if(!ordem.length) return '<div class="dash-vazio" style="padding:20px">Sem eventos no período.</div>';
+  var maxV=Math.max.apply(null,ordem.map(function(m){
+    return meses[m].reduce(function(t,x){return t+x.valor;},0);
+  }))||1;
+
+  var barras=ordem.map(function(m){
+    var itens=meses[m];
+    var tot=itens.reduce(function(t,x){return t+x.valor;},0);
+    var dt=new Date(m+'-01T12:00:00');
+    var pilha=ABC_FAIXAS.map(function(f){
+      var v=itens.filter(function(x){return x.faixa.id===f.id;}).reduce(function(t,x){return t+x.valor;},0);
+      if(!v) return '';
+      var q=itens.filter(function(x){return x.faixa.id===f.id;}).length;
+      return '<div title="'+f.rot+' — '+q+' evento(s) · '+fmt(v)+'" style="height:'+(v/tot*100)+'%;background:'+f.cor+'"></div>';
+    }).join('');
+    return '<div style="flex:1;min-width:46px;display:flex;flex-direction:column;align-items:center;gap:3px">'
+      +'<div style="font-size:9.5px;font-weight:800;color:var(--text-dim)">'+fmtN(tot)+'</div>'
+      +'<div style="width:100%;height:'+Math.max(6,Math.round(tot/maxV*150))+'px;display:flex;flex-direction:column-reverse;border-radius:3px;overflow:hidden">'+pilha+'</div>'
+      +'<div style="font-size:9.5px;font-weight:800;color:var(--text)">'+MESES_NOMES[dt.getMonth()].substring(0,3)+'</div>'
+      +'<div style="font-size:9px;color:var(--text-muted)">'+itens.length+' ev.</div>'
+      +'</div>';
+  }).join('');
+
+  return '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px">'
+    +'<div style="font-size:11px;font-weight:800;color:var(--text-dim);margin-bottom:9px">Faturamento por mês, repartido por faixa</div>'
+    +'<div style="display:flex;gap:6px;align-items:flex-end;overflow-x:auto;padding-bottom:4px">'+barras+'</div>'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text-dim);margin-top:10px">'
+    +ABC_FAIXAS.map(function(f){
+      return '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:'+f.cor+';margin-right:4px"></span>'+f.rot+' — '+eh(f.desc)+'</span>';
+    }).join('')
+    +'</div></div>'
+    +_abcCruzamento(lista,'mes','Mês','chave');
+}
+
+// Ranking de clientes com concentração acumulada: responde "quanto do ano
+// depende de poucos clientes", que é risco, não só curiosidade.
+function _abcPorCliente(lista){
+  var tot=lista.reduce(function(t,x){return t+x.valor;},0);
+  var g={};
+  lista.forEach(function(x){
+    if(!g[x.cliente]) g[x.cliente]={k:x.cliente, itens:[], valor:0};
+    g[x.cliente].itens.push(x); g[x.cliente].valor+=x.valor;
+  });
+  var linhas=Object.keys(g).map(function(k){return g[k];}).sort(function(a,b){return b.valor-a.valor;});
+  var ac=0;
+  var top5=linhas.slice(0,5).reduce(function(t,x){return t+x.valor;},0);
+
+  return '<div style="background:rgba(21,101,192,.1);border:1px solid #1565c0;border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px">'
+    +'🏢 <b>'+linhas.length+' cliente(s)</b> no período. Os <b>5 maiores</b> respondem por <b>'+(tot?Math.round(top5/tot*100):0)+'%</b> do faturamento.'
+    +'<div style="font-size:10px;color:var(--text-dim);margin-top:3px">Concentração alta é faturamento previsível e risco concentrado ao mesmo tempo.</div></div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+    +'<thead><tr style="border-bottom:2px solid var(--R)">'
+    +'<th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--text-muted);text-transform:uppercase">#</th>'
+    +'<th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--text-muted);text-transform:uppercase">Cliente</th>'
+    +'<th style="padding:6px 8px;text-align:right;font-size:10px;color:var(--text-muted)">Eventos</th>'
+    +'<th style="padding:6px 8px;text-align:center;font-size:10px;color:var(--text-muted)">Faixas</th>'
+    +'<th style="padding:6px 8px;text-align:right;font-size:10px;color:var(--text-muted)">Faturamento</th>'
+    +'<th style="padding:6px 8px;text-align:right;font-size:10px;color:var(--text-muted)">% acum.</th>'
+    +'</tr></thead><tbody>'
+    +linhas.map(function(c,i){
+      ac+=c.valor;
+      var faixas=ABC_FAIXAS.filter(function(f){ return c.itens.some(function(x){return x.faixa.id===f.id;}); })
+        .map(function(f){ return '<span style="display:inline-block;min-width:16px;text-align:center;border-radius:3px;background:'+f.cor+';color:#fff;font-size:9.5px;font-weight:900;margin-right:2px">'+f.rot+'</span>'; }).join('');
+      return '<tr style="border-bottom:1px solid var(--border)">'
+        +'<td style="padding:6px 8px;color:var(--text-muted)">'+(i+1)+'</td>'
+        +'<td style="padding:6px 8px;font-weight:700">'+eh(c.k)+'</td>'
+        +'<td style="padding:6px 8px;text-align:right">'+c.itens.length+'</td>'
+        +'<td style="padding:6px 8px;text-align:center">'+faixas+'</td>'
+        +'<td style="padding:6px 8px;text-align:right;font-weight:800;color:var(--R)">'+fmt(c.valor)+'</td>'
+        +'<td style="padding:6px 8px;text-align:right;color:#1565c0;font-weight:700">'+(tot?(ac/tot*100).toFixed(1):'0.0')+'%</td>'
+        +'</tr>';
+    }).join('')
+    +'</tbody></table></div>';
+}
+
+// A lista completa. O nome do evento abre a OS — pedido do Fabiano.
+function _abcListaEventos(lista){
+  if(!lista.length) return '<div class="dash-vazio" style="padding:20px">Sem eventos no período.</div>';
+  return '<div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">Clique no nome do evento para abrir a Ordem de Serviço.</div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+    +'<thead><tr style="border-bottom:2px solid var(--R)">'
+    +['#','Faixa','Data','Evento / Cliente','Consultor','Tipo','Orç.','Valor'].map(function(h,i){
+      return '<th style="padding:6px 8px;font-size:10px;color:var(--text-muted);text-transform:uppercase;text-align:'+(i===7?'right':'left')+'">'+h+'</th>';
+    }).join('')
+    +'</tr></thead><tbody>'
+    +lista.map(function(x,i){
+      var nome=(x.evento?x.evento+' — ':'')+x.cliente;
+      return '<tr style="border-bottom:1px solid var(--border)">'
+        +'<td style="padding:6px 8px;color:var(--text-muted)">'+(i+1)+'</td>'
+        +'<td style="padding:6px 8px"><span style="display:inline-block;width:20px;text-align:center;border-radius:4px;background:'+x.faixa.cor+';color:#fff;font-weight:900;font-size:10px">'+x.faixa.rot+'</span></td>'
+        +'<td style="padding:6px 8px;color:var(--text-dim);white-space:nowrap">'+fD(x.dia)+'</td>'
+        +'<td style="padding:6px 8px;font-weight:700">'
+          +(x.driveId
+            ? '<span onclick="logAbrirPreviewOS(\''+eh(x.driveId)+'\')" title="Abrir a Ordem de Serviço" style="cursor:pointer;color:#90caf9;text-decoration:underline">'+eh(nome)+'</span>'
+            : eh(nome))
+        +'</td>'
+        +'<td style="padding:6px 8px;color:var(--text-dim)">'+eh(x.consultor)+'</td>'
+        +'<td style="padding:6px 8px;color:var(--text-dim)">'+eh(x.tipo)+'</td>'
+        +'<td style="padding:6px 8px;color:var(--text-muted)">'+eh(x.num)+'</td>'
+        +'<td style="padding:6px 8px;text-align:right;font-weight:800;color:'+x.faixa.cor+'">'+fmt(x.valor)+'</td>'
+        +'</tr>';
+    }).join('')
+    +'</tbody></table></div>';
+}
+
+function abcRenderDetalhe(){
+  var el=document.getElementById('abc-detalhe');
+  if(!el) return;
+  var lista=abcDados();
+  if(!lista.length){ el.innerHTML=''; return; }
+  if(_abcAba==='consultor') el.innerHTML=_abcCruzamento(lista,'consultor','Consultor');
+  else if(_abcAba==='mes') el.innerHTML=_abcPorMes(lista);
+  else if(_abcAba==='cliente') el.innerHTML=_abcPorCliente(lista);
+  else if(_abcAba==='tipo') el.innerHTML=_abcCruzamento(lista,'tipo','Tipo de evento');
+  else el.innerHTML=_abcListaEventos(lista);
+}
+
+/* ── Exportar ─────────────────────────────────────────────────────────── */
+
+function _abcPeriodoLabel(){
+  var de=(document.getElementById('abc-de')||{}).value||'';
+  var ate=(document.getElementById('abc-ate')||{}).value||'';
+  var cons=(document.getElementById('abc-cons')||{}).value||'';
+  return (de&&ate?fD(de)+' a '+fD(ate):'todo o período')+(cons?' · Consultor: '+cons:'');
+}
+
+function abcExportarExcel(){
+  var lista=abcDados();
+  if(!lista.length){ alert('Não há eventos no período escolhido para exportar.'); return; }
+  function campo(v){
+    var s=String(v===null||v===undefined?'':v).replace(/\r?\n/g,' / ');
+    if(/[";]/.test(s)) s='"'+s.replace(/"/g,'""')+'"';
+    return s;
+  }
+  var out=['﻿'+['Faixa','Data','Evento','Cliente','Consultor','Tipo','Orçamento','Valor'].map(campo).join(';')];
+  lista.forEach(function(x){
+    out.push([x.faixa.rot, fD(x.dia), x.evento, x.cliente, x.consultor, x.tipo, x.num,
+      Number(x.valor).toFixed(2).replace('.',',')].map(campo).join(';'));
+  });
+  var blob=new Blob([out.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='CrazySom_CurvaABC_'+((document.getElementById('abc-de')||{}).value||'').replace(/-/g,'')+'.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  _toastMostrar('📊 '+lista.length+' evento(s) exportado(s).','',5000);
+}
+
+function abcExportarPDF(){
+  var lista=abcDados();
+  if(!lista.length){ alert('Não há eventos no período escolhido para gerar o relatório.'); return; }
+  // Janela aberta dentro do clique, antes de qualquer coisa — senão o
+  // navegador bloqueia como pop-up.
+  var w=window.open('','_blank');
+  if(!w){ alert('O navegador bloqueou a janela do relatório. Libere pop-ups para este site e tente de novo.'); return; }
+
+  var porFaixa=abcPorFaixa(lista);
+  var tot=lista.reduce(function(t,x){return t+x.valor;},0);
+  var p=_abcPareto(lista);
+  var hoje=new Date().toLocaleString('pt-BR');
+  var nomeArq='CrazySom_CurvaABC_'+((document.getElementById('abc-de')||{}).value||'').replace(/-/g,'');
+
+  function tabelaCurva(){
+    return '<table><thead><tr><th>Faixa</th><th>Intervalo</th><th class="r">Eventos</th><th class="r">% ev.</th>'
+      +'<th class="r">Faturamento</th><th class="r">% fat.</th><th class="r">% acum.</th><th class="r">Ticket médio</th></tr></thead><tbody>'
+      +porFaixa.map(function(x){
+        return '<tr><td><b style="color:'+x.faixa.cor+'">'+x.faixa.rot+'</b></td><td>'+eh(x.faixa.desc)+'</td>'
+          +'<td class="r">'+x.qtd+'</td><td class="r">'+x.pctQtd.toFixed(1)+'%</td>'
+          +'<td class="r"><b>'+fmt(x.valor)+'</b></td><td class="r">'+x.pctVal.toFixed(1)+'%</td>'
+          +'<td class="r">'+x.acVal.toFixed(1)+'%</td><td class="r">'+fmt(x.ticket)+'</td></tr>';
+      }).join('')
+      +'<tr class="tot"><td colspan="2">TOTAL</td><td class="r">'+lista.length+'</td><td class="r">100%</td>'
+      +'<td class="r">'+fmt(tot)+'</td><td class="r">100%</td><td class="r"></td><td class="r">'+fmt(tot/lista.length)+'</td></tr>'
+      +'</tbody></table>';
+  }
+
+  function cruz(chave,rot,ordChave){
+    var g={};
+    lista.forEach(function(x){ var k=x[chave]||'—'; (g[k]=g[k]||{k:k,itens:[],valor:0}); g[k].itens.push(x); g[k].valor+=x.valor; });
+    var ls=Object.keys(g).map(function(k){return g[k];});
+    ls.sort(function(a,b){ return ordChave?String(a.k).localeCompare(String(b.k),'pt-BR'):b.valor-a.valor; });
+    return '<table><thead><tr><th>'+rot+'</th>'
+      +ABC_FAIXAS.map(function(f){return '<th class="c" style="color:'+f.cor+'">'+f.rot+'</th>';}).join('')
+      +'<th class="r">Eventos</th><th class="r">Faturamento</th><th class="r">% total</th><th class="r">Ticket médio</th></tr></thead><tbody>'
+      +ls.map(function(x){
+        return '<tr><td><b>'+eh(x.k)+'</b></td>'
+          +ABC_FAIXAS.map(function(f){
+            var q=x.itens.filter(function(y){return y.faixa.id===f.id;}).length;
+            return '<td class="c">'+(q||'–')+'</td>';
+          }).join('')
+          +'<td class="r">'+x.itens.length+'</td><td class="r"><b>'+fmt(x.valor)+'</b></td>'
+          +'<td class="r">'+(tot?(x.valor/tot*100).toFixed(1):'0.0')+'%</td>'
+          +'<td class="r">'+fmt(x.valor/x.itens.length)+'</td></tr>';
+      }).join('')+'</tbody></table>';
+  }
+
+  var acCli=0;
+  var gCli={};
+  lista.forEach(function(x){ (gCli[x.cliente]=gCli[x.cliente]||{k:x.cliente,itens:[],valor:0}); gCli[x.cliente].itens.push(x); gCli[x.cliente].valor+=x.valor; });
+  var cli=Object.keys(gCli).map(function(k){return gCli[k];}).sort(function(a,b){return b.valor-a.valor;});
+
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+nomeArq+'</title><style>'
+    +'*{margin:0;padding:0;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}'
+    +'body{background:#fff;color:#111}'
+    +'.hdr{background:#d63447;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-radius:6px}'
+    +'.hdr h1{font-size:15px;font-weight:900}.hdr span{font-size:10px;opacity:.85;text-align:right}'
+    +'h2{font-size:12px;color:#d63447;border-bottom:2px solid #d63447;padding-bottom:4px;margin:16px 0 8px;text-transform:uppercase;page-break-after:avoid}'
+    +'table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:8px}'
+    +'th{background:#f2f2f2;text-align:left;padding:5px 6px;border-bottom:2px solid #ccc;font-size:9.5px;text-transform:uppercase}'
+    +'td{padding:5px 6px;border-bottom:1px solid #eee}'
+    +'.r{text-align:right}.c{text-align:center}'
+    +'tr.tot td{border-top:2px solid #d63447;font-weight:900;background:#fff6f6}'
+    +'tr{page-break-inside:avoid;break-inside:avoid}'
+    +'thead{display:table-header-group}tbody{display:table-row-group}'
+    +'.cx{background:#f1f8e9;border:1px solid #689f38;border-radius:6px;padding:9px 12px;font-size:11px;margin-bottom:10px}'
+    +'.quebra{page-break-before:always;break-before:page}'
+    +'#pw{padding:0 0 8mm}'
+    +'#st{position:fixed;top:0;left:0;right:0;background:#d63447;color:#fff;text-align:center;padding:10px;font-size:13px;font-weight:bold;z-index:9999}'
+    +'@media print{#st{display:none}}'
+    +'</style>'
+    +'<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>'
+    +'</head><body><div id="st">Gerando PDF...</div><div id="pw">'
+    +'<div class="hdr"><h1>📊 CRAZY SOM — CURVA ABC DE EVENTOS</h1><span>'+eh(_abcPeriodoLabel())
+      +'<br>'+lista.length+' evento(s) · '+fmt(tot)+'<br>Gerado em: '+hoje+'</span></div>'
+    +(p?'<div class="cx"><b>'+p.nEventos+' evento(s)</b> — '+p.pctEventos.toFixed(0)+'% do total — respondem por <b>'
+      +p.pctFat.toFixed(0)+'% do faturamento</b> do período. Ticket médio geral: <b>'+fmt(tot/lista.length)+'</b>.</div>':'')
+    +'<h2>1 · A curva</h2>'+tabelaCurva()
+    +'<h2>2 · Por consultor</h2>'+cruz('consultor','Consultor')
+    +'<h2>3 · Mês a mês</h2>'+cruz('mes','Mês',true)
+    +'<h2>4 · Por tipo de evento</h2>'+cruz('tipo','Tipo')
+    +'<h2 class="quebra">5 · Clientes</h2>'
+    +'<table><thead><tr><th>#</th><th>Cliente</th><th class="r">Eventos</th><th class="r">Faturamento</th><th class="r">% acum.</th></tr></thead><tbody>'
+    +cli.map(function(c,i){ acCli+=c.valor;
+      return '<tr><td>'+(i+1)+'</td><td><b>'+eh(c.k)+'</b></td><td class="r">'+c.itens.length+'</td>'
+        +'<td class="r"><b>'+fmt(c.valor)+'</b></td><td class="r">'+(tot?(acCli/tot*100).toFixed(1):'0.0')+'%</td></tr>';
+    }).join('')+'</tbody></table>'
+    +'<h2 class="quebra">6 · Eventos do período</h2>'
+    +'<table><thead><tr><th>#</th><th>Faixa</th><th>Data</th><th>Evento / Cliente</th><th>Consultor</th><th>Orç.</th><th class="r">Valor</th></tr></thead><tbody>'
+    +lista.map(function(x,i){
+      return '<tr><td>'+(i+1)+'</td><td><b style="color:'+x.faixa.cor+'">'+x.faixa.rot+'</b></td><td>'+fD(x.dia)+'</td>'
+        +'<td>'+eh((x.evento?x.evento+' — ':'')+x.cliente)+'</td><td>'+eh(x.consultor)+'</td><td>'+eh(x.num)+'</td>'
+        +'<td class="r"><b>'+fmt(x.valor)+'</b></td></tr>';
+    }).join('')+'</tbody></table>'
+    +'<div style="margin-top:14px;font-size:9px;color:#aaa;text-align:center;border-top:1px solid #ddd;padding-top:6px">'
+    +'Faixas: A acima de R$ 45 mil · B R$ 25 a 45 mil · C R$ 15 a 25 mil · D R$ 5 a 15 mil · E até R$ 5 mil. '
+    +'Considera apenas Venda Ganha, pela data do evento.<br>'
+    +'Crazy Som Audiovisuais – Sistema de Orçamentos – CNPJ: 10.909.827/0001-76</div>'
+    +'</div><script>'
+    +'window.onload=function(){setTimeout(function(){'
+    +'var opt={margin:[6,5,10,5],filename:"'+nomeArq+'.pdf",image:{type:"jpeg",quality:1},'
+    +'html2canvas:{scale:2,useCORS:true,logging:false,backgroundColor:"#ffffff"},'
+    +'jsPDF:{unit:"mm",format:"a4",orientation:"landscape"},'
+    +'pagebreak:{mode:["css","legacy"],avoid:"tr"}};'
+    +'html2pdf().set(opt).from(document.getElementById("pw")).save().then(function(){'
+    +'document.getElementById("st").style.background="#2e7d32";'
+    +'document.getElementById("st").textContent="PDF salvo! Pode fechar esta janela.";'
+    +'});},600);};'
+    +'<\/script></body></html>');
+  w.document.close();
+}
+
 // ════════════════════════════════════════════════════════
 //  REGISTRO ÚNICO DE MÓDULOS — usado em três lugares ao mesmo tempo:
 //  (1) monta a aba Admin > Permissões por Módulo,
@@ -28494,6 +29144,7 @@ var DASH_MODULOS = [
   {id:'dash-com',       card:'home-btn-com',        label:'📈 Dashboard Comercial',       grupo:'Gestão'},
   {id:'dash-metas',     card:'home-btn-metas',      label:'🎯 Metas',                     grupo:'Gestão'},
   {id:'dash-resultados',card:'home-btn-resultados', label:'🏆 Resultados Mensais',        grupo:'Gestão'},
+  {id:'dash-abc',       card:'home-btn-abc',        label:'📊 Curva ABC de Eventos',      grupo:'Gestão'},
   {id:'dash-apres',     card:'home-btn-apres',      label:'🎤 Apresentação Gerencial',    grupo:'Gestão'},
   {id:'dash-conc',      card:'home-btn-conc',       label:'🔄 Conciliação de Agenda',     grupo:'Gestão'},
   {id:'dash-fin',       card:'home-btn-fin',        label:'💰 Financeiro',                grupo:'Gestão'},
