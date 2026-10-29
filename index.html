@@ -28542,7 +28542,10 @@ var PERM_MODULOS = [
    aqui dentro e importá-las contaria o mesmo dinheiro duas vezes.
    Duas linhas da planilha ficaram de fora por terem valor zerado ("A voz
    do churrasco" e "Entre Elas - Instituto Caldeira") — valor zero não tem
-   faixa e só sujaria a contagem.
+   faixa e só sujaria a contagem. Uma terceira saiu depois: MKF FEIRAS,
+   18/08, R$ 55.000 — a planilha a lançou sem número, mas é a MESMA venda do
+   orçamento 20266100 (EXPOAGAS), que já está no sistema. Foi o detalhamento
+   da faixa A que mostrou as duas lado a lado, com valor e data idênticos.
    A data é a da planilha, que é a do faturamento, não necessariamente a da
    execução. Para a Curva ABC isso muda pouco (quase tudo fecha no mês do
    evento), mas é por isso que estes lançamentos ficam marcados e podem ser
@@ -28637,7 +28640,6 @@ var LANC2026=[
   {n:'PL085',d:'2026-08-12',c:'ICH ADMINISTRACAO DE HOTEIS S.A.',v:1070},
   {n:'PL086',d:'2026-08-16',c:'Edilson',v:500},
   {n:'PL087',d:'2026-08-17',c:'ICH ADMINISTRACAO DE HOTEIS S.A.',v:3220},
-  {n:'PL088',d:'2026-08-18',c:'MKF FEIRAS E EVENTOS LTDA',v:55000},
   {n:'PL089',d:'2026-08-20',c:'ICH ADMINISTRACAO DE HOTEIS S.A.',v:1830},
   {n:'PL090',d:'2026-08-22',c:'ICH ADMINISTRACAO DE HOTEIS S.A.',v:1670},
   {n:'PL091',d:'2026-08-25',c:'ICH ADMINISTRACAO DE HOTEIS S.A.',v:9550},
@@ -28840,7 +28842,7 @@ function abcAgrupar(itens){
     var consultores={};
     g.forEach(function(x){ consultores[x.consultor]=1; });
     return {
-      o:p.o, valor:valor, faixa:_abcFaixa(valor), importado:!!p.importado, grupo:p.grupo||'',
+      o:p.o, valor:valor, faixa:_abcFaixa(valor), importado:!!p.importado, grupo:p.grupo||'', suspeita:p.suspeita||'',
       dia:p.dia, mes:p.mes, num:p.num, cliente:p.cliente,
       evento:ordenado.map(function(x){return x.evento;}).filter(Boolean)[0]||'',
       consultor:p.consultor, tipo:p.tipo, driveId:p.driveId,
@@ -28960,6 +28962,20 @@ function abcDados(){
       _abcNImportados++;
     });
   }
+  // Possível duplicata: um lançamento da planilha com a MESMA data e o MESMO
+  // valor de um orçamento do sistema é quase sempre a mesma venda, lançada
+  // sem número na planilha. Foi assim que a EXPOAGAS/MKF apareceu duas vezes.
+  // Não removemos sozinhos — datas e valores podem coincidir de verdade —
+  // mas marcamos, para a conferência ser de olhar e não de procurar.
+  var _porDiaValor={};
+  out.forEach(function(x){ if(!x.importado) _porDiaValor[x.dia+'|'+x.valor]=(x.num||'orçamento'); });
+  _abcNDuplicatas=0;
+  out.forEach(function(x){
+    if(x.importado && _porDiaValor[x.dia+'|'+x.valor]){
+      x.suspeita=_porDiaValor[x.dia+'|'+x.valor];
+      _abcNDuplicatas++;
+    }
+  });
   out.sort(function(a,b){ return b.valor-a.valor; });
   _abcNOrcamentos=out.length;
   if(!_abcUnificando()){
@@ -28975,6 +28991,7 @@ function abcDados(){
 // os dois números é o que a unificação fez.
 var _abcNOrcamentos=0;
 var _abcNImportados=0;
+var _abcNDuplicatas=0;
 
 // Totais por faixa, já com o acumulado de Pareto. A ordem é a de ABC_FAIXAS
 // (do maior porte para o menor), que é o que faz o acumulado significar
@@ -29019,7 +29036,8 @@ function abcRenderizar(){
 
   var av=document.getElementById('abc-aviso');
   if(av) av.textContent=(juntados>0?'🔗 '+juntados+' orçamento(s) somado(s) ao evento correspondente':'')
-    +(_abcNImportados?(juntados>0?' · ':'')+'📥 '+_abcNImportados+' lançamento(s) da planilha':'');
+    +(_abcNImportados?(juntados>0?' · ':'')+'📥 '+_abcNImportados+' lançamento(s) da planilha':'')
+    +(_abcNDuplicatas?' · ⚠️ '+_abcNDuplicatas+' com data e valor iguais a um orçamento — confira':'');
 
   abcRenderResumo(lista,porFaixa,tot);
   abcRenderGrafico(porFaixa,tot);
@@ -29408,6 +29426,7 @@ function _abcListaEventos(lista){
             ? '<span onclick="logAbrirPreviewOS(\''+eh(x.driveId)+'\')" title="Abrir a Ordem de Serviço" style="cursor:pointer;color:#90caf9;text-decoration:underline">'+eh(nome)+'</span>'
             : eh(nome))
           +(x.importado?' <span style="font-size:9px;font-weight:800;color:#ef6c00;border:1px solid #ef6c00;border-radius:3px;padding:0 4px" title="Veio da planilha de fechamento 2026 — não tem orçamento no sistema, por isso não abre OS">PLANILHA</span>':'')
+          +(x.suspeita?' <span style="font-size:9px;font-weight:800;color:#c62828;border:1px solid #c62828;border-radius:3px;padding:0 4px" title="Mesma data e mesmo valor do orçamento '+eh(x.suspeita)+' — pode ser a mesma venda lançada duas vezes. Confira antes de usar o total.">⚠️ IGUAL AO '+eh(x.suspeita)+'</span>':'')
           +juntos
         +'</td>'
         +'<td style="padding:6px 8px;color:var(--text-dim)">'+eh(x.consultor)+'</td>'
