@@ -28646,6 +28646,18 @@ var LANC2026=[
   {n:'PL094',d:'2026-08-29',c:'ALTUS PRO BUSINESS LTDA',v:21000}
 ];
 
+// Quem pode importar/limpar os lançamentos da planilha. Mesmo padrão das
+// demais permissões do sistema: Gerência, Diretoria e Administrador sempre
+// podem (é decisão de gestão, não de operação), e qualquer outro cargo só
+// com a caixa marcada em Admin → Permissões por Cargo.
+function _abcPodeImportar(){
+  if(!usuarioAtual) return false;
+  if(typeof _modoLeitura!=='undefined' && _modoLeitura) return false;
+  if(['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0) return true;
+  var cargo=typeof _cargoEfetivo==='function'?_cargoEfetivo(usuarioAtual):(usuarioAtual.cargo||'');
+  return !!(cargo && _permissoes[cargo] && _permissoes[cargo]['abc-importar']===true);
+}
+
 var _abcImportados=null;   // cache do que está gravado em config/lancamentosExternos
 
 async function abcCarregarImportados(){
@@ -28659,7 +28671,7 @@ async function abcCarregarImportados(){
 // Importa (ou reimporta) os lançamentos de 2026. Idempotente: grava a lista
 // inteira de uma vez, então rodar duas vezes não duplica nada.
 async function abcImportarPlanilha2026(){
-  if(!(usuarioAtual&&usuarioAtual.nivel==='adm')){ alert('Só o administrador pode importar lançamentos.'); return; }
+  if(!_abcPodeImportar()){ alert('Seu usuário não tem permissão para importar lançamentos.'); return; }
   var tot=LANC2026.reduce(function(t,x){return t+x.v;},0);
   if(!confirm('Importar '+LANC2026.length+' lançamentos de 2026 da planilha de fechamento ('+fmt(tot)+')?\n\n'
     +'São as linhas SEM número de orçamento — as que têm número já estão no sistema e NÃO entram.\n'
@@ -28992,11 +29004,11 @@ function abcRenderizar(){
        +(_abcQuando()?' · '+_abcQuandoLabel().toLowerCase():'')
        +(juntados>0?' · '+_abcNOrcamentos+' orçamentos unificados em '+lista.length+' eventos':''))
     : ('Nenhum evento fechado no período escolhido'+(_abcQuando()?' em "'+_abcQuandoLabel()+'"':''));
-  // Os botões de importar/limpar são de administrador.
-  var ehAdm=!!(usuarioAtual&&usuarioAtual.nivel==='adm');
+  // Os botões de importar/limpar seguem a permissão de gestão.
+  var podeImp=_abcPodeImportar();
   var bi=document.getElementById('abc-btn-importar'), bl=document.getElementById('abc-btn-limpar');
-  if(bi) bi.style.display=ehAdm?'inline-block':'none';
-  if(bl) bl.style.display=(ehAdm&&(_abcImportados||[]).length)?'inline-block':'none';
+  if(bi) bi.style.display=podeImp?'inline-block':'none';
+  if(bl) bl.style.display=(podeImp&&(_abcImportados||[]).length)?'inline-block':'none';
 
   var av=document.getElementById('abc-aviso');
   if(av) av.textContent=(juntados>0?'🔗 '+juntados+' orçamento(s) somado(s) ao evento correspondente':'')
@@ -29659,6 +29671,8 @@ async function permSalvar(){
   if(anxAddEl) _permissoes[cargo]['anexar-arquivo']=anxAddEl.checked;
   var anxDelEl=document.getElementById('perm-excluir-anexo');
   if(anxDelEl) _permissoes[cargo]['excluir-anexo']=anxDelEl.checked;
+  var abcImpEl=document.getElementById('perm-abc-importar');
+  if(abcImpEl) _permissoes[cargo]['abc-importar']=abcImpEl.checked;
   try{ localStorage.setItem('crazySomPerm',JSON.stringify(_permissoes)); }catch(e){}
   var btn=document.querySelector('#admpane-permissoes button[onclick="permSalvar()"]');
   if(btn){btn.textContent='⏳ Salvando...';btn.disabled=true;}
@@ -29921,6 +29935,12 @@ function permRenderizar(){
     +'<input type="checkbox" id="perm-liberar-montagem"'+(perm['liberar-montagem']===true?' checked':'')+' style="width:14px;height:14px;cursor:pointer"> 🔓 Pode Liberar Montagem Manualmente'
     +'</label>'
     +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px;margin-left:22px">Permite liberar a Montagem mesmo sem todos os requisitos cumpridos (contrato assinado, entrada paga, nº da venda no Conta Azul) — e também revogar essa liberação. Use em casos como pagamento combinado por fora do sistema ou urgência do cliente. Exige uma justificativa, gravada com data e autor no histórico do orçamento. Vem DESMARCADA por padrão. Gerência, Diretoria e Administradores já podem sempre.</div>'
+    +'</div>'
+    +'<div style="background:#1a1206;border:1px solid #ef6c00;border-radius:6px;padding:10px 12px;margin-bottom:10px">'
+    +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#ffb74d;font-weight:800;text-transform:uppercase">'
+    +'<input type="checkbox" id="perm-abc-importar"'+(perm['abc-importar']===true?' checked':'')+' style="width:14px;height:14px;cursor:pointer"> 📥 Pode Importar Lançamentos na Curva ABC'
+    +'</label>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px;margin-left:22px">Permite importar (e limpar) na Curva ABC os eventos de 2026 que só existiam na planilha de fechamento — faturamento que nunca passou pelo sistema. Mexe no total do relatório gerencial, por isso é permissão de gestão. Os orçamentos do sistema não são afetados em nenhum caso. Vem DESMARCADA por padrão. Gerência, Diretoria e Administradores já podem sempre.</div>'
     +'</div>'
     +'<div style="background:#0a1622;border:1px solid #1565c0;border-radius:6px;padding:10px 12px;margin-bottom:10px">'
     +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#64b5f6;font-weight:800;text-transform:uppercase">'
