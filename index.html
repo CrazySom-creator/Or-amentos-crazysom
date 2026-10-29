@@ -28679,6 +28679,47 @@ function _abcQuandoLabel(){
   return q==='ja'?'Já aconteceram':(q==='falta'?'Falta acontecer':'Tudo vendido');
 }
 
+/* ── Conciliação com os lançamentos manuais ───────────────────────────
+   A tela de Resultados Mensais soma, além dos orçamentos do sistema, o
+   realizado MANUAL lançado mês a mês em Metas — o histórico anterior ao
+   sistema, digitado como um valor único por mês. A Curva ABC não pode
+   colocar esse dinheiro em faixa nenhuma: um valor de mês inteiro não tem
+   cliente, data nem valor por evento, e rateá-lo inventaria eventos que
+   não existem. Então a curva não o soma — mas também não o esconde: o
+   módulo declara quanto é e por que está fora, para os dois números
+   pararem de divergir em silêncio.
+   A convenção de onde ler é a mesma do módulo de Metas: sem filtro de
+   consultor, o manual do bloco "eventos"; com filtro, o manual daquele
+   consultor (realizadoManualEventos). São dois lançamentos paralelos, não
+   somáveis entre si.                                                    */
+function _abcManualPeriodo(){
+  var de=(document.getElementById('abc-de')||{}).value||'';
+  var ate=(document.getElementById('abc-ate')||{}).value||'';
+  var cons=(document.getElementById('abc-cons')||{}).value||'';
+  var total=0, meses=[], parcial=false;
+  if(!de||!ate) return {total:0,meses:[],parcial:false};
+  // Mês parcial: a soma lançada é do mês inteiro, então um período que
+  // começa ou termina no meio do mês traz mais do que o recorte pediria.
+  if(de.substring(8)!=='01') parcial=true;
+  var fimMes=new Date(Number(ate.substring(0,4)), Number(ate.substring(5,7)), 0).getDate();
+  if(Number(ate.substring(8))<fimMes) parcial=true;
+  Object.keys(_metasDados||{}).forEach(function(ano){
+    var d=_metasDados[ano]||{};
+    for(var m=1;m<=12;m++){
+      var ym=ano+'-'+(m<10?'0':'')+m;
+      if(ym<de.substring(0,7)||ym>ate.substring(0,7)) continue;
+      var v=cons
+        ? _metaConsultorRealizadoManualEventoMes(d.consultores,cons,ym)
+        : ((d.eventos&&d.eventos.realizadoManual&&d.eventos.realizadoManual[ym])!==undefined
+            ? d.eventos.realizadoManual[ym] : null);
+      if(v===null||v===undefined||!v) continue;
+      total+=v; meses.push({ym:ym,valor:v});
+    }
+  });
+  meses.sort(function(a,b){ return a.ym<b.ym?-1:1; });
+  return {total:total, meses:meses, parcial:parcial};
+}
+
 function _abcUnificando(){
   var el=document.getElementById('abc-unificar');
   return el?el.checked:true;
@@ -28820,6 +28861,20 @@ function abcRenderResumo(lista,porFaixa,tot){
         +_abcTile('Falta acontecer', fmt(vFa), fa.length+' evento(s) em carteira', '#ef6c00');
     })()
     +'</div>'
+    +(function(){
+      var mn=_abcManualPeriodo();
+      if(!mn.total) return '';
+      var m=mn.meses.map(function(x){ return x.ym.substring(5)+'/'+x.ym.substring(2,4)+' '+fmtN(x.valor); }).join(' · ');
+      return '<div style="background:rgba(239,108,0,.12);border:1px solid #ef6c00;border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text)">'
+        +'⚠️ <b>'+fmt(mn.total)+'</b> em lançamentos manuais no período <b>não entram nesta curva</b>.'
+        +'<div style="font-size:10.5px;color:var(--text-dim);margin-top:4px">'
+        +'São os valores digitados mês a mês em <b>Metas → Eventos</b> (histórico anterior ao sistema). '
+        +'Cada um é um total de mês, sem cliente nem valor por evento — não há como colocá-los numa faixa A–E sem inventar eventos. '
+        +'Por isso a Curva ABC mostra <b>'+fmt(tot)+'</b> e Resultados Mensais mostra até <b>'+fmt(tot+mn.total)+'</b> no mesmo período.'
+        +(mn.parcial?'<br><b>Atenção:</b> o período escolhido começa ou termina no meio de um mês, e o lançamento manual é sempre do mês inteiro — aqui ele está contado inteiro.':'')
+        +'<br>Meses com lançamento: '+m
+        +'</div></div>';
+    })()
     +(p?'<div style="background:rgba(46,125,50,.12);border:1px solid #2e7d32;border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text)">'
       +'📌 <b>'+p.nEventos+' evento(s)</b> — '+p.pctEventos.toFixed(0)+'% do total — respondem por <b>'+p.pctFat.toFixed(0)+'% do faturamento</b> do período.'
       +'<div style="font-size:10px;color:var(--text-dim);margin-top:3px">Quanto menor esse percentual de eventos, mais o resultado depende de poucos negócios.</div>'
@@ -29214,6 +29269,14 @@ function abcExportarPDF(){
       +'<br>'+lista.length+' evento(s) · '+fmt(tot)+'<br>Gerado em: '+hoje+'</span></div>'
     +(p?'<div class="cx"><b>'+p.nEventos+' evento(s)</b> — '+p.pctEventos.toFixed(0)+'% do total — respondem por <b>'
       +p.pctFat.toFixed(0)+'% do faturamento</b> do período. Ticket médio geral: <b>'+fmt(tot/lista.length)+'</b>.</div>':'')
+    +(function(){
+      var mn=_abcManualPeriodo();
+      if(!mn.total) return '';
+      return '<div class="cx" style="background:#fff3e0;border-color:#ef6c00">'
+        +'<b>'+fmt(mn.total)+'</b> em lançamentos manuais do período (Metas → Eventos, histórico anterior ao sistema) <b>não entram nesta curva</b> — '
+        +'são totais de mês, sem cliente nem valor por evento, e não podem ser classificados em faixa. '
+        +'Curva ABC: <b>'+fmt(tot)+'</b> · com os manuais: <b>'+fmt(tot+mn.total)+'</b>.</div>';
+    })()
     +(function(){
       if(_abcQuando()) return '';
       var hj=_abcHoje();
