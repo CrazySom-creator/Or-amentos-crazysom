@@ -28660,6 +28660,34 @@ function _abcPodeImportar(){
   return !!(cargo && _permissoes[cargo] && _permissoes[cargo]['abc-importar']===true);
 }
 
+/* Totais da planilha de fechamento por mês, para a conciliação conseguir
+   apontar a origem da divergência em vez de só mostrar que ela existe.
+   t = total do mês na planilha; o = a parte que JÁ tem número de orçamento
+   e portanto já está somada pelo sistema.                                */
+var PLANILHA2026_MES={
+  '2026-01':{t:106150,o:52760},
+  '2026-02':{t:76500,o:49470},
+  '2026-03':{t:220785,o:97150},
+  '2026-04':{t:319700,o:179605},
+  '2026-05':{t:147282,o:110982},
+  '2026-06':{t:146415,o:137215},
+  '2026-07':{t:299977.5,o:268250},
+  '2026-08':{t:375375,o:261246},
+  '2026-09':{t:193295,o:193295},
+  '2026-10':{t:32500,o:32500}
+};
+
+// Um lançamento manual de Metas que bate com o TOTAL do mês na planilha está
+// contando também as vendas que já têm orçamento no sistema — ou seja, o
+// sistema soma aquele dinheiro duas vezes em Resultados Mensais. Tolerância
+// de R$ 1.000 porque esses lançamentos foram digitados à mão.
+function _abcManualEmDobro(ym, valorManual){
+  var p=PLANILHA2026_MES[ym];
+  if(!p||!valorManual) return 0;
+  if(Math.abs(Math.abs(valorManual)-p.t)>1000) return 0;
+  return p.o;
+}
+
 var _abcImportados=null;   // cache do que está gravado em config/lancamentosExternos
 
 async function abcCarregarImportados(){
@@ -29098,17 +29126,29 @@ function abcRenderResumo(lista,porFaixa,tot){
     +(function(){
       var mn=_abcManualPeriodo();
       if(!mn.total) return '';
-      var m=mn.meses.map(function(x){ return x.ym.substring(5)+'/'+x.ym.substring(2,4)+' '+fmtN(x.valor); }).join(' · ');
+      // Quanto de cada lançamento manual é dinheiro que o sistema já soma por
+      // conta própria (venda com orçamento). É a parte contada duas vezes.
+      var dobro=0, linhas=mn.meses.map(function(x){
+        var d=_abcManualEmDobro(x.ym, x.valor);
+        dobro+=d;
+        return x.ym.substring(5)+'/'+x.ym.substring(2,4)+' '+fmtN(x.valor)
+          +(d?' <span style="color:#c62828;font-weight:800" title="Esse valor é o total do mês na planilha de fechamento, que inclui '+fmtN(d)+' de vendas que JÁ têm orçamento no sistema — o sistema soma esse pedaço duas vezes em Resultados Mensais">(inclui '+fmtN(d)+' já somado)</span>':'');
+      }).join(' · ');
       return '<div style="background:rgba(239,108,0,.12);border:1px solid #ef6c00;border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text)">'
-        +'⚠️ <b>'+fmt(mn.total)+'</b> em lançamentos manuais no período <b>não entram nesta curva</b>.'
+        +'⚠️ <b>'+fmt(mn.total)+'</b> em lançamentos manuais de <b>Metas → Eventos</b> <b>não entram nesta curva</b>.'
         +'<div style="font-size:10.5px;color:var(--text-dim);margin-top:4px">'
-        +'São os valores digitados mês a mês em <b>Metas → Eventos</b> (histórico anterior ao sistema). '
-        +'Cada um é um total de mês, sem cliente nem valor por evento — não há como colocá-los numa faixa A–E sem inventar eventos. '
-        +'Por isso a Curva ABC mostra <b>'+fmt(tot)+'</b> e Resultados Mensais mostra até <b>'+fmt(tot+mn.total)+'</b> no mesmo período.'
-        +(_abcNImportados?'<br><b>⚠️ Risco de contar duas vezes:</b> há '+_abcNImportados+' lançamento(s) da planilha já dentro desta curva nos mesmos meses. '
-          +'Se a planilha e o lançamento manual de Metas cobrem o mesmo faturamento, zere o manual dos meses importados em Metas → Eventos.':'')
+        +'Cada um é um total de mês, sem cliente nem valor por evento — não há como colocá-los numa faixa A–E sem inventar eventos.'
+        +'<br><b>Por que a Curva ABC e Resultados Mensais não batem:</b> cada relatório soma uma terceira fonte diferente. '
+        +'A curva soma os <b>lançamentos da planilha</b> ('+(_abcNImportados||0)+' linhas), que são eventos de verdade, com data e valor. '
+        +'Resultados Mensais soma o <b>manual de Metas</b> ('+fmt(mn.total)+'), que é um total por mês. '
+        +'São o mesmo faturamento contado de duas maneiras — <b>não some os dois</b>.'
+        +(dobro?'<br><span style="color:#c62828"><b>⚠️ '+fmt(dobro)+' está sendo contado DUAS VEZES em Resultados Mensais.</b> '
+          +'Nos meses marcados abaixo, o valor manual é o total do mês inteiro da planilha de fechamento — '
+          +'e esse total já inclui as vendas que têm orçamento no sistema, que o sistema soma sozinho. '
+          +'<b>O que fazer:</b> depois de importar a planilha aqui, zere o manual desses meses em Metas → Eventos. '
+          +'A parte que não tem orçamento passa a vir da importação, com cliente e data.</span>':'')
         +(mn.parcial?'<br><b>Atenção:</b> o período escolhido começa ou termina no meio de um mês, e o lançamento manual é sempre do mês inteiro — aqui ele está contado inteiro.':'')
-        +'<br>Meses com lançamento: '+m
+        +'<br>Meses com lançamento: '+linhas
         +'</div></div>';
     })()
     +(p?'<div style="background:rgba(46,125,50,.12);border:1px solid #2e7d32;border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text)">'
@@ -29567,10 +29607,15 @@ function abcExportarPDF(){
     +(function(){
       var mn=_abcManualPeriodo();
       if(!mn.total) return '';
+      var dobro=0;
+      mn.meses.forEach(function(x){ dobro+=_abcManualEmDobro(x.ym,x.valor); });
       return '<div class="cx" style="background:#fff3e0;border-color:#ef6c00">'
-        +'<b>'+fmt(mn.total)+'</b> em lançamentos manuais do período (Metas → Eventos, histórico anterior ao sistema) <b>não entram nesta curva</b> — '
+        +'<b>'+fmt(mn.total)+'</b> em lançamentos manuais de Metas → Eventos <b>não entram nesta curva</b> — '
         +'são totais de mês, sem cliente nem valor por evento, e não podem ser classificados em faixa. '
-        +'Curva ABC: <b>'+fmt(tot)+'</b> · com os manuais: <b>'+fmt(tot+mn.total)+'</b>.</div>';
+        +'A curva soma, no lugar deles, os lançamentos da planilha de fechamento, que têm cliente e data. '
+        +'São o mesmo faturamento contado de duas maneiras: <b>não some os dois</b>.'
+        +(dobro?' <b>Atencao: '+fmt(dobro)+' esta sendo contado duas vezes em Resultados Mensais</b> — nos meses em que o manual e o total do mes inteiro da planilha, que ja inclui as vendas com orcamento no sistema.':'')
+        +'</div>';
     })()
     +(function(){
       if(_abcQuando()) return '';
