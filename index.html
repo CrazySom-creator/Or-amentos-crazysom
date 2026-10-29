@@ -2784,6 +2784,16 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div><label style="font-size:9px">Consultor</label>
         <select id="abc-cons" onchange="abcRenderizar()" style="font-size:11px;padding:5px 7px"><option value="">Todos</option></select>
       </div>
+      <div title="Tudo vendido = toda Venda Ganha do período. Já aconteceram = data do evento até hoje. Falta acontecer = vendido com data à frente."><label style="font-size:9px">Situação</label>
+        <select id="abc-quando" onchange="abcRenderizar()" style="font-size:11px;padding:5px 7px">
+          <option value="">Tudo vendido</option>
+          <option value="ja">Já aconteceram</option>
+          <option value="falta">Falta acontecer</option>
+        </select>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer;padding-bottom:6px" title="Junta num evento só os orçamentos do mesmo cliente, na mesma data e com o mesmo nome de evento — inclusive os aditivos">
+        <input type="checkbox" id="abc-unificar" checked onchange="abcRenderizar()"> unificar orçamentos do mesmo evento
+      </label>
       <span id="abc-aviso" style="font-size:10px;color:var(--text-muted);padding-bottom:7px"></span>
     </div>
 
@@ -28584,12 +28594,103 @@ function abcAba(a){
 
 /* ── Os dados ─────────────────────────────────────────────────────────── */
 
+/* ── Unificar orçamentos do mesmo evento ──────────────────────────────────
+   Pedido do Fabiano: "unifique orçamentos que são para a mesma data e
+   cliente, pois são para o mesmo evento". O ICH aparecia com 41 eventos —
+   na prática um punhado de trabalhos orçados em pedaços, cada pedaço caindo
+   numa faixa baixa e distorcendo a curva inteira.
+
+   A regra combinada NÃO é só cliente+data: é cliente + data + NOME DO
+   EVENTO. Um hotel tem eventos diferentes no mesmo dia, de clientes finais
+   diferentes — juntar "Unifertil" com "Sicredi" porque caem no mesmo dia do
+   mesmo hotel seria transformar dois eventos de verdade num só, e ainda
+   empurrá-lo para uma faixa acima.
+
+   Orçamento SEM nome de evento entra no evento nomeado daquele dia quando há
+   exatamente UM; havendo dois ou mais, não dá para adivinhar de qual ele é,
+   então fica separado. Aditivos (/1, /2) são clones do original e já trazem
+   o mesmo cliente, data e nome — caem juntos sem regra extra.            */
+
+function _abcNorm(t){
+  return (typeof _normalizarNomeItem==='function')
+    ? _normalizarNomeItem(String(t||''))
+    : String(t||'').trim().toLowerCase();
+}
+
+function abcAgrupar(itens){
+  var porCliDia={};
+  itens.forEach(function(x){
+    var k=_abcNorm(x.cliente)+'||'+x.dia;
+    (porCliDia[k]=porCliDia[k]||[]).push(x);
+  });
+
+  var grupos=[];
+  Object.keys(porCliDia).forEach(function(k){
+    var doDia=porCliDia[k], porNome={}, semNome=[];
+    doDia.forEach(function(x){
+      var n=_abcNorm(x.evento);
+      if(!n) semNome.push(x);
+      else (porNome[n]=porNome[n]||[]).push(x);
+    });
+    var nomes=Object.keys(porNome);
+    if(nomes.length===1 && semNome.length){
+      // Um único evento nomeado nesse dia: o que está sem nome é dele.
+      porNome[nomes[0]]=porNome[nomes[0]].concat(semNome);
+      semNome=[];
+    }
+    nomes.forEach(function(n){ grupos.push(porNome[n]); });
+    if(semNome.length){
+      if(!nomes.length) grupos.push(semNome);                       // todos sem nome → um evento
+      else semNome.forEach(function(x){ grupos.push([x]); });       // ambíguo → cada um por si
+    }
+  });
+
+  return grupos.map(function(g){
+    // O orçamento de maior valor representa o grupo: é dele o consultor, o
+    // tipo e a OS que abre no clique. Somar valores de consultores
+    // diferentes e atribuir ao menor seria pior.
+    var ordenado=g.slice().sort(function(a,b){ return b.valor-a.valor; });
+    var p=ordenado[0];
+    var valor=g.reduce(function(t,x){return t+x.valor;},0);
+    var consultores={};
+    g.forEach(function(x){ consultores[x.consultor]=1; });
+    return {
+      o:p.o, valor:valor, faixa:_abcFaixa(valor),
+      dia:p.dia, mes:p.mes, num:p.num, cliente:p.cliente,
+      evento:ordenado.map(function(x){return x.evento;}).filter(Boolean)[0]||'',
+      consultor:p.consultor, tipo:p.tipo, driveId:p.driveId,
+      partes:ordenado,
+      nPartes:g.length,
+      variosConsultores:Object.keys(consultores).length>1
+    };
+  }).sort(function(a,b){ return b.valor-a.valor; });
+}
+
+// Realizado x a realizar. A fronteira é HOJE, pela data do evento: o que já
+// passou é faturamento entregue, o que está à frente é vendido e em carteira.
+// O dia de hoje conta como realizado — o evento é hoje, não amanhã.
+function _abcQuando(){
+  var el=document.getElementById('abc-quando');
+  return el?(el.value||''):'';
+}
+function _abcHoje(){ return _abcISO(new Date()); }
+function _abcQuandoLabel(){
+  var q=_abcQuando();
+  return q==='ja'?'Já aconteceram':(q==='falta'?'Falta acontecer':'Tudo vendido');
+}
+
+function _abcUnificando(){
+  var el=document.getElementById('abc-unificar');
+  return el?el.checked:true;
+}
+
 // Um registro por evento fechado no período. Guarda o orçamento inteiro
 // porque o clique no nome abre a OS.
 function abcDados(){
   var de=(document.getElementById('abc-de')||{}).value||'';
   var ate=(document.getElementById('abc-ate')||{}).value||'';
   var cons=(document.getElementById('abc-cons')||{}).value||'';
+  var quando=_abcQuando(), hoje=_abcHoje();
   var out=[];
   (_dashDados||[]).forEach(function(o){
     if(((o.dados&&o.dados.comercialStatus)||'')!=='ganha') return;
@@ -28599,6 +28700,8 @@ function abcDados(){
     if(de && dia<de) return;
     if(ate && dia>ate) return;
     if(cons && (f['f-cons']||'')!==cons) return;
+    if(quando==='ja' && dia>hoje) return;
+    if(quando==='falta' && dia<=hoje) return;
     var v=dashValOrc(o);
     out.push({
       o:o, valor:v, faixa:_abcFaixa(v),
@@ -28609,8 +28712,19 @@ function abcDados(){
     });
   });
   out.sort(function(a,b){ return b.valor-a.valor; });
-  return out;
+  _abcNOrcamentos=out.length;
+  if(!_abcUnificando()){
+    // Sem unificar, cada orçamento é um "evento" de uma parte só — assim o
+    // resto do módulo não precisa saber em qual modo está.
+    return out.map(function(x){
+      return Object.assign({}, x, {partes:[x], nPartes:1, variosConsultores:false});
+    });
+  }
+  return abcAgrupar(out);
 }
+// Quantos orçamentos deram origem aos eventos mostrados — a diferença entre
+// os dois números é o que a unificação fez.
+var _abcNOrcamentos=0;
 
 // Totais por faixa, já com o acumulado de Pareto. A ordem é a de ABC_FAIXAS
 // (do maior porte para o menor), que é o que faz o acumulado significar
@@ -28641,9 +28755,14 @@ function abcRenderizar(){
   var porFaixa=abcPorFaixa(lista);
   var tot=lista.reduce(function(t,x){return t+x.valor;},0);
   var sub=document.getElementById('abc-sub');
+  var juntados=_abcNOrcamentos-lista.length;
   if(sub) sub.textContent=lista.length
-    ? (lista.length+' evento(s) fechado(s) · '+fmt(tot)+' no período')
-    : 'Nenhum evento fechado no período escolhido';
+    ? (lista.length+' evento(s) fechado(s) · '+fmt(tot)+' no período'
+       +(_abcQuando()?' · '+_abcQuandoLabel().toLowerCase():'')
+       +(juntados>0?' · '+_abcNOrcamentos+' orçamentos unificados em '+lista.length+' eventos':''))
+    : ('Nenhum evento fechado no período escolhido'+(_abcQuando()?' em "'+_abcQuandoLabel()+'"':''));
+  var av=document.getElementById('abc-aviso');
+  if(av) av.textContent=juntados>0?('🔗 '+juntados+' orçamento(s) somado(s) ao evento correspondente'):'';
 
   abcRenderResumo(lista,porFaixa,tot);
   abcRenderGrafico(porFaixa,tot);
@@ -28687,6 +28806,19 @@ function abcRenderResumo(lista,porFaixa,tot){
     +_abcTile('Ticket médio', fmt(tot/lista.length), 'por evento')
     +_abcTile('Maior evento', fmt(lista[0].valor), eh(lista[0].cliente))
     +_abcTile('Faixas A + B', qtdAB+' evento(s)', (tot?Math.round(valAB/tot*100):0)+'% do faturamento', '#2e7d32')
+    // Com o filtro em "Tudo vendido", a quebra realizado x carteira é a
+    // informação que o gestor procura primeiro — então ela aparece sozinha,
+    // sem precisar trocar o filtro duas vezes para comparar.
+    +(function(){
+      if(_abcQuando()) return '';
+      var hoje=_abcHoje();
+      var ja=lista.filter(function(x){ return x.dia<=hoje; });
+      var fa=lista.filter(function(x){ return x.dia>hoje; });
+      var vJa=ja.reduce(function(t,x){return t+x.valor;},0);
+      var vFa=fa.reduce(function(t,x){return t+x.valor;},0);
+      return _abcTile('Já aconteceram', fmt(vJa), ja.length+' evento(s) · '+(tot?Math.round(vJa/tot*100):0)+'% do período', '#1565c0')
+        +_abcTile('Falta acontecer', fmt(vFa), fa.length+' evento(s) em carteira', '#ef6c00');
+    })()
     +'</div>'
     +(p?'<div style="background:rgba(46,125,50,.12);border:1px solid #2e7d32;border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text)">'
       +'📌 <b>'+p.nEventos+' evento(s)</b> — '+p.pctEventos.toFixed(0)+'% do total — respondem por <b>'+p.pctFat.toFixed(0)+'% do faturamento</b> do período.'
@@ -28912,7 +29044,10 @@ function _abcPorCliente(lista){
 // A lista completa. O nome do evento abre a OS — pedido do Fabiano.
 function _abcListaEventos(lista){
   if(!lista.length) return '<div class="dash-vazio" style="padding:20px">Sem eventos no período.</div>';
-  return '<div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">Clique no nome do evento para abrir a Ordem de Serviço.</div>'
+  var nUnif=lista.filter(function(x){ return x.nPartes>1; }).length;
+  return '<div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">Clique no nome do evento para abrir a Ordem de Serviço.'
+    +(nUnif?' <b>'+nUnif+' evento(s) vieram de mais de um orçamento</b> — os números somados aparecem abaixo do nome, e cada um abre a sua própria OS.':'')
+    +'</div>'
     +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
     +'<thead><tr style="border-bottom:2px solid var(--R)">'
     +['#','Faixa','Data','Evento / Cliente','Consultor','Tipo','Orç.','Valor'].map(function(h,i){
@@ -28921,6 +29056,19 @@ function _abcListaEventos(lista){
     +'</tr></thead><tbody>'
     +lista.map(function(x,i){
       var nome=(x.evento?x.evento+' — ':'')+x.cliente;
+      // Quando o evento é a soma de vários orçamentos, a soma não pode ser
+      // caixa-preta: mostra cada número, cada valor, e cada um abre a sua OS.
+      var juntos=(x.nPartes>1)
+        ? '<div style="font-size:9.5px;color:var(--text-muted);margin-top:2px">🔗 '+x.nPartes+' orçamentos: '
+            +x.partes.map(function(pp){
+              return (pp.driveId
+                ? '<span onclick="logAbrirPreviewOS(\''+eh(pp.driveId)+'\')" title="Abrir a Ordem de Serviço deste orçamento" style="cursor:pointer;color:#90caf9;text-decoration:underline">'+eh(pp.num||'—')+'</span>'
+                : eh(pp.num||'—'))
+                +' <span style="color:var(--text-dim)">'+fmtN(pp.valor)+'</span>';
+            }).join(' · ')
+            +(x.variosConsultores?' <span style="color:#ffa726" title="Os orçamentos somados estão em nomes de consultores diferentes — o evento ficou com o consultor do maior deles">⚠️ consultores diferentes</span>':'')
+          +'</div>'
+        : '';
       return '<tr style="border-bottom:1px solid var(--border)">'
         +'<td style="padding:6px 8px;color:var(--text-muted)">'+(i+1)+'</td>'
         +'<td style="padding:6px 8px"><span style="display:inline-block;width:20px;text-align:center;border-radius:4px;background:'+x.faixa.cor+';color:#fff;font-weight:900;font-size:10px">'+x.faixa.rot+'</span></td>'
@@ -28929,10 +29077,12 @@ function _abcListaEventos(lista){
           +(x.driveId
             ? '<span onclick="logAbrirPreviewOS(\''+eh(x.driveId)+'\')" title="Abrir a Ordem de Serviço" style="cursor:pointer;color:#90caf9;text-decoration:underline">'+eh(nome)+'</span>'
             : eh(nome))
+          +juntos
         +'</td>'
         +'<td style="padding:6px 8px;color:var(--text-dim)">'+eh(x.consultor)+'</td>'
         +'<td style="padding:6px 8px;color:var(--text-dim)">'+eh(x.tipo)+'</td>'
-        +'<td style="padding:6px 8px;color:var(--text-muted)">'+eh(x.num)+'</td>'
+        +'<td style="padding:6px 8px;color:var(--text-muted)">'+eh(x.num)
+          +(x.nPartes>1?' <span style="color:#90caf9;font-weight:800" title="'+x.nPartes+' orçamentos somados neste evento">+'+(x.nPartes-1)+'</span>':'')+'</td>'
         +'<td style="padding:6px 8px;text-align:right;font-weight:800;color:'+x.faixa.cor+'">'+fmt(x.valor)+'</td>'
         +'</tr>';
     }).join('')
@@ -28957,7 +29107,9 @@ function _abcPeriodoLabel(){
   var de=(document.getElementById('abc-de')||{}).value||'';
   var ate=(document.getElementById('abc-ate')||{}).value||'';
   var cons=(document.getElementById('abc-cons')||{}).value||'';
-  return (de&&ate?fD(de)+' a '+fD(ate):'todo o período')+(cons?' · Consultor: '+cons:'');
+  return (de&&ate?fD(de)+' a '+fD(ate):'todo o período')+(cons?' · Consultor: '+cons:'')
+    +' · '+_abcQuandoLabel()+(_abcQuando()?' (corte em '+fD(_abcHoje())+')':'')
+    +(_abcUnificando()?'':' · orçamentos não unificados');
 }
 
 function abcExportarExcel(){
@@ -28968,9 +29120,11 @@ function abcExportarExcel(){
     if(/[";]/.test(s)) s='"'+s.replace(/"/g,'""')+'"';
     return s;
   }
-  var out=['﻿'+['Faixa','Data','Evento','Cliente','Consultor','Tipo','Orçamento','Valor'].map(campo).join(';')];
+  var hoje=_abcHoje();
+  var out=['﻿'+['Faixa','Data','Situação','Evento','Cliente','Consultor','Tipo','Orçamentos','Qtd orçamentos','Valor'].map(campo).join(';')];
   lista.forEach(function(x){
-    out.push([x.faixa.rot, fD(x.dia), x.evento, x.cliente, x.consultor, x.tipo, x.num,
+    out.push([x.faixa.rot, fD(x.dia), (x.dia<=hoje?'Realizado':'A realizar'), x.evento, x.cliente, x.consultor, x.tipo,
+      x.partes.map(function(p){return p.num;}).join(' + '), x.nPartes,
       Number(x.valor).toFixed(2).replace('.',',')].map(campo).join(';'));
   });
   var blob=new Blob([out.join('\r\n')],{type:'text/csv;charset=utf-8'});
@@ -29060,6 +29214,15 @@ function abcExportarPDF(){
       +'<br>'+lista.length+' evento(s) · '+fmt(tot)+'<br>Gerado em: '+hoje+'</span></div>'
     +(p?'<div class="cx"><b>'+p.nEventos+' evento(s)</b> — '+p.pctEventos.toFixed(0)+'% do total — respondem por <b>'
       +p.pctFat.toFixed(0)+'% do faturamento</b> do período. Ticket médio geral: <b>'+fmt(tot/lista.length)+'</b>.</div>':'')
+    +(function(){
+      if(_abcQuando()) return '';
+      var hj=_abcHoje();
+      var vJa=lista.filter(function(x){return x.dia<=hj;}).reduce(function(t,x){return t+x.valor;},0);
+      var nJa=lista.filter(function(x){return x.dia<=hj;}).length;
+      return '<div class="cx" style="background:#e3f2fd;border-color:#1565c0">'
+        +'<b>Já aconteceram:</b> '+nJa+' evento(s) · '+fmt(vJa)+' ('+(tot?Math.round(vJa/tot*100):0)+'%) &nbsp;|&nbsp; '
+        +'<b>Falta acontecer:</b> '+(lista.length-nJa)+' evento(s) · '+fmt(tot-vJa)+'. Corte em '+fD(hj)+'.</div>';
+    })()
     +'<h2>1 · A curva</h2>'+tabelaCurva()
     +'<h2>2 · Por consultor</h2>'+cruz('consultor','Consultor')
     +'<h2>3 · Mês a mês</h2>'+cruz('mes','Mês',true)
@@ -29071,10 +29234,12 @@ function abcExportarPDF(){
         +'<td class="r"><b>'+fmt(c.valor)+'</b></td><td class="r">'+(tot?(acCli/tot*100).toFixed(1):'0.0')+'%</td></tr>';
     }).join('')+'</tbody></table>'
     +'<h2 class="quebra">6 · Eventos do período</h2>'
-    +'<table><thead><tr><th>#</th><th>Faixa</th><th>Data</th><th>Evento / Cliente</th><th>Consultor</th><th>Orç.</th><th class="r">Valor</th></tr></thead><tbody>'
+    +'<table><thead><tr><th>#</th><th>Faixa</th><th>Data</th><th>Situação</th><th>Evento / Cliente</th><th>Consultor</th><th>Orç.</th><th class="r">Valor</th></tr></thead><tbody>'
     +lista.map(function(x,i){
       return '<tr><td>'+(i+1)+'</td><td><b style="color:'+x.faixa.cor+'">'+x.faixa.rot+'</b></td><td>'+fD(x.dia)+'</td>'
-        +'<td>'+eh((x.evento?x.evento+' — ':'')+x.cliente)+'</td><td>'+eh(x.consultor)+'</td><td>'+eh(x.num)+'</td>'
+        +'<td>'+(x.dia<=_abcHoje()?'Realizado':'<span style="color:#ef6c00">A realizar</span>')+'</td>'
+        +'<td>'+eh((x.evento?x.evento+' — ':'')+x.cliente)+'</td><td>'+eh(x.consultor)+'</td>'
+        +'<td>'+eh(x.partes.map(function(p){return p.num;}).join(' + '))+'</td>'
         +'<td class="r"><b>'+fmt(x.valor)+'</b></td></tr>';
     }).join('')+'</tbody></table>'
     +'<div style="margin-top:14px;font-size:9px;color:#aaa;text-align:center;border-top:1px solid #ddd;padding-top:6px">'
