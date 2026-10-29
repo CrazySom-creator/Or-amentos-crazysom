@@ -28598,10 +28598,10 @@ var LANC2026=[
   {n:'PL046',d:'2026-04-01',c:'Intercity - Aurora',v:1760},
   {n:'PL047',d:'2026-04-07',c:'Intercity - Sanremo',v:1090},
   {n:'PL048',d:'2026-04-08',c:'Intercity - Dipesul',v:1380},
-  {n:'PL049',d:'2026-04-09',c:'Ugart geral- Sabri (16.964 30/03 - 15.500 07/05)',v:33465},
-  {n:'PL050',d:'2026-04-09',c:'Ugart estandes - Sabri (14/05)',v:24000},
-  {n:'PL051',d:'2026-04-09',c:'Ugart RS- Sabri (14/05)',v:14950},
-  {n:'PL052',d:'2026-04-09',c:'Ugart Cinema - Sabri (14/05)',v:6000},
+  {n:'PL049',d:'2026-04-09',c:'Ugart geral- Sabri (16.964 30/03 - 15.500 07/05)',v:33465,g:'UGART-SABRI'},
+  {n:'PL050',d:'2026-04-09',c:'Ugart estandes - Sabri (14/05)',v:24000,g:'UGART-SABRI'},
+  {n:'PL051',d:'2026-04-09',c:'Ugart RS- Sabri (14/05)',v:14950,g:'UGART-SABRI'},
+  {n:'PL052',d:'2026-04-09',c:'Ugart Cinema - Sabri (14/05)',v:6000,g:'UGART-SABRI'},
   {n:'PL053',d:'2026-04-13',c:'Intercity - Sicredi',v:1700},
   {n:'PL054',d:'2026-04-20',c:'Intercity - Unifertil',v:1240},
   {n:'PL055',d:'2026-04-22',c:'Ped Meeting',v:43130},
@@ -28798,7 +28798,14 @@ function abcAgrupar(itens){
     // Importado nunca entra num grupo: sem nome de evento, ele cairia junto
     // com um orçamento do mesmo cliente no mesmo dia — e somar os dois pode
     // ser somar o mesmo dinheiro duas vezes. Fica sempre sozinho.
-    var k=x.importado ? ('__imp'+(nImp++)) : (_abcNorm(x.cliente)+'||'+x.dia);
+    // Um importado só se junta a outro quando os dois trazem o MESMO grupo,
+    // marcado na importação (os quatro lançamentos da Ugart, por exemplo, que
+    // são partes de um evento só). Sem grupo ele fica sozinho: é o caso das
+    // locações avulsas do ICH, várias no mesmo dia, que são diárias
+    // independentes e não podem virar um evento único.
+    var k=x.importado
+      ? (x.grupo ? ('__g'+x.grupo+'||'+x.dia) : ('__imp'+(nImp++)))
+      : (_abcNorm(x.cliente)+'||'+x.dia);
     (porCliDia[k]=porCliDia[k]||[]).push(x);
   });
 
@@ -28833,7 +28840,7 @@ function abcAgrupar(itens){
     var consultores={};
     g.forEach(function(x){ consultores[x.consultor]=1; });
     return {
-      o:p.o, valor:valor, faixa:_abcFaixa(valor), importado:!!p.importado,
+      o:p.o, valor:valor, faixa:_abcFaixa(valor), importado:!!p.importado, grupo:p.grupo||'',
       dia:p.dia, mes:p.mes, num:p.num, cliente:p.cliente,
       evento:ordenado.map(function(x){return x.evento;}).filter(Boolean)[0]||'',
       consultor:p.consultor, tipo:p.tipo, driveId:p.driveId,
@@ -28945,7 +28952,7 @@ function abcDados(){
       if(quando==='ja' && x.d>hoje) return;
       if(quando==='falta' && x.d<=hoje) return;
       out.push({
-        o:null, valor:x.v, faixa:_abcFaixa(x.v), importado:true,
+        o:null, valor:x.v, faixa:_abcFaixa(x.v), importado:true, grupo:x.g||'',
         dia:x.d, mes:x.d.substring(0,7), num:x.n||'planilha',
         cliente:x.c||'(sem cliente)', evento:'', consultor:'(planilha)',
         tipo:'(importado)', driveId:''
@@ -29163,9 +29170,11 @@ function abcRenderTabela(porFaixa,tot,n){
       .map(function(h,i){ return '<th style="padding:6px 8px;color:var(--text-muted);font-size:10px;text-transform:uppercase;text-align:'+(i<2?'left':'right')+'">'+h+'</th>'; }).join('')
     +'</tr></thead><tbody>'
     +porFaixa.map(function(x){
-      return '<tr style="border-bottom:1px solid var(--border)'+(x.qtd?'':';opacity:.45')+'">'
+      return '<tr style="border-bottom:1px solid var(--border)'+(x.qtd?';cursor:pointer':';opacity:.45')+'"'
+        +(x.qtd?' onclick="abcDrillFaixa(\''+x.faixa.id+'\')" title="Ver os '+x.qtd+' evento(s) desta faixa"'
+               +' onmouseover="this.style.background=\'var(--surface-2)\'" onmouseout="this.style.background=\'\'"':'')+'>'
         +'<td style="padding:6px 8px"><span style="display:inline-block;width:22px;text-align:center;border-radius:4px;background:'+x.faixa.cor+';color:#fff;font-weight:900">'+x.faixa.rot+'</span></td>'
-        +'<td style="padding:6px 8px;color:var(--text-dim)">'+eh(x.faixa.desc)+'</td>'
+        +'<td style="padding:6px 8px;color:var(--text-dim)">'+eh(x.faixa.desc)+(x.qtd?' <span style="color:#90caf9;font-size:10px">▸ ver</span>':'')+'</td>'
         +'<td style="padding:6px 8px;text-align:right;font-weight:800">'+x.qtd+'</td>'
         +'<td style="padding:6px 8px;text-align:right;color:var(--text-dim)">'+x.pctQtd.toFixed(1)+'%</td>'
         +'<td style="padding:6px 8px;text-align:right;font-weight:800;color:'+x.faixa.cor+'">'+fmt(x.valor)+'</td>'
@@ -29297,7 +29306,7 @@ function _abcPorCliente(lista){
         .map(function(f){ return '<span style="display:inline-block;min-width:16px;text-align:center;border-radius:3px;background:'+f.cor+';color:#fff;font-size:9.5px;font-weight:900;margin-right:2px">'+f.rot+'</span>'; }).join('');
       return '<tr style="border-bottom:1px solid var(--border)">'
         +'<td style="padding:6px 8px;color:var(--text-muted)">'+(i+1)+'</td>'
-        +'<td style="padding:6px 8px;font-weight:700">'+eh(c.k)+'</td>'
+        +'<td style="padding:6px 8px;font-weight:700"><span onclick="abcDrillCliente(\''+btoa(encodeURIComponent(c.k))+'\')" title="'+(c.itens.length===1?'Abrir a Ordem de Serviço':'Ver os '+c.itens.length+' eventos deste cliente')+'" style="cursor:pointer;color:#90caf9;text-decoration:underline">'+eh(c.k)+'</span></td>'
         +'<td style="padding:6px 8px;text-align:right">'+c.itens.length+'</td>'
         +'<td style="padding:6px 8px;text-align:center">'+faixas+'</td>'
         +'<td style="padding:6px 8px;text-align:right;font-weight:800;color:var(--R)">'+fmt(c.valor)+'</td>'
@@ -29306,6 +29315,61 @@ function _abcPorCliente(lista){
     }).join('')
     +'</tbody></table></div>';
 }
+
+/* ── Detalhar: da linha para os orçamentos ────────────────────────────
+   Um número de relatório que não se abre é um número em que ninguém
+   confia. Clicar numa faixa ou num cliente mostra exatamente quais
+   eventos formam aquele valor, e dali cada orçamento abre a sua OS.
+   Quando o recorte tem um único evento com OS, pula a lista e abre a OS
+   direto — a lista de um item só é cerimônia à toa.                     */
+var _abcDrillAberto=false;
+
+function abcDrillFaixa(id){
+  var f=ABC_FAIXAS.filter(function(x){return x.id===id;})[0];
+  if(!f) return;
+  var l=abcDados().filter(function(x){ return x.faixa.id===id; });
+  _abcDrill('Faixa '+f.rot+' — '+f.desc, l, f.cor);
+}
+
+function abcDrillCliente(nomeB64){
+  var nome=decodeURIComponent(atob(nomeB64));
+  var l=abcDados().filter(function(x){ return x.cliente===nome; });
+  _abcDrill(nome, l, '#1565c0');
+}
+
+function _abcDrill(titulo, lista, cor){
+  if(!lista.length) return;
+  // Um evento só, com OS: abre direto.
+  if(lista.length===1 && lista[0].nPartes===1 && lista[0].driveId){
+    logAbrirPreviewOS(lista[0].driveId); return;
+  }
+  var tot=lista.reduce(function(t,x){return t+x.valor;},0);
+  abcDrillFechar();
+  var ov=document.createElement('div');
+  ov.id='abc-drill';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9500;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:28px 14px';
+  ov.onclick=function(e){ if(e.target===ov) abcDrillFechar(); };
+  ov.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-top:4px solid '+(cor||'var(--R)')+';border-radius:8px;max-width:1040px;width:100%;padding:14px 16px 18px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px">'
+    +'<div><div style="font-size:14px;font-weight:900;color:var(--text)">'+eh(titulo)+'</div>'
+    +'<div style="font-size:11px;color:var(--text-dim);margin-top:2px">'+lista.length+' evento(s) · <b style="color:'+(cor||'var(--R)')+'">'+fmt(tot)+'</b> · '+eh(_abcPeriodoLabel())+'</div></div>'
+    +'<button class="btn btn-o btn-sm" onclick="abcDrillFechar()">✕ Fechar</button>'
+    +'</div>'
+    +_abcListaEventos(lista)
+    +'</div>';
+  document.body.appendChild(ov);
+  _abcDrillAberto=true;
+}
+
+function abcDrillFechar(){
+  var el=document.getElementById('abc-drill');
+  if(el) el.parentNode.removeChild(el);
+  _abcDrillAberto=false;
+}
+
+document.addEventListener('keydown', function(e){
+  if(e.key==='Escape' && _abcDrillAberto) abcDrillFechar();
+});
 
 // A lista completa. O nome do evento abre a OS — pedido do Fabiano.
 function _abcListaEventos(lista){
