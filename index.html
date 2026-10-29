@@ -2794,6 +2794,11 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer;padding-bottom:6px" title="Junta num evento só os orçamentos do mesmo cliente, na mesma data e com o mesmo nome de evento — inclusive os aditivos">
         <input type="checkbox" id="abc-unificar" checked onchange="abcRenderizar()"> unificar orçamentos do mesmo evento
       </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer;padding-bottom:6px" title="Eventos faturados de 2026 que nunca passaram pelo sistema — importados da planilha de fechamento. Só as linhas SEM número de orçamento: as que têm número já estão aqui.">
+        <input type="checkbox" id="abc-importados" checked onchange="abcRenderizar()"> incluir lançamentos da planilha
+      </label>
+      <button class="btn btn-o btn-sm" id="abc-btn-importar" onclick="abcImportarPlanilha2026()" title="Grava no sistema os lançamentos de 2026 da planilha de fechamento que não têm orçamento" style="display:none">📥 Importar planilha 2026</button>
+      <button class="btn btn-o btn-sm" id="abc-btn-limpar" onclick="abcLimparImportados()" title="Remove os lançamentos importados — os orçamentos do sistema não são afetados" style="display:none">🗑 Limpar importados</button>
       <span id="abc-aviso" style="font-size:10px;color:var(--text-muted);padding-bottom:7px"></span>
     </div>
 
@@ -28530,6 +28535,160 @@ var PERM_MODULOS = [
      recalcular por fora: seria mais um número para divergir.
    ════════════════════════════════════════════════════════════════════════ */
 
+/* ── Lançamentos da planilha de fechamento (2026) ──────────────────────
+   Eventos que aconteceram e foram faturados mas nunca passaram pelo
+   sistema — estavam só na planilha "Relatório Fechamento CRAZY 2026". São
+   as linhas de 2026 SEM número de orçamento: as que têm número já estão
+   aqui dentro e importá-las contaria o mesmo dinheiro duas vezes.
+   Duas linhas da planilha ficaram de fora por terem valor zerado ("A voz
+   do churrasco" e "Entre Elas - Instituto Caldeira") — valor zero não tem
+   faixa e só sujaria a contagem.
+   A data é a da planilha, que é a do faturamento, não necessariamente a da
+   execução. Para a Curva ABC isso muda pouco (quase tudo fecha no mês do
+   evento), mas é por isso que estes lançamentos ficam marcados e podem ser
+   desligados com um clique.
+   Ficam num documento de config, como o resto das configurações, para não
+   exigir mudança nas regras do banco.                                    */
+var LANC2026=[
+  {n:'PL001',d:'2026-01-16',c:'Casa de Cura',v:1000},
+  {n:'PL002',d:'2026-01-17',c:'Top Agencia',v:2800},
+  {n:'PL003',d:'2026-01-17',c:'Sigma',v:2400},
+  {n:'PL004',d:'2026-01-17',c:'Fabio',v:1180},
+  {n:'PL005',d:'2026-01-17',c:'Fabio',v:50},
+  {n:'PL006',d:'2026-01-23',c:'Casa de Cura',v:1000},
+  {n:'PL007',d:'2026-01-24',c:'Eletrica Paleta Atlantida',v:18000},
+  {n:'PL008',d:'2026-01-26',c:'Plus Produções - Di Paolo',v:2130},
+  {n:'PL009',d:'2026-01-26',c:'Intercity - Quero Quero',v:430},
+  {n:'PL010',d:'2026-01-30',c:'Sabri - Planeta PUC (15/01 e 26/02)',v:16400},
+  {n:'PL011',d:'2026-01-30',c:'Sabri - Planeta Banrisul (03/03)',v:5800},
+  {n:'PL012',d:'2026-01-30',c:'Intituto Pitani',v:2000},
+  {n:'PL013',d:'2026-01-30',c:'Pyrogroup',v:200},
+  {n:'PL014',d:'2026-02-06',c:'Intercity - Corsan',v:1230},
+  {n:'PL015',d:'2026-02-10',c:'AEL - PUC',v:2000},
+  {n:'PL016',d:'2026-02-12',c:'Intercity - Tecno press',v:1230},
+  {n:'PL017',d:'2026-02-14',c:'Intercity - Deus é Amor',v:1030},
+  {n:'PL018',d:'2026-02-20',c:'Advogado 10x',v:9250},
+  {n:'PL019',d:'2026-02-20',c:'Renata Cunha Karam',v:600},
+  {n:'PL020',d:'2026-02-24',c:'Bliss - DELL - Cubo de LED',v:2900},
+  {n:'PL021',d:'2026-02-28',c:'Igreja de Jesus dos Ultimos Dias',v:8000},
+  {n:'PL022',d:'2026-02-28',c:'Intercity - Lwart',v:790},
+  {n:'PL023',d:'2026-03-01',c:'Intercity- Urano',v:1160},
+  {n:'PL024',d:'2026-03-01',c:'Vinicius Testoni',v:200},
+  {n:'PL025',d:'2026-03-03',c:'Sabri - John Deere (02/04)',v:15900},
+  {n:'PL026',d:'2026-03-03',c:'Intercity - Saque e pague',v:2310},
+  {n:'PL027',d:'2026-03-07',c:'Snowland (02/04)',v:9540},
+  {n:'PL028',d:'2026-03-08',c:'Igreja Philadelfia',v:34500},
+  {n:'PL029',d:'2026-03-10',c:'Intercity - Sicred',v:4640},
+  {n:'PL030',d:'2026-03-10',c:'Dell - Sabri (08/04)',v:2800},
+  {n:'PL031',d:'2026-03-14',c:'Garden Festival',v:31500},
+  {n:'PL032',d:'2026-03-14',c:'Gabriela Lohmann',v:500},
+  {n:'PL033',d:'2026-03-14',c:'Willian Rushell - Garden',v:200},
+  {n:'PL034',d:'2026-03-17',c:'Intercity - Dipesul/Volvo',v:2810},
+  {n:'PL035',d:'2026-03-19',c:'Intercity - Quero Quero',v:2320},
+  {n:'PL036',d:'2026-03-21',c:'Plug Som',v:5000},
+  {n:'PL037',d:'2026-03-23',c:'Intercity - Dipesul/Prolec',v:630},
+  {n:'PL038',d:'2026-03-25',c:'Rush Marketing',v:1200},
+  {n:'PL039',d:'2026-03-25',c:'Golden Lake',v:995},
+  {n:'PL040',d:'2026-03-26',c:'Intercity - Dipesul/Unifertil',v:710},
+  {n:'PL041',d:'2026-03-27',c:'Base Aerea',v:2500},
+  {n:'PL042',d:'2026-03-28',c:'Intercity - Partido Democratico',v:880},
+  {n:'PL043',d:'2026-03-30',c:'Intercity - GS',v:1410},
+  {n:'PL044',d:'2026-03-31',c:'CDL Canoas',v:1500},
+  {n:'PL045',d:'2026-03-31',c:'Intercity - Minerva Foods',v:430},
+  {n:'PL046',d:'2026-04-01',c:'Intercity - Aurora',v:1760},
+  {n:'PL047',d:'2026-04-07',c:'Intercity - Sanremo',v:1090},
+  {n:'PL048',d:'2026-04-08',c:'Intercity - Dipesul',v:1380},
+  {n:'PL049',d:'2026-04-09',c:'Ugart geral- Sabri (16.964 30/03 - 15.500 07/05)',v:33465},
+  {n:'PL050',d:'2026-04-09',c:'Ugart estandes - Sabri (14/05)',v:24000},
+  {n:'PL051',d:'2026-04-09',c:'Ugart RS- Sabri (14/05)',v:14950},
+  {n:'PL052',d:'2026-04-09',c:'Ugart Cinema - Sabri (14/05)',v:6000},
+  {n:'PL053',d:'2026-04-13',c:'Intercity - Sicredi',v:1700},
+  {n:'PL054',d:'2026-04-20',c:'Intercity - Unifertil',v:1240},
+  {n:'PL055',d:'2026-04-22',c:'Ped Meeting',v:43130},
+  {n:'PL056',d:'2026-04-23',c:'Intercity - Quero Quero',v:1620},
+  {n:'PL057',d:'2026-04-24',c:'Up Time - afisvec',v:900},
+  {n:'PL058',d:'2026-04-25',c:'ADA network - Sabri - Deville (28/05)',v:5800},
+  {n:'PL059',d:'2026-04-25',c:'Intercity - Clinica Pietra',v:780},
+  {n:'PL060',d:'2026-04-25',c:'Intercity - Terapeuta Mari',v:780},
+  {n:'PL061',d:'2026-04-30',c:'Glass - Bourbon Country',v:1500},
+  {n:'PL062',d:'2026-05-07',c:'Jefferson',v:300},
+  {n:'PL063',d:'2026-05-15',c:'Psicorp',v:36000},
+  {n:'PL064',d:'2026-06-09',c:'Intercity Unifertil',v:1240},
+  {n:'PL065',d:'2026-06-12',c:'Intercity - Dia dos Namorados',v:210},
+  {n:'PL066',d:'2026-06-17',c:'Intercity Quero-quero',v:3270},
+  {n:'PL067',d:'2026-06-17',c:'Intercity - Dipesul',v:980},
+  {n:'PL068',d:'2026-06-20',c:'Intercity Vet Log',v:3500},
+  {n:'PL069',d:'2026-07-11',c:'INTERCITY - DENTAL SHOP',v:3810},
+  {n:'PL070',d:'2026-07-12',c:'HELIVO ARTES E EVENTOS',v:1250},
+  {n:'PL071',d:'2026-07-13',c:'INTERCITY - SICREDI',v:9557.5},
+  {n:'PL072',d:'2026-07-14',c:'INTERCITY - UNIFERTIL',v:1200},
+  {n:'PL073',d:'2026-07-18',c:'JEFFERSON',v:160},
+  {n:'PL074',d:'2026-07-23',c:'INTERCITY - SEBRATEL',v:910},
+  {n:'PL075',d:'2026-07-24',c:'VOE IDEIAS - SEBRAE RS',v:9150},
+  {n:'PL076',d:'2026-07-24',c:'INTERCITY - C6 AUTO',v:960},
+  {n:'PL077',d:'2026-07-24',c:'INTERCITY - SAQUE E PAGUE',v:830},
+  {n:'PL078',d:'2026-07-25',c:'SIGMA',v:3900},
+  {n:'PL079',d:'2026-08-01',c:'EMPGROUP PRODUCOES E LOCACOES LTDA',v:6480},
+  {n:'PL080',d:'2026-08-05',c:'ICH ADMINISTRACAO DE HOTEIS S.A.',v:1600},
+  {n:'PL081',d:'2026-08-07',c:'ICH ADMINISTRACAO DE HOTEIS S.A.',v:1865},
+  {n:'PL082',d:'2026-08-08',c:'Cristiano Borba',v:184},
+  {n:'PL083',d:'2026-08-12',c:'ICH ADMINISTRACAO DE HOTEIS S.A.',v:6020},
+  {n:'PL084',d:'2026-08-12',c:'ICH ADMINISTRACAO DE HOTEIS S.A.',v:1110},
+  {n:'PL085',d:'2026-08-12',c:'ICH ADMINISTRACAO DE HOTEIS S.A.',v:1070},
+  {n:'PL086',d:'2026-08-16',c:'Edilson',v:500},
+  {n:'PL087',d:'2026-08-17',c:'ICH ADMINISTRACAO DE HOTEIS S.A.',v:3220},
+  {n:'PL088',d:'2026-08-18',c:'MKF FEIRAS E EVENTOS LTDA',v:55000},
+  {n:'PL089',d:'2026-08-20',c:'ICH ADMINISTRACAO DE HOTEIS S.A.',v:1830},
+  {n:'PL090',d:'2026-08-22',c:'ICH ADMINISTRACAO DE HOTEIS S.A.',v:1670},
+  {n:'PL091',d:'2026-08-25',c:'ICH ADMINISTRACAO DE HOTEIS S.A.',v:9550},
+  {n:'PL092',d:'2026-08-27',c:'ESPACO/Z MARKETING E COMUNICACAO LTDA',v:2500},
+  {n:'PL093',d:'2026-08-27',c:'ICH ADMINISTRACAO DE HOTEIS S.A.',v:530},
+  {n:'PL094',d:'2026-08-29',c:'ALTUS PRO BUSINESS LTDA',v:21000}
+];
+
+var _abcImportados=null;   // cache do que está gravado em config/lancamentosExternos
+
+async function abcCarregarImportados(){
+  try{
+    var d=await fbDb.collection('config').doc('lancamentosExternos').get();
+    _abcImportados=(d.exists&&d.data()&&d.data().itens)||[];
+  }catch(e){ console.warn('abcCarregarImportados:',e); _abcImportados=_abcImportados||[]; }
+  return _abcImportados;
+}
+
+// Importa (ou reimporta) os lançamentos de 2026. Idempotente: grava a lista
+// inteira de uma vez, então rodar duas vezes não duplica nada.
+async function abcImportarPlanilha2026(){
+  if(!(usuarioAtual&&usuarioAtual.nivel==='adm')){ alert('Só o administrador pode importar lançamentos.'); return; }
+  var tot=LANC2026.reduce(function(t,x){return t+x.v;},0);
+  if(!confirm('Importar '+LANC2026.length+' lançamentos de 2026 da planilha de fechamento ('+fmt(tot)+')?\n\n'
+    +'São as linhas SEM número de orçamento — as que têm número já estão no sistema e NÃO entram.\n'
+    +'Rodar de novo não duplica: a lista é regravada inteira.')) return;
+  try{
+    await fbDb.collection('config').doc('lancamentosExternos').set({
+      itens:LANC2026, origem:'Relatório Fechamento CRAZY 2026', importadoEm:new Date().toISOString()
+    });
+    _abcImportados=LANC2026.slice();
+    abcRenderizar();
+    _toastMostrar('✅ '+LANC2026.length+' lançamentos importados ('+fmt(tot)+').','',6000);
+  }catch(e){ alert('Não foi possível gravar: '+(e&&e.message||e)); }
+}
+
+async function abcLimparImportados(){
+  if(!confirm('Remover TODOS os lançamentos importados da planilha?\n\nOs orçamentos do sistema não são afetados.')) return;
+  try{
+    await fbDb.collection('config').doc('lancamentosExternos').set({itens:[],importadoEm:new Date().toISOString()});
+    _abcImportados=[];
+    abcRenderizar();
+    _toastMostrar('Lançamentos importados removidos.','',4000);
+  }catch(e){ alert('Não foi possível gravar: '+(e&&e.message||e)); }
+}
+
+function _abcUsandoImportados(){
+  var el=document.getElementById('abc-importados');
+  return el?el.checked:true;
+}
+
 // Faixas na ordem da curva — do maior para o menor, que é a convenção de
 // Pareto e a ordem em que a leitura faz sentido ("os A fazem X% do total").
 // Limite superior INCLUSIVO: "5k a 15k" quer dizer até 15.000 inclusive.
@@ -28570,6 +28729,8 @@ async function abrirCurvaABC(){
   _abrirOv('abc-ov');
   document.getElementById('abc-sub').textContent='Carregando dados...';
   await metasCarregarConsultoresNomes();
+  await metasCarregar();
+  await abcCarregarImportados();
   await dashAtualizar(true);
   var elC=document.getElementById('abc-cons');
   if(elC) elC.innerHTML='<option value="">Todos</option>'+_metasNomes.map(function(n){return '<option value="'+eh(n)+'">'+eh(n)+'</option>';}).join('');
@@ -28580,6 +28741,7 @@ async function abrirCurvaABC(){
 async function abcAtualizar(){
   document.getElementById('abc-sub').textContent='🔄 Atualizando...';
   await dashAtualizar(true);
+  await abcCarregarImportados();
   abcRenderizar();
 }
 
@@ -28619,8 +28781,12 @@ function _abcNorm(t){
 
 function abcAgrupar(itens){
   var porCliDia={};
+  var nImp=0;
   itens.forEach(function(x){
-    var k=_abcNorm(x.cliente)+'||'+x.dia;
+    // Importado nunca entra num grupo: sem nome de evento, ele cairia junto
+    // com um orçamento do mesmo cliente no mesmo dia — e somar os dois pode
+    // ser somar o mesmo dinheiro duas vezes. Fica sempre sozinho.
+    var k=x.importado ? ('__imp'+(nImp++)) : (_abcNorm(x.cliente)+'||'+x.dia);
     (porCliDia[k]=porCliDia[k]||[]).push(x);
   });
 
@@ -28655,7 +28821,7 @@ function abcAgrupar(itens){
     var consultores={};
     g.forEach(function(x){ consultores[x.consultor]=1; });
     return {
-      o:p.o, valor:valor, faixa:_abcFaixa(valor),
+      o:p.o, valor:valor, faixa:_abcFaixa(valor), importado:!!p.importado,
       dia:p.dia, mes:p.mes, num:p.num, cliente:p.cliente,
       evento:ordenado.map(function(x){return x.evento;}).filter(Boolean)[0]||'',
       consultor:p.consultor, tipo:p.tipo, driveId:p.driveId,
@@ -28752,6 +28918,29 @@ function abcDados(){
       tipo:f['f-tipo']||'(sem tipo)', driveId:o.driveId||''
     });
   });
+  // Lançamentos importados da planilha de fechamento. Entram como eventos
+  // de uma parte só, marcados com importado:true — nunca se misturam com um
+  // orçamento na unificação, porque não têm nome de evento e cair no mesmo
+  // grupo de um orçamento real seria somar o que talvez já esteja somado.
+  // Não têm driveId: não há OS para abrir, e o nome não vira link.
+  _abcNImportados=0;
+  if(_abcUsandoImportados()){
+    (_abcImportados||[]).forEach(function(x){
+      if(!x||!x.d||!x.v) return;
+      if(de && x.d<de) return;
+      if(ate && x.d>ate) return;
+      if(cons) return;                       // não têm consultor atribuído
+      if(quando==='ja' && x.d>hoje) return;
+      if(quando==='falta' && x.d<=hoje) return;
+      out.push({
+        o:null, valor:x.v, faixa:_abcFaixa(x.v), importado:true,
+        dia:x.d, mes:x.d.substring(0,7), num:x.n||'planilha',
+        cliente:x.c||'(sem cliente)', evento:'', consultor:'(planilha)',
+        tipo:'(importado)', driveId:''
+      });
+      _abcNImportados++;
+    });
+  }
   out.sort(function(a,b){ return b.valor-a.valor; });
   _abcNOrcamentos=out.length;
   if(!_abcUnificando()){
@@ -28766,6 +28955,7 @@ function abcDados(){
 // Quantos orçamentos deram origem aos eventos mostrados — a diferença entre
 // os dois números é o que a unificação fez.
 var _abcNOrcamentos=0;
+var _abcNImportados=0;
 
 // Totais por faixa, já com o acumulado de Pareto. A ordem é a de ABC_FAIXAS
 // (do maior porte para o menor), que é o que faz o acumulado significar
@@ -28802,8 +28992,15 @@ function abcRenderizar(){
        +(_abcQuando()?' · '+_abcQuandoLabel().toLowerCase():'')
        +(juntados>0?' · '+_abcNOrcamentos+' orçamentos unificados em '+lista.length+' eventos':''))
     : ('Nenhum evento fechado no período escolhido'+(_abcQuando()?' em "'+_abcQuandoLabel()+'"':''));
+  // Os botões de importar/limpar são de administrador.
+  var ehAdm=!!(usuarioAtual&&usuarioAtual.nivel==='adm');
+  var bi=document.getElementById('abc-btn-importar'), bl=document.getElementById('abc-btn-limpar');
+  if(bi) bi.style.display=ehAdm?'inline-block':'none';
+  if(bl) bl.style.display=(ehAdm&&(_abcImportados||[]).length)?'inline-block':'none';
+
   var av=document.getElementById('abc-aviso');
-  if(av) av.textContent=juntados>0?('🔗 '+juntados+' orçamento(s) somado(s) ao evento correspondente'):'';
+  if(av) av.textContent=(juntados>0?'🔗 '+juntados+' orçamento(s) somado(s) ao evento correspondente':'')
+    +(_abcNImportados?(juntados>0?' · ':'')+'📥 '+_abcNImportados+' lançamento(s) da planilha':'');
 
   abcRenderResumo(lista,porFaixa,tot);
   abcRenderGrafico(porFaixa,tot);
@@ -28871,6 +29068,8 @@ function abcRenderResumo(lista,porFaixa,tot){
         +'São os valores digitados mês a mês em <b>Metas → Eventos</b> (histórico anterior ao sistema). '
         +'Cada um é um total de mês, sem cliente nem valor por evento — não há como colocá-los numa faixa A–E sem inventar eventos. '
         +'Por isso a Curva ABC mostra <b>'+fmt(tot)+'</b> e Resultados Mensais mostra até <b>'+fmt(tot+mn.total)+'</b> no mesmo período.'
+        +(_abcNImportados?'<br><b>⚠️ Risco de contar duas vezes:</b> há '+_abcNImportados+' lançamento(s) da planilha já dentro desta curva nos mesmos meses. '
+          +'Se a planilha e o lançamento manual de Metas cobrem o mesmo faturamento, zere o manual dos meses importados em Metas → Eventos.':'')
         +(mn.parcial?'<br><b>Atenção:</b> o período escolhido começa ou termina no meio de um mês, e o lançamento manual é sempre do mês inteiro — aqui ele está contado inteiro.':'')
         +'<br>Meses com lançamento: '+m
         +'</div></div>';
@@ -29132,6 +29331,7 @@ function _abcListaEventos(lista){
           +(x.driveId
             ? '<span onclick="logAbrirPreviewOS(\''+eh(x.driveId)+'\')" title="Abrir a Ordem de Serviço" style="cursor:pointer;color:#90caf9;text-decoration:underline">'+eh(nome)+'</span>'
             : eh(nome))
+          +(x.importado?' <span style="font-size:9px;font-weight:800;color:#ef6c00;border:1px solid #ef6c00;border-radius:3px;padding:0 4px" title="Veio da planilha de fechamento 2026 — não tem orçamento no sistema, por isso não abre OS">PLANILHA</span>':'')
           +juntos
         +'</td>'
         +'<td style="padding:6px 8px;color:var(--text-dim)">'+eh(x.consultor)+'</td>'
