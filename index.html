@@ -16687,12 +16687,52 @@ async function bancoDiagTestar(){
   h+='<div style="margin-top:11px;font-size:10.5px;color:var(--text-dim);line-height:1.6">'
     +'<b>O que fazer com isto:</b> se houver ⛔ em algo marcado como <b>essencial</b>, a correção é nas '
     +'<b>Regras de Segurança</b> do Firebase — não adianta mexer no sistema nem no computador. '
-    +'Tire um print desta tela e mande para um administrador, ou use o texto pronto abaixo.'
+    +'Use o botão <b>Copiar relatório</b> abaixo e mande o texto para um administrador — '
+    +'chega inteiro e legível, ao contrário de um print de celular.'
     +'</div>';
 
-  if(res) res.innerHTML=h;
+  // Versão em texto do mesmo relatório. Um print de celular chega torto e
+  // ilegível; texto colado no WhatsApp chega inteiro e dá para procurar o
+  // nome da coleção nele.
+  _bancoDiagTexto=[
+    'DIAGNÓSTICO DE ACESSO AO BANCO — Crazy Som',
+    'Usuário: '+((usuarioAtual&&usuarioAtual.nome)||'—')+'  ('+((usuarioAtual&&usuarioAtual.id)||'sem e-mail')+')',
+    'Nível: '+((usuarioAtual&&usuarioAtual.nivel)||'—')+'  ·  Cargo: '+((usuarioAtual&&usuarioAtual.cargo)||'—'),
+    'auth.uid: '+((fbAuth&&fbAuth.currentUser&&fbAuth.currentUser.uid)||'SEM SESSÃO ATIVA'),
+    'Cadastro deste e-mail na coleção usuarios: '+(usuarioDoc||'—'),
+    'Quando: '+new Date().toLocaleString('pt-BR'),
+    '',
+    cab.replace(/[⛔✅⚠️]/g,'').trim(),
+    ''
+  ].concat(linhas.map(function(l){
+    return (l.gravou?'[ok]   ':'[NEGA] ')+l.c.label+'  ('+l.c.col+')'
+      +(l.c.critico?'  *ESSENCIAL*':'')
+      +'  lê:'+(l.leu?'sim':'NÃO')+' grava:'+(l.gravou?'sim':'NÃO')
+      +((l.erroG&&!l.gravou)?'  -> '+l.erroG:'');
+  })).join('\n');
+
+  if(res) res.innerHTML=h
+    +'<div style="margin-top:9px;display:flex;gap:7px;flex-wrap:wrap">'
+    +'<button class="btn btn-r btn-sm" onclick="bancoDiagCopiarRelatorio()">📋 Copiar relatório para mandar ao administrador</button>'
+    +'</div>';
   if(btn){ btn.disabled=false; btn.textContent='▶️ Testar meu acesso'; }
-  return {linhas:linhas, criticosRuins:criticosRuins.length, tudoOk:tudoOk, usuarioDoc:usuarioDoc};
+  return {linhas:linhas, criticosRuins:criticosRuins.length, tudoOk:tudoOk, usuarioDoc:usuarioDoc, texto:_bancoDiagTexto};
+}
+
+var _bancoDiagTexto='';
+
+function bancoDiagCopiarRelatorio(){
+  if(!_bancoDiagTexto){ alert('Rode o teste primeiro.'); return; }
+  var ta=document.createElement('textarea');
+  ta.value=_bancoDiagTexto;
+  ta.style.cssText='position:fixed;left:-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  var ok=false;
+  try{ ok=document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta);
+  if(ok) _toastMostrar('📋 Relatório copiado — cole no WhatsApp ou no e-mail.','',6000);
+  else prompt('Copie o texto abaixo (Ctrl+C) e mande para o administrador:', _bancoDiagTexto);
 }
 
 function bancoDiagCopiarRegra(){
