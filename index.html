@@ -4506,6 +4506,20 @@ SECS.forEach(function(s){state[s]={ambientes:[{id:'default',nome:'Geral'}],ambAt
 
 var PX={'Painel Led Ph2.5Mm Indoor':384,'Painel Led Ph2.9Mm Indoor':336,'Painel Led Ph3.9Mm Outdoor':256,'Painel Led Ph6Mm Indoor':160};
 function isPainel(n){return Object.keys(PX).some(function(k){return n&&n.includes(k);});}
+
+/* Descrição de um Painel de LED para a OS, a agenda e a Logística.
+   Existia copiada em quatro lugares e a elevação faltava em todos os
+   quatro — ela só aparecia no PDF do orçamento. Um painel elevado muda
+   a estrutura que a equipe tem de levar, então faltar na OS é faltar
+   justamente para quem monta. Agora há um lugar só.                     */
+function _descPainelOS(r){
+  var px=getPx(r.name)||0;
+  var pxW=Math.round((Number(r.larg)||0)*px), pxH=Math.round((Number(r.alt)||0)*px);
+  return ' \u2013 '+Number(r.larg||0).toFixed(2)+'\u00d7'+Number(r.alt||0).toFixed(2)+'m'
+    +(Number(r.elev)>0?' \u2013 Elev: '+Number(r.elev).toFixed(2)+'m':'')
+    +' ['+pxW+'\u00d7'+pxH+'px]';
+}
+
 function getPx(n){var k=Object.keys(PX).find(function(k){return n&&n.includes(k);});return k?PX[k]:null;}
 var ELEV=[{l:'20cm',v:100},{l:'30cm',v:100},{l:'40cm',v:100},{l:'60cm',v:100},{l:'80cm',v:100},{l:'100cm',v:100}];
 function isPalco(n){return n&&n.trim().toLowerCase()==='palco';}
@@ -13023,7 +13037,7 @@ function _montarOSHtml(form, dadosCompletos, avisoAditivos){
     // Item que veio de aditivo leva a marca: a montagem precisa saber o que
     // foi pedido depois do fechamento.
     var selo=r._adit?('<span class="selo-adit">'+eh(r._adit)+'</span> '):'';
-    if(r.painel){var pxW=Math.round(r.larg*getPx(r.name)),pxH=Math.round(r.alt*getPx(r.name));desc+=' – '+Number(r.larg).toFixed(2)+'×'+Number(r.alt).toFixed(2)+'m ['+pxW+'×'+pxH+'px]';}
+    if(r.painel){desc+=_descPainelOS(r);}
     else if(isPal){desc='Palco '+Number(r.larg).toFixed(2)+'×'+Number(r.prof).toFixed(2)+'m – Elev: '+(r.elObj?r.elObj.l:'—');if(r.carp)desc+=' | Carpete '+(r.carpT==='novo'?'Novo':'Usado')+(r.carpC?' – '+r.carpC:'');}
     return'<tr><td class="qtd">'+r.qty+'x</td><td class="item">'+selo+desc+'</td><td class="chk">☐</td></tr>';
   }
@@ -13535,8 +13549,7 @@ function _gaMontarDescricao(stForcado){
       var isPal=r.palco||isPalco(r.name);
       var desc=r.name||'';
       if(r.painel){
-        var pxW=Math.round(r.larg*getPx(r.name)),pxH=Math.round(r.alt*getPx(r.name));
-        desc+=' – '+Number(r.larg).toFixed(2)+'×'+Number(r.alt).toFixed(2)+'m ['+pxW+'×'+pxH+'px]';
+        desc+=_descPainelOS(r);
       } else if(isPal){
         desc='Palco '+Number(r.larg).toFixed(2)+'×'+Number(r.prof).toFixed(2)+'m – Elev: '+(r.elObj?r.elObj.l:'—');
         if(r.carp) desc+=' | Carpete '+(r.carpT==='novo'?'Novo':'Usado')+(r.carpC?' – '+r.carpC:'');
@@ -13939,8 +13952,7 @@ function _gaMontarDescricaoDe(form, state){
       var isPal=r.palco||isPalco(r.name);
       var desc=r.name||'';
       if(r.painel){
-        var pxW=Math.round(r.larg*getPx(r.name)),pxH=Math.round(r.alt*getPx(r.name));
-        desc+=' – '+Number(r.larg).toFixed(2)+'×'+Number(r.alt).toFixed(2)+'m ['+pxW+'×'+pxH+'px]';
+        desc+=_descPainelOS(r);
       } else if(isPal){
         desc='Palco '+Number(r.larg).toFixed(2)+'×'+Number(r.prof).toFixed(2)+'m – Elev: '+(r.elObj?r.elObj.l:'—');
         if(r.carp) desc+=' | Carpete '+(r.carpT==='novo'?'Novo':'Usado')+(r.carpC?' – '+r.carpC:'');
@@ -33815,7 +33827,7 @@ function osModGerarOS(lista){
   function bRowOS(r){
     var isPal=r.palco||(r.name&&r.name.toLowerCase().includes('palco'));
     var desc=r.name||'';
-    if(r.painel&&r.larg&&r.alt){var pxW=Math.round(r.larg*(r.name&&r.name.includes('P4')?4:r.name&&r.name.includes('P6')?6:5));var pxH=Math.round(r.alt*(r.name&&r.name.includes('P4')?4:r.name&&r.name.includes('P6')?6:5));desc+=' – '+Number(r.larg).toFixed(2)+'×'+Number(r.alt).toFixed(2)+'m ['+pxW+'×'+pxH+'px]';}
+    if(r.painel&&r.larg&&r.alt){desc+=_descPainelOS(r);}
     else if(isPal&&r.larg&&r.prof){desc='Palco '+Number(r.larg).toFixed(2)+'×'+Number(r.prof).toFixed(2)+'m';if(r.elObj)desc+=' – Elev: '+r.elObj.l;}
     return'<tr><td class="qtd">'+r.qty+'x</td><td class="item">'+eh(desc)+'</td><td class="chk">☐</td></tr>';
   }
