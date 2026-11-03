@@ -27193,6 +27193,26 @@ function escCorPessoa(id){
 // do mesmo tipo, pula. Assim dá para clicar sem medo depois de ter editado.
 // Gera as etapas de UM dia. Não renderiza nem avisa — quem chama decide,
 // porque o botão agora pode varrer um período inteiro.
+// Quantas etapas daquele tipo já existem para aquele orçamento, em qualquer
+// dia carregado, contra quantos dias a fase ocupa. Uma montagem de dois dias
+// precisa de dois cards; um card já movido à mão não precisa de companhia.
+function _escJaTemEtapaEmOutroDia(it,tipo,o){
+  var num=((o&&o.form)||{})['f-num']||'';
+  var drive=(o&&o.driveId)||'';
+  var achados=0;
+  Object.keys(_escMeses||{}).forEach(function(ym){
+    var m=_escMeses[ym];
+    if(!m||!m.dias) return;
+    Object.keys(m.dias).forEach(function(d){
+      (m.dias[d]||[]).forEach(function(c){
+        if(c.tipo!==tipo) return;
+        if(num ? c.orcNum===num : (drive && c.driveId===drive)) achados++;
+      });
+    });
+  });
+  return achados>=Math.max(1,_escDiasDaEtapa(it,tipo).length);
+}
+
 function _escGerarNoDia(dia,itens){
   var achados=[];
   itens.forEach(function(it){
@@ -27209,6 +27229,10 @@ function _escGerarNoDia(dia,itens){
     var tipo=ESC_FASE_PARA_TIPO[a.fase]||'operacao';
     var num=f['f-num']||'';
     if(_escCardDaOrigem(lista,tipo,o)){ pulados++; return; }
+    // Nem recriar o que já existe em OUTRO dia. Sem isto, uma etapa movida
+    // à mão para a véspera ganhava uma cópia no dia do orçamento a cada
+    // atualização — trocando um card perdido por dois.
+    if(_escJaTemEtapaEmOutroDia(a.it,tipo,o)){ pulados++; return; }
     // Etapa que o usuário excluiu de propósito não volta sozinha.
     if(removidos.indexOf(_escChaveEtapa(tipo,o))>=0){ pulados++; return; }
     var endereco=[f['f-end-ev'],f['f-num-ev'],f['f-bairro-ev'],f['f-cid-ev']].filter(Boolean).join(', ');
@@ -27423,6 +27447,8 @@ async function escDropNoDia(ev,iso){
   if(i<0) return;
   var c=lista.splice(i,1)[0];
   c.editadoEm=new Date().toLocaleString('pt-BR');
+  // Marca a escolha de quem moveu, para a sincronização não desfazê-la.
+  c.movidoManual=true;
   escCards(iso).push(c);
   _escMarcarSujo(diaOrigem);
   _escMarcarSujo(iso);
@@ -27593,6 +27619,23 @@ function escRenderFaltam(){
       +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">Abra o orçamento e corrija: com data trocada o evento ocupa a agenda no período errado.</div>'
       +'</div>';
   }
+  // Etapas que ficaram fora da data do orçamento e a sincronização não
+  // conseguiu realinhar sozinha. Aparecem sempre, não só no dia à vista:
+  // o ponto é que a pessoa não sabe em que dia procurar.
+  if((_escForaDeData||[]).length){
+    html+='<div style="background:rgba(198,40,40,.14);border:1px solid #c62828;border-radius:6px;padding:9px 12px;margin-bottom:10px">'
+      +'<div style="font-size:11px;font-weight:900;color:#ef5350;margin-bottom:5px">⚠️ '+_escForaDeData.length+' etapa(s) fora da data do orçamento</div>'
+      +_escForaDeData.map(function(x){
+        return '<div style="font-size:10px;color:var(--text-dim)">• '+_escTipo(x.c.tipo).ico+' '
+          +eh(x.c.evento||'(sem evento)')+(x.c.orcNum?' <span style="color:var(--text-muted)">(orç. '+eh(x.c.orcNum)+')</span>':'')
+          +' — está em <b>'+fD(x.dia)+'</b>'+(x.destino?', o orçamento diz <b>'+x.destino.split(', ').map(fD).join(' / ')+'</b>':'')
+          +' <span style="color:var(--text-muted)">['+eh(x.motivo)+']</span>'
+          +(x.destino&&_escPodeEditar()?' <span onclick="escMoverPara(\''+x.c.id+'\',\''+x.destino.split(', ')[0]+'\')" style="cursor:pointer;color:#90caf9;text-decoration:underline">mover agora</span>':'')
+          +'</div>';
+      }).join('')
+      +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">A escala não move sozinha uma etapa que alguém moveu à mão — e não apaga nenhuma, porque pode haver equipe escalada nela.</div>'
+      +'</div>';
+  }
   if(!faltam.length){ el.innerHTML=html; return; }
   var pode=_escPodeEditar();
   el.innerHTML=html+'<div style="background:rgba(255,167,38,.12);border:1px solid #ffa726;border-radius:6px;padding:9px 12px;margin-bottom:10px">'
@@ -27636,14 +27679,112 @@ var _escRelRedesenhando=false;
 //
 // Não duplica o que já existe, não mexe no que foi editado à mão, e respeita
 // as etapas excluídas de propósito.
+/* ── Realinhar as etapas quando a data do orçamento muda ───────────────
+   A sincronização só CRIAVA etapas faltantes. Se a data do evento mudava
+   no orçamento, o card antigo continuava no dia velho para sempre e um
+   novo nascia no dia certo — dois cards do mesmo evento, e o ⚡ dizendo
+   que estava tudo em ordem. Foi o relato do Fabiano com o Cena B.
+
+   Agora o card SEGUE o orçamento, levando junto equipe, veículos,
+   horários e observações — mover é melhor do que apagar e recriar, que
+   jogaria fora a escala já montada.
+
+   Com uma exceção que importa: card movido à mão (arrastado ou pelo
+   "MOVER PARA") não é puxado de volta. Quem moveu sabia o que estava
+   fazendo; desfazer isso a cada atualização seria pior do que o defeito.
+   Esses ficam sinalizados, para a divergência aparecer em vez de sumir. */
+
+function _escOrcDoCard(c, itens){
+  if(!c || (!c.orcNum && !c.driveId)) return null;
+  for(var i=0;i<itens.length;i++){
+    var o=itens[i].o, f=o.form||{};
+    if(c.orcNum && (f['f-num']||'')===c.orcNum) return itens[i];
+    if(!c.orcNum && c.driveId && o.driveId===c.driveId) return itens[i];
+  }
+  return null;
+}
+
+// Dias em que aquele orçamento tem uma fase daquele tipo.
+function _escDiasDaEtapa(it, tipo){
+  var dias=[], dia=it.range.inicio, guarda=0;
+  while(dia<=it.range.fim && guarda++<800){
+    var achou=false;
+    _logFasesNoDia(it.o,dia).forEach(function(fase){
+      if((ESC_FASE_PARA_TIPO[fase]||'operacao')===tipo) achou=true;
+    });
+    if(achou) dias.push(dia);
+    dia=_logAddDias(dia,1);
+  }
+  return dias;
+}
+
+var _escForaDeData=[];   // o que não deu para realinhar sozinho
+
+function _escRealinharDatas(itens){
+  var movidas=0;
+  _escForaDeData=[];
+  Object.keys(_escMeses||{}).forEach(function(ym){
+    var m=_escMeses[ym];
+    if(!m||!m.dias) return;
+    Object.keys(m.dias).forEach(function(dia){
+      (m.dias[dia]||[]).slice().forEach(function(c){
+        if(!c || (!c.orcNum && !c.driveId)) return;      // etapa avulsa fica onde está
+        var it=_escOrcDoCard(c, itens);
+        if(!it){
+          // O orçamento saiu da Agenda (deixou de ser Venda Ganha, ou perdeu
+          // a data). Não apagamos: pode haver equipe escalada nele.
+          _escForaDeData.push({dia:dia, c:c, motivo:'sem evento na Agenda', destino:''});
+          return;
+        }
+        var dias=_escDiasDaEtapa(it, c.tipo);
+        if(!dias.length){
+          _escForaDeData.push({dia:dia, c:c, motivo:'o orçamento não tem mais esta fase', destino:''});
+          return;
+        }
+        if(dias.indexOf(dia)>=0) return;                 // já está no lugar certo
+        if(c.movidoManual){
+          _escForaDeData.push({dia:dia, c:c, motivo:'movida à mão', destino:dias.join(', ')});
+          return;
+        }
+        // Destino: um dia da fase que ainda não tenha card desta origem —
+        // senão o realinhamento criaria a duplicata que veio evitar.
+        var destino='';
+        for(var k=0;k<dias.length;k++){
+          if(!_escMeses[dias[k].substring(0,7)]) continue;   // mês não carregado
+          if(!_escCardDaOrigem(escCards(dias[k]), c.tipo, it.o)){ destino=dias[k]; break; }
+        }
+        if(!destino){
+          _escForaDeData.push({dia:dia, c:c, motivo:'já existe esta etapa no dia certo', destino:dias.join(', ')});
+          return;
+        }
+        var lista=m.dias[dia];
+        var i=lista.indexOf(c);
+        if(i<0) return;
+        lista.splice(i,1);
+        c.editadoEm=new Date().toLocaleString('pt-BR');
+        c.realinhadaEm=dia;
+        escCards(destino).push(c);
+        _escMarcarSujo(dia);
+        _escMarcarSujo(destino);
+        movidas++;
+      });
+    });
+  });
+  return movidas;
+}
+
 async function escSincronizarAgenda(){
   var itens=_escItensAgenda();
-  if(!itens.length) return {criados:0, dias:0};
+  // O realinhamento roda ANTES da saída antecipada: um orçamento que saiu da
+  // Agenda (venda perdida, data apagada) deixa etapas órfãs, e é justamente
+  // quando não há mais item que elas precisam ser sinalizadas.
+  var movidas=_escRealinharDatas(itens);
+  if(!itens.length) return {criados:0, dias:0, movidas:movidas, foraDeData:_escForaDeData.length};
 
   var hoje=_logISO(new Date());
   var de=_logAddDias(hoje,-ESC_SINC_DIAS_ATRAS), ate=de;
   itens.forEach(function(it){ if(it.range.fim>ate) ate=it.range.fim; });
-  if(ate<de) return {criados:0, dias:0};
+  if(ate<de) return {criados:0, dias:0, movidas:movidas, foraDeData:_escForaDeData.length};
 
   await _escCarregarFaixa(de,ate);
 
@@ -27655,7 +27796,7 @@ async function escSincronizarAgenda(){
     if(r.criados){ criados+=r.criados; dias++; }
     dia=_logAddDias(dia,1);
   }
-  return {criados:criados, dias:dias};
+  return {criados:criados, dias:dias, movidas:movidas, foraDeData:_escForaDeData.length};
 }
 
 // Depois de sincronizar, grava sozinho. Sem isto o módulo abriria sempre com
@@ -27663,7 +27804,7 @@ async function escSincronizarAgenda(){
 // alteração que o próprio sistema fez.
 async function _escSincronizarEGravar(){
   var r=await escSincronizarAgenda();
-  if(r.criados) await escSalvar(true);
+  if(r.criados||r.movidas) await escSalvar(true);
   return r;
 }
 
@@ -27681,9 +27822,13 @@ async function escAtualizar(){
   var r=await _escSincronizarEGravar();
   _escAtualizarSub();
   escRenderizar();
-  _toastMostrar(r.criados
-    ? ('🔄 Atualizado · ⚡ '+r.criados+' etapa(s) nova(s) da Agenda em '+r.dias+' dia(s).')
-    : '🔄 Atualizado · a escala já tinha todos os eventos da Agenda.','',7000);
+  var partes=[];
+  if(r.criados) partes.push('⚡ '+r.criados+' etapa(s) nova(s) em '+r.dias+' dia(s)');
+  if(r.movidas) partes.push('📅 '+r.movidas+' etapa(s) movida(s) para a data nova do orçamento');
+  if(r.foraDeData) partes.push('⚠️ '+r.foraDeData+' fora da data do orçamento — veja o aviso no quadro');
+  _toastMostrar(partes.length
+    ? ('🔄 Atualizado · '+partes.join(' · '))
+    : '🔄 Atualizado · a escala já batia com a Agenda.','',8000);
 }
 
 function escRenderFaixa(){
