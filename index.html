@@ -27623,17 +27623,39 @@ function escRenderFaltam(){
   // conseguiu realinhar sozinha. Aparecem sempre, não só no dia à vista:
   // o ponto é que a pessoa não sabe em que dia procurar.
   if((_escForaDeData||[]).length){
+    // Agrupado por orçamento + tipo + motivo. Sem isto, uma data de evento
+    // encurtada produz dezenas de linhas idênticas (foram 99 no Cena B) e o
+    // aviso deixa de ser legível justamente quando mais importa.
+    var grupos={}, ordem=[];
+    _escForaDeData.forEach(function(x){
+      var k=(x.c.orcNum||x.c.evento||'—')+'|'+x.c.tipo+'|'+x.motivo;
+      if(!grupos[k]){ grupos[k]={x:x, dias:[], n:0}; ordem.push(k); }
+      grupos[k].dias.push(x.dia); grupos[k].n++;
+    });
+    var limpaveis=_escDuplicadasVazias().length;
+    var MAXG=8;
     html+='<div style="background:rgba(198,40,40,.14);border:1px solid #c62828;border-radius:6px;padding:9px 12px;margin-bottom:10px">'
-      +'<div style="font-size:11px;font-weight:900;color:#ef5350;margin-bottom:5px">⚠️ '+_escForaDeData.length+' etapa(s) fora da data do orçamento</div>'
-      +_escForaDeData.map(function(x){
-        return '<div style="font-size:10px;color:var(--text-dim)">• '+_escTipo(x.c.tipo).ico+' '
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:5px">'
+        +'<div style="font-size:11px;font-weight:900;color:#ef5350">⚠️ '+_escForaDeData.length+' etapa(s) fora da data do orçamento'
+        +(ordem.length<_escForaDeData.length?' <span style="font-weight:600;color:var(--text-muted)">em '+ordem.length+' evento(s)</span>':'')+'</div>'
+        +((limpaveis&&_escPodeEditar())?'<button class="btn btn-b btn-sm" onclick="escLimparDuplicadas()" title="Remove só as que já existem no dia certo e estão sem equipe, sem veículo e sem observação">🧹 Limpar '+limpaveis+' duplicada(s) vazia(s)</button>':'')
+      +'</div>'
+      +ordem.slice(0,MAXG).map(function(k){
+        var g=grupos[k], x=g.x;
+        g.dias.sort();
+        var diasTxt=g.n>3
+          ? (g.n+' dias, de '+fD(g.dias[0])+' a '+fD(g.dias[g.n-1]))
+          : g.dias.map(fD).join(', ');
+        return '<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px">• '+_escTipo(x.c.tipo).ico+' '
           +eh(x.c.evento||'(sem evento)')+(x.c.orcNum?' <span style="color:var(--text-muted)">(orç. '+eh(x.c.orcNum)+')</span>':'')
-          +' — está em <b>'+fD(x.dia)+'</b>'+(x.destino?', o orçamento diz <b>'+x.destino.split(', ').map(fD).join(' / ')+'</b>':'')
+          +(g.n>1?' <b style="color:#ef5350">×'+g.n+'</b>':'')
+          +' — em '+diasTxt+(x.destino?'; o orçamento diz <b>'+x.destino.split(', ').map(fD).join(' / ')+'</b>':'')
           +' <span style="color:var(--text-muted)">['+eh(x.motivo)+']</span>'
-          +(x.destino&&_escPodeEditar()?' <span onclick="escMoverPara(\''+x.c.id+'\',\''+x.destino.split(', ')[0]+'\')" style="cursor:pointer;color:#90caf9;text-decoration:underline">mover agora</span>':'')
+          +((g.n===1&&x.destino&&_escPodeEditar())?' <span onclick="escMoverPara(\''+x.c.id+'\',\''+x.destino.split(', ')[0]+'\')" style="cursor:pointer;color:#90caf9;text-decoration:underline">mover agora</span>':'')
           +'</div>';
       }).join('')
-      +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">A escala não move sozinha uma etapa que alguém moveu à mão — e não apaga nenhuma, porque pode haver equipe escalada nela.</div>'
+      +(ordem.length>MAXG?'<div style="font-size:10px;color:var(--text-muted)">… e mais '+(ordem.length-MAXG)+' evento(s).</div>':'')
+      +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">A escala não move sozinha uma etapa que alguém moveu à mão, e não apaga nenhuma que tenha equipe escalada ou algo preenchido.</div>'
       +'</div>';
   }
   if(!faltam.length){ el.innerHTML=html; return; }
@@ -27719,6 +27741,60 @@ function _escDiasDaEtapa(it, tipo){
 }
 
 var _escForaDeData=[];   // o que não deu para realinhar sozinho
+
+// Uma etapa "vazia" é a que ninguém trabalhou: sem equipe, sem veículo, sem
+// observação e sem horário digitado à mão. O horário "no local" não conta —
+// ele vem preenchido pelo próprio sistema na criação.
+function _escCardVazio(c){
+  if(!c) return false;
+  if((c.equipe||[]).length) return false;
+  if((c.veiculos||[]).some(function(v){ return v; })) return false;
+  if((c.obs||'').trim()) return false;
+  if((c.saida||'').trim() || (c.termino||'').trim()) return false;
+  return true;
+}
+
+// As divergências que dá para limpar sem perder trabalho: etapa duplicada
+// (já existe a mesma etapa no dia que o orçamento manda) e sem nada
+// preenchido. É o resto que fica de uma data de evento que foi encurtada —
+// o Natal Luz do Cena B gerou um card por dia enquanto durava um mês, e ao
+// virar um dia só os outros viraram entulho.
+function _escDuplicadasVazias(){
+  return (_escForaDeData||[]).filter(function(x){
+    return x.motivo==='já existe esta etapa no dia certo' && _escCardVazio(x.c);
+  });
+}
+
+async function escLimparDuplicadas(){
+  if(_escBloqueado()) return;
+  var alvo=_escDuplicadasVazias();
+  if(!alvo.length){ alert('Não há etapas duplicadas e vazias para limpar.'); return; }
+  var porOrc={};
+  alvo.forEach(function(x){ var k=x.c.orcNum||x.c.evento||'—'; porOrc[k]=(porOrc[k]||0)+1; });
+  var resumo=Object.keys(porOrc).map(function(k){ return '• '+k+': '+porOrc[k]+' etapa(s)'; }).join('\n');
+  if(!confirm('Remover '+alvo.length+' etapa(s) duplicada(s)?\n\n'+resumo
+    +'\n\nSão etapas que já existem no dia que o orçamento manda e estão SEM equipe, '
+    +'SEM veículo e SEM observação — sobraram de uma data de evento que foi encurtada.\n\n'
+    +'Nenhuma etapa com equipe escalada ou com algo preenchido é tocada.')) return;
+
+  var n=0;
+  alvo.forEach(function(x){
+    var lista=escCards(x.dia);
+    var i=-1;
+    for(var k=0;k<lista.length;k++) if(lista[k].id===x.c.id) i=k;
+    if(i<0) return;
+    // Marca como removida de propósito, senão a sincronização a recria.
+    _escMarcarRemovido(x.dia, x.c);
+    lista.splice(i,1);
+    _escMarcarSujo(x.dia);
+    n++;
+  });
+  await escSalvar(true);
+  _escForaDeData=_escForaDeData.filter(function(x){ return alvo.indexOf(x)<0; });
+  _escAtualizarSub();
+  escRenderizar();
+  _toastMostrar('🧹 '+n+' etapa(s) duplicada(s) removida(s).','',6000);
+}
 
 function _escRealinharDatas(itens){
   var movidas=0;
