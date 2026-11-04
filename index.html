@@ -3378,6 +3378,11 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
   </div>
 </div>
 
+<!-- Tarja de reprovação: fica no TOPO do orçamento, antes de tudo. O ponto
+     do recurso é o consultor ver o motivo e ligar para o cliente — escondê-la
+     no histórico seria entregar a informação a quem já a tem. -->
+<div id="reprov-faixa" style="display:none"></div>
+
 <div class="card">
   <div class="st">📋 Identificação</div>
   <div class="g4">
@@ -3411,6 +3416,24 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <option value="Prospecção">🎯 Prospecção</option>
         <option value="Outros">📝 Outros</option>
       </select>
+    </div>
+  </div>
+</div>
+
+<div class="ov" id="reprov-ov" style="align-items:center">
+  <div style="background:var(--surface);border:1px solid var(--border);border-top:4px solid #bf360c;border-radius:8px;max-width:520px;width:94%;margin:auto;padding:16px 18px 18px">
+    <div style="font-size:14px;font-weight:900;color:var(--text);margin-bottom:3px">⛔ Reprovar Orçamento</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px">
+      O motivo vai para o topo do orçamento, onde o consultor o encontra para dar a devolutiva ao cliente.
+      Reprovar <b>não</b> registra Venda Perdida — isso continua sendo decisão do comercial.
+    </div>
+    <label style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:800">Motivo da reprovação (obrigatório)</label>
+    <select id="reprov-motivo" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--input-bg);color:var(--text);margin:4px 0 11px"></select>
+    <label style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:800">Detalhe para a devolutiva</label>
+    <textarea id="reprov-det" placeholder="O que o consultor precisa dizer ao cliente. Ex: a data já está comprometida com outro evento; dá para atender no dia seguinte." style="width:100%;height:76px;padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--input-bg);color:var(--text);resize:vertical;margin:4px 0 13px"></textarea>
+    <div style="display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn btn-o btn-sm" onclick="fecharReprovacao()">Cancelar</button>
+      <button class="btn btn-sm" onclick="confirmarReprovacao()" style="background:#bf360c;color:#fff;border:none">⛔ Confirmar reprovação</button>
     </div>
   </div>
 </div>
@@ -4296,8 +4319,30 @@ var SI={
   gerencial:{label:'🟠 Aprovação Gerencial',bg:'#fff3e0',bd:'#ffb74d',tx:'#e65100',dot:'#e65100'},
   diretoria:{label:'🟣 Aprovação Diretoria',bg:'#f3e5f5',bd:'#ce93d8',tx:'#6a1b9a',dot:'#6a1b9a'},
   aprovado:{label:'🟢 Aprovado',bg:'#e8f5e9',bd:'#a5d6a7',tx:'#1b5e20',dot:'#2e7d32'},
-  revisao:{label:'🔴 Revisão Solicitada',bg:'#ffebee',bd:'#ef9a9a',tx:'#b71c1c',dot:'#c62828'}
+  revisao:{label:'🔴 Revisão Solicitada',bg:'#ffebee',bd:'#ef9a9a',tx:'#b71c1c',dot:'#c62828'},
+  // Reprovado é diferente de Revisão Solicitada: revisão é "ajuste e volte",
+  // reprovação é "este orçamento não vai acontecer assim, e o motivo é este".
+  // Quem reprova é a gestão; quem fala com o cliente é o consultor, então o
+  // motivo precisa estar na frente dele, pronto para virar devolutiva.
+  reprovado:{label:'⛔ Reprovado',bg:'#fbe9e7',bd:'#ff8a65',tx:'#bf360c',dot:'#bf360c'}
 };
+
+// Os mesmos motivos da Venda Perdida, de propósito: a reprovação costuma
+// virar perda, e com o vocabulário igual o relatório de motivos de perda
+// continua somando tudo na mesma categoria. "Indisponibilidade de data" foi
+// o exemplo do Fabiano no pedido.
+var MOTIVOS_REPROVACAO=[
+  'Indisponibilidade de data',
+  'Indisponibilidade de equipamento',
+  'Indisponibilidade de equipe',
+  'Preço',
+  'Política de crédito',
+  'Margem insuficiente',
+  'Prazo de montagem inviável',
+  'Escopo técnico inviável',
+  'Evento cancelado',
+  'Outros'
+];
 var NIVEIS={adm:'Administrador',consultor:'Consultor',tecnico:'Área Técnica',gerente:'Gerente Comercial',diretor:'Diretor Comercial'};
 var USUARIOS=[
   {id:'fabiano.santos@crazysom.com.br',nome:'Fabiano Santos',nivel:'adm'},
@@ -4322,6 +4367,8 @@ function _nomeUsuario(v){
 }
 var usuarioAtual=null;
 var aprovStatus='rascunho';
+// Reprovação: motivo escolhido da lista, detalhe livre, quem e quando.
+var reprovMotivo='', reprovDetalhe='', reprovPor='', reprovEm='';
 var aprovHist=[];
 var comercialStatus='';
 var comercialHist=[];
@@ -7928,6 +7975,9 @@ function atualizarBotoesBloqueioAprovacao(){
 }
 
 function renderStatusOrc(){
+  // A tarja de reprovação é o primeiro aviso da tela: quem abre um orçamento
+  // reprovado precisa ver o motivo antes de qualquer outra coisa.
+  try{ renderReprovacao(); }catch(e){}
   atualizarBotoesBloqueioAprovacao();
   var sb=document.getElementById('status-orc-bar');
   var sa=document.getElementById('status-orc-acoes');
@@ -7971,7 +8021,7 @@ function renderStatusOrc(){
   var obsVal=document.getElementById('aprov-obs')?document.getElementById('aprov-obs').value:'';
   var obsHtml='<textarea id="aprov-obs" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:4px;font-size:11px;resize:vertical;height:52px;margin-top:8px;background:var(--surface);color:var(--text)" placeholder="Observação / Motivo...">'+obsVal+'</textarea>';
   function btn(cor,txt,fn){return '<button onclick="'+fn+'" style="padding:8px 15px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;color:var(--text);background:'+cor+';margin:3px">'+txt+'</button>';}
-  if(nivel==='consultor'&&(aprovStatus==='rascunho'||aprovStatus==='revisao')){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#1565c0',aprovStatus==='rascunho'?'📤 Enviar para Análise Técnica':'📤 Reenviar para Análise Técnica',"aprovAcao('analise')")+'</div>';}
+  if(nivel==='consultor'&&(aprovStatus==='rascunho'||aprovStatus==='revisao'||aprovStatus==='reprovado')){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#1565c0',aprovStatus==='rascunho'?'📤 Enviar para Análise Técnica':'📤 Reenviar para Análise Técnica',"aprovAcao('analise')")+'</div>';}
   // Um usuário de nível Área Técnica que ELE PRÓPRIO está elaborando o
   // orçamento (ainda em Rascunho ou Revisão, antes de qualquer envio) não
   // precisa passar pelo passo de "Enviar para Análise Técnica" — ele já É
@@ -7984,7 +8034,14 @@ function renderStatusOrc(){
   else if(nivel==='gerente'&&aprovStatus==='gerencial'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#6a1b9a','🏆 Enviar para Diretoria',"aprovAcao('diretoria')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}
   else if(nivel==='diretor'&&aprovStatus==='diretoria'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#c62828','🔄 Reprovar / Revisão',"aprovAcao('revisao')")+'</div>';}
   else if(['adm','gerente','diretor'].includes(usuarioAtual.nivel)&&aprovStatus!=='aprovado'&&aprovStatus!=='rascunho'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#6a1b9a','🏆 Enviar para Diretoria',"aprovAcao('diretoria')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}
-  else{var msgs={rascunho:'Aguardando envio pelo consultor.',analise:'Aguardando análise técnica.',gerencial:'Aguardando aprovação do gerente.',diretoria:'Aguardando aprovação da diretoria.',aprovado:'✅ Orçamento aprovado!',revisao:'🔄 Revisão solicitada.'};acoes='<p style="font-size:11px;color:var(--text-muted);padding:6px 0">'+(msgs[aprovStatus]||'')+'</p>';}
+  else{var msgs={rascunho:'Aguardando envio pelo consultor.',analise:'Aguardando análise técnica.',gerencial:'Aguardando aprovação do gerente.',diretoria:'Aguardando aprovação da diretoria.',aprovado:'✅ Orçamento aprovado!',revisao:'🔄 Revisão solicitada.',reprovado:'⛔ Orçamento reprovado — veja o motivo no topo.'};acoes='<p style="font-size:11px;color:var(--text-muted);padding:6px 0">'+(msgs[aprovStatus]||'')+'</p>';}
+  // Reprovar — decisão da gestão, com motivo obrigatório. Aparece em
+  // qualquer etapa que não seja Rascunho (não se reprova o que ainda não foi
+  // enviado) e some quando o orçamento JÁ está reprovado.
+  if(_podeReprovar()&&aprovStatus!=='rascunho'&&aprovStatus!=='reprovado'){
+    acoes+='<div style="margin-top:6px"><button onclick="abrirReprovacao()" title="Reprova o orçamento com um motivo — o consultor vê o motivo no topo para dar a devolutiva ao cliente" style="padding:7px 14px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;color:#fff;background:#bf360c;margin:3px">⛔ Reprovar Orçamento</button></div>';
+  }
+
   // Cancelar aprovação — só aparece com o orçamento aprovado e para quem tem
   // a permissão; em vermelho porque desfaz uma decisão já tomada.
   if(aprovStatus==='aprovado'&&_podeCancelarAprovacao()){
@@ -7998,6 +8055,92 @@ function renderStatusOrc(){
     acoes+='<div style="margin-top:6px"><button onclick="abrirComparativoAprovado()" title="Lista lado a lado: o que foi incluído, retirado, trocado ou alterado em relação à versão aprovada" style="padding:7px 14px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;color:#fff;background:#1565c0;margin:3px">🔍 O que mudou no orçamento</button></div>';
   }
   sa.innerHTML=acoes;
+}
+
+/* ── Reprovar orçamento ────────────────────────────────────────────────
+   Pedido do Fabiano: "preciso que crie um botão reprovar orçamento para
+   que eu possa reprovar um orçamento e colocar o motivo [...] e deve
+   aparecer para o consultor para que ele possa fazer a devolutiva".
+
+   Duas decisões que ele tomou e que o código precisa respeitar:
+   • reprovar NÃO marca Venda Perdida. A reprovação é técnica; perder a
+     venda é decisão comercial, e o consultor ainda pode contornar
+     (remarcar a data, trocar equipamento). O motivo fica sugerido para
+     quando ele registrar a perda, se ela vier;
+   • o consultor PODE corrigir e reenviar para análise. Reprovado é fim de
+     linha com motivo, não cadeado.                                       */
+
+function _podeReprovar(){
+  if(!usuarioAtual) return false;
+  if(typeof _modoLeitura!=='undefined' && _modoLeitura) return false;
+  return ['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0;
+}
+
+// O motivo é obrigatório e escolhido de uma lista — digitar livre produziria
+// dez grafias de "data" e o relatório de motivos não somaria nada. O campo
+// de detalhe fica ao lado, para a devolutiva ter o que dizer ao cliente.
+function abrirReprovacao(){
+  if(!_podeReprovar()){ alert('Seu usuário não tem permissão para reprovar orçamentos.'); return; }
+  var ov=document.getElementById('reprov-ov');
+  if(!ov) return;
+  document.getElementById('reprov-motivo').value='';
+  document.getElementById('reprov-det').value='';
+  var sel=document.getElementById('reprov-motivo');
+  sel.innerHTML='<option value="">— Selecione o motivo —</option>'
+    +MOTIVOS_REPROVACAO.map(function(m){ return '<option value="'+eh(m)+'">'+eh(m)+'</option>'; }).join('');
+  ov.classList.add('open');
+  setTimeout(function(){ try{ sel.focus(); }catch(e){} },60);
+}
+
+function fecharReprovacao(){
+  var ov=document.getElementById('reprov-ov');
+  if(ov) ov.classList.remove('open');
+}
+
+async function confirmarReprovacao(){
+  var motivo=(document.getElementById('reprov-motivo')||{}).value||'';
+  var det=((document.getElementById('reprov-det')||{}).value||'').trim();
+  if(!motivo){
+    alert('Escolha o motivo da reprovação.\n\nÉ o que o consultor vai usar para dar a devolutiva ao cliente.');
+    try{ document.getElementById('reprov-motivo').focus(); }catch(e){}
+    return;
+  }
+  if(motivo==='Outros' && !det){
+    alert('Com o motivo "Outros", descreva o que houve no campo de detalhe.\n\nSem isso a devolutiva fica sem conteúdo.');
+    try{ document.getElementById('reprov-det').focus(); }catch(e){}
+    return;
+  }
+  fecharReprovacao();
+  reprovMotivo=motivo;
+  reprovDetalhe=det;
+  reprovPor=(usuarioAtual&&usuarioAtual.nome)||'';
+  reprovEm=new Date().toLocaleString('pt-BR');
+  aprovStatus='reprovado';
+  aprovHist.push({
+    ico:'⛔', acao:'Reprovado', usuario:usuarioAtual.nome,
+    cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,
+    data:reprovEm, obs:motivo+(det?' — '+det:''), diffs:[]
+  });
+  renderStatusOrc(); renderAprovInline(); renderComercial();
+  if(driveIdAtual){ salvarNoDrive({mostrarStatus:false}).catch(function(){}); }
+  _toastMostrar('⛔ Orçamento reprovado · '+motivo,'O consultor vê o motivo no topo do orçamento para dar a devolutiva.',8000);
+}
+
+// A tarja que o consultor encontra ao abrir. Fica no topo do orçamento, não
+// escondida no histórico: o ponto todo é que ele ligue para o cliente.
+function renderReprovacao(){
+  var el=document.getElementById('reprov-faixa');
+  if(!el) return;
+  if(aprovStatus!=='reprovado'||!reprovMotivo){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='';
+  el.innerHTML='<div style="background:#fbe9e7;border:1px solid #ff8a65;border-left:5px solid #bf360c;border-radius:6px;padding:11px 14px;margin-bottom:10px">'
+    +'<div style="font-size:12.5px;font-weight:900;color:#bf360c">⛔ Orçamento reprovado — '+eh(reprovMotivo)+'</div>'
+    +(reprovDetalhe?'<div style="font-size:11.5px;color:#5d2c1c;margin-top:4px">'+eh(reprovDetalhe)+'</div>':'')
+    +'<div style="font-size:10px;color:#8d5b4c;margin-top:5px">Reprovado por <b>'+eh(reprovPor||'—')+'</b> em '+eh(reprovEm||'—')+'.</div>'
+    +'<div style="font-size:10.5px;color:#5d2c1c;margin-top:6px"><b>O que fazer:</b> dê a devolutiva ao cliente. '
+    +'Se der para contornar (outra data, outro equipamento), ajuste e reenvie para Análise Técnica. '
+    +'Se o cliente desistir, registre a Venda Perdida — o motivo já vem sugerido.</div>'
+    +'</div>';
 }
 
 async function aprovAcao(novo){
@@ -8017,6 +8160,9 @@ async function aprovAcao(novo){
   }
   // A pendência aberta (se houver) vira história agora, com a lista fechada.
   _aprovCongelarPendentes(_snapEnvio);
+  // Reenviar tira a tarja: o orçamento voltou a circular. A reprovação e o
+  // motivo continuam no histórico — some o aviso, não o registro.
+  if(novo==='analise'&&aprovStatus==='reprovado'){ reprovMotivo=''; reprovDetalhe=''; reprovPor=''; reprovEm=''; }
   if(novo==='analise'){snapshotAnterior=_snapEnvio;}
   if(novo==='aprovado'){snapshotAprovado=_snapEnvio;}
   var _evt={ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),obs:obs,diffs:diffs};
@@ -8043,7 +8189,7 @@ function renderAprovInline(){
   var cImp=0;try{cImp=secsVenda().reduce(function(t,s){return t+secTotAll(s);},0)*(1+IMP);}catch(e){}
   function btn(cor,txt,st){var b=document.createElement('button');b.className='acao-btn';b.style.background=cor;b.textContent=txt;b.onclick=function(){aprovAcaoInline(st);};return b;}
   btnsEl.innerHTML='';var mostrar=false;
-  if(nivel==='consultor'&&(aprovStatus==='rascunho'||aprovStatus==='revisao')){mostrar=true;btnsEl.appendChild(btn('#1565c0',aprovStatus==='rascunho'?'📤 Enviar para Análise Técnica':'📤 Reenviar para Análise Técnica','analise'));}
+  if(nivel==='consultor'&&(aprovStatus==='rascunho'||aprovStatus==='revisao'||aprovStatus==='reprovado')){mostrar=true;btnsEl.appendChild(btn('#1565c0',aprovStatus==='rascunho'?'📤 Enviar para Análise Técnica':'📤 Reenviar para Análise Técnica','analise'));}
   // Mesma regra de renderStatusOrc(): Área Técnica elaborando o próprio
   // orçamento pula o passo de "Enviar para Análise Técnica" (ele já é a
   // análise técnica) e vai direto pros botões de ação.
@@ -8051,6 +8197,15 @@ function renderAprovInline(){
   else if(nivel==='gerente'&&aprovStatus==='gerencial'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#6a1b9a','🏆 Enviar para Diretoria','diretoria'));btnsEl.appendChild(btn('#c62828','🔄 Solicitar Revisão','revisao'));}
   else if(nivel==='diretor'&&aprovStatus==='diretoria'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#c62828','🔄 Reprovar / Revisão','revisao'));}
   else if(['adm','gerente','diretor'].includes(usuarioAtual.nivel)&&aprovStatus!=='aprovado'&&aprovStatus!=='rascunho'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#6a1b9a','🏆 Enviar para Diretoria','diretoria'));btnsEl.appendChild(btn('#c62828','🔄 Solicitar Revisão','revisao'));}
+  if(_podeReprovar()&&aprovStatus!=='rascunho'&&aprovStatus!=='reprovado'){
+    mostrar=true;
+    var bRep=document.createElement('button');
+    bRep.className='acao-btn'; bRep.style.background='#bf360c';
+    bRep.textContent='⛔ Reprovar Orçamento';
+    bRep.title='Reprova o orçamento com um motivo — o consultor vê o motivo no topo para dar a devolutiva ao cliente';
+    bRep.onclick=function(){ abrirReprovacao(); };
+    btnsEl.appendChild(bRep);
+  }
   if(aprovStatus==='aprovado'&&_podeCancelarAprovacao()){
     mostrar=true;
     var bCan=document.createElement('button');
@@ -8083,6 +8238,9 @@ async function aprovAcaoInline(novo){
   }
   // A pendência aberta (se houver) vira história agora, com a lista fechada.
   _aprovCongelarPendentes(_snapEnvio);
+  // Reenviar tira a tarja: o orçamento voltou a circular. A reprovação e o
+  // motivo continuam no histórico — some o aviso, não o registro.
+  if(novo==='analise'&&aprovStatus==='reprovado'){ reprovMotivo=''; reprovDetalhe=''; reprovPor=''; reprovEm=''; }
   if(novo==='analise'){snapshotAnterior=_snapEnvio;}
   if(novo==='aprovado'){snapshotAprovado=_snapEnvio;}
   var _evt={ico:icos[novo]||'•',acao:atos[novo]||novo,usuario:usuarioAtual.nome,cargo:NIVEIS[usuarioAtual.nivel]||usuarioAtual.nivel,data:new Date().toLocaleString('pt-BR'),obs:obs,diffs:diffs};
@@ -9627,6 +9785,10 @@ function getDadosCompletos(){
     state:state,
     aprovStatus:aprovStatus,
     aprovHist:aprovHist,
+    reprovMotivo:reprovMotivo,
+    reprovDetalhe:reprovDetalhe,
+    reprovPor:reprovPor,
+    reprovEm:reprovEm,
     comercialStatus:comercialStatus,
     comercialHist:comercialHist,
     contratoStatus:contratoStatus,
@@ -10744,7 +10906,7 @@ function _aplicarDadosOrcamento(dados){
     if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];
   });
   if(dados.form)setForm(dados.form);else setForm({});
-  aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();contratoStatus=dados.contratoStatus||'';contratoHist=(dados.contratoHist||[]).slice();creditoStatus=dados.creditoStatus||'';creditoHist=(dados.creditoHist||[]).slice();montagemLiberacaoManual=!!dados.montagemLiberacaoManual;montagemLiberacaoManualHist=(dados.montagemLiberacaoManualHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcAtualGoogleAgenda=Object.assign({},dados.googleAgenda||{});anexosOrc=(dados.anexos||[]).map(function(a){return Object.assign({},a);});orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
+  aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();reprovMotivo=dados.reprovMotivo||'';reprovDetalhe=dados.reprovDetalhe||'';reprovPor=dados.reprovPor||'';reprovEm=dados.reprovEm||'';comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();contratoStatus=dados.contratoStatus||'';contratoHist=(dados.contratoHist||[]).slice();creditoStatus=dados.creditoStatus||'';creditoHist=(dados.creditoHist||[]).slice();montagemLiberacaoManual=!!dados.montagemLiberacaoManual;montagemLiberacaoManualHist=(dados.montagemLiberacaoManualHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcAtualGoogleAgenda=Object.assign({},dados.googleAgenda||{});anexosOrc=(dados.anexos||[]).map(function(a){return Object.assign({},a);});orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
   descDiscriminarPDF=(dados.descDiscriminarPDF!==undefined)?!!dados.descDiscriminarPDF:true;
   arredDiscriminarPDF=!!dados.arredDiscriminarPDF;
   (function(){var _e=document.getElementById('chk-arred-discriminar');if(_e)_e.checked=arredDiscriminarPDF;})();
@@ -10939,7 +11101,7 @@ function setForm(f){
   });
   sv('orc-disp',f['f-num']||'—');
 }
-function salvar(){var blob=new Blob([JSON.stringify({form:getForm(),state:state,catExtras:catExtras,aprovStatus:aprovStatus,aprovHist:aprovHist,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,snapshotAprovado:snapshotAprovado,finParcelas:finParcelas,finObs:finObs},null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(gv('f-num')||'orc')+' - '+(gv('f-cliente')||'cliente')+'.json';a.click();URL.revokeObjectURL(a.href);}
+function salvar(){var blob=new Blob([JSON.stringify({form:getForm(),state:state,catExtras:catExtras,aprovStatus:aprovStatus,aprovHist:aprovHist,reprovMotivo:reprovMotivo,reprovDetalhe:reprovDetalhe,reprovPor:reprovPor,reprovEm:reprovEm,comercialStatus:comercialStatus,comercialHist:comercialHist,snapshotAnterior:snapshotAnterior,snapshotAprovado:snapshotAprovado,finParcelas:finParcelas,finObs:finObs},null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(gv('f-num')||'orc')+' - '+(gv('f-cliente')||'cliente')+'.json';a.click();URL.revokeObjectURL(a.href);}
 function carregar(input){
   var file=input.files[0];if(!file)return;
   var fr=new FileReader();
@@ -10959,7 +11121,7 @@ function carregar(input){
         if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];
       });
       setForm(data.form||{});
-      aprovStatus=data.aprovStatus||'rascunho';aprovHist=data.aprovHist||[];comercialStatus=data.comercialStatus||'';comercialHist=data.comercialHist||[];contratoStatus=data.contratoStatus||'';contratoHist=data.contratoHist||[];creditoStatus=data.creditoStatus||'';creditoHist=data.creditoHist||[];montagemLiberacaoManual=!!data.montagemLiberacaoManual;montagemLiberacaoManualHist=data.montagemLiberacaoManualHist||[];equipReservadoManual=!!data.equipReservadoManual;atividades=data.atividades||[];followupData=data.followupData||'';orcAtualGoogleAgenda=Object.assign({},data.googleAgenda||{});anexosOrc=(data.anexos||[]).map(function(a){return Object.assign({},a);});orcCriadoEmISO=data.criadoEmISO||'';snapshotAnterior=data.snapshotAnterior||null;snapshotAprovado=data.snapshotAprovado||null;finParcelas=data.finParcelas||[];finObs=data.finObs||'';finImposto=data.finImposto||'cimp';finNumVenda=data.finNumVenda||'';
+      aprovStatus=data.aprovStatus||'rascunho';aprovHist=data.aprovHist||[];reprovMotivo=data.reprovMotivo||'';reprovDetalhe=data.reprovDetalhe||'';reprovPor=data.reprovPor||'';reprovEm=data.reprovEm||'';comercialStatus=data.comercialStatus||'';comercialHist=data.comercialHist||[];contratoStatus=data.contratoStatus||'';contratoHist=data.contratoHist||[];creditoStatus=data.creditoStatus||'';creditoHist=data.creditoHist||[];montagemLiberacaoManual=!!data.montagemLiberacaoManual;montagemLiberacaoManualHist=data.montagemLiberacaoManualHist||[];equipReservadoManual=!!data.equipReservadoManual;atividades=data.atividades||[];followupData=data.followupData||'';orcAtualGoogleAgenda=Object.assign({},data.googleAgenda||{});anexosOrc=(data.anexos||[]).map(function(a){return Object.assign({},a);});orcCriadoEmISO=data.criadoEmISO||'';snapshotAnterior=data.snapshotAnterior||null;snapshotAprovado=data.snapshotAprovado||null;finParcelas=data.finParcelas||[];finObs=data.finObs||'';finImposto=data.finImposto||'cimp';finNumVenda=data.finNumVenda||'';
       descDiscriminarPDF=(data.descDiscriminarPDF!==undefined)?!!data.descDiscriminarPDF:true;
       var _chkDescDiscrLocal=document.getElementById('chk-desc-discriminar');if(_chkDescDiscrLocal)_chkDescDiscrLocal.checked=descDiscriminarPDF;
       _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
@@ -15120,8 +15282,12 @@ var COM_SI={
 function renderComercial(){
   var panel=document.getElementById('com-panel');
   if(!panel)return;
-  // Mostrar apenas se aprovado e usuário for consultor/adm
-  var visivel=aprovStatus==='aprovado'&&usuarioAtual&&['consultor','adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0;
+  // Aprovado — e também REPROVADO. Sem isso o consultor não teria como
+  // registrar a Venda Perdida de um orçamento reprovado, que é justamente o
+  // desfecho mais provável: o painel ficaria escondido exatamente quando ele
+  // precisa fechar o funil.
+  var visivel=(aprovStatus==='aprovado'||aprovStatus==='reprovado')
+    &&usuarioAtual&&['consultor','adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0;
   panel.style.display=visivel?'block':'none';
   if(!visivel)return;
 
@@ -15243,6 +15409,13 @@ function setComercial(status){
     motivoLabel.style.display=isPerdida?'block':'none';
     motivoSel.style.display=isPerdida?'block':'none';
     if(!isPerdida)motivoSel.value='';
+    // Veio de uma reprovação? O motivo já vem escolhido — é quase sempre o
+    // mesmo, e redigitar à mão produziria duas grafias para a mesma causa.
+    // Continua editável: o cliente pode ter desistido por outra razão.
+    else if(!motivoSel.value&&reprovMotivo){
+      var temOpcao=Array.prototype.some.call(motivoSel.options,function(op){ return op.value===reprovMotivo; });
+      if(temOpcao) motivoSel.value=reprovMotivo;
+    }
   }
 
   // Mostrar aviso visual de que há seleção pendente de confirmação
