@@ -4564,7 +4564,22 @@ function uid(){return Math.random().toString(36).slice(2)+Date.now().toString(36
 function gv(id){var e=document.getElementById(id);return e?e.value:'';}
 function sv(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
 function eh(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
-function fD(s){try{return new Date(s+'T12:00:00').toLocaleDateString('pt-BR');}catch(e){return s||'';}}
+// Ano fora do intervalo em que um orçamento pode viver. Digitar "26" em vez
+// de "2026" num campo de data produz o ano 0026 — e a data continua válida
+// para o navegador, então nada reclama sozinho.
+function _anoImplausivel(iso){
+  var a=Number(String(iso||'').substring(0,4));
+  return !!a && (a<2000||a>2100);
+}
+function fD(s){
+  try{
+    // Com ano estranho, mostra os quatro dígitos: "11/12/26" ao lado de
+    // "11/12/2026" parece a mesma data, e foi o que fez o aviso parecer
+    // errado quando estava certo.
+    if(_anoImplausivel(s)) return String(s).substring(8,10)+'/'+String(s).substring(5,7)+'/'+String(s).substring(0,4);
+    return new Date(s+'T12:00:00').toLocaleDateString('pt-BR');
+  }catch(e){ return s||''; }
+}
 function safe(v){return (isNaN(v)||!isFinite(v))?0:v;}
 function fmtCep(el){var v=el.value.replace(/\D/g,'').slice(0,8);if(v.length>5)v=v.slice(0,5)+'-'+v.slice(5);el.value=v;}
 function fmtDoc(el){var v=el.value.replace(/\D/g,'');if(v.length<=11){if(v.length>9)v=v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6,9)+'-'+v.slice(9);else if(v.length>6)v=v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6);else if(v.length>3)v=v.slice(0,3)+'.'+v.slice(3);}else{v=v.slice(0,14);if(v.length>12)v=v.slice(0,2)+'.'+v.slice(2,5)+'.'+v.slice(5,8)+'/'+v.slice(8,12)+'-'+v.slice(12);else if(v.length>8)v=v.slice(0,2)+'.'+v.slice(2,5)+'.'+v.slice(5,8)+'/'+v.slice(8);else if(v.length>5)v=v.slice(0,2)+'.'+v.slice(2,5)+'.'+v.slice(5);else if(v.length>2)v=v.slice(0,2)+'.'+v.slice(2);}el.value=v;}
@@ -25831,8 +25846,14 @@ function _logRangeEvento(o){
 }
 
 function _logRangeDeDatas(f){
+  // Data com ano absurdo (0026 por "26" digitado) fica FORA do intervalo.
+  // Senão o período do orçamento vira dois mil anos e tudo que depende dele
+  // mente junto: o contador da Agenda acusava 204 eventos, a disponibilidade
+  // de LED e de equipamento varria o acervo inteiro, e a Logística gerava
+  // etapa atrás de etapa. Um erro de digitação não pode contaminar o resto —
+  // quem avisa dele é _logDatasInconsistentes, com o nome do campo.
   var datas=[f['f-dm'],f['f-dm-fim'],f['f-dia'],f['f-dia-fim'],f['f-dd'],f['f-dd-fim']]
-    .filter(function(d){ return !!d; });
+    .filter(function(d){ return !!d && !_anoImplausivel(d); });
   if(!datas.length) return null;
   var ini=datas[0], fim=datas[0];
   datas.forEach(function(d){ if(d<ini) ini=d; if(d>fim) fim=d; });
@@ -25849,6 +25870,29 @@ function _logDatasInconsistentes(f){
   var dia=f['f-dia']||'', diaF=f['f-dia-fim']||dia;
   var dd=f['f-dd']||'', ddF=f['f-dd-fim']||dd;
   function d(x){ return fD(x); }
+
+  // Ano absurdo primeiro. Um ano 0026 quebra TODAS as comparações abaixo e
+  // faria o aviso falar de "fim anterior ao início" — verdade, mas inútil:
+  // as duas datas aparecem quase iguais na tela e o consultor conclui que o
+  // sistema está errado. Nomeando o ano, a correção leva um segundo.
+  var campos=[
+    {v:f['f-dm'],      rot:'início da montagem'},
+    {v:f['f-dm-fim'],  rot:'fim da montagem'},
+    {v:f['f-dia'],     rot:'início do evento'},
+    {v:f['f-dia-fim'], rot:'fim do evento'},
+    {v:f['f-dd'],      rot:'início da desmontagem'},
+    {v:f['f-dd-fim'],  rot:'fim da desmontagem'}
+  ];
+  var anosRuins=campos.filter(function(c){ return c.v && _anoImplausivel(c.v); });
+  if(anosRuins.length){
+    anosRuins.forEach(function(c){
+      var ano=String(c.v).substring(0,4);
+      p.push('o ano do '+c.rot+' está '+ano+' (data '+fD(c.v)+')'
+        +(Number(ano)<100?' — provavelmente o ano foi digitado com dois dígitos':''));
+    });
+    // Com uma data impossível no meio, comparar a ordem só produz ruído.
+    return p;
+  }
   if(dm&&dmF&&dmF<dm) p.push('o fim da montagem ('+d(dmF)+') é anterior ao início ('+d(dm)+')');
   if(dia&&diaF&&diaF<dia) p.push('o fim do evento ('+d(diaF)+') é anterior ao início ('+d(dia)+')');
   if(dd&&ddF&&ddF<dd) p.push('o fim da desmontagem ('+d(ddF)+') é anterior ao início ('+d(dd)+')');
