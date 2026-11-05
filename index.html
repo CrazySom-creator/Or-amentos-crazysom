@@ -8550,7 +8550,9 @@ async function carregarListaAprov(aba){
     validos=_dedupPorDriveId(validos);
 
     if(aba==='pend'){
-      _aprovTodos=validos.filter(function(x){return x.st!=='aprovado'&&x.st!=='rascunho';});
+      // Reprovado saiu da fila: a decisão já foi tomada. Fica visível no
+      // bloco de avisos do consultor, que é quem tem o que fazer com ele.
+      _aprovTodos=validos.filter(function(x){return x.st!=='aprovado'&&x.st!=='rascunho'&&x.st!=='reprovado';});
     }else{
       _aprovTodos=validos.filter(function(x){return x.st==='aprovado';});
     }
@@ -8685,12 +8687,12 @@ function carregarMaisAprovados(){
 function buildOrcCard(orc,idx){
   var si=SI[orc.st]||SI.rascunho;
   var ult=orc.hist.length?orc.hist[orc.hist.length-1]:null;
-  var aguardando={analise:'Área Técnica',gerencial:'Gerente Comercial',diretoria:'Diretoria Comercial',revisao:'Consultor (revisão)'};
+  var aguardando={analise:'Área Técnica',gerencial:'Gerente Comercial',diretoria:'Diretoria Comercial',revisao:'Consultor (revisão)',reprovado:'Consultor (devolutiva ao cliente e registro da perda)'};
   var etapas=['analise','gerencial','diretoria','aprovado'];
   var iAtual=etapas.indexOf(orc.st);
   var etapasHTML=etapas.map(function(e,i){var cls=(orc.st==='aprovado')?'feito':(i<iAtual?'feito':(i===iAtual?'atual':'futuro'));var lbl={analise:'Técnico',gerencial:'Gerente',diretoria:'Diretoria',aprovado:'Aprovado'}[e];return '<span class="etapa '+cls+'">'+lbl+'</span>';}).join('<span style="color:var(--text-dim);font-size:9px;margin:0 1px">›</span>');
   var nivel=usuarioAtual?usuarioAtual.nivel:'';
-  var minhaVez=(nivel==='tecnico'&&orc.st==='analise')||(nivel==='gerente'&&orc.st==='gerencial')||(nivel==='diretor'&&orc.st==='diretoria')||(['adm','gerente','diretor'].includes(nivel)&&orc.st!=='aprovado'&&orc.st!=='rascunho')||(nivel==='consultor'&&orc.st==='revisao');
+  var minhaVez=(nivel==='tecnico'&&orc.st==='analise')||(nivel==='gerente'&&orc.st==='gerencial')||(nivel==='diretor'&&orc.st==='diretoria')||(['adm','gerente','diretor'].includes(nivel)&&orc.st!=='aprovado'&&orc.st!=='rascunho'&&orc.st!=='reprovado')||(nivel==='consultor'&&(orc.st==='revisao'||orc.st==='reprovado'));
   var botoesAcao=getBotoesAcaoLista(orc,idx);var temAcao=botoesAcao.length>0;
   var histHtml='';
   if(orc.hist.length){
@@ -12131,8 +12133,8 @@ function homeExecutarBusca(){
   homeFiltrarBusca(q);
 }
 
-var HOME_BUSCA_SI_COR={rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828'};
-var HOME_BUSCA_SI_LBL={rascunho:'Rascunho',analise:'Em Análise',gerencial:'Ap. Gerencial',diretoria:'Ap. Diretoria',aprovado:'Aprovado',revisao:'Revisão'};
+var HOME_BUSCA_SI_COR={rascunho:'#546e7a',analise:'#1565c0',gerencial:'#e65100',diretoria:'#6a1b9a',aprovado:'#2e7d32',revisao:'#c62828',reprovado:'#bf360c'};
+var HOME_BUSCA_SI_LBL={rascunho:'Rascunho',analise:'Em Análise',gerencial:'Ap. Gerencial',diretoria:'Ap. Diretoria',aprovado:'Aprovado',revisao:'Revisão',reprovado:'Reprovado'};
 
 function homeFiltrarBusca(q){
   if(!_homeBuscaCarregada) return;
@@ -12346,7 +12348,10 @@ function _avisosGrupos(){
   var gestor=['adm','gerente','diretor'].indexOf(nivel)>=0;
   var lista=(_avisosCache||[]).filter(Boolean);
   var meuSt={tecnico:'analise',gerente:'gerencial',diretor:'diretoria'}[nivel]||'';
-  var pend=lista.filter(function(o){ return o.st!=='aprovado'&&o.st!=='rascunho'; });
+  // Reprovado é decisão TOMADA, não pendência. Sem tirá-lo daqui, ele caía em
+  // "aguardando sua aprovação" e cobrava do gestor uma decisão que ele mesmo
+  // já tinha dado — foi o que o Fabiano viu na Home.
+  var pend=lista.filter(function(o){ return o.st!=='aprovado'&&o.st!=='rascunho'&&o.st!=='reprovado'; });
   var grupos=[];
 
   // 1. Minha vez de aprovar
@@ -12400,6 +12405,27 @@ function _avisosGrupos(){
       titulo:prontos.length+(prontos.length>1?' aprovados — já pode enviar ao cliente':' aprovado — já pode enviar ao cliente'),
       sub:'Aprovação concluída e ainda sem registro de envio. Depois de mandar, marque "Proposta Enviada" no orçamento.',
       itens:prontos, acaoTxt:'', acaoFn:''
+    });
+  }
+
+  // 5. Reprovados ainda sem desfecho comercial. Espelha o bloco dos aprovados:
+  // fica aguardando enquanto o consultor não registrar a perda (ou qualquer
+  // outro desfecho — ele pode ter contornado e o cliente seguido). Some
+  // sozinho quando a marcação é feita, sem ninguém precisar dar baixa.
+  var reprov=lista.filter(function(o){
+    if(o.st!=='reprovado') return false;
+    var cs=(o.dados&&o.dados.comercialStatus)||'';
+    return !cs||cs==='enviada'||cs==='negociacao'||cs==='standby';
+  });
+  if(!gestor) reprov=reprov.filter(_avisosEhMeu);
+  if(reprov.length){
+    grupos.push({
+      id:'reprovados', ico:'⛔', cor:'#bf360c',
+      titulo:reprov.length+(reprov.length>1?' reprovados — aguardando registro de perda':' reprovado — aguardando registro de perda'),
+      sub:gestor
+        ? 'Reprovados e ainda sem desfecho no funil. Estão com o consultor, para a devolutiva ao cliente.'
+        : 'Dê a devolutiva ao cliente e registre o desfecho. Se ele desistiu, marque "Venda Perdida" — o motivo da reprovação já vem sugerido. Se der para contornar, ajuste e reenvie para análise.',
+      itens:reprov, acaoTxt:'', acaoFn:''
     });
   }
 
