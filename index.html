@@ -1885,7 +1885,9 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
   <div class="modal-box" style="max-width:780px">
     <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <div><h2 style="margin-bottom:2px">👥 Cadastro de Clientes</h2><p class="sub" style="margin:0">Clientes cadastrados (PF/PJ)</p></div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-o btn-sm" id="cli-btn-importar" onclick="cliImportarDosOrcamentos()" title="Cadastra os clientes que já aparecem em orçamentos e completa os campos em branco dos que já existem">👥 Importar dos orçamentos</button>
+        <button class="btn btn-o btn-sm" id="cli-btn-incompletos" onclick="cliFiltrarIncompletos()" title="Mostra só os clientes cadastrados a partir de orçamentos que ficaram sem CNPJ/CPF">⚠️ Faltam dados</button>
         <button class="btn btn-g btn-sm" onclick="clienteNovo()">+ Novo Cliente</button>
         <button class="btn btn-o btn-sm" onclick="document.getElementById('clientes-ov').classList.remove('open');if(!_clienteBuscaModoSelecao)voltarDoModulo();">✕</button>
       </div>
@@ -10388,6 +10390,10 @@ async function _executarSave(num,cli,dt,opts){
     // Avisos da Home: quem acabou de enviar para aprovação precisa ver o
     // reflexo disso na hora, sem esperar uma nova varredura do Drive.
     try{ _avisosAtualizarUm(d.id, num, cli, dt, dados); }catch(eAv){}
+    // Cadastra (ou completa) o cliente deste orçamento. Best-effort e sem
+    // await: o orçamento já está salvo, e uma falha aqui não pode travar
+    // nem atrasar o retorno ao usuário.
+    try{ _cliAutoDoOrcamento(); }catch(eCli){}
     // O número agora EXISTE de verdade na listagem — a reserva cumpriu o
     // papel dela e volta para o estoque (não fica ocupando o registro).
     if(_numReservado && String(_numReservado)===String(num)) _liberarNumeroReservado();
@@ -30743,6 +30749,164 @@ async function clientesCarregarStorage(){
   }catch(e){}
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   CADASTRO AUTOMÁTICO DE CLIENTE A PARTIR DO ORÇAMENTO
+   ──────────────────────────────────────────────────────────────────────
+   Pedido do Fabiano: "você pode cadastrar automaticamente todos os
+   clientes que é elaborado um orçamento?".
+
+   Duas decisões dele que o código respeita:
+
+   • Cliente SEM CNPJ/CPF entra assim mesmo, marcado. O cadastro manual
+     exige documento, e exigir aqui deixaria de fora justamente o cliente
+     avulso e a pessoa física — que são os que mais somem do radar numa
+     positivação de carteira. Eles ficam com incompleto:true e o cadastro
+     mostra um filtro para completá-los depois. Ao EDITAR, o documento
+     continua obrigatório: a regra do cadastro manual não mudou.
+
+   • O cadastro manda. Um orçamento só preenche campo VAZIO do cliente —
+     nunca sobrescreve o que alguém digitou no cadastro. Sem isso, reabrir
+     um orçamento antigo desfaria uma correção feita à mão.          */
+
+// Os campos do orçamento que alimentam o cadastro, na ordem cadastro ← form.
+var CLI_AUTO_CAMPOS=[
+  ['doc','f-doc'], ['email','f-email'], ['tel','f-tel'], ['contato','f-contato'],
+  ['cep','f-cep'], ['end','f-end'], ['endnum','f-endnum'],
+  ['bairro','f-bairro'], ['cidade','f-cidade'], ['ie','f-ie']
+];
+
+// Acha o cliente já cadastrado que corresponde a estes dados. Pelo documento
+// primeiro (é o que o cadastro usa como identidade) e, na falta dele, pelo
+// nome normalizado — a mesma regra do histórico do cliente.
+function _cliAutoAchar(nome,doc){
+  var dig=_clienteSoDigitos(doc||'');
+  if(dig.length>=11){
+    var porDoc=CLIENTES.find(function(c){ return _clienteSoDigitos(c.doc)===dig; });
+    if(porDoc) return porDoc;
+  }
+  var alvo=_cliChave(nome);
+  if(!alvo) return null;
+  return CLIENTES.find(function(c){ return _cliChave(c.nome)===alvo || (c.fantasia&&_cliChave(c.fantasia)===alvo); })||null;
+}
+
+// Cria ou completa o cliente a partir de um conjunto de campos de orçamento.
+// Devolve {acao:'criado'|'completado'|'nada', cliente, campos:[...]}.
+function _cliAutoDe(form, quem){
+  form=form||{};
+  var nome=String(form['f-cliente']||'').trim();
+  if(!nome) return {acao:'nada'};
+  var doc=String(form['f-doc']||'').trim();
+  var dig=_clienteSoDigitos(doc);
+  var existe=_cliAutoAchar(nome,doc);
+
+  if(existe){
+    // Só completa o que está vazio.
+    var mudou=[];
+    CLI_AUTO_CAMPOS.forEach(function(p){
+      var atual=String(existe[p[0]]||'').trim();
+      var novo=String(form[p[1]]||'').trim();
+      if(!atual&&novo){ existe[p[0]]=novo; mudou.push(p[0]); }
+    });
+    if(mudou.indexOf('doc')>=0 && _clienteSoDigitos(existe.doc).length>=11) existe.incompleto=false;
+    if(!mudou.length) return {acao:'nada', cliente:existe};
+    existe.atualizadoEm=new Date().toLocaleString('pt-BR');
+    existe.atualizadoPor=(quem||'auto (orçamento)');
+    return {acao:'completado', cliente:existe, campos:mudou};
+  }
+
+  var obj={
+    id:'cli_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    tipo:dig.length===11?'PF':'PJ',
+    nome:nome, fantasia:'', doc:doc, ie:'', email:'', tel:'', contato:'',
+    origem:String(form['f-fonte']||''), cep:'', end:'', endnum:'', bairro:'', cidade:'', obs:'',
+    incompleto:dig.length!==11&&dig.length!==14,
+    criadoPorOrcamento:String(form['f-num']||''),
+    atualizadoEm:new Date().toLocaleString('pt-BR'),
+    atualizadoPor:(quem||'auto (orçamento)')
+  };
+  CLI_AUTO_CAMPOS.forEach(function(p){
+    var v=String(form[p[1]]||'').trim();
+    if(v) obj[p[0]]=v;
+  });
+  CLIENTES.push(obj);
+  return {acao:'criado', cliente:obj};
+}
+
+// Chamado depois de salvar o orçamento. Best-effort: nunca derruba o
+// salvamento — o orçamento já está gravado quando isto roda.
+async function _cliAutoDoOrcamento(){
+  try{
+    if(!CLIENTES||!CLIENTES.length){ try{ await clientesCarregarStorage(); }catch(e){} }
+    var r=_cliAutoDe(getForm(), usuarioAtual?usuarioAtual.nome:'');
+    if(r.acao==='nada') return r;
+    await _clienteSalvarFirestore(r.cliente);
+    return r;
+  }catch(e){ console.warn('_cliAutoDoOrcamento:',e); return {acao:'nada'}; }
+}
+
+/* ── Importar os clientes dos orçamentos já existentes ─────────────────
+   O auto-cadastro só vale daqui para a frente; a carteira que interessa
+   para a positivação está nos orçamentos antigos. Este botão varre todos,
+   do mais ANTIGO para o mais recente — assim, quando o mesmo cliente
+   aparece várias vezes, o orçamento mais novo é o que completa os campos
+   que ainda faltam, e não o contrário.                                 */
+async function cliImportarDosOrcamentos(){
+  if(!usuarioAtual||['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)<0){
+    alert('Só Gerência, Diretoria ou Administração podem importar clientes.'); return;
+  }
+  var box=document.getElementById('clientes-lista');
+  if(box) box.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">⏳ Lendo os orçamentos...</div>';
+  try{
+    if(!(_dashDados||[]).length) await dashAtualizar(true);
+  }catch(e){}
+  var orcs=(_dashDados||[]).slice().sort(function(a,b){
+    var da=(a.form&&a.form['f-data'])||(a.form&&a.form['f-dia'])||'';
+    var db=(b.form&&b.form['f-data'])||(b.form&&b.form['f-dia'])||'';
+    return da<db?-1:da>db?1:0;
+  });
+  var criados=[], completados=[], semNome=0;
+  orcs.forEach(function(o){
+    var f=o.form||{};
+    if(!String(f['f-cliente']||'').trim()){ semNome++; return; }
+    var r=_cliAutoDe(f, 'importação dos orçamentos');
+    if(r.acao==='criado') criados.push(r.cliente);
+    else if(r.acao==='completado') completados.push(r.cliente);
+  });
+  if(!criados.length&&!completados.length){
+    clientesRenderLista(document.getElementById('clientes-busca').value||'');
+    alert('Nada a importar: todos os clientes dos orçamentos já estão cadastrados e completos.');
+    return;
+  }
+  var semDoc=criados.filter(function(c){ return c.incompleto; }).length;
+  if(!confirm('Importar os clientes dos orçamentos?\n\n'
+    +'• '+criados.length+' cliente(s) novo(s)'+(semDoc?' — '+semDoc+' sem CNPJ/CPF, que entram marcados como incompletos':'')+'\n'
+    +'• '+completados.length+' cadastro(s) existente(s) ganham campos que estavam em branco\n'
+    +(semNome?'• '+semNome+' orçamento(s) sem nome de cliente, ignorados\n':'')
+    +'\nNenhum dado já preenchido no cadastro é sobrescrito.')){
+    // Desfaz o que foi montado em memória — nada foi gravado ainda.
+    criados.forEach(function(c){ var i=CLIENTES.indexOf(c); if(i>=0) CLIENTES.splice(i,1); });
+    clientesRenderLista(document.getElementById('clientes-busca').value||'');
+    return;
+  }
+  var alvo=criados.concat(completados), n=0, falhas=0;
+  for(var i=0;i<alvo.length;i++){
+    if(box) box.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">⏳ Gravando '+(i+1)+' de '+alvo.length+'...</div>';
+    var ok=await _clienteSalvarFirestore(alvo[i]);
+    if(ok) n++; else falhas++;
+  }
+  clientesRenderLista(document.getElementById('clientes-busca').value||'');
+  _toastMostrar('👥 '+criados.length+' cliente(s) cadastrado(s) e '+completados.length+' completado(s).',
+    falhas?(falhas+' não puderam ser gravados — veja as permissões do banco.'):'',9000);
+}
+
+function cliFiltrarIncompletos(){
+  var el=document.getElementById('clientes-busca');
+  if(el) el.value='';
+  _cliSoIncompletos=!_cliSoIncompletos;
+  clientesRenderLista('');
+}
+var _cliSoIncompletos=false;
+
 async function _clienteSalvarFirestore(obj){
   try{
     await fbDb.collection('clientes').doc(obj.id).set(obj);
@@ -31039,6 +31203,7 @@ function clientesRenderLista(filtro){
   filtro=(filtro||'').toLowerCase().trim();
   var filtroDig=_clienteSoDigitos(filtro);
   var lista=CLIENTES.filter(function(c){
+    if(_cliSoIncompletos && !c.incompleto) return false;
     if(!filtro)return true;
     var nome=(c.nome||'').toLowerCase();
     var fantasia=(c.fantasia||'').toLowerCase();
@@ -31046,7 +31211,14 @@ function clientesRenderLista(filtro){
     var doc=_clienteSoDigitos(c.doc);
     return nome.indexOf(filtro)>=0||fantasia.indexOf(filtro)>=0||email.indexOf(filtro)>=0||(filtroDig&&doc.indexOf(filtroDig)>=0);
   }).sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
-  if(!lista.length){box.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">Nenhum cliente encontrado.</div>';return;}
+  var nInc=CLIENTES.filter(function(c){ return c.incompleto; }).length;
+  var bi=document.getElementById('cli-btn-incompletos');
+  if(bi){
+    bi.style.display=nInc?'inline-block':'none';
+    bi.textContent=(_cliSoIncompletos?'✕ ver todos':'⚠️ Faltam dados ('+nInc+')');
+  }
+  if(!lista.length){box.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">'
+    +(_cliSoIncompletos?'Nenhum cliente com dados faltando. 👍':'Nenhum cliente encontrado.')+'</div>';return;}
   box.innerHTML=lista.map(function(c){
     var idx=CLIENTES.indexOf(c);
     var acao=_clienteBuscaModoSelecao
@@ -31056,7 +31228,9 @@ function clientesRenderLista(filtro){
     return '<div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
       +'<div>'
       +'<div style="color:var(--text);font-size:13px;font-weight:700"><span onclick="clienteHistorico('+idx+')" title="Ver o histórico de vendas e as notas da negociação deste cliente" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px">'+eh(c.nome||'—')+'</span>'+(c.fantasia?' <span style="color:var(--text-muted);font-weight:400">('+eh(c.fantasia)+')</span>':'')+'</div>'
-      +'<div style="color:var(--text-muted);font-size:11px;margin-top:2px">'+(c.tipo==='PF'?'CPF':'CNPJ')+': '+eh(c.doc||'—')+(c.email?' · ✉️ '+eh(c.email):'')+(c.tel?' · 📞 '+eh(c.tel):'')+'</div>'
+      +'<div style="color:var(--text-muted);font-size:11px;margin-top:2px">'+(c.tipo==='PF'?'CPF':'CNPJ')+': '+eh(c.doc||'—')
+        +(c.incompleto?' <span style="color:#ef6c00;font-weight:800;font-size:9.5px;border:1px solid #ef6c00;border-radius:3px;padding:0 4px" title="Cadastrado a partir de um orçamento, sem CNPJ/CPF. Edite para completar.">FALTAM DADOS</span>':'')
+        +(c.email?' · ✉️ '+eh(c.email):'')+(c.tel?' · 📞 '+eh(c.tel):'')+'</div>'
       +(c.cidade?'<div style="color:var(--text-muted);font-size:10px;margin-top:2px">📍 '+eh(c.cidade)+'</div>':'')
       +'</div>'
       +'<div>'+acao+'</div>'
