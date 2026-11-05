@@ -3037,7 +3037,10 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <h2 style="margin-bottom:2px">📋 Ordens de Serviço</h2>
         <p class="sub" id="os-mod-sub" style="margin:0">Filtre por período, evento e consultor · marque as OS e imprima ou envie em lote</p>
       </div>
-      <button class="btn btn-o btn-sm" onclick="document.getElementById('os-mod-ov').classList.remove('open');voltarDoModulo()">✕</button>
+      <div style="display:flex;gap:7px;align-items:center">
+        <button class="btn btn-r btn-sm" onclick="osModAtualizar()" title="Relê os orçamentos do servidor — use depois de corrigir um dado, porque a lista fica em cache">🔄 Atualizar</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('os-mod-ov').classList.remove('open');voltarDoModulo()">✕</button>
+      </div>
     </div>
 
     <!-- Filtros -->
@@ -34084,7 +34087,17 @@ async function abrirModuloOS(){
   }
 }
 
-async function osModCarregarDados(){
+// Relê tudo do servidor e refaz a busca. O módulo guardava os orçamentos
+// para a sessão inteira, então corrigir um dado no orçamento não aparecia
+// aqui — era o que fazia a validação acusar falta do que já estava lá.
+async function osModAtualizar(){
+  await osModCarregarDados(true);
+  var de=(document.getElementById('os-filtro-de')||{}).value||'';
+  if(de) await osModBuscar();
+  _toastMostrar('🔄 '+_osModDados.length+' orçamentos relidos do servidor.','',5000);
+}
+
+async function osModCarregarDados(forcar){
   var sub=document.getElementById('os-mod-sub');
   var lista=document.getElementById('os-mod-lista');
   sub.textContent='⏳ Carregando orçamentos do Drive...';
@@ -34100,7 +34113,7 @@ async function osModCarregarDados(){
     sub.textContent='⏳ Carregando '+itens.length+' orçamentos...';
     _osModDados=(await fetchProgressivo(itens,15,function(parciais,total){
       sub.textContent='⏳ '+parciais.length+' / '+total+' carregados...';
-    })).filter(Boolean);
+    }, !!forcar)).filter(Boolean);
     sub.textContent=_osModDados.length+' orçamentos carregados';
     lista.innerHTML='';
   }catch(e){
@@ -34456,10 +34469,56 @@ function osModSelecionarTodos(marcar){
   osModAtualizarContagem();
 }
 
+/* ── Reler antes de reclamar ───────────────────────────────────────────
+   Relato do Fabiano: "este evento já está com os horários corretos e
+   continua aparecendo esta mensagem". Estava mesmo. O módulo carrega os
+   orçamentos uma vez por sessão e nunca mais relê — então ele validava a
+   versão de antes da correção, e acusava falta de um dado que já existia.
+
+   Agora, antes de dizer que falta alguma coisa, o sistema RELÊ os
+   orçamentos envolvidos, direto do servidor, ignorando o cache. Se o dado
+   foi preenchido, a OS sai; se continua faltando, aí sim a mensagem — e
+   dessa vez ela é verdade.
+
+   A janela é aberta ANTES da releitura, dentro do clique: abrir depois do
+   await faria o navegador tratá-la como pop-up não solicitado.          */
+async function osModRelerOrcamentos(lista){
+  var itens=(lista||[]).filter(function(o){ return o&&o.driveId; })
+    .map(function(o){ return {id:o.driveId, nome:o.nome, modificado:o.modificado}; });
+  if(!itens.length) return lista;
+  var frescos=[];
+  try{
+    frescos=(await fetchProgressivo(itens, 15, null, true)).filter(Boolean);
+  }catch(e){ console.warn('osModRelerOrcamentos:', e); return lista; }
+  var porId={};
+  frescos.forEach(function(o){ if(o&&o.driveId) porId[o.driveId]=o; });
+  // Atualiza as listas do módulo, para a tela também parar de mostrar o
+  // estado velho depois desta releitura.
+  function troca(arr){
+    (arr||[]).forEach(function(o,i){ if(o&&o.driveId&&porId[o.driveId]) arr[i]=porId[o.driveId]; });
+  }
+  troca(_osModDados); troca(_osModFiltrados);
+  return (lista||[]).map(function(o){ return (o&&o.driveId&&porId[o.driveId])?porId[o.driveId]:o; });
+}
+
+async function osModImprimir(lista){
+  if(!lista||!lista.length) return;
+  var w=window.open('','_blank');
+  if(!w){ alert('⚠️ Pop-up bloqueado! Permita pop-ups para este site.'); return; }
+  try{
+    w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Gerando OS...</title></head>'
+      +'<body style="font-family:Arial,Helvetica,sans-serif;background:#fff;color:#444;padding:40px;text-align:center">'
+      +'<div style="font-size:15px;font-weight:700">⏳ Conferindo a versão mais recente dos orçamentos...</div>'
+      +'<div style="font-size:12px;color:#888;margin-top:6px">'+lista.length+' OS</div></body></html>');
+  }catch(e){}
+  var frescos=await osModRelerOrcamentos(lista);
+  osModGerarOS(frescos, w);
+}
+
 function osModImprimirUm(idx){
   var o=_osModFiltrados[idx];
   if(!o) return;
-  osModGerarOS([o]);
+  osModImprimir([o]);
 }
 
 function osModImprimirSelecionados(){
@@ -34471,16 +34530,16 @@ function osModImprimirSelecionados(){
     if(_osModFiltrados[idx]) lista.push(_osModFiltrados[idx]);
   });
   if(!confirm('Imprimir '+lista.length+' OS(s) em lote?\n\nAs OS serão abertas em uma única janela.'))return;
-  osModGerarOS(lista);
+  osModImprimir(lista);
 }
 
 function osModImprimirTodos(){
   if(!_osModFiltrados.length){alert('Nenhuma OS para imprimir.');return;}
   if(!confirm('Imprimir '+_osModFiltrados.length+' OS(s) em lote?\n\nTodas as OS serão abertas em uma única janela.'))return;
-  osModGerarOS(_osModFiltrados);
+  osModImprimir(_osModFiltrados);
 }
 
-function osModGerarOS(lista){
+function osModGerarOS(lista, janela){
   // ── Validação: verificar campos obrigatórios em cada orçamento da lista ──
   var CAMPOS_OBR_OS=[
     {id:'f-cliente', label:'Nome do cliente'},
@@ -34508,6 +34567,7 @@ function osModGerarOS(lista){
       msg+='\n';
     });
     msg+='Preencha os dados e tente novamente.';
+    if(janela){ try{ janela.close(); }catch(e){} }
     alert(msg);
     return;
   }
@@ -34681,7 +34741,7 @@ function osModGerarOS(lista){
     +paginasHTML
     +'</body></html>';
 
-  var w=window.open('','_blank');
+  var w=janela||window.open('','_blank');
   if(!w){alert('⚠️ Pop-up bloqueado! Permita pop-ups para este site.');return;}
   w.document.open();
   w.document.write(fullHTML);
