@@ -1886,13 +1886,19 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     <div class="mb-head-sticky" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <div><h2 style="margin-bottom:2px">👥 Cadastro de Clientes</h2><p class="sub" style="margin:0">Clientes cadastrados (PF/PJ)</p></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-r btn-sm" onclick="positAbrir()" title="Sugere quais clientes devem ser positivados, pelo histórico de cada um">🎯 Positivação</button>
         <button class="btn btn-o btn-sm" id="cli-btn-importar" onclick="cliImportarDosOrcamentos()" title="Cadastra os clientes que já aparecem em orçamentos e completa os campos em branco dos que já existem">👥 Importar dos orçamentos</button>
         <button class="btn btn-o btn-sm" id="cli-btn-incompletos" onclick="cliFiltrarIncompletos()" title="Mostra só os clientes cadastrados a partir de orçamentos que ficaram sem CNPJ/CPF">⚠️ Faltam dados</button>
         <button class="btn btn-g btn-sm" onclick="clienteNovo()">+ Novo Cliente</button>
         <button class="btn btn-o btn-sm" onclick="document.getElementById('clientes-ov').classList.remove('open');if(!_clienteBuscaModoSelecao)voltarDoModulo();">✕</button>
       </div>
     </div>
-    <input id="clientes-busca" type="text" placeholder="🔍 Buscar por nome, CNPJ/CPF ou e-mail..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text);font-size:12px;margin:12px 0 10px" oninput="clientesRenderLista(this.value)">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 10px">
+      <input id="clientes-busca" type="text" placeholder="🔍 Buscar por nome, CNPJ/CPF ou e-mail..." style="flex:1;min-width:220px;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text);font-size:12px" oninput="clientesRenderLista(this.value)">
+      <select id="clientes-cons" onchange="clientesRenderLista(document.getElementById('clientes-busca').value)" title="Mostra só os clientes deste consultor — pelo cadastro ou por ter orçamento dele" style="padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text);font-size:12px">
+        <option value="">Todos os consultores</option>
+      </select>
+    </div>
     <div id="clientes-lista" style="max-height:440px;overflow-y:auto;border:1px solid var(--border);border-radius:6px"></div>
   </div>
 </div>
@@ -3434,6 +3440,39 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <option value="Outros">📝 Outros</option>
       </select>
     </div>
+  </div>
+</div>
+
+<div class="ov" id="posit-ov">
+  <div class="modal-box dash-modal" style="max-width:1000px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px">
+      <div>
+        <h2 style="margin-bottom:2px">🎯 Positivação de Carteira</h2>
+        <p class="sub" id="posit-sub" style="margin:0">Quem deveria ter comprado no período e não comprou</p>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center">
+        <button class="btn btn-o btn-sm" onclick="positCopiar()" title="Copia a lista em texto, agrupada por motivo — para dividir entre a equipe">📋 Copiar</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('posit-ov').classList.remove('open');voltarDoModulo()">✕</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 13px;margin-bottom:12px">
+      <div><label style="font-size:9px">De</label><input type="date" id="posit-de" onchange="positBuscar()" style="font-size:11px;padding:5px 7px"></div>
+      <div><label style="font-size:9px">Até</label><input type="date" id="posit-ate" onchange="positBuscar()" style="font-size:11px;padding:5px 7px"></div>
+      <div><label style="font-size:9px">Consultor</label>
+        <select id="posit-cons" onchange="positBuscar()" style="font-size:11px;padding:5px 7px"><option value="">Todos</option></select>
+      </div>
+      <div><label style="font-size:9px">Motivo</label>
+        <select id="posit-motivo" onchange="positBuscar()" style="font-size:11px;padding:5px 7px">
+          <option value="">Todos</option>
+          <option value="esfriou">Esfriou</option>
+          <option value="perdido">Perdido recente</option>
+          <option value="emaberto">Parado em aberto</option>
+          <option value="nunca">Nunca comprou</option>
+        </select>
+      </div>
+      <span style="font-size:10px;color:var(--text-muted);padding-bottom:7px;max-width:330px">O período é a janela em que o cliente <b>deveria</b> ter comprado. Quem comprou dentro dela está ativo e não aparece.</span>
+    </div>
+    <div id="posit-corpo"></div>
   </div>
 </div>
 
@@ -18653,6 +18692,7 @@ function fkAbrirAtrasados(tipo){
 function fkAtrasadosAbrirVinculo(vinculoTipo, vinculoId){
   document.getElementById('fk-atrasados-modal').classList.remove('open');
   if(vinculoTipo === 'lead') leadAbrirDetalhe(vinculoId);
+  else if(vinculoTipo === 'cliente'){ var c=_cliAchar(vinculoId); if(c) clienteHistorico(c); }
   else fkAbrirDetalhe(vinculoId);
 }
 
@@ -19944,7 +19984,18 @@ function tarefaAbrirForm(vinculoTipo, vinculoId, vinculoLabel, consultorPadrao){
   popularTiposTarefa();
   document.getElementById('tf-tipo').value='';
   _tarefaPopularConsultorSelect();
-  document.getElementById('tf-consultor').value=consultorPadrao||(usuarioAtual?usuarioAtual.nome:'');
+  // O select é copiado do campo de consultor do orçamento. Um consultor que
+  // não esteja nessa lista (antigo, externo, ou o próprio usuário) deixaria
+  // o campo VAZIO — e a tarefa não salva, porque o consultor é obrigatório.
+  // Em vez de perder a tarefa em silêncio, o nome entra como opção.
+  var _selC=document.getElementById('tf-consultor');
+  var _nomeC=consultorPadrao||(usuarioAtual?usuarioAtual.nome:'');
+  if(_selC&&_nomeC&&!Array.prototype.some.call(_selC.options,function(o){ return o.value===_nomeC; })){
+    var _op=document.createElement('option');
+    _op.value=_nomeC; _op.textContent=_nomeC;
+    _selC.appendChild(_op);
+  }
+  if(_selC) _selC.value=_nomeC;
   document.getElementById('tarefa-form-modal').classList.add('open');
 }
 
@@ -19980,6 +20031,9 @@ function _tarefasAtualizarTelasAbertas(vinculoTipo, vinculoId){
   }
   if(vinculoTipo==='lead' && _leadDetId===vinculoId){
     tarefasRenderNoDetalhe('lead', vinculoId, 'lead-det-tarefas');
+  }
+  if(vinculoTipo==='cliente' && _cliHistAtual && _cliHistAtual.id===vinculoId){
+    tarefasRenderNoDetalhe('cliente', vinculoId, 'clihist-tarefas');
   }
   var telaOv=document.getElementById('tarefas-ov');
   if(telaOv && telaOv.style.display!=='none') tarefasRenderMinhas();
@@ -30772,7 +30826,10 @@ async function clientesCarregarStorage(){
 var CLI_AUTO_CAMPOS=[
   ['doc','f-doc'], ['email','f-email'], ['tel','f-tel'], ['contato','f-contato'],
   ['cep','f-cep'], ['end','f-end'], ['endnum','f-endnum'],
-  ['bairro','f-bairro'], ['cidade','f-cidade'], ['ie','f-ie']
+  ['bairro','f-bairro'], ['cidade','f-cidade'], ['ie','f-ie'],
+  // Quem atende. Fica no cadastro para o filtro por consultor funcionar
+  // mesmo em cliente que ainda não tem orçamento nenhum.
+  ['consultor','f-cons']
 ];
 
 // Acha o cliente já cadastrado que corresponde a estes dados. Pelo documento
@@ -30817,7 +30874,8 @@ function _cliAutoDe(form, quem){
   var obj={
     id:'cli_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
     tipo:dig.length===11?'PF':'PJ',
-    nome:nome, fantasia:'', doc:doc, ie:'', email:'', tel:'', contato:'',
+    nome:nome, fantasia:'', doc:doc, ie:'', email:'', tel:'', contato:'', consultor:'',
+    notas:[],
     origem:String(form['f-fonte']||''), cep:'', end:'', endnum:'', bairro:'', cidade:'', obs:'',
     incompleto:dig.length!==11&&dig.length!==14,
     criadoPorOrcamento:String(form['f-num']||''),
@@ -30899,6 +30957,248 @@ async function cliImportarDosOrcamentos(){
     falhas?(falhas+' não puderam ser gravados — veja as permissões do banco.'):'',9000);
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   POSITIVAÇÃO DE CARTEIRA
+   ──────────────────────────────────────────────────────────────────────
+   Pedido do Fabiano: "uma aba com a função positivação de carteira para
+   que os consultores determinem um período e o sistema busque e sugira
+   quais clientes devem ser positivados de acordo com seu histórico".
+
+   "Positivar" é fazer o cliente voltar a comprar. O período é a janela em
+   que ele DEVERIA ter comprado: quem comprou dentro dela está ativo e não
+   precisa de nada; quem comprou antes e não dentro é exatamente quem a
+   lista existe para achar.
+
+   Quatro motivos, nesta ordem de prioridade — cada um pede uma conversa
+   diferente, e misturá-los num "lista de clientes frios" tiraria do
+   consultor o que dizer ao ligar:
+
+   1. ESFRIOU — comprava e parou. O melhor retorno por telefonema: já
+      conhece a empresa, já aprovou preço, já teve evento entregue.
+   2. PERDIDO RECENTE — orçou no período e não fechou. A memória ainda é
+      fresca e o motivo está registrado.
+   3. PARADO EM ABERTO — tem orçamento sem desfecho nenhum. Não é
+      positivação, é follow-up que não aconteceu.
+   4. NUNCA COMPROU — orçou alguma vez, nunca fechou. O mais frio, por
+      último.
+
+   A ordem dentro de cada motivo é pelo VALOR já movimentado (ou orçado,
+   para quem nunca comprou): com tempo limitado, liga-se primeiro para
+   quem pesa mais.                                                        */
+
+var POSIT_MOTIVOS={
+  esfriou:   {rot:'Esfriou',           cor:'#e65100', peso:4, dica:'Já comprou e parou. Ligue lembrando do último evento — é o retorno mais provável da lista.'},
+  perdido:   {rot:'Perdido recente',   cor:'#c62828', peso:3, dica:'Orçou no período e não fechou. O motivo está registrado; vale entender se mudou alguma coisa.'},
+  emaberto:  {rot:'Parado em aberto',  cor:'#1565c0', peso:2, dica:'Tem orçamento sem desfecho. Antes de positivar, feche o funil: ganhou ou perdeu?'},
+  nunca:     {rot:'Nunca comprou',     cor:'#6a1b9a', peso:1, dica:'Já orçou e nunca fechou. O mais frio — deixe por último.'}
+};
+
+function positSugestoes(de, ate, consultor){
+  if(!de||!ate) return [];
+  var out=[];
+  (CLIENTES||[]).forEach(function(c){
+    if(consultor && !_cliEhDoConsultor(c,consultor)) return;
+    var orcs=_cliOrcamentosDe(c);
+    if(!orcs.length) return;     // sem nenhum histórico não há o que sugerir
+
+    var ganhasTodas=[], ganhasNoPeriodo=[], perdidasNoPeriodo=[], abertas=[], orcadoTotal=0;
+    orcs.forEach(function(o){
+      var f=o.form||{}, dia=f['f-dia']||'';
+      var cs=(o.dados&&o.dados.comercialStatus)||'';
+      var v=dashValOrc(o);
+      orcadoTotal+=v;
+      var dentro=dia&&dia>=de&&dia<=ate;
+      if(cs==='ganha'){ ganhasTodas.push(o); if(dentro) ganhasNoPeriodo.push(o); }
+      else if(cs==='perdida'){ if(dentro) perdidasNoPeriodo.push(o); }
+      else abertas.push(o);
+    });
+
+    // Comprou DENTRO do período: está ativo, sai da lista. É o que separa
+    // "positivação" de "lista de todo mundo".
+    if(ganhasNoPeriodo.length) return;
+
+    var motivo='', detalhe='', valor=0, ultima='';
+    if(ganhasTodas.length){
+      var dias=ganhasTodas.map(function(o){ return (o.form&&o.form['f-dia'])||''; }).filter(Boolean).sort();
+      ultima=dias[dias.length-1]||'';
+      motivo='esfriou';
+      valor=ganhasTodas.reduce(function(t,o){ return t+dashValOrc(o); },0);
+      detalhe=ganhasTodas.length+' compra(s), a última em '+(ultima?fD(ultima):'—')
+        +(ultima?' ('+Math.round((new Date()-new Date(ultima))/864e5)+' dias)':'');
+    }else if(perdidasNoPeriodo.length){
+      motivo='perdido';
+      valor=perdidasNoPeriodo.reduce(function(t,o){ return t+dashValOrc(o); },0);
+      var mots={};
+      perdidasNoPeriodo.forEach(function(o){
+        var h=(o.dados&&o.dados.comercialHist)||[];
+        for(var i=h.length-1;i>=0;i--){ if(h[i].status==='perdida'&&h[i].motivo){ mots[h[i].motivo]=1; break; } }
+      });
+      var lm=Object.keys(mots);
+      detalhe=perdidasNoPeriodo.length+' orçamento(s) perdido(s) no período'+(lm.length?' — '+lm.join(', '):'');
+    }else if(abertas.length){
+      motivo='emaberto';
+      valor=abertas.reduce(function(t,o){ return t+dashValOrc(o); },0);
+      detalhe=abertas.length+' orçamento(s) sem desfecho no funil';
+    }else{
+      motivo='nunca';
+      valor=orcadoTotal;
+      detalhe=orcs.length+' orçamento(s) e nenhuma venda fechada';
+    }
+
+    out.push({
+      cliente:c, motivo:motivo, detalhe:detalhe, valor:valor, ultima:ultima,
+      consultor:_cliConsultorPadrao(c), nOrcs:orcs.length
+    });
+  });
+  return out.sort(function(a,b){
+    var pa=POSIT_MOTIVOS[a.motivo].peso, pb=POSIT_MOTIVOS[b.motivo].peso;
+    if(pa!==pb) return pb-pa;
+    return b.valor-a.valor;
+  });
+}
+
+function positAbrir(){
+  _abrirOv('posit-ov');
+  var de=document.getElementById('posit-de'), ate=document.getElementById('posit-ate');
+  if(de&&!de.value){
+    // Padrão: os últimos 12 meses. Quem não comprou em um ano é a
+    // definição prática de carteira a recuperar neste ramo.
+    var hoje=new Date();
+    ate.value=_logISO(hoje);
+    de.value=_logISO(new Date(hoje.getFullYear()-1, hoje.getMonth(), hoje.getDate()));
+  }
+  var sel=document.getElementById('posit-cons');
+  if(sel&&sel.options.length<=1){
+    sel.innerHTML='<option value="">Todos</option>'
+      +_cliConsultoresDaCarteira().map(function(n){ return '<option value="'+eh(n)+'">'+eh(n)+'</option>'; }).join('');
+    // Consultor entra já filtrado na própria carteira.
+    if(usuarioAtual&&usuarioAtual.nivel==='consultor') sel.value=usuarioAtual.nome;
+  }
+  positBuscar();
+}
+
+async function positBuscar(){
+  var el=document.getElementById('posit-corpo');
+  if(!el) return;
+  el.innerHTML='<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:12px">⏳ Analisando a carteira...</div>';
+  try{
+    if(!(CLIENTES||[]).length) await clientesCarregarStorage();
+    if(!(_dashDados||[]).length) await dashAtualizar(true);
+  }catch(e){ console.warn('positBuscar:',e); }
+  var de=(document.getElementById('posit-de')||{}).value||'';
+  var ate=(document.getElementById('posit-ate')||{}).value||'';
+  var cons=(document.getElementById('posit-cons')||{}).value||'';
+  var mot=(document.getElementById('posit-motivo')||{}).value||'';
+  if(!de||!ate){ el.innerHTML='<div class="dash-vazio" style="padding:22px">Escolha o período.</div>'; return; }
+  var todas=positSugestoes(de,ate,cons);
+  _positUltima=todas;
+  var lista=mot?todas.filter(function(x){ return x.motivo===mot; }):todas;
+  var sub=document.getElementById('posit-sub');
+  if(sub) sub.textContent=todas.length+' cliente(s) para positivar · período '+fD(de)+' a '+fD(ate)+(cons?' · '+cons:'');
+  el.innerHTML=_positHTML(lista,todas,de,ate);
+}
+
+function _positHTML(lista,todas,de,ate){
+  if(!todas.length){
+    return '<div class="dash-vazio" style="padding:26px">Nenhum cliente a positivar neste período. 👏'
+      +'<div style="margin-top:7px;font-size:11px;color:var(--text-dim)">Todo cliente com histórico comprou dentro do período escolhido — ou a carteira ainda não foi importada dos orçamentos (botão no Cadastro de Clientes).</div></div>';
+  }
+  var porMotivo={};
+  todas.forEach(function(x){ porMotivo[x.motivo]=(porMotivo[x.motivo]||0)+1; });
+  var resumo='<div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:11px">'
+    +Object.keys(POSIT_MOTIVOS).map(function(k){
+      var m=POSIT_MOTIVOS[k], n=porMotivo[k]||0;
+      if(!n) return '';
+      return '<div style="flex:1;min-width:150px;border:1px solid '+m.cor+';border-left:4px solid '+m.cor+';border-radius:6px;padding:8px 11px;background:var(--surface-2)">'
+        +'<div style="font-size:16px;font-weight:900;color:'+m.cor+'">'+n+'</div>'
+        +'<div style="font-size:10px;font-weight:800;color:var(--text)">'+m.rot+'</div>'
+        +'<div style="font-size:9.5px;color:var(--text-dim);margin-top:2px">'+m.dica+'</div>'
+        +'</div>';
+    }).join('')+'</div>';
+
+  if(!lista.length) return resumo+'<div class="dash-vazio" style="padding:20px">Nenhum cliente neste motivo.</div>';
+
+  return resumo
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+    +'<thead><tr style="border-bottom:2px solid var(--R)">'
+    +['#','Cliente','Por quê','Consultor','Valor histórico','Ação'].map(function(h,i){
+      return '<th style="padding:5px 7px;font-size:9.5px;color:var(--text-muted);text-transform:uppercase;text-align:'+(i===4?'right':'left')+'">'+h+'</th>';
+    }).join('')+'</tr></thead><tbody>'
+    +lista.map(function(x,i){
+      var m=POSIT_MOTIVOS[x.motivo];
+      var ii=CLIENTES.indexOf(x.cliente);
+      return '<tr style="border-bottom:1px solid var(--border)">'
+        +'<td style="padding:6px 7px;color:var(--text-muted)">'+(i+1)+'</td>'
+        +'<td style="padding:6px 7px;font-weight:700"><span onclick="clienteHistorico('+ii+')" title="Abrir o histórico deste cliente" style="cursor:pointer;color:#90caf9;text-decoration:underline">'+eh(x.cliente.nome||'—')+'</span>'
+          +(x.cliente.tel?'<div style="font-size:9.5px;color:var(--text-muted);font-weight:400">📞 '+eh(x.cliente.tel)+'</div>':'')
+          +(!x.cliente.tel&&x.cliente.email?'<div style="font-size:9.5px;color:var(--text-muted);font-weight:400">✉️ '+eh(x.cliente.email)+'</div>':'')
+        +'</td>'
+        +'<td style="padding:6px 7px"><span style="display:inline-block;padding:1px 7px;border-radius:9px;font-size:9.5px;font-weight:800;background:'+m.cor+';color:#fff">'+m.rot+'</span>'
+          +'<div style="font-size:10px;color:var(--text-dim);margin-top:2px">'+eh(x.detalhe)+'</div></td>'
+        +'<td style="padding:6px 7px;color:var(--text-dim)">'+eh(x.consultor||'—')+'</td>'
+        +'<td style="padding:6px 7px;text-align:right;font-weight:800">'+fmt(x.valor)+'</td>'
+        +'<td style="padding:6px 7px"><button class="btn btn-b btn-sm" onclick="positCriarTarefa('+ii+')" title="Cria a tarefa de contato já com o motivo">📋 Tarefa</button></td>'
+        +'</tr>';
+    }).join('')+'</tbody></table></div>';
+}
+
+var _positUltima=[];
+
+function positCriarTarefa(idx){
+  var c=CLIENTES[idx];
+  if(!c) return;
+  var s=(_positUltima||[]).find(function(x){ return x.cliente===c; });
+  _cliHistAtual=c;
+  tarefaAbrirForm('cliente', c.id, c.nome||'Cliente', _cliConsultorPadrao(c));
+  // Já deixa escrito por que a tarefa existe — quem for ligar daqui a uma
+  // semana não vai lembrar do que a lista dizia.
+  var obs=document.getElementById('tf-obs');
+  if(obs&&s) obs.value='Positivação — '+POSIT_MOTIVOS[s.motivo].rot+': '+s.detalhe+'.';
+  var tipo=document.getElementById('tf-tipo');
+  if(tipo){ try{ tipo.value='Follow-up'; }catch(e){} }
+}
+
+function positCopiar(){
+  var lista=_positUltima||[];
+  if(!lista.length){ alert('Nada para copiar.'); return; }
+  var de=(document.getElementById('posit-de')||{}).value||'';
+  var ate=(document.getElementById('posit-ate')||{}).value||'';
+  var linhas=['POSITIVAÇÃO DE CARTEIRA — CRAZY SOM','Período analisado: '+fD(de)+' a '+fD(ate),''];
+  Object.keys(POSIT_MOTIVOS).forEach(function(k){
+    var doMotivo=lista.filter(function(x){ return x.motivo===k; });
+    if(!doMotivo.length) return;
+    linhas.push('● '+POSIT_MOTIVOS[k].rot.toUpperCase()+' ('+doMotivo.length+')');
+    doMotivo.forEach(function(x){
+      linhas.push('   - '+(x.cliente.nome||'—')
+        +(x.cliente.tel?'  | '+x.cliente.tel:'')
+        +'  | '+x.detalhe
+        +'  | histórico '+fmt(x.valor)
+        +(x.consultor?'  | '+x.consultor:''));
+    });
+    linhas.push('');
+  });
+  var txt=linhas.join('\n');
+  var ta=document.createElement('textarea');
+  ta.value=txt; ta.style.cssText='position:fixed;left:-9999px';
+  document.body.appendChild(ta); ta.select();
+  var ok=false;
+  try{ ok=document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta);
+  if(ok) _toastMostrar('📋 Lista de positivação copiada ('+lista.length+' clientes).','',6000);
+  else prompt('Copie o texto abaixo (Ctrl+C):', txt);
+}
+
+function _cliPopularConsultores(){
+  var sel=document.getElementById('clientes-cons');
+  if(!sel) return;
+  var nomes=_cliConsultoresDaCarteira();
+  var atual=sel.value;
+  if(sel.options.length-1===nomes.length) return;   // já populado
+  sel.innerHTML='<option value="">Todos os consultores</option>'
+    +nomes.map(function(n){ return '<option value="'+eh(n)+'">'+eh(n)+'</option>'; }).join('');
+  if(atual) sel.value=atual;
+}
+
 function cliFiltrarIncompletos(){
   var el=document.getElementById('clientes-busca');
   if(el) el.value='';
@@ -30963,6 +31263,87 @@ async function abrirClientes(){
 
 function _cliChave(nome){ return _normalizarNomeItem(String(nome||'')); }
 
+/* ── Notas e tarefas direto no cliente ─────────────────────────────────
+   Pedido do Fabiano: "que os consultores possam inserir anotações e criar
+   tarefas avulsas sem depender de um orçamento para isso".
+
+   As notas ficam no próprio documento do cliente (campo notas[]), não numa
+   coleção nova: é a mesma decisão de sempre neste sistema — coleção nova
+   exige mexer nas regras do banco, e isso já travou o Luiz e o Wagner.
+
+   As tarefas reusam TAREFAS, com vinculoTipo 'cliente'. Assim elas
+   aparecem em "Minhas Tarefas", contam no badge da Home e entram no aviso
+   de tarefas atrasadas — sem nada disso precisar saber que existe um tipo
+   de vínculo novo.                                                       */
+
+var _cliHistAtual=null;   // cliente aberto na tela de histórico
+
+function _cliAchar(id){ return (CLIENTES||[]).find(function(c){ return c.id===id; })||null; }
+
+async function cliAddNota(){
+  var c=_cliHistAtual;
+  if(!c){ return; }
+  var el=document.getElementById('clihist-nota');
+  var texto=((el&&el.value)||'').trim();
+  if(!texto){ if(el) el.focus(); return; }
+  c.notas=(c.notas||[]).concat([{
+    texto:texto,
+    usuario:(usuarioAtual&&usuarioAtual.nome)||'—',
+    data:new Date().toLocaleString('pt-BR'),
+    dataISO:new Date().toISOString().split('T')[0]
+  }]);
+  c.atualizadoEm=new Date().toLocaleString('pt-BR');
+  if(el) el.value='';
+  _cliHistRender(c);
+  var ok=await _clienteSalvarFirestore(c);
+  if(!ok) _toastMostrar('⚠️ A nota não foi gravada no servidor.','Ela aparece na tela, mas some ao recarregar. Veja as permissões do banco.',8000);
+}
+
+async function cliExcluirNota(i){
+  var c=_cliHistAtual;
+  if(!c||!c.notas||!c.notas[i]) return;
+  if(!confirm('Excluir esta anotação?\n\n"'+String(c.notas[i].texto).slice(0,90)+'"')) return;
+  c.notas.splice(i,1);
+  _cliHistRender(c);
+  await _clienteSalvarFirestore(c);
+}
+
+// Consultor sugerido para a tarefa: o que mais atende este cliente.
+function _cliConsultorPadrao(c){
+  if(c&&c.consultor) return c.consultor;
+  var cont={};
+  _cliOrcamentosDe(c||{}).forEach(function(o){
+    var n=(o.form&&o.form['f-cons'])||''; if(n) cont[n]=(cont[n]||0)+1;
+  });
+  var nomes=Object.keys(cont).sort(function(a,b){ return cont[b]-cont[a]; });
+  return nomes[0]||((usuarioAtual&&usuarioAtual.nome)||'');
+}
+
+function cliNovaTarefa(){
+  var c=_cliHistAtual;
+  if(!c) return;
+  tarefaAbrirForm('cliente', c.id, c.nome||'Cliente', _cliConsultorPadrao(c));
+}
+
+// Todos os consultores que aparecem na carteira — os do cadastro e os dos
+// orçamentos, porque muito cliente antigo só tem consultor no orçamento.
+function _cliConsultoresDaCarteira(){
+  var set={};
+  (CLIENTES||[]).forEach(function(c){ if(c.consultor) set[c.consultor]=1; });
+  (_dashDados||[]).forEach(function(o){ var n=(o.form&&o.form['f-cons'])||''; if(n) set[n]=1; });
+  return Object.keys(set).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
+}
+
+// O cliente é deste consultor? Pelo cadastro OU por ter orçamento dele —
+// exigir o cadastro deixaria de fora a carteira inteira de antes do
+// auto-cadastro.
+function _cliEhDoConsultor(c,nome){
+  if(!nome) return true;
+  if(c.consultor===nome) return true;
+  return _cliOrcamentosDe(c).some(function(o){ return ((o.form&&o.form['f-cons'])||'')===nome; });
+}
+
+
 // Todos os orçamentos daquele cliente, pelo nome (e pelo documento quando o
 // orçamento guardou um).
 function _cliOrcamentosDe(cliente){
@@ -31014,6 +31395,11 @@ function _cliTimeline(orcs, leads){
       itens.push({tipo:'nota', ico:'Nota', cor:'#455a64', ref:ref, driveId:o.driveId||'',
         texto:(a.texto||'').trim(), motivo:'', quem:a.usuario||'—', data:a.data||'', ord:dataOrd(a)});
     });
+  });
+  // Notas escritas direto no cliente, sem orçamento — o pedido do Fabiano.
+  ((_cliHistAtual&&_cliHistAtual.notas)||[]).forEach(function(a,i){
+    itens.push({tipo:'cliente', ico:'Anotação', cor:'#00838f', ref:'direto no cliente', driveId:'',
+      texto:(a.texto||'').trim(), motivo:'', quem:a.usuario||'—', data:a.data||'', ord:dataOrd(a), idxNota:i});
   });
   (leads||[]).forEach(function(l){
     (l.atividades||[]).forEach(function(a){
@@ -31067,8 +31453,9 @@ function _cliResumo(orcs){
 }
 
 async function clienteHistorico(idx){
-  var c=CLIENTES[idx];
+  var c=(typeof idx==='object')?idx:CLIENTES[idx];
   if(!c) return;
+  _cliHistAtual=c;
   _abrirOv('clihist-ov');
   var el=document.getElementById('clihist-corpo');
   document.getElementById('clihist-titulo').textContent=c.nome||'Cliente';
@@ -31096,8 +31483,23 @@ function _cliHistRender(c){
   var orcs=_cliOrcamentosDe(c);
   var leads=_cliLeadsDe(c);
   if(!orcs.length&&!leads.length){
-    el.innerHTML='<div class="dash-vazio" style="padding:26px">Nenhum orçamento ou lead encontrado para este cliente.'
-      +'<div style="margin-top:7px;font-size:11px;color:var(--text-dim)">A ligação é pelo nome do cliente no orçamento. Se ele foi digitado de outro jeito, o histórico não encontra — vale conferir a grafia.</div></div>';
+    el.innerHTML='<div class="dash-vazio" style="padding:20px;margin-bottom:12px">Nenhum orçamento ou lead encontrado para este cliente.'
+      +'<div style="margin-top:7px;font-size:11px;color:var(--text-dim)">A ligação é pelo nome do cliente no orçamento. Se ele foi digitado de outro jeito, o histórico não encontra — vale conferir a grafia.</div></div>'
+      // Mesmo sem histórico dá para anotar e criar tarefa: é justamente o
+      // cliente novo, ou o que nunca chegou a orçamento, que mais precisa.
+      +'<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:10px 12px;margin-bottom:12px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">'
+          +'<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:800">Acompanhamento deste cliente</div>'
+          +'<button class="btn btn-b btn-sm" onclick="cliNovaTarefa()">📋 Nova tarefa</button>'
+        +'</div>'
+        +'<div style="display:flex;gap:7px;align-items:flex-start">'
+          +'<textarea id="clihist-nota" placeholder="Anotação sobre este cliente..." style="flex:1;min-height:52px;padding:7px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--input-bg);color:var(--text);resize:vertical"></textarea>'
+          +'<button class="btn btn-r btn-sm" onclick="cliAddNota()" style="white-space:nowrap">💬 Anotar</button>'
+        +'</div>'
+        +'<div id="clihist-tarefas" style="margin-top:9px"></div>'
+      +'</div>'
+      +_cliHistTimelineHTML(_cliTimeline([],[]));
+    try{ tarefasRenderNoDetalhe('cliente', c.id, 'clihist-tarefas'); }catch(e){}
     return;
   }
   var r=_cliResumo(orcs);
@@ -31130,10 +31532,22 @@ function _cliHistRender(c){
     +'</div>'
     +(consTxt?'<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">👤 <b>Atendido por:</b> '+consTxt
       +(motivosTxt?' &nbsp;·&nbsp; ❌ <b>Motivos de perda:</b> '+motivosTxt:'')+'</div>':'')
+    +'<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:10px 12px;margin-bottom:12px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">'
+        +'<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:800">Acompanhamento deste cliente</div>'
+        +'<button class="btn btn-b btn-sm" onclick="cliNovaTarefa()" title="Cria uma tarefa ligada a este cliente — aparece em Minhas Tarefas, sem precisar de orçamento">📋 Nova tarefa</button>'
+      +'</div>'
+      +'<div style="display:flex;gap:7px;align-items:flex-start">'
+        +'<textarea id="clihist-nota" placeholder="Anotação sobre este cliente — o que foi conversado, o que ficou combinado..." style="flex:1;min-height:52px;padding:7px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--input-bg);color:var(--text);resize:vertical"></textarea>'
+        +'<button class="btn btn-r btn-sm" onclick="cliAddNota()" style="white-space:nowrap">💬 Anotar</button>'
+      +'</div>'
+      +'<div id="clihist-tarefas" style="margin-top:9px"></div>'
+    +'</div>'
     +'<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:800;margin:14px 0 6px">Orçamentos ('+orcs.length+')</div>'
     +_cliHistTabela(orcs)
     +'<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:800;margin:16px 0 6px">Histórico de negociação ('+tl.length+' nota(s))</div>'
     +_cliHistTimelineHTML(tl);
+  try{ tarefasRenderNoDetalhe('cliente', c.id, 'clihist-tarefas'); }catch(e){}
 }
 
 function _cliHistTabela(orcs){
@@ -31176,6 +31590,7 @@ function _cliHistTimelineHTML(tl){
         +'</div>'
         +(x.motivo?'<div style="font-size:11px;color:#ef5350;font-weight:700;margin-top:2px">Motivo: '+eh(x.motivo)+'</div>':'')
         +(x.texto?'<div style="font-size:12px;color:var(--text);margin-top:2px;white-space:pre-wrap">'+eh(x.texto)+'</div>':'')
+        +(x.idxNota!==undefined?' <span onclick="cliExcluirNota('+x.idxNota+')" title="Excluir esta anotação" style="cursor:pointer;color:var(--text-muted);font-size:10px">🗑 excluir</span>':'')
         +'</div>';
     }).join('')
     +'</div>';
@@ -31202,8 +31617,11 @@ function clientesRenderLista(filtro){
   var box=document.getElementById('clientes-lista');
   filtro=(filtro||'').toLowerCase().trim();
   var filtroDig=_clienteSoDigitos(filtro);
+  var cons=(document.getElementById('clientes-cons')||{}).value||'';
+  _cliPopularConsultores();
   var lista=CLIENTES.filter(function(c){
     if(_cliSoIncompletos && !c.incompleto) return false;
+    if(cons && !_cliEhDoConsultor(c,cons)) return false;
     if(!filtro)return true;
     var nome=(c.nome||'').toLowerCase();
     var fantasia=(c.fantasia||'').toLowerCase();
