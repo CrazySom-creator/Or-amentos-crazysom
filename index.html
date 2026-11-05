@@ -2828,6 +2828,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <button class="btn btn-r btn-sm" onclick="escAtualizar()" title="Rebusca os orçamentos — use depois de fechar uma venda, porque a lista fica em cache">🔄 Atualizar</button>
         <button class="btn btn-o btn-sm" onclick="escExportarPDF()" title="Gera o PDF da escala do período escolhido abaixo">📄 PDF</button>
         <button class="btn btn-o btn-sm" onclick="escExportarExcel()" title="Exporta a escala do período escolhido abaixo em CSV/Excel">📊 Excel</button>
+        <button class="btn btn-o btn-sm" onclick="escAbrirOSdoEvento()" title="Buscar as OS por evento, período e consultor — marcar e imprimir em lote, para separar o material">📋 OS do evento</button>
         <button class="btn btn-r btn-sm" id="esc-btn-salvar" onclick="escSalvar()" title="Grava a escala no banco">💾 Salvar</button>
         <button class="btn btn-o btn-sm" onclick="escFechar()">✕</button>
       </div>
@@ -3034,7 +3035,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div>
         <h2 style="margin-bottom:2px">📋 Ordens de Serviço</h2>
-        <p class="sub" id="os-mod-sub" style="margin:0">Filtre por data do evento e imprima as OS</p>
+        <p class="sub" id="os-mod-sub" style="margin:0">Filtre por período, evento e consultor · marque as OS e imprima ou envie em lote</p>
       </div>
       <button class="btn btn-o btn-sm" onclick="document.getElementById('os-mod-ov').classList.remove('open');voltarDoModulo()">✕</button>
     </div>
@@ -3056,6 +3057,10 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
             <option value="">Todos</option>
           </select>
         </div>
+        <div>
+          <label style="font-size:9px;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:3px">Evento / Local / Cliente</label>
+          <input type="text" id="os-filtro-evento" placeholder="ex: Festuris" onkeydown="if(event.key==='Enter')osModBuscar()" style="padding:6px 9px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;min-width:190px">
+        </div>
         <div style="display:flex;gap:5px;flex-wrap:wrap">
           <button onclick="osModAtalho('hoje')" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-size:10px;cursor:pointer">Hoje</button>
           <button onclick="osModAtalho('semana')" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-size:10px;cursor:pointer">Esta Semana</button>
@@ -3066,6 +3071,11 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <button onclick="osModBuscar()" style="padding:7px 18px;background:var(--R);color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer;font-size:12px">🔍 Buscar</button>
       </div>
     </div>
+
+    <!-- Eventos encontrados no período: clicar num deles é mais rápido e mais
+         seguro do que digitar o nome. Festuris aparece uma vez, com a conta
+         de clientes e de consultores envolvidos. -->
+    <div id="os-mod-eventos" style="margin-bottom:10px"></div>
 
     <!-- Status -->
     <div id="os-mod-status" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;min-height:16px"></div>
@@ -3079,6 +3089,8 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <button onclick="osModSelecionarTodos(true)" style="padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-size:11px;cursor:pointer">☑️ Selecionar Todos</button>
       <button onclick="osModSelecionarTodos(false)" style="padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-size:11px;cursor:pointer">☐ Desmarcar Todos</button>
       <button onclick="osModImprimirSelecionados()" style="padding:7px 18px;background:#1565c0;color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer;font-size:12px">🖨️ Imprimir Selecionados</button>
+      <button onclick="osModSelecionarEvento()" title="Marca todas as OS do evento que está filtrado" style="padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-size:11px;cursor:pointer">🎪 Marcar o evento todo</button>
+      <button onclick="osModCopiarResumo()" title="Copia a lista em texto — cliente, nº da OS, data e montagem — para mandar a quem vai separar o material" style="padding:7px 14px;background:#e65100;color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer;font-size:12px">📋 Copiar para enviar</button>
       <button onclick="osModImprimirTodos()" style="padding:7px 18px;background:#2e7d32;color:#fff;border:none;border-radius:4px;font-weight:800;cursor:pointer;font-size:12px">🖨️ Imprimir Todos</button>
     </div>
   </div>
@@ -34096,6 +34108,203 @@ function osModAtalho(tipo){
   document.getElementById('os-filtro-ate').value=ate;
 }
 
+/* ── Buscar as OS de um evento inteiro ─────────────────────────────────
+   Pedido do Fabiano: "a Festuris de Gramado temos alguns clientes tanto do
+   consultor Luis Fonseca quanto do consultor Wagner [...] quero que minha
+   logística possa buscar pelo nome do evento, período e consultor e marque
+   as OS que ele quer imprimir ou enviar para alguém".
+
+   Um evento grande não é um orçamento: é um punhado deles, de clientes
+   diferentes e consultores diferentes, no mesmo lugar e nos mesmos dias. A
+   separação de material é feita por EVENTO, então a busca precisa enxergar
+   o evento — e não obrigar quem separa a lembrar de seis números de
+   orçamento.                                                              */
+
+// Casa o texto buscado com o nome do evento, o local OU o cliente. Os três,
+// porque "Festuris" tanto pode estar no nome do evento quanto no local
+// (Serra Park) quanto no cliente. Sem acento e sem caixa, pelo mesmo
+// normalizador que o resto do sistema usa.
+function _osModCasaEvento(o,termo){
+  var t=_normalizarNomeItem(String(termo||''));
+  if(!t) return true;
+  var f=o.form||{};
+  return [f['f-nome-evento'],f['f-local'],f['f-cliente'],f['f-cid-ev']]
+    .filter(Boolean)
+    .some(function(v){ return _normalizarNomeItem(v).indexOf(t)>=0; });
+}
+
+// Agrupa a lista por EVENTO. A regra é a do mundo real, não a da string:
+// uma feira é o mesmo evento quando acontece no MESMO LUGAR, em dias que se
+// encostam, e os nomes se reconhecem. Agrupar só por nome igual quebraria a
+// Festuris em três — "FESTURIS", "Festuris 2026" e um orçamento sem nome de
+// evento, com "Serra Park — Festuris" no local, são a mesma feira e a mesma
+// separação de material.
+//
+// Dois itens entram no mesmo grupo quando:
+//   • os nomes de evento se contêm ("festuris" dentro de "festuris2026"), OU
+//   • os locais se contêm ("serrapark" dentro de "serraparkfesturis"), OU
+//   • o nome de um aparece no local do outro (o caso do sem-nome);
+//   E os períodos se tocam (com três dias de folga: montagem e desmontagem
+//   de um cliente podem não encostar nas do outro).
+//
+// A exigência de 4 caracteres evita que "sw" ou "rs" junte o que não deve.
+function _osModParece(a,b){
+  if(!a||!b) return false;
+  if(a.length<4||b.length<4) return a===b;
+  return a.indexOf(b)>=0||b.indexOf(a)>=0;
+}
+
+function _osModMesmoEvento(g,o){
+  var f=o.form||{};
+  var nome=_normalizarNomeItem(f['f-nome-evento']||'');
+  var local=_normalizarNomeItem(f['f-local']||'');
+  var de=f['f-dia']||'', ate=f['f-dia-fim']||de;
+  // Períodos têm de se tocar — sem isso, a Festuris deste ano juntaria com a
+  // do ano que vem.
+  var folga=3;
+  if(de&&g.ate&&_logAddDias(g.ate,folga)<de) return false;
+  if(ate&&g.de&&_logAddDias(ate,folga)<g.de) return false;
+  var gNomes=g._nomes||[], gLocais=g._locais||[];
+  if(nome&&gNomes.some(function(x){ return _osModParece(nome,x); })) return true;
+  if(local&&gLocais.some(function(x){ return _osModParece(local,x); })) return true;
+  // O sem-nome entra pelo local que carrega o nome do evento, e vice-versa.
+  if(nome&&gLocais.some(function(x){ return _osModParece(nome,x); })) return true;
+  if(local&&gNomes.some(function(x){ return _osModParece(local,x); })) return true;
+  return false;
+}
+
+function _osModAgrupaEventos(lista){
+  var grupos=[];
+  (lista||[]).slice().sort(function(a,b){
+    var da=(a.form&&a.form['f-dia'])||'', db=(b.form&&b.form['f-dia'])||'';
+    return da<db?-1:da>db?1:0;
+  }).forEach(function(o){
+    var f=o.form||{};
+    var nome=(f['f-nome-evento']||'').trim();
+    var local=(f['f-local']||'').trim();
+    var g=null;
+    for(var i=0;i<grupos.length;i++){ if(_osModMesmoEvento(grupos[i],o)){ g=grupos[i]; break; } }
+    if(!g){
+      g={ rotulo:nome||local||f['f-cliente']||'(sem nome)', local:local,
+          itens:[], clientes:{}, consultores:{},
+          de:f['f-dia']||'', ate:f['f-dia-fim']||f['f-dia']||'',
+          _nomes:[], _locais:[] };
+      grupos.push(g);
+    }
+    g.itens.push(o);
+    if(nome&&g._nomes.indexOf(_normalizarNomeItem(nome))<0) g._nomes.push(_normalizarNomeItem(nome));
+    if(local&&g._locais.indexOf(_normalizarNomeItem(local))<0) g._locais.push(_normalizarNomeItem(local));
+    if(f['f-cliente']) g.clientes[f['f-cliente']]=1;
+    if(f['f-cons']) g.consultores[f['f-cons']]=1;
+    if(f['f-dia'] && (!g.de||f['f-dia']<g.de)) g.de=f['f-dia'];
+    var fim=f['f-dia-fim']||f['f-dia']||'';
+    if(fim && fim>g.ate) g.ate=fim;
+    // O rótulo fica com o nome de evento mais curto do grupo: "FESTURIS" diz
+    // mais do que "Serra Park — Festuris" e do que "Festuris 2026".
+    if(nome && (!g.rotulo || g.rotulo.length>nome.length || !g._temNome)){ g.rotulo=nome; g._temNome=true; }
+    if(!g.local && local) g.local=local;
+  });
+  return grupos.sort(function(a,b){ return a.de<b.de?-1:a.de>b.de?1:0; });
+}
+
+// Os eventos do período, clicáveis. Clicar preenche o campo de busca e
+// rebusca — é o "selecionar o evento" do pedido, sem digitar nada.
+function _osModRenderEventos(filtroAtual){
+  var el=document.getElementById('os-mod-eventos');
+  if(!el) return;
+  // Com um filtro de evento ativo, a lista mostra os eventos do PERÍODO
+  // inteiro, não só os que sobraram — senão não há como trocar de evento
+  // sem antes limpar o campo.
+  var de=(document.getElementById('os-filtro-de')||{}).value||'';
+  var ate=(document.getElementById('os-filtro-ate')||{}).value||'';
+  var cons=(document.getElementById('os-filtro-cons')||{}).value||'';
+  var base=(_osModDados||[]).filter(function(o){
+    var d=(o.form&&o.form['f-dia'])||'';
+    if(!d) return false;
+    if(de&&d<de) return false;
+    if(ate&&d>ate) return false;
+    if(cons&&(o.form&&o.form['f-cons'])!==cons) return false;
+    return ((o.dados&&o.dados.comercialStatus)||'')==='ganha';
+  });
+  var grupos=_osModAgrupaEventos(base);
+  if(grupos.length<2){ el.innerHTML=''; return; }
+  var atual=_normalizarNomeItem(filtroAtual||'');
+  el.innerHTML='<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:800;margin-bottom:4px">Eventos no período — clique para filtrar</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+    +grupos.map(function(x){
+      var nCli=Object.keys(x.clientes).length, nCons=Object.keys(x.consultores).length;
+      var sel=atual&&_normalizarNomeItem(x.rotulo).indexOf(atual)>=0;
+      return '<button onclick="osModFiltrarEvento(\''+eh(String(x.rotulo).replace(/'/g,"\\'"))+'\')" '
+        +'title="'+eh(Object.keys(x.clientes).join(' · '))+'" '
+        +'style="padding:5px 10px;border-radius:14px;cursor:pointer;font-size:10.5px;font-weight:700;'
+        +'border:1px solid '+(sel?'var(--R)':'var(--border-strong)')+';'
+        +'background:'+(sel?'rgba(214,52,71,.18)':'var(--surface)')+';color:'+(sel?'var(--R)':'var(--text-dim)')+'">'
+        +eh(x.rotulo)
+        +' <span style="font-weight:600;color:var(--text-muted)">'+x.itens.length+' OS · '+nCli+' cliente'+(nCli===1?'':'s')
+        +(nCons>1?' · '+nCons+' consultores':'')+'</span>'
+        +'</button>';
+    }).join('')
+    +(atual?'<button onclick="osModFiltrarEvento(\'\')" style="padding:5px 10px;border-radius:14px;cursor:pointer;font-size:10.5px;font-weight:700;border:1px dashed var(--border-strong);background:transparent;color:var(--text-muted)">✕ todos</button>':'')
+    +'</div>';
+}
+
+// Atalho da Logística: abre o módulo de OS já com o período que está à vista
+// na escala. Quem está separando material já escolheu o período ali — pedir
+// que escolha de novo seria trabalho repetido.
+async function escAbrirOSdoEvento(){
+  var de=(document.getElementById('esc-rel-de')||{}).value||_escData||'';
+  var ate=(document.getElementById('esc-rel-ate')||{}).value||de;
+  await abrirModuloOS();
+  var elDe=document.getElementById('os-filtro-de'), elAte=document.getElementById('os-filtro-ate');
+  if(elDe&&de) elDe.value=de;
+  if(elAte&&ate) elAte.value=ate;
+  var elEv=document.getElementById('os-filtro-evento');
+  if(elEv) elEv.value='';
+  if(de) osModBuscar();
+}
+
+function osModFiltrarEvento(nome){
+  var el=document.getElementById('os-filtro-evento');
+  if(el) el.value=nome||'';
+  osModBuscar();
+}
+
+// Resumo em texto para mandar a quem vai separar o material — o "enviar para
+// alguém" do pedido. Texto, não print: cola no WhatsApp inteiro e dá para
+// procurar um cliente nele.
+function osModCopiarResumo(){
+  var cbs=document.querySelectorAll('.os-mod-cb:checked');
+  var lista=[];
+  cbs.forEach(function(cb){ var i=parseInt(cb.dataset.idx); if(_osModFiltrados[i]) lista.push(_osModFiltrados[i]); });
+  if(!lista.length) lista=(_osModFiltrados||[]).slice();
+  if(!lista.length){ alert('Nenhuma OS na lista para copiar.'); return; }
+  var linhas=['SEPARAÇÃO DE MATERIAL — CRAZY SOM',''];
+  _osModAgrupaEventos(lista).forEach(function(g){
+    linhas.push('● '+g.rotulo.toUpperCase()
+      +(g.local?' — '+g.local:'')
+      +'  ('+(g.de===g.ate?fD(g.de):fD(g.de)+' a '+fD(g.ate))+')');
+    g.itens.forEach(function(o){
+      var f=o.form||{};
+      linhas.push('   - '+(f['f-cliente']||'—')
+        +'  | OS '+(f['f-num']||'—')
+        +'  | '+(f['f-dia']?fD(f['f-dia']):'—')
+        +(f['f-dm']?'  | montagem '+fD(f['f-dm'])+(f['f-hm']?' '+f['f-hm']:''):'')
+        +(f['f-cons']?'  | '+f['f-cons']:''));
+    });
+    linhas.push('');
+  });
+  linhas.push(lista.length+' OS no total · gerado em '+new Date().toLocaleString('pt-BR'));
+  var txt=linhas.join('\n');
+  var ta=document.createElement('textarea');
+  ta.value=txt; ta.style.cssText='position:fixed;left:-9999px';
+  document.body.appendChild(ta); ta.select();
+  var ok=false;
+  try{ ok=document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta);
+  if(ok) _toastMostrar('📋 Resumo de '+lista.length+' OS copiado — cole no WhatsApp ou no e-mail.','',6000);
+  else prompt('Copie o texto abaixo (Ctrl+C):', txt);
+}
+
 async function osModBuscar(){
   try{
     var _ex=[];
@@ -34105,6 +34314,7 @@ async function osModBuscar(){
   var de  =document.getElementById('os-filtro-de').value;
   var ate =document.getElementById('os-filtro-ate').value;
   var cons=document.getElementById('os-filtro-cons').value;
+  var ev=((document.getElementById('os-filtro-evento')||{}).value||'').trim();
   var stEl=document.getElementById('os-mod-status');
   var listaEl=document.getElementById('os-mod-lista');
   var acoesEl=document.getElementById('os-mod-acoes');
@@ -34123,6 +34333,7 @@ async function osModBuscar(){
     if(de  && dtEv < de)  return false;
     if(ate && dtEv > ate) return false;
     if(cons && (o.form&&o.form['f-cons'])!==cons) return false;
+    if(ev && !_osModCasaEvento(o,ev)) return false;
     // Apenas orçamentos com venda ganha
     var cs=(o.dados&&o.dados.comercialStatus)||'';
     if(cs!=='ganha') return false;
@@ -34136,7 +34347,14 @@ async function osModBuscar(){
     return da<db?-1:da>db?1:0;
   });
 
-  stEl.textContent=_osModFiltrados.length+' evento(s) encontrado(s) no período';
+  // A contagem honesta: "eventos" aqui eram orçamentos. Um Festuris com seis
+  // clientes são seis OS de UM evento, e chamar isso de seis eventos é o que
+  // faz o número da tela não bater com o que a operação enxerga.
+  var nEv=_osModAgrupaEventos(_osModFiltrados).length;
+  stEl.textContent=_osModFiltrados.length+' OS'+(_osModFiltrados.length===1?'':'s')
+    +' em '+nEv+' evento'+(nEv===1?'':'s')+' no período'
+    +(ev?' · filtrando por "'+ev+'"':'');
+  _osModRenderEventos(ev);
 
   if(!_osModFiltrados.length){
     listaEl.innerHTML='<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:12px">Nenhum evento encontrado no período selecionado.</div>';
@@ -34179,6 +34397,32 @@ function osModAtualizarContagem(){
   var total=document.querySelectorAll('.os-mod-cb').length;
   var el=document.getElementById('os-mod-sel-count');
   if(el) el.textContent=cbs.length+' de '+total+' selecionado(s)';
+}
+
+// Marca todas as OS do evento filtrado. Com o filtro de evento ativo, "todos"
+// e "o evento todo" dão no mesmo — mas sem filtro, este botão ainda serve:
+// marca as OS do evento da PRIMEIRA linha, que é por onde se começa a
+// separar o material.
+function osModSelecionarEvento(){
+  var lista=_osModFiltrados||[];
+  if(!lista.length){ alert('Busque primeiro.'); return; }
+  var grupos=_osModAgrupaEventos(lista);
+  var alvo=grupos[0];
+  if(grupos.length>1){
+    var nomes=grupos.map(function(g,i){ return (i+1)+') '+g.rotulo+' — '+g.itens.length+' OS'; }).join('\n');
+    var esc=prompt('Há '+grupos.length+' eventos na lista. Digite o número do que quer marcar:\n\n'+nomes, '1');
+    if(esc===null) return;
+    var i=parseInt(esc,10)-1;
+    if(!(i>=0&&i<grupos.length)){ alert('Número inválido.'); return; }
+    alvo=grupos[i];
+  }
+  var ids={};
+  alvo.itens.forEach(function(o){ ids[lista.indexOf(o)]=1; });
+  document.querySelectorAll('.os-mod-cb').forEach(function(cb){
+    cb.checked=!!ids[parseInt(cb.dataset.idx)];
+  });
+  osModAtualizarContagem();
+  _toastMostrar('🎪 '+alvo.itens.length+' OS de "'+alvo.rotulo+'" marcada(s).','',5000);
 }
 
 function osModSelecionarTodos(marcar){
