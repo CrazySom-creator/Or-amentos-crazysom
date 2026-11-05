@@ -3435,6 +3435,22 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
   </div>
 </div>
 
+<div class="ov" id="clihist-ov">
+  <div class="modal-box dash-modal" style="max-width:980px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px">
+      <div>
+        <h2 style="margin-bottom:2px">📈 <span id="clihist-titulo">Cliente</span></h2>
+        <p class="sub" id="clihist-sub" style="margin:0"></p>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center">
+        <button class="btn btn-o btn-sm" onclick="cliHistCopiar()" title="Copia o histórico em texto — para levar à reunião ou mandar ao consultor antes de uma visita">📋 Copiar</button>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('clihist-ov').classList.remove('open')">✕</button>
+      </div>
+    </div>
+    <div id="clihist-corpo"></div>
+  </div>
+</div>
+
 <div class="ov" id="reprov-ov" style="align-items:center">
   <div style="background:var(--surface);border:1px solid var(--border);border-top:4px solid #bf360c;border-radius:8px;max-width:520px;width:94%;margin:auto;padding:16px 18px 18px">
     <div style="font-size:14px;font-weight:900;color:var(--text);margin-bottom:3px">⛔ Reprovar Orçamento</div>
@@ -30758,6 +30774,266 @@ async function abrirClientes(){
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   HISTÓRICO DO CLIENTE — positivação de carteira
+   ──────────────────────────────────────────────────────────────────────
+   Pedido do Fabiano: "quando clicar no nome do cliente apareça o histórico
+   de vendas e histórico de todas as notas inseridas no funil de vendas
+   para podermos fazer uma positivação de carteira e entender o histórico
+   de negociação de cada cliente".
+
+   As notas da negociação estão espalhadas em três lugares, e só juntas
+   contam a história:
+     • comercialHist do orçamento — cada mudança de etapa do funil, com a
+       observação de quem registrou e o motivo, quando é perda;
+     • atividades do orçamento — as notas soltas do acompanhamento;
+     • atividades do LEAD — o que foi conversado ANTES de existir orçamento,
+       que é justamente onde mora o motivo de muita venda não ter nascido.
+
+   A ligação com o cliente é pelo nome normalizado (sem acento, sem caixa,
+   sem pontuação) e, quando houver, pelo CNPJ/CPF: o mesmo cliente aparece
+   como "ICH ADMINISTRACAO DE HOTEIS S.A." e "ICH Administração de Hotéis"
+   em orçamentos diferentes, e tratá-los como dois clientes esconderia
+   metade da carteira.
+   ══════════════════════════════════════════════════════════════════════ */
+
+function _cliChave(nome){ return _normalizarNomeItem(String(nome||'')); }
+
+// Todos os orçamentos daquele cliente, pelo nome (e pelo documento quando o
+// orçamento guardou um).
+function _cliOrcamentosDe(cliente){
+  var alvo=_cliChave(cliente.nome);
+  var alvoFant=_cliChave(cliente.fantasia||'');
+  var doc=_clienteSoDigitos(cliente.doc||'');
+  return (_dashDados||[]).filter(function(o){
+    var f=o.form||{};
+    var n=_cliChave(f['f-cliente']||'');
+    if(!n) return false;
+    if(doc && _clienteSoDigitos(f['f-doc']||'')===doc) return true;
+    if(n===alvo) return true;
+    if(alvoFant && n===alvoFant) return true;
+    // Contenção, para "ICH" casar com "ICH ADMINISTRACAO DE HOTEIS S.A." —
+    // com 5 caracteres no mínimo, senão nomes curtos juntariam carteiras
+    // inteiras por engano.
+    if(alvo.length>=5 && (n.indexOf(alvo)>=0||alvo.indexOf(n)>=0)) return true;
+    return false;
+  });
+}
+
+function _cliLeadsDe(cliente){
+  var alvo=_cliChave(cliente.nome);
+  return (LEADS||[]).filter(function(l){
+    var n=_cliChave(l.cliente||l.nome||'');
+    if(!n) return false;
+    if(n===alvo) return true;
+    return alvo.length>=5 && (n.indexOf(alvo)>=0||alvo.indexOf(n)>=0);
+  });
+}
+
+// Uma linha do tempo só, com tudo que foi escrito sobre este cliente.
+function _cliTimeline(orcs, leads){
+  var itens=[];
+  function dataOrd(x){ return x.dataISO||_cliISOdeBR(x.data)||''; }
+  (orcs||[]).forEach(function(o){
+    var f=o.form||{}, d=o.dados||{};
+    var ref=(f['f-num']||'')+(f['f-nome-evento']?' · '+f['f-nome-evento']:'');
+    (d.comercialHist||[]).forEach(function(h){
+      itens.push({
+        tipo:'funil', ico:(COM_SI[h.status]||{}).label||h.status||'•',
+        cor:(COM_SI[h.status]||{}).bg||'#78909c',
+        ref:ref, driveId:o.driveId||'',
+        texto:(h.obs||'').trim(), motivo:h.motivo||'',
+        quem:h.usuario||'—', data:h.data||'', ord:dataOrd(h)
+      });
+    });
+    (d.atividades||[]).forEach(function(a){
+      itens.push({tipo:'nota', ico:'Nota', cor:'#455a64', ref:ref, driveId:o.driveId||'',
+        texto:(a.texto||'').trim(), motivo:'', quem:a.usuario||'—', data:a.data||'', ord:dataOrd(a)});
+    });
+  });
+  (leads||[]).forEach(function(l){
+    (l.atividades||[]).forEach(function(a){
+      itens.push({tipo:'lead', ico:'Lead', cor:'#6a1b9a', ref:l.titulo||l.cliente||'Lead', driveId:'',
+        texto:(a.texto||'').trim(), motivo:'', quem:a.usuario||'—', data:a.data||'', ord:dataOrd(a)});
+    });
+  });
+  return itens.filter(function(x){ return x.texto||x.motivo; })
+    .sort(function(a,b){ return a.ord<b.ord?1:a.ord>b.ord?-1:0; });   // mais recente primeiro
+}
+
+// "04/11/2026, 10:00:00" -> "2026-11-04", para ordenar o que não guardou ISO.
+function _cliISOdeBR(s){
+  var m=/^(\d{2})\/(\d{2})\/(\d{4})/.exec(String(s||''));
+  return m?(m[3]+'-'+m[2]+'-'+m[1]):'';
+}
+
+// Os números da positivação: o que esta carteira já deu, o que deixou de
+// dar, e há quanto tempo ela não compra.
+function _cliResumo(orcs){
+  var hoje=_logISO(new Date());
+  var ganhas=[], perdidas=[], abertas=[];
+  orcs.forEach(function(o){
+    var cs=(o.dados&&o.dados.comercialStatus)||'';
+    if(cs==='ganha') ganhas.push(o);
+    else if(cs==='perdida') perdidas.push(o);
+    else abertas.push(o);
+  });
+  function soma(l){ return l.reduce(function(t,o){ return t+dashValOrc(o); },0); }
+  var datasGanhas=ganhas.map(function(o){ return (o.form&&o.form['f-dia'])||''; }).filter(Boolean).sort();
+  var ultima=datasGanhas.length?datasGanhas[datasGanhas.length-1]:'';
+  var dias=ultima?Math.round((new Date(hoje)-new Date(ultima))/864e5):null;
+  var motivos={};
+  perdidas.forEach(function(o){
+    var h=(o.dados&&o.dados.comercialHist)||[];
+    for(var i=h.length-1;i>=0;i--){ if(h[i].status==='perdida'&&h[i].motivo){ motivos[h[i].motivo]=(motivos[h[i].motivo]||0)+1; break; } }
+  });
+  var consultores={};
+  orcs.forEach(function(o){ var c=(o.form&&o.form['f-cons'])||''; if(c) consultores[c]=(consultores[c]||0)+1; });
+  var decididas=ganhas.length+perdidas.length;
+  return {
+    total:orcs.length,
+    ganhas:ganhas.length, valGanhas:soma(ganhas),
+    perdidas:perdidas.length, valPerdidas:soma(perdidas),
+    abertas:abertas.length, valAbertas:soma(abertas),
+    conversao:decididas?Math.round(ganhas.length/decididas*100):null,
+    ticket:ganhas.length?soma(ganhas)/ganhas.length:0,
+    ultimaCompra:ultima, diasSemComprar:dias,
+    motivos:motivos, consultores:consultores
+  };
+}
+
+async function clienteHistorico(idx){
+  var c=CLIENTES[idx];
+  if(!c) return;
+  _abrirOv('clihist-ov');
+  var el=document.getElementById('clihist-corpo');
+  document.getElementById('clihist-titulo').textContent=c.nome||'Cliente';
+  document.getElementById('clihist-sub').textContent=(c.tipo==='PF'?'CPF ':'CNPJ ')+(c.doc||'—')
+    +(c.cidade?' · '+c.cidade:'');
+  el.innerHTML='<div style="padding:26px;text-align:center;color:var(--text-muted);font-size:12px">⏳ Buscando o histórico deste cliente...</div>';
+  try{
+    if(!(_dashDados||[]).length) await dashAtualizar(true);
+    if(!(LEADS||[]).length) await leadsCarregarStorage();
+  }catch(e){ console.warn('clienteHistorico:',e); }
+  _cliHistRender(c);
+}
+
+function _cliHistTile(rot,val,sub,cor){
+  return '<div style="flex:1;min-width:132px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:9px 12px">'
+    +'<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800;letter-spacing:.4px">'+rot+'</div>'
+    +'<div style="font-size:18px;font-weight:900;color:'+(cor||'var(--text)')+';margin-top:2px">'+val+'</div>'
+    +(sub?'<div style="font-size:9.5px;color:var(--text-dim);margin-top:1px">'+sub+'</div>':'')
+    +'</div>';
+}
+
+function _cliHistRender(c){
+  var el=document.getElementById('clihist-corpo');
+  if(!el) return;
+  var orcs=_cliOrcamentosDe(c);
+  var leads=_cliLeadsDe(c);
+  if(!orcs.length&&!leads.length){
+    el.innerHTML='<div class="dash-vazio" style="padding:26px">Nenhum orçamento ou lead encontrado para este cliente.'
+      +'<div style="margin-top:7px;font-size:11px;color:var(--text-dim)">A ligação é pelo nome do cliente no orçamento. Se ele foi digitado de outro jeito, o histórico não encontra — vale conferir a grafia.</div></div>';
+    return;
+  }
+  var r=_cliResumo(orcs);
+  var tl=_cliTimeline(orcs,leads);
+
+  var motivosTxt=Object.keys(r.motivos).sort(function(a,b){ return r.motivos[b]-r.motivos[a]; })
+    .map(function(m){ return eh(m)+' ('+r.motivos[m]+')'; }).join(' · ');
+  var consTxt=Object.keys(r.consultores).sort(function(a,b){ return r.consultores[b]-r.consultores[a]; })
+    .map(function(n){ return eh(n)+' ('+r.consultores[n]+')'; }).join(' · ');
+
+  var alerta='';
+  if(r.diasSemComprar!==null&&r.diasSemComprar>180){
+    alerta='<div style="background:rgba(239,108,0,.14);border:1px solid #ef6c00;border-radius:7px;padding:9px 13px;margin-bottom:11px;font-size:12px">'
+      +'⚠️ <b>'+r.diasSemComprar+' dias sem comprar</b> — último evento em '+fD(r.ultimaCompra)+'. Candidato a positivação.</div>';
+  }else if(!r.ganhas&&r.total){
+    alerta='<div style="background:rgba(198,40,40,.14);border:1px solid #c62828;border-radius:7px;padding:9px 13px;margin-bottom:11px;font-size:12px">'
+      +'⚠️ <b>Nunca comprou</b> — '+r.total+' orçamento(s) e nenhuma venda fechada'
+      +(motivosTxt?'. Motivos registrados: '+motivosTxt:'')+'.</div>';
+  }
+
+  el.innerHTML=alerta
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'
+    +_cliHistTile('Vendas fechadas', String(r.ganhas), fmt(r.valGanhas), '#2e7d32')
+    +_cliHistTile('Ticket médio', fmt(r.ticket), 'por evento fechado')
+    +_cliHistTile('Conversão', r.conversao===null?'—':r.conversao+'%', r.ganhas+' de '+(r.ganhas+r.perdidas)+' decididos', '#1565c0')
+    +_cliHistTile('Perdidas', String(r.perdidas), fmt(r.valPerdidas), '#c62828')
+    +_cliHistTile('Em aberto', String(r.abertas), fmt(r.valAbertas), '#e65100')
+    +_cliHistTile('Última compra', r.ultimaCompra?fD(r.ultimaCompra):'—',
+        r.diasSemComprar===null?'nenhuma ainda':('há '+r.diasSemComprar+' dias'))
+    +'</div>'
+    +(consTxt?'<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">👤 <b>Atendido por:</b> '+consTxt
+      +(motivosTxt?' &nbsp;·&nbsp; ❌ <b>Motivos de perda:</b> '+motivosTxt:'')+'</div>':'')
+    +'<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:800;margin:14px 0 6px">Orçamentos ('+orcs.length+')</div>'
+    +_cliHistTabela(orcs)
+    +'<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:800;margin:16px 0 6px">Histórico de negociação ('+tl.length+' nota(s))</div>'
+    +_cliHistTimelineHTML(tl);
+}
+
+function _cliHistTabela(orcs){
+  var lista=orcs.slice().sort(function(a,b){
+    var da=(a.form&&a.form['f-dia'])||'', db=(b.form&&b.form['f-dia'])||'';
+    return da<db?1:da>db?-1:0;
+  });
+  return '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+    +'<thead><tr style="border-bottom:2px solid var(--R)">'
+    +['Data','Nº','Evento','Consultor','Situação','Valor'].map(function(h,i){
+      return '<th style="padding:5px 7px;font-size:9.5px;color:var(--text-muted);text-transform:uppercase;text-align:'+(i===5?'right':'left')+'">'+h+'</th>';
+    }).join('')+'</tr></thead><tbody>'
+    +lista.map(function(o){
+      var f=o.form||{}, cs=(o.dados&&o.dados.comercialStatus)||'';
+      var si=COM_SI[cs]||{label:'— sem registro',bg:'var(--surface-3)',tx:'var(--text-muted)'};
+      var nome=f['f-nome-evento']||'—';
+      return '<tr style="border-bottom:1px solid var(--border)">'
+        +'<td style="padding:5px 7px;color:var(--text-dim);white-space:nowrap">'+(f['f-dia']?fD(f['f-dia']):'—')+'</td>'
+        +'<td style="padding:5px 7px;color:var(--text-muted)">'
+          +(o.driveId?'<span onclick="logAbrirPreviewOS(\''+eh(o.driveId)+'\')" title="Abrir a Ordem de Serviço" style="cursor:pointer;color:#90caf9;text-decoration:underline">'+eh(f['f-num']||'—')+'</span>':eh(f['f-num']||'—'))
+        +'</td>'
+        +'<td style="padding:5px 7px;font-weight:600">'+eh(nome)+'</td>'
+        +'<td style="padding:5px 7px;color:var(--text-dim)">'+eh(f['f-cons']||'—')+'</td>'
+        +'<td style="padding:5px 7px"><span style="display:inline-block;padding:1px 7px;border-radius:9px;font-size:9.5px;font-weight:800;background:'+si.bg+';color:'+(si.tx||'#fff')+'">'+eh(si.label)+'</span></td>'
+        +'<td style="padding:5px 7px;text-align:right;font-weight:800">'+fmt(dashValOrc(o))+'</td>'
+        +'</tr>';
+    }).join('')+'</tbody></table></div>';
+}
+
+function _cliHistTimelineHTML(tl){
+  if(!tl.length) return '<div class="dash-vazio" style="padding:18px;font-size:11.5px">Nenhuma nota registrada na negociação deste cliente ainda.</div>';
+  return '<div style="border-left:2px solid var(--border);padding-left:11px">'
+    +tl.map(function(x){
+      return '<div style="margin-bottom:11px;position:relative">'
+        +'<div style="position:absolute;left:-17px;top:4px;width:8px;height:8px;border-radius:50%;background:'+x.cor+'"></div>'
+        +'<div style="font-size:10px;color:var(--text-muted)">'
+          +'<span style="color:'+x.cor+';font-weight:800">'+eh(x.ico)+'</span>'
+          +' · '+eh(x.quem)+' · '+eh(x.data)
+          +(x.ref?' · <span style="color:var(--text-dim)">'+eh(x.ref)+'</span>':'')
+        +'</div>'
+        +(x.motivo?'<div style="font-size:11px;color:#ef5350;font-weight:700;margin-top:2px">Motivo: '+eh(x.motivo)+'</div>':'')
+        +(x.texto?'<div style="font-size:12px;color:var(--text);margin-top:2px;white-space:pre-wrap">'+eh(x.texto)+'</div>':'')
+        +'</div>';
+    }).join('')
+    +'</div>';
+}
+
+// Texto para levar à reunião ou mandar ao consultor antes de uma visita.
+function cliHistCopiar(){
+  var el=document.getElementById('clihist-corpo');
+  if(!el){ return; }
+  var txt=(document.getElementById('clihist-titulo').textContent||'')+'\n'
+    +(document.getElementById('clihist-sub').textContent||'')+'\n\n'
+    +el.innerText.replace(/\n{3,}/g,'\n\n');
+  var ta=document.createElement('textarea');
+  ta.value=txt; ta.style.cssText='position:fixed;left:-9999px';
+  document.body.appendChild(ta); ta.select();
+  var ok=false;
+  try{ ok=document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta);
+  if(ok) _toastMostrar('📋 Histórico copiado.','',5000);
+  else prompt('Copie o texto abaixo (Ctrl+C):', txt);
+}
+
 function clientesRenderLista(filtro){
   var box=document.getElementById('clientes-lista');
   filtro=(filtro||'').toLowerCase().trim();
@@ -30775,10 +31051,11 @@ function clientesRenderLista(filtro){
     var idx=CLIENTES.indexOf(c);
     var acao=_clienteBuscaModoSelecao
       ? '<button class="btn btn-g btn-sm" onclick="clienteSelecionarParaOrcamento('+idx+')">✅ Selecionar</button>'
-      : '<button class="btn btn-o btn-sm" onclick="clienteEditar('+idx+')">✏️ Editar</button>';
+      : '<button class="btn btn-o btn-sm" onclick="clienteHistorico('+idx+')" title="Histórico de vendas e notas da negociação">📈 Histórico</button>'
+        +' <button class="btn btn-o btn-sm" onclick="clienteEditar('+idx+')">✏️ Editar</button>';
     return '<div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
       +'<div>'
-      +'<div style="color:var(--text);font-size:13px;font-weight:700">'+eh(c.nome||'—')+(c.fantasia?' <span style="color:var(--text-muted);font-weight:400">('+eh(c.fantasia)+')</span>':'')+'</div>'
+      +'<div style="color:var(--text);font-size:13px;font-weight:700"><span onclick="clienteHistorico('+idx+')" title="Ver o histórico de vendas e as notas da negociação deste cliente" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px">'+eh(c.nome||'—')+'</span>'+(c.fantasia?' <span style="color:var(--text-muted);font-weight:400">('+eh(c.fantasia)+')</span>':'')+'</div>'
       +'<div style="color:var(--text-muted);font-size:11px;margin-top:2px">'+(c.tipo==='PF'?'CPF':'CNPJ')+': '+eh(c.doc||'—')+(c.email?' · ✉️ '+eh(c.email):'')+(c.tel?' · 📞 '+eh(c.tel):'')+'</div>'
       +(c.cidade?'<div style="color:var(--text-muted);font-size:10px;margin-top:2px">📍 '+eh(c.cidade)+'</div>':'')
       +'</div>'
