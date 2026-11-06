@@ -27689,6 +27689,140 @@ function escAddPessoa(id,valor){
   _escMarcarSujo(_escDiaDoCard(id));
   escRenderizar();
 }
+/* ── Clonar a etapa ────────────────────────────────────────────────────
+   Pedido do Fabiano: "várias vezes se repete a equipe para mais de um dia
+   de montagem". Montar a mesma escala duas vezes à mão é onde nasce a
+   divergência entre os dois dias.
+
+   O clone leva TUDO o que é trabalho de escalar — equipe, veículos,
+   horários, endereço, observações — e a origem (o orçamento), porque o
+   card clonado continua sendo do mesmo evento. O que não leva é a
+   identidade: id novo, criadoEm novo, e a marca de que foi clonado.      */
+function escClonarCard(id){
+  if(_escBloqueado()) return;
+  var c=escAcharCard(id);
+  if(!c) return;
+  var diaOrigem=_escDiaDoCard(id);
+  var opcoes=[];
+  for(var d=-3;d<=7;d++){
+    var iso=_logAddDias(diaOrigem,d);
+    var dt=new Date(iso+'T12:00:00');
+    opcoes.push((d===0?'0':String(d))+') '+DIAS_SEMANA_ABREV[dt.getDay()]+' '+fD(iso)+(d===0?' — mesmo dia':''));
+  }
+  var esc=prompt('Clonar esta etapa com a mesma equipe e os mesmos veículos.\n\n'
+    +'Para qual dia? Digite o número da lista:\n\n'+opcoes.join('\n'), '1');
+  if(esc===null) return;
+  var n=parseInt(esc,10);
+  if(isNaN(n)||n<-3||n>7){ alert('Número fora da lista.'); return; }
+  var destino=_logAddDias(diaOrigem,n);
+  _escClonarPara(c, diaOrigem, destino);
+}
+
+function _escClonarPara(c, diaOrigem, destino){
+  var copia=JSON.parse(JSON.stringify(c));
+  copia.id=uid();
+  copia.equipe=(c.equipe||[]).slice();
+  copia.veiculos=(c.veiculos||['','']).slice();
+  copia.criadoEm=new Date().toLocaleString('pt-BR');
+  copia.criadoPor=(usuarioAtual&&usuarioAtual.nome)||'';
+  copia.editadoEm='';
+  copia.clonadoDe=c.id;
+  // Clonar é uma escolha de quem escala, não um palpite da sincronização:
+  // sem esta marca, o realinhamento mandaria o clone de volta para o dia do
+  // orçamento na primeira atualização.
+  copia.movidoManual=(destino!==diaOrigem);
+  delete copia.realinhadaEm;
+  escCards(destino).push(copia);
+  _escMarcarSujo(destino);
+  if(destino!==diaOrigem) _escMarcarSujo(diaOrigem);
+  escRenderizar();
+  _toastMostrar('📑 Etapa clonada para '+fD(destino)+'.',
+    (c.equipe||[]).length?((c.equipe||[]).length+' pessoa(s) e os veículos vieram junto.'):'',6000);
+}
+
+/* ── Renomear quem está na lista ───────────────────────────────────────
+   Pedido do Fabiano: "torne editável os nomes que coloco na lista". Vale
+   só para FREELANCER: o nome de quem está no cadastro é o do cadastro, e
+   deixar editar aqui criaria duas verdades para a mesma pessoa — a tela
+   manda para o cadastro, que é onde o nome muda de verdade.
+
+   Renomear um freelancer troca o valor em TODAS as etapas onde ele está,
+   não só neste card: é a mesma pessoa, e corrigir "Jõao" em um dia e
+   deixar errado nos outros quatro não corrige nada.                      */
+function escRenomearPessoa(cardId, valor){
+  if(_escBloqueado()) return;
+  if(!_escEhFree(valor)){
+    alert('Este nome vem do cadastro de colaboradores.\n\nPara mudá-lo, use a aba "Equipe & Frota" — assim ele muda em todas as escalas de uma vez.');
+    return;
+  }
+  var atual=_escNomeFree(valor);
+  var novo=prompt('Nome do freelancer:', atual);
+  if(novo===null) return;
+  novo=String(novo).trim();
+  if(!novo){ alert('O nome não pode ficar vazio.'); return; }
+  if(novo===atual) return;
+  var alvo=ESC_FREE_PREFIX+novo;
+  var trocados=0, dias={};
+  Object.keys(_escMeses||{}).forEach(function(ym){
+    var m=_escMeses[ym];
+    if(!m||!m.dias) return;
+    Object.keys(m.dias).forEach(function(dia){
+      (m.dias[dia]||[]).forEach(function(card){
+        var eq=card.equipe||[];
+        var i=eq.indexOf(valor);
+        if(i<0) return;
+        // Já havia alguém com o nome novo nesta etapa? Então renomear
+        // criaria a mesma pessoa duas vezes no mesmo card.
+        if(eq.indexOf(alvo)>=0 && eq.indexOf(alvo)!==i) eq.splice(i,1);
+        else eq[i]=alvo;
+        card.editadoEm=new Date().toLocaleString('pt-BR');
+        dias[dia]=1; trocados++;
+      });
+    });
+  });
+  Object.keys(dias).forEach(function(d){ _escMarcarSujo(d); });
+  escRenderizar();
+  if(trocados>1) _toastMostrar('✏️ Nome corrigido em '+trocados+' etapa(s).','É a mesma pessoa — mudou em todas de uma vez.',6000);
+}
+
+/* ── Ordem da equipe dentro do card ────────────────────────────────────
+   Pedido do Fabiano: "quero poder arrastar para cima ou para baixo para
+   alterar a ordem". A ordem importa: o primeiro da lista é quem responde
+   pela etapa, e é nessa ordem que a escala sai no PDF.                   */
+function escMoverPessoa(cardId, valor, delta){
+  if(_escBloqueado()) return;
+  var c=escAcharCard(cardId);
+  if(!c||!c.equipe) return;
+  var i=c.equipe.indexOf(valor);
+  if(i<0) return;
+  var j=i+delta;
+  if(j<0||j>=c.equipe.length) return;
+  c.equipe.splice(j,0,c.equipe.splice(i,1)[0]);
+  c.editadoEm=new Date().toLocaleString('pt-BR');
+  _escMarcarSujo(_escDiaDoCard(cardId));
+  escRenderizar();
+}
+
+// Soltar um chip SOBRE outro chip do MESMO card reordena; de outro card,
+// continua transferindo (o comportamento que já existia).
+function escDropNoChip(ev, cardId, valorAlvo){
+  ev.preventDefault();
+  ev.stopPropagation();
+  var a=_escArrasto;
+  if(!a||a.tipo!=='chip'||a.kind!=='pessoa'){ return; }
+  if(a.cardId!==cardId){ _escArrasto=a; escDropNoCard(ev,cardId); return; }
+  _escArrasto=null;
+  if(!_escPodeEditar()) return;
+  var c=escAcharCard(cardId);
+  if(!c||!c.equipe) return;
+  var de=c.equipe.indexOf(a.valor), para=c.equipe.indexOf(valorAlvo);
+  if(de<0||para<0||de===para) return;
+  c.equipe.splice(para,0,c.equipe.splice(de,1)[0]);
+  c.editadoEm=new Date().toLocaleString('pt-BR');
+  _escMarcarSujo(_escDiaDoCard(cardId));
+  escRenderizar();
+}
+
 function escDelPessoa(id,valor){
   if(_escBloqueado()) return;
   var c=escAcharCard(id);
@@ -28457,18 +28591,25 @@ function _escCardHtml(c,cf){
     opcoesDia+='<option value="'+iso+'">'+DIAS_SEMANA_ABREV[dt.getDay()]+' '+fD(iso)+'</option>';
   }
 
-  var equipeHtml=(c.equipe||[]).map(function(pid){
+  var nEq=(c.equipe||[]).length;
+  var equipeHtml=(c.equipe||[]).map(function(pid,iEq){
     var cfl=_escChipConflito(cf,c.id,pid,'pessoa');
     var cor=escCorPessoa(pid);
     var free=_escEhFree(pid);
     return '<div draggable="true" ondragstart="escDragChip(event,\''+c.id+'\',\'pessoa\',\''+eh(pid)+'\')" ondragend="escDragFim()" '
-      +'title="'+(free?'Freelancer — não está no cadastro. ':'')+'Arraste para outra etapa para transferir'+(cfl?' — ⚠️ CONFLITO DE HORÁRIO':'')+'" '
+      +'ondragover="escPermitir(event)" ondrop="escDropNoChip(event,\''+c.id+'\',\''+eh(pid)+'\')" '
+      +'title="'+(free?'Freelancer — não está no cadastro. ':'')+'Arraste sobre outro nome para mudar a ordem, ou para outra etapa para transferir'+(cfl?' — ⚠️ CONFLITO DE HORÁRIO':'')+'" '
       +'style="display:flex;justify-content:space-between;align-items:center;gap:5px;padding:4px 7px;border-radius:4px;margin-bottom:3px;cursor:grab;'
       +'background:'+cor+'33;border-left:3px '+(free?'dashed':'solid')+' '+cor+';'
       +(cfl?'box-shadow:0 0 0 1px '+(cfl==='grave'?'#ff5555':'#ffa726')+';':'')
       +'font-size:10px;font-weight:700;color:var(--text)">'
-      +'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(cfl?(cfl==='grave'?'⛔ ':'⚠️ '):'')+(free?'✏️ ':'')+eh(escNomePessoa(pid))+'</span>'
+      +'<span onclick="event.stopPropagation();escRenomearPessoa(\''+c.id+'\',\''+eh(pid)+'\')" '
+        +'title="'+(free?'Clique para corrigir o nome — muda em todas as etapas deste freelancer':'O nome vem do cadastro de colaboradores')+'" '
+        +'style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap'+(free?';cursor:text;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px':'')+'">'
+        +(cfl?(cfl==='grave'?'⛔ ':'⚠️ '):'')+(free?'✏️ ':'')+eh(escNomePessoa(pid))+'</span>'
       +'<span style="display:flex;gap:4px;flex:0 0 auto">'
+      +(nEq>1?'<span class="esc-acao" onclick="event.stopPropagation();escMoverPessoa(\''+c.id+'\',\''+eh(pid)+'\',-1)" title="Subir na ordem" style="cursor:pointer;color:var(--text-muted);font-weight:900'+(iEq===0?';opacity:.25;pointer-events:none':'')+'">▲</span>'
+        +'<span class="esc-acao" onclick="event.stopPropagation();escMoverPessoa(\''+c.id+'\',\''+eh(pid)+'\',1)" title="Descer na ordem" style="cursor:pointer;color:var(--text-muted);font-weight:900'+(iEq===nEq-1?';opacity:.25;pointer-events:none':'')+'">▼</span>':'')
       +(free?'<span class="esc-acao" onclick="event.stopPropagation();escPromoverFree(\''+c.id+'\',\''+eh(pid)+'\')" title="Passar para o cadastro de colaboradores" style="cursor:pointer;color:#90caf9;font-weight:900">📌</span>':'')
       +'<span class="esc-acao" onclick="event.stopPropagation();escDelPessoa(\''+c.id+'\',\''+eh(pid)+'\')" title="Tirar da escala" style="cursor:pointer;color:#ff8a8a;font-weight:900">✕</span>'
       +'</span></div>';
@@ -28535,6 +28676,7 @@ function _escCardHtml(c,cf){
     // porque o corpo do card é todo campo de edição — clicar nele é para
     // digitar, não para abrir outra tela.
     +(c.driveId?'<span onclick="event.stopPropagation();logAbrirPreviewOS(\''+eh(c.driveId)+'\')" title="Ver a Ordem de Serviço deste evento" style="cursor:pointer;font-size:12px">🗂️</span>':'')
+    +'<span class="esc-acao" onclick="event.stopPropagation();escClonarCard(\''+c.id+'\')" title="Clonar esta etapa com a mesma equipe e os mesmos veículos — para outro dia de montagem" style="cursor:pointer;color:#90caf9;font-weight:900;font-size:12px">📑</span>'
     +'<span class="esc-acao" onclick="escExcluirCard(\''+c.id+'\')" title="Excluir esta etapa" style="cursor:pointer;color:#ff8a8a;font-weight:900;font-size:12px">✕</span>'
     +'</span>'
     +'</div>'
