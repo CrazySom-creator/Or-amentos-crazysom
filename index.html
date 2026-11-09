@@ -2572,6 +2572,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div class="rel-tab active" id="eqd-tab-alertas" onclick="eqAba('alertas')">🚨 Alertas</div>
       <div class="rel-tab" id="eqd-tab-mapa" onclick="eqAba('mapa')">📅 Mapa por dia</div>
       <div class="rel-tab" id="eqd-tab-periodo" onclick="eqAba('periodo')">📋 Consulta por período</div>
+      <div class="rel-tab" id="eqd-tab-item" onclick="eqAba('item')">🔍 Por equipamento</div>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 13px;margin-bottom:12px">
       <div><label style="font-size:9px">De</label><input type="date" id="eqd-de" onchange="eqRenderizar()" style="font-size:11px;padding:5px 7px"></div>
@@ -2582,6 +2583,14 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer">
         <input type="checkbox" id="eqd-so-uso" checked onchange="eqRenderizar()"> só itens em uso <span style="color:var(--text-muted);font-size:10px">(consulta)</span>
       </label>
+      <div id="eqd-item-filtros" style="display:none;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div><label style="font-size:9px">Equipamento</label>
+          <select id="eqd-item" onchange="eqRenderizar()" style="font-size:11px;padding:5px 7px;min-width:250px"><option value="">Selecione...</option></select>
+        </div>
+        <div><label style="font-size:9px" title="Opcional. Informando quanto você precisa, a resposta vira sim ou não.">Preciso de</label>
+          <input type="number" id="eqd-qtd" min="0" step="1" placeholder="qtd" oninput="eqRenderizar()" style="font-size:11px;padding:5px 7px;width:70px">
+        </div>
+      </div>
     </div>
     <div id="eqd-corpo"></div>
   </div>
@@ -6393,10 +6402,15 @@ async function eqMapaAtualizar(){
 
 function eqAba(a){
   _eqAbaAtual=a;
-  ['alertas','mapa','periodo'].forEach(function(x){
+  ['alertas','mapa','periodo','item'].forEach(function(x){
     var t=document.getElementById('eqd-tab-'+x);
     if(t) t.classList.toggle('active', x===a);
   });
+  // Os campos de equipamento e quantidade só fazem sentido na aba nova —
+  // nas outras seriam dois controles que não mexem em nada.
+  var ff=document.getElementById('eqd-item-filtros');
+  if(ff) ff.style.display=(a==='item')?'flex':'none';
+  if(a==='item') _eqPopularItens();
   eqRenderizar();
 }
 
@@ -6412,6 +6426,7 @@ function eqRenderizar(){
   }
   if(_eqAbaAtual==='alertas')      eqAlertasRenderizar();
   else if(_eqAbaAtual==='mapa')    eqMapaRenderizar();
+  else if(_eqAbaAtual==='item')    eqItemRenderizar();
   else                             eqPeriodoRenderizar();
 }
 
@@ -6708,6 +6723,162 @@ function eqPicoDoPeriodo(de, ate){
             falta:Math.max(0,picoFirme-estoque), diasEmUso:diasEmUso, situacao:situacao};
   });
   return {dias:d.dias, porDia:d.porDia, linhas:linhas};
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   ABA "POR EQUIPAMENTO" — a pergunta que se faz com o cliente ao telefone
+   ──────────────────────────────────────────────────────────────────────
+   Pedido do Fabiano: "quero poder consultar disponibilidade de equipamentos
+   selecionando o equipamento e o período que preciso".
+
+   As outras abas respondem "onde vai faltar alguma coisa". Esta responde
+   outra pergunta, que é a do dia a dia comercial: "tenho 10 destes, de 12
+   a 15?". São perguntas diferentes e por isso uma tela diferente — filtrar
+   a tabela grande deixaria a resposta escondida no meio de colunas que não
+   interessam naquele momento.
+
+   Informando QUANTO precisa, a resposta vira sim ou não, com o dia que
+   aperta. Sem a quantidade, mostra o livre dia a dia.                     */
+
+function _eqPopularItens(){
+  var sel=document.getElementById('eqd-item');
+  if(!sel) return;
+  var itens=_eqControlados();
+  if(sel.options.length-1===itens.length) return;   // já populado
+  var atual=sel.value;
+  var porSec={};
+  itens.forEach(function(it){ (porSec[it.sec]=porSec[it.sec]||[]).push(it); });
+  sel.innerHTML='<option value="">Selecione o equipamento...</option>'
+    +Object.keys(porSec).map(function(sec){
+      return '<optgroup label="'+eh(SEC_LBL[sec]||sec)+'">'
+        +porSec[sec].sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome),'pt-BR'); })
+          .map(function(it){ return '<option value="'+eh(it.id)+'">'+eh(it.nome)+' ('+(parseInt(it.qtd,10)||0)+')</option>'; }).join('')
+        +'</optgroup>';
+    }).join('');
+  if(atual) sel.value=atual;
+}
+
+// Dia a dia de UM item: estoque, comprometido, em negociação, livre, e quem
+// está usando. É a base da tela e do que ela responde.
+function eqItemDados(itemId, de, ate){
+  var it=_eqControlados().filter(function(x){ return x.id===itemId; })[0];
+  if(!it) return null;
+  var d=eqMapaDados(de, ate);
+  var estoque=parseInt(it.qtd,10)||0;
+  var dias=d.dias.map(function(dia){
+    var reg=d.porDia[dia];
+    var firme=reg.firme[itemId]||0, risco=reg.risco[itemId]||0;
+    // Só os eventos que usam ESTE item — a lista do dia traz todos.
+    var usam=(reg.eventos||[]).filter(function(ev){ return (ev.qtd||{})[itemId]>0; })
+      .map(function(ev){
+        return {o:ev.orc, qtd:ev.qtd[itemId], status:ev.status,
+                num:((ev.orc.form||{})['f-num'])||'', cliente:((ev.orc.form||{})['f-cliente'])||'—',
+                evento:((ev.orc.form||{})['f-nome-evento'])||''};
+      }).sort(function(a,b){ return b.qtd-a.qtd; });
+    return {dia:dia, firme:firme, risco:risco, livre:estoque-firme,
+            livreSeFecharem:estoque-firme-risco, usam:usam};
+  });
+  var piorLivre=null, diaPior='';
+  dias.forEach(function(x){
+    if(piorLivre===null||x.livre<piorLivre){ piorLivre=x.livre; diaPior=x.dia; }
+  });
+  var piorComRisco=null, diaPiorRisco='';
+  dias.forEach(function(x){
+    if(piorComRisco===null||x.livreSeFecharem<piorComRisco){ piorComRisco=x.livreSeFecharem; diaPiorRisco=x.dia; }
+  });
+  return {item:it, estoque:estoque, dias:dias,
+          piorLivre:(piorLivre===null?estoque:piorLivre), diaPior:diaPior,
+          piorComRisco:(piorComRisco===null?estoque:piorComRisco), diaPiorRisco:diaPiorRisco};
+}
+
+function eqItemRenderizar(){
+  var el=document.getElementById('eqd-corpo');
+  var de=(document.getElementById('eqd-de')||{}).value||'';
+  var ate=(document.getElementById('eqd-ate')||{}).value||'';
+  var id=(document.getElementById('eqd-item')||{}).value||'';
+  var qtdTxt=((document.getElementById('eqd-qtd')||{}).value||'').trim();
+  var querQtd=qtdTxt!==''?Math.max(0,parseInt(qtdTxt,10)||0):null;
+
+  if(!de||!ate){ el.innerHTML='<div style="padding:22px;color:var(--text-muted);font-size:12px">Escolha o período.</div>'; return; }
+  if(ate<de){ el.innerHTML='<div style="padding:22px;color:var(--R);font-size:12px">A data final está antes da inicial.</div>'; return; }
+  if(!id){
+    el.innerHTML='<div style="padding:26px;text-align:center;color:var(--text-muted);font-size:12px;border:1px dashed var(--border);border-radius:8px;line-height:1.8">'
+      +'🔍 Escolha o equipamento acima.<br>'
+      +'<span style="font-size:11px">Informando também <b>quanto você precisa</b>, a resposta vira um sim ou não para o período inteiro.</span></div>';
+    return;
+  }
+  var d=eqItemDados(id, de, ate);
+  if(!d){ el.innerHTML='<div style="padding:22px;color:var(--text-muted);font-size:12px">Equipamento não encontrado no estoque controlado.</div>'; return; }
+
+  // ── O veredito, que é o que a pessoa veio buscar ──
+  var cab;
+  if(querQtd===null){
+    cab=_eqItemCaixa('#1565c0','📦 '+d.piorLivre+' livre(s) no pior dia do período',
+      'Estoque '+d.estoque+' · pior dia '+(d.diaPior?fD(d.diaPior):'—')
+      +(d.piorComRisco<d.piorLivre?' · se as propostas em negociação fecharem, sobram '+d.piorComRisco:''));
+  }else if(d.piorLivre>=querQtd){
+    var apertado=(d.piorComRisco<querQtd);
+    cab=_eqItemCaixa(apertado?'#e65100':'#2e7d32',
+      (apertado?'⚠️ ':'✅ ')+'Dá para atender '+querQtd+' no período inteiro',
+      'No pior dia ('+(d.diaPior?fD(d.diaPior):'—')+') sobram '+d.piorLivre+' de '+d.estoque+'.'
+      +(apertado?' <b>Mas há proposta em negociação para o mesmo período</b> — se fechar, faltariam '+(querQtd-d.piorComRisco)+'. Vale confirmar antes de prometer.':''));
+  }else{
+    var faltam=querQtd-d.piorLivre;
+    var diasRuins=d.dias.filter(function(x){ return x.livre<querQtd; });
+    cab=_eqItemCaixa('#c62828','⛔ Faltam '+faltam+' para atender '+querQtd,
+      'O aperto é em '+(diasRuins.length===1?fD(diasRuins[0].dia):diasRuins.length+' dia(s), o pior em '+fD(d.diaPior))
+      +'. Dá para locar '+faltam+' com parceiro, ou remarcar.');
+  }
+
+  // ── Dia a dia ──
+  var linhas=d.dias.map(function(x){
+    var ruim=querQtd!==null?(x.livre<querQtd):(x.livre<0);
+    var atencao=!ruim&&querQtd!==null&&x.livreSeFecharem<querQtd;
+    var cor=ruim?'#c62828':(atencao?'#e65100':(x.firme>0?'#2e7d32':'var(--text-muted)'));
+    var pct=d.estoque>0?Math.min(100,Math.round((x.firme/d.estoque)*100)):0;
+    var pctR=d.estoque>0?Math.min(100-pct,Math.round((x.risco/d.estoque)*100)):0;
+    return '<tr style="border-bottom:1px solid var(--border)'+(x.dia===d.diaPior?';background:rgba(214,52,71,.07)':'')+'">'
+      +'<td style="padding:5px 7px;white-space:nowrap;color:var(--text-dim)">'+fD(x.dia)
+        +'<div style="font-size:9px;color:var(--text-muted)">'+DIAS_SEMANA_ABREV[new Date(x.dia+'T12:00:00').getDay()]+'</div></td>'
+      +'<td style="padding:5px 7px;width:34%">'
+        +'<div style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:var(--surface-3)">'
+          +'<div style="width:'+pct+'%;background:#2e7d32"></div>'
+          +'<div style="width:'+pctR+'%;background:#e65100;opacity:.7"></div>'
+        +'</div></td>'
+      +'<td style="padding:5px 7px;text-align:right;font-weight:700">'+x.firme+'</td>'
+      +'<td style="padding:5px 7px;text-align:right;color:#e65100">'+(x.risco||'—')+'</td>'
+      +'<td style="padding:5px 7px;text-align:right;font-weight:900;color:'+cor+'">'+x.livre+'</td>'
+      +'<td style="padding:5px 7px;font-size:10px;color:var(--text-dim)">'
+        +(x.usam.length?x.usam.map(function(u){
+            return (u.o.driveId
+              ?'<span onclick="logAbrirPreviewOS(\''+eh(u.o.driveId)+'\')" title="Abrir a Ordem de Serviço" style="cursor:pointer;color:#90caf9;text-decoration:underline">'+eh(u.cliente)+'</span>'
+              :eh(u.cliente))
+              +' <b>'+u.qtd+'</b>'+(u.status!=='ganha'?' <span style="color:#e65100" title="Em negociação — ainda não é Venda Ganha">~</span>':'');
+          }).join(' · ')
+          :'<span style="color:var(--text-muted)">livre</span>')
+      +'</td></tr>';
+  }).join('');
+
+  el.innerHTML=cab
+    +'<div style="font-size:10.5px;color:var(--text-dim);margin:10px 0 6px">'
+      +'<b>'+eh(d.item.nome)+'</b> · estoque '+d.estoque+' · '+d.dias.length+' dia(s) no período'
+      +' &nbsp;·&nbsp; <span style="color:#2e7d32">■</span> fechado &nbsp; <span style="color:#e65100">■</span> em negociação'
+    +'</div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+    +'<thead><tr style="border-bottom:2px solid var(--R)">'
+    +['Dia','Ocupação','Fechado','Negoc.','Livre','Quem está usando'].map(function(h,i){
+      return '<th style="padding:5px 7px;font-size:9.5px;color:var(--text-muted);text-transform:uppercase;text-align:'+(i>=2&&i<=4?'right':'left')+'">'+h+'</th>';
+    }).join('')+'</tr></thead><tbody>'+linhas+'</tbody></table></div>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:8px">'
+    +'"Livre" desconta só o que já é <b>Venda Ganha</b>. O que está em negociação aparece em laranja porque ainda pode não acontecer — '
+    +'mas se você prometer o equipamento e as duas fecharem, falta. Clique no cliente para abrir a OS.</div>';
+}
+
+function _eqItemCaixa(cor,titulo,sub){
+  return '<div style="background:'+cor+'1f;border:1px solid '+cor+';border-left:5px solid '+cor+';border-radius:7px;padding:11px 14px">'
+    +'<div style="font-size:14px;font-weight:900;color:'+cor+'">'+titulo+'</div>'
+    +(sub?'<div style="font-size:11.5px;color:var(--text);margin-top:3px">'+sub+'</div>':'')
+    +'</div>';
 }
 
 function eqPeriodoRenderizar(){
