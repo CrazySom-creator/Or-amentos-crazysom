@@ -16898,7 +16898,12 @@ var BANCO_COLECOES=[
   {col:'comprovantes',          label:'Comprovantes financeiros',      critico:false, nota:'Anexos do financeiro'},
   {col:'historicoRD',           label:'Histórico importado (RD)',      critico:false, nota:'Importação do RD Station'},
   {col:'usuarios',              label:'Usuários',                      critico:false, nota:'Só administrador precisa gravar'},
-  {col:'config',                label:'Configurações',                 critico:false, nota:'Só administrador precisa gravar'}
+  // ERA 'só administrador precisa gravar'. Deixou de ser verdade quando a
+  // Logística passou a gravar a escala em config/escala-AAAA-MM: quem edita
+  // a escala precisa escrever aqui. Com critico:false o diagnóstico dizia
+  // "o essencial está liberado" para alguém que não conseguia salvar a
+  // escala — o relatório mentia exatamente para quem foi pedir ajuda.
+  {col:'config',                label:'Configurações e escala da Logística', critico:true,  nota:'Escala da Logística, metas, tabela de preços e permissões'}
 ];
 
 var BANCO_REGRA_TEXTO=''
@@ -16923,6 +16928,10 @@ var BANCO_REGRA_TEXTO=''
   +'match /comprovantes/{doc}      { allow read, write: if request.auth != null; }\n'
   +'match /historicoRD/{doc}       { allow read, write: if request.auth != null; }\n'
   +'match /usuarios/{doc}          { allow read: if request.auth != null; allow write: if request.auth != null; }\n'
+  +'// ATENÇÃO: config guarda a ESCALA DA LOGÍSTICA (config/escala-AAAA-MM),\n'
+  +'// e não só as configurações. Quem edita a escala precisa gravar aqui —\n'
+  +'// se esta linha liberar só administradores, o consultor e a área técnica\n'
+  +'// montam a escala na tela e não conseguem salvar.\n'
   +'match /config/{doc}            { allow read: if request.auth != null; allow write: if request.auth != null; }';
 
 // Código e mensagem juntos: o código ajuda o administrador, a mensagem é a
@@ -27119,7 +27128,18 @@ async function escSalvar(silencioso){
     }catch(e){ console.warn('escSalvar '+m+':',e); erros++; }
   }
   if(btn){ btn.disabled=false; btn.textContent='💾 Salvar'; }
-  if(erros && !silencioso) alert('Não consegui salvar '+erros+' mês(es) da escala.\n\nVeja o Diagnóstico de Permissões do Banco, no Admin.');
+  if(erros && !silencioso){
+    // Mandar "veja no Admin" é um beco sem saída: quem edita a escala
+    // normalmente NÃO é administrador e não abre essa tela. O diagnóstico
+    // roda com o login de quem está nela, então a oferta vai aqui, direto.
+    var abrir=confirm('Não consegui salvar '+erros+' mês(es) da escala.\n\n'
+      +'O mais provável é o banco estar recusando a gravação para o seu usuário — '
+      +'a escala é gravada em "config", e a regra de segurança pode liberar essa parte só para administradores.\n\n'
+      +'Quer rodar o teste de acesso agora? Ele diz exatamente onde foi recusado, '
+      +'e o resultado dá para copiar e mandar para quem administra o sistema.\n\n'
+      +'As alterações continuam na tela — nada do que você escalou foi perdido.');
+    if(abrir && typeof bancoDiagAbrir==='function') bancoDiagAbrir();
+  }
   else if(!erros && !silencioso) _toastMostrar('💾 Escala salva.','',4000);
   escAtualizarBotaoSalvar();
 }
