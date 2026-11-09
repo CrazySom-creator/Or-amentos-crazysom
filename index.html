@@ -3136,6 +3136,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div class="rel-tab" onclick="relAba('financeiro')">💰 Financeiro</div>
       <div class="rel-tab" onclick="relAba('eventos')">🗓️ Eventos</div>
       <div class="rel-tab" onclick="relAba('proximos')">🔜 Próximos Eventos</div>
+      <div class="rel-tab" onclick="relAba('cortesia')">🎁 Patrocínios</div>
     </div>
 
     <!-- PERÍODO -->
@@ -3251,6 +3252,19 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <div><button class="btn btn-r btn-sm" onclick="relGerar('proximos')">🔍 Gerar</button></div>
       </div>
       <div id="rel-prox-body"></div>
+    </div>
+
+    <!-- PATROCÍNIOS / CORTESIAS -->
+    <div class="rel-pane" id="rpane-cortesia">
+      <div class="rel-filtros">
+        <div><label>De</label><input type="date" id="rf-cort-de"></div>
+        <div><label>Até</label><input type="date" id="rf-cort-ate"></div>
+        <div><label>Tipo</label>
+          <select id="rf-cort-tipo"><option value="">Todos</option></select>
+        </div>
+        <div><button class="btn btn-r btn-sm" onclick="relGerarCortesia()">🔍 Gerar</button></div>
+      </div>
+      <div id="rel-cort-body"></div>
     </div>
 
     <!-- RODAPÉ COM EXPORTAÇÃO -->
@@ -3415,6 +3429,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
      do recurso é o consultor ver o motivo e ligar para o cliente — escondê-la
      no histórico seria entregar a informação a quem já a tem. -->
 <div id="reprov-faixa" style="display:none"></div>
+<div id="cortesia-faixa" style="display:none"></div>
 
 <div class="card">
   <div class="st">📋 Identificação</div>
@@ -3739,6 +3754,13 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <button class="acao-btn" style="background:#e65100" onclick="enviarNegociacao()">📤 Enviar ao Gerente</button>
       <button class="acao-btn" style="background:var(--surface-3)" onclick="document.getElementById('negociacao-box').style.display='none'">Cancelar</button>
     </div>
+  </div>
+
+  <!-- Cortesia / Patrocínio: fica junto do acompanhamento comercial porque
+       é uma decisão comercial, não um campo do orçamento do cliente. -->
+  <div class="aprov-inline" id="cortesia-box" style="display:none;border-color:#6a1b9a">
+    <h4 style="color:#ab47bc">🎁 Cortesia / Patrocínio</h4>
+    <div id="cortesia-corpo"></div>
   </div>
 
   <div class="com-panel" id="com-panel" style="display:none">
@@ -4449,6 +4471,35 @@ function _nomeUsuario(v){
 }
 var usuarioAtual=null;
 var aprovStatus='rascunho';
+/* ── Cortesia / Patrocínio ─────────────────────────────────────────────
+   Pedido do Fabiano: "vamos criar uma opção no orçamento onde possa
+   transformar em cortesia, pois temos diversas parcerias, mas quero poder
+   mensurar qual valor estamos investindo como patrocinador. Esta função
+   deve deixar os valores para tirarmos relatórios, mas no financeiro e
+   nos relatórios de vendas deve ser desconsiderado."
+
+   A chave do desenho: os valores do orçamento NÃO são zerados. O que
+   muda é quanto daquilo é considerado FATURAMENTO. Zerar os itens — como
+   ele tentou fazer à mão neste orçamento — destrói justamente o número
+   que ele quer medir, e ainda esbarra em itens que não aceitam zero
+   (o palco).
+
+   cortesiaValor é quanto do orçamento é doado. Pode ser parcial: um
+   evento de R$ 10.000 com R$ 3.000 de patrocínio fatura R$ 7.000 e
+   registra R$ 3.000 de investimento.                                    */
+var cortesiaAtiva=false, cortesiaTipo='patrocinio', cortesiaValor=0, cortesiaMotivo='';
+
+var CORTESIA_TIPOS=[
+  {id:'patrocinio', rot:'Patrocínio', desc:'Apoio a um evento em troca de exposição da marca'},
+  {id:'parceria',   rot:'Parceria',   desc:'Permuta ou contrapartida com outra empresa'},
+  {id:'cortesia',   rot:'Cortesia',   desc:'Atendimento sem cobrança a cliente ou convidado'},
+  {id:'bonificacao',rot:'Bonificação',desc:'Compensação a cliente por algo que não saiu como combinado'},
+  {id:'interno',    rot:'Evento interno', desc:'Evento da própria Crazy Som'}
+];
+function _cortesiaRot(id){
+  var t=CORTESIA_TIPOS.filter(function(x){ return x.id===id; })[0];
+  return t?t.rot:(id||'Cortesia');
+}
 // Reprovação: motivo escolhido da lista, detalhe livre, quem e quando.
 var reprovMotivo='', reprovDetalhe='', reprovPor='', reprovEm='';
 var aprovHist=[];
@@ -8061,7 +8112,7 @@ async function _entrarNoSistema(email, perfil, opts){
   // Logística/Financeiro abertos por cima da tela inicial.
   try{ await _resetarEstadoOrcamento(); }catch(eReset){ console.warn('reset ao entrar:', eReset&&eReset.message); }
   _fecharTudoParaAbrirOrc();
-  usuarioAtual=u;aprovStatus='rascunho';aprovHist=[];
+  usuarioAtual=u;aprovStatus='rascunho';aprovHist=[];cortesiaAtiva=false;cortesiaTipo='patrocinio';cortesiaValor=0;cortesiaMotivo='';
   idleAtivar(); // Iniciar contador de logout automático por inatividade
   permCarregar();
   // Sempre repopula o campo Consultor a partir do documento público de nomes.
@@ -8167,7 +8218,7 @@ async function logout(forcado){
     }catch(e4){}
   }
   try{await fbAuth.signOut();}catch(e7){}
-  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();arredDiscriminarPDF=false;(function(){var _e=document.getElementById('chk-arred-discriminar');if(_e)_e.checked=false;})();comExtAtiva=true;comExtPct=0;aditivoDe=null;(function(){try{renderComissaoExterna();renderAditivoInfo();}catch(e){}})();driveIdAtual=null;driveNumAtual=null;
+  usuarioAtual=null;aprovStatus='rascunho';aprovHist=[];cortesiaAtiva=false;cortesiaTipo='patrocinio';cortesiaValor=0;cortesiaMotivo='';comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';snapshotAnterior=null;snapshotAprovado=null;finParcelas=[];finObs='';finImposto='cimp';finNumVenda='';descDiscriminarPDF=true;(function(){var _e=document.getElementById('chk-desc-discriminar');if(_e)_e.checked=true;})();arredDiscriminarPDF=false;(function(){var _e=document.getElementById('chk-arred-discriminar');if(_e)_e.checked=false;})();comExtAtiva=true;comExtPct=0;aditivoDe=null;(function(){try{renderComissaoExterna();renderAditivoInfo();}catch(e){}})();driveIdAtual=null;driveNumAtual=null;
   _atualizarBtnClonar();
   // Limpa o formulário e fecha qualquer tela sobreposta — senão o próximo
   // login (ou a volta depois de uma queda de sessão) encontra o último
@@ -8222,6 +8273,7 @@ function renderStatusOrc(){
   // A tarja de reprovação é o primeiro aviso da tela: quem abre um orçamento
   // reprovado precisa ver o motivo antes de qualquer outra coisa.
   try{ renderReprovacao(); }catch(e){}
+  try{ renderCortesiaFaixa(); }catch(e){}
   atualizarBotoesBloqueioAprovacao();
   var sb=document.getElementById('status-orc-bar');
   var sa=document.getElementById('status-orc-acoes');
@@ -10089,6 +10141,10 @@ function getDadosCompletos(){
     state:state,
     aprovStatus:aprovStatus,
     aprovHist:aprovHist,
+    cortesiaAtiva:cortesiaAtiva,
+    cortesiaTipo:cortesiaTipo,
+    cortesiaValor:cortesiaValor,
+    cortesiaMotivo:cortesiaMotivo,
     reprovMotivo:reprovMotivo,
     reprovDetalhe:reprovDetalhe,
     reprovPor:reprovPor,
@@ -10483,7 +10539,7 @@ async function _salvarNoDriveInterno(opts){
         driveStatus('Salvamento cancelado — o número não foi alterado.','err');
         return null;
       }
-      aprovStatus='rascunho';aprovHist=[];
+      aprovStatus='rascunho';aprovHist=[];cortesiaAtiva=false;cortesiaTipo='patrocinio';cortesiaValor=0;cortesiaMotivo='';
       comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';
       snapshotAnterior=null;snapshotAprovado=null;
       if(typeof _limparCamposComercialDOM==='function') _limparCamposComercialDOM();
@@ -11214,7 +11270,7 @@ function _aplicarDadosOrcamento(dados){
     if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];
   });
   if(dados.form)setForm(dados.form);else setForm({});
-  aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();reprovMotivo=dados.reprovMotivo||'';reprovDetalhe=dados.reprovDetalhe||'';reprovPor=dados.reprovPor||'';reprovEm=dados.reprovEm||'';comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();contratoStatus=dados.contratoStatus||'';contratoHist=(dados.contratoHist||[]).slice();creditoStatus=dados.creditoStatus||'';creditoHist=(dados.creditoHist||[]).slice();montagemLiberacaoManual=!!dados.montagemLiberacaoManual;montagemLiberacaoManualHist=(dados.montagemLiberacaoManualHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcAtualGoogleAgenda=Object.assign({},dados.googleAgenda||{});anexosOrc=(dados.anexos||[]).map(function(a){return Object.assign({},a);});orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
+  aprovStatus=dados.aprovStatus||'rascunho';aprovHist=(dados.aprovHist||[]).slice();cortesiaAtiva=!!dados.cortesiaAtiva;cortesiaTipo=dados.cortesiaTipo||'patrocinio';cortesiaValor=parseFloat(dados.cortesiaValor)||0;cortesiaMotivo=dados.cortesiaMotivo||'';reprovMotivo=dados.reprovMotivo||'';reprovDetalhe=dados.reprovDetalhe||'';reprovPor=dados.reprovPor||'';reprovEm=dados.reprovEm||'';comercialStatus=dados.comercialStatus||'';comercialHist=(dados.comercialHist||[]).slice();contratoStatus=dados.contratoStatus||'';contratoHist=(dados.contratoHist||[]).slice();creditoStatus=dados.creditoStatus||'';creditoHist=(dados.creditoHist||[]).slice();montagemLiberacaoManual=!!dados.montagemLiberacaoManual;montagemLiberacaoManualHist=(dados.montagemLiberacaoManualHist||[]).slice();equipReservadoManual=!!dados.equipReservadoManual;atividades=(dados.atividades||[]).slice();followupData=dados.followupData||'';orcAtualGoogleAgenda=Object.assign({},dados.googleAgenda||{});anexosOrc=(dados.anexos||[]).map(function(a){return Object.assign({},a);});orcCriadoEmISO=dados.criadoEmISO||'';snapshotAnterior=dados.snapshotAnterior||null;snapshotAprovado=dados.snapshotAprovado||null;finParcelas=(dados.finParcelas||[]).map(function(p){return Object.assign({},p);});finObs=dados.finObs||'';finImposto=dados.finImposto||'cimp';finNumVenda=dados.finNumVenda||'';_bvStorage=parseFloat(dados.form&&dados.form['f-bv'])||0;
   descDiscriminarPDF=(dados.descDiscriminarPDF!==undefined)?!!dados.descDiscriminarPDF:true;
   arredDiscriminarPDF=!!dados.arredDiscriminarPDF;
   (function(){var _e=document.getElementById('chk-arred-discriminar');if(_e)_e.checked=arredDiscriminarPDF;})();
@@ -11429,7 +11485,7 @@ function carregar(input){
         if(!state[s].rows[state[s].ambAtiva])state[s].rows[state[s].ambAtiva]=[];
       });
       setForm(data.form||{});
-      aprovStatus=data.aprovStatus||'rascunho';aprovHist=data.aprovHist||[];reprovMotivo=data.reprovMotivo||'';reprovDetalhe=data.reprovDetalhe||'';reprovPor=data.reprovPor||'';reprovEm=data.reprovEm||'';comercialStatus=data.comercialStatus||'';comercialHist=data.comercialHist||[];contratoStatus=data.contratoStatus||'';contratoHist=data.contratoHist||[];creditoStatus=data.creditoStatus||'';creditoHist=data.creditoHist||[];montagemLiberacaoManual=!!data.montagemLiberacaoManual;montagemLiberacaoManualHist=data.montagemLiberacaoManualHist||[];equipReservadoManual=!!data.equipReservadoManual;atividades=data.atividades||[];followupData=data.followupData||'';orcAtualGoogleAgenda=Object.assign({},data.googleAgenda||{});anexosOrc=(data.anexos||[]).map(function(a){return Object.assign({},a);});orcCriadoEmISO=data.criadoEmISO||'';snapshotAnterior=data.snapshotAnterior||null;snapshotAprovado=data.snapshotAprovado||null;finParcelas=data.finParcelas||[];finObs=data.finObs||'';finImposto=data.finImposto||'cimp';finNumVenda=data.finNumVenda||'';
+      aprovStatus=data.aprovStatus||'rascunho';aprovHist=data.aprovHist||[];cortesiaAtiva=!!data.cortesiaAtiva;cortesiaTipo=data.cortesiaTipo||'patrocinio';cortesiaValor=parseFloat(data.cortesiaValor)||0;cortesiaMotivo=data.cortesiaMotivo||'';reprovMotivo=data.reprovMotivo||'';reprovDetalhe=data.reprovDetalhe||'';reprovPor=data.reprovPor||'';reprovEm=data.reprovEm||'';comercialStatus=data.comercialStatus||'';comercialHist=data.comercialHist||[];contratoStatus=data.contratoStatus||'';contratoHist=data.contratoHist||[];creditoStatus=data.creditoStatus||'';creditoHist=data.creditoHist||[];montagemLiberacaoManual=!!data.montagemLiberacaoManual;montagemLiberacaoManualHist=data.montagemLiberacaoManualHist||[];equipReservadoManual=!!data.equipReservadoManual;atividades=data.atividades||[];followupData=data.followupData||'';orcAtualGoogleAgenda=Object.assign({},data.googleAgenda||{});anexosOrc=(data.anexos||[]).map(function(a){return Object.assign({},a);});orcCriadoEmISO=data.criadoEmISO||'';snapshotAnterior=data.snapshotAnterior||null;snapshotAprovado=data.snapshotAprovado||null;finParcelas=data.finParcelas||[];finObs=data.finObs||'';finImposto=data.finImposto||'cimp';finNumVenda=data.finNumVenda||'';
       descDiscriminarPDF=(data.descDiscriminarPDF!==undefined)?!!data.descDiscriminarPDF:true;
       var _chkDescDiscrLocal=document.getElementById('chk-desc-discriminar');if(_chkDescDiscrLocal)_chkDescDiscrLocal.checked=descDiscriminarPDF;
       _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
@@ -11488,7 +11544,7 @@ async function limpar(){
   sv('orc-disp','—');
   driveIdAtual=null;driveNumAtual=null;
   _naoSalvo=false;
-  aprovStatus='rascunho';aprovHist=[];
+  aprovStatus='rascunho';aprovHist=[];cortesiaAtiva=false;cortesiaTipo='patrocinio';cortesiaValor=0;cortesiaMotivo='';
   comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';
   _limparCamposComercialDOM();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
@@ -11920,7 +11976,7 @@ async function clonarOrcamento(){
   _bvStorage=0;var bvEl=document.getElementById('f-bv');if(bvEl)bvEl.value=''; _clienteHistLista=[];var histEl=document.getElementById('f-cliente-hist-status');if(histEl)histEl.innerHTML='';
 
   // ── Zerar aprovações, funil e financeiro
-  aprovStatus='rascunho';aprovHist=[];
+  aprovStatus='rascunho';aprovHist=[];cortesiaAtiva=false;cortesiaTipo='patrocinio';cortesiaValor=0;cortesiaMotivo='';
   comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';
   _limparCamposComercialDOM();
   snapshotAnterior=null;
@@ -12895,7 +12951,7 @@ async function _resetarEstadoOrcamento(){
   var pgtoTipoReset=document.getElementById('f-pgto-tipo');if(pgtoTipoReset)pgtoTipoReset.value='padrao';
   sv('orc-disp','—');
   driveIdAtual=null;driveNumAtual=null;_naoSalvo=false;_versaoAtual=null;
-  aprovStatus='rascunho';aprovHist=[];
+  aprovStatus='rascunho';aprovHist=[];cortesiaAtiva=false;cortesiaTipo='patrocinio';cortesiaValor=0;cortesiaMotivo='';
   comercialStatus='';comercialHist=[];contratoStatus='';contratoHist=[];creditoStatus='';creditoHist=[];montagemLiberacaoManual=false;montagemLiberacaoManualHist=[];equipReservadoManual=false;atividades=[];followupData='';orcAtualGoogleAgenda={};anexosOrc=[];orcCriadoEmISO='';
   _limparCamposComercialDOM();
   _ultimoDEquipAuto=null;_ultimoDiasAuto=null;
@@ -15611,7 +15667,139 @@ var COM_SI={
   perdida:  {label:'❌ Venda Perdida',    bg:'#c62828', tx:'#fff'}
 };
 
+/* ── Cortesia / Patrocínio: a tela ─────────────────────────────────────
+   Mostra o valor cheio, quanto é doado e quanto sobra de faturamento. Os
+   três juntos, porque é a conta que a pessoa precisa conferir antes de
+   marcar — e porque o número do meio é o que vai para o relatório de
+   investimento.                                                          */
+function _cortesiaValorCheio(){
+  try{ return _dashValOrcCalc({form:getForm(), dados:{state:state, finImposto:finImposto}}); }
+  catch(e){ return 0; }
+}
+
+// Tarja no topo: quem abre o orçamento precisa saber que ele é cortesia
+// antes de olhar qualquer número — senão lê o total como faturamento.
+function renderCortesiaFaixa(){
+  var el=document.getElementById('cortesia-faixa');
+  if(!el) return;
+  if(!cortesiaAtiva){ el.style.display='none'; el.innerHTML=''; return; }
+  var cheio=_cortesiaValorCheio();
+  var doado=cortesiaValor>0?Math.min(cortesiaValor,cheio):cheio;
+  var fatura=Math.max(0,cheio-doado);
+  el.style.display='';
+  el.innerHTML='<div style="background:rgba(106,27,154,.14);border:1px solid #6a1b9a;border-left:5px solid #6a1b9a;border-radius:6px;padding:10px 14px;margin-bottom:10px">'
+    +'<div style="font-size:12.5px;font-weight:900;color:#ab47bc">🎁 '+eh(_cortesiaRot(cortesiaTipo))
+      +' — investimento de '+fmt(doado)+(fatura>0?' (faturando '+fmt(fatura)+')':' (nada a faturar)')+'</div>'
+    +(cortesiaMotivo?'<div style="font-size:11.5px;color:var(--text);margin-top:3px">Contrapartida: '+eh(cortesiaMotivo)+'</div>':'')
+    +'<div style="font-size:10px;color:var(--text-dim);margin-top:4px">'
+      +'Os valores abaixo continuam valendo para a OS e para o cliente. Eles <b>não</b> contam como faturamento '
+      +'nas metas, na comissão nem nos relatórios de venda — aparecem em Relatórios › Patrocínios.</div>'
+    +'</div>';
+}
+
+function renderCortesia(){
+  var box=document.getElementById('cortesia-box');
+  var el=document.getElementById('cortesia-corpo');
+  if(!box||!el) return;
+  // Só faz sentido depois de o orçamento existir de verdade.
+  var visivel=!!usuarioAtual && ['consultor','adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0
+    && aprovStatus!=='rascunho';
+  box.style.display=visivel?'block':'none';
+  if(!visivel) return;
+
+  var cheio=_cortesiaValorCheio();
+  var doado=cortesiaAtiva?(cortesiaValor>0?Math.min(cortesiaValor,cheio):cheio):0;
+  var fatura=Math.max(0,cheio-doado);
+  var pode=_cortesiaPodeEditar();
+
+  if(!cortesiaAtiva){
+    el.innerHTML='<p style="font-size:10.5px;color:var(--text-muted);margin:0 0 8px">'
+      +'Marque quando o evento for patrocínio, parceria ou cortesia. <b>Os valores continuam no orçamento</b> — '
+      +'o que muda é que eles deixam de contar como faturamento no financeiro, nas metas e nos relatórios de venda, '
+      +'e passam a ser medidos como investimento.</p>'
+      +(pode?'<button class="acao-btn" style="background:#6a1b9a" onclick="cortesiaAtivar()">🎁 Transformar em cortesia / patrocínio</button>'
+            :'<p style="font-size:10.5px;color:var(--text-muted)">Só Gerência, Diretoria ou Administração podem marcar.</p>');
+    return;
+  }
+
+  el.innerHTML='<div style="background:rgba(106,27,154,.14);border:1px solid #6a1b9a;border-radius:6px;padding:9px 12px;margin-bottom:9px">'
+    +'<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px">'
+      +'<div><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">Valor do evento</div>'
+        +'<div style="font-size:15px;font-weight:900">'+fmt(cheio)+'</div></div>'
+      +'<div><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">Investimento ('+eh(_cortesiaRot(cortesiaTipo))+')</div>'
+        +'<div style="font-size:15px;font-weight:900;color:#ab47bc">'+fmt(doado)+'</div></div>'
+      +'<div><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">Fatura</div>'
+        +'<div style="font-size:15px;font-weight:900;color:'+(fatura>0?'#2e7d32':'var(--text-muted)')+'">'+fmt(fatura)+'</div></div>'
+    +'</div>'
+    +'<div style="font-size:10px;color:var(--text-dim);margin-top:5px">'
+      +(fatura>0
+        ? 'Cortesia <b>parcial</b>: o financeiro cobra '+fmt(fatura)+' e o resto entra como investimento.'
+        : 'Cortesia <b>integral</b>: nada é cobrado, e o financeiro não pede condição de pagamento.')
+    +'</div></div>'
+    +(pode?'<div style="display:flex;gap:9px;flex-wrap:wrap;align-items:flex-end">'
+      +'<div><label style="font-size:9px">Tipo</label><br>'
+        +'<select id="cortesia-tipo" onchange="cortesiaSalvarCampos()" style="font-size:11px;padding:4px 6px">'
+        +CORTESIA_TIPOS.map(function(t){ return '<option value="'+t.id+'"'+(t.id===cortesiaTipo?' selected':'')+' title="'+eh(t.desc)+'">'+eh(t.rot)+'</option>'; }).join('')
+        +'</select></div>'
+      +'<div><label style="font-size:9px" title="Deixe vazio para cortesia integral (o valor cheio do evento).">Valor doado (R$)</label><br>'
+        +'<input type="number" id="cortesia-valor" min="0" step="0.01" value="'+(cortesiaValor>0?cortesiaValor:'')+'" placeholder="tudo" oninput="cortesiaSalvarCampos()" style="font-size:11px;padding:4px 6px;width:120px"></div>'
+      +'<div style="flex:1;min-width:200px"><label style="font-size:9px">Contrapartida / motivo</label><br>'
+        +'<input type="text" id="cortesia-motivo" value="'+eh(cortesiaMotivo)+'" placeholder="Ex: logo no palco e 2 posts" oninput="cortesiaSalvarCampos()" style="font-size:11px;padding:4px 6px;width:100%"></div>'
+      +'<button class="acao-btn" style="background:var(--surface-3)" onclick="cortesiaDesativar()">Desfazer</button>'
+      +'</div>'
+      :'<div style="font-size:10.5px;color:var(--text-muted)">'+eh(_cortesiaRot(cortesiaTipo))
+        +(cortesiaMotivo?' — '+eh(cortesiaMotivo):'')+'</div>');
+}
+
+function _cortesiaPodeEditar(){
+  if(!usuarioAtual) return false;
+  if(typeof _modoLeitura!=='undefined' && _modoLeitura) return false;
+  return ['adm','gerente','diretor'].indexOf(usuarioAtual.nivel)>=0;
+}
+
+function cortesiaAtivar(){
+  if(!_cortesiaPodeEditar()){ alert('Só Gerência, Diretoria ou Administração podem marcar uma cortesia.'); return; }
+  var cheio=_cortesiaValorCheio();
+  if(!confirm('Transformar este orçamento em cortesia / patrocínio?\n\n'
+    +'Valor do evento: '+fmt(cheio)+'\n\n'
+    +'Os valores CONTINUAM no orçamento e na OS — o cliente e a equipe veem tudo igual.\n'
+    +'O que muda: este valor deixa de contar como faturamento no financeiro, nas metas, '
+    +'na comissão e nos relatórios de venda, e passa a ser medido como investimento.\n\n'
+    +'Depois você pode informar um valor menor, se for cortesia parcial.')) return;
+  cortesiaAtiva=true;
+  if(!cortesiaTipo) cortesiaTipo='patrocinio';
+  marcarAlterado();
+  _cortesiaRerender();
+  _toastMostrar('🎁 Marcado como '+_cortesiaRot(cortesiaTipo)+'.','Os valores continuam no orçamento; saem do faturamento.',7000);
+}
+
+function cortesiaDesativar(){
+  if(!_cortesiaPodeEditar()) return;
+  if(!confirm('Desfazer a cortesia?\n\nO valor volta a contar como faturamento normal.')) return;
+  cortesiaAtiva=false; cortesiaValor=0; cortesiaMotivo='';
+  marcarAlterado();
+  _cortesiaRerender();
+}
+
+function cortesiaSalvarCampos(){
+  var t=document.getElementById('cortesia-tipo');
+  var v=document.getElementById('cortesia-valor');
+  var m=document.getElementById('cortesia-motivo');
+  if(t) cortesiaTipo=t.value||'patrocinio';
+  if(v) cortesiaValor=Math.max(0,parseFloat(v.value)||0);
+  if(m) cortesiaMotivo=(m.value||'').trim();
+  marcarAlterado();
+  // Rerenderiza só os números do topo, para não tirar o foco do campo que
+  // está sendo digitado.
+  try{ _pgtoRenderAviso(); renderFinanceiroInline(); }catch(e){}
+}
+
+function _cortesiaRerender(){
+  try{ renderCortesia(); renderComercial(); renderFinanceiroInline(); _pgtoRenderAviso(); }catch(e){}
+}
+
 function renderComercial(){
+  try{ renderCortesia(); }catch(e){}
   var panel=document.getElementById('com-panel');
   if(!panel)return;
   // Aprovado — e também REPROVADO. Sem isso o consultor não teria como
@@ -16014,6 +16202,15 @@ var PGTO_TOLERANCIA=1.00;   // diferença em R$ aceita entre parcelas e total
 
 function _pgtoCondicaoDefinida(){
   if(comercialStatus!=='ganha') return {ok:true, faltando:[]};
+  // Cortesia INTEGRAL não tem o que cobrar: exigir condição de pagamento
+  // seria pedir parcela de um dinheiro que ninguém vai pagar — foi
+  // exatamente o que travou o orçamento 20266720. Cortesia PARCIAL
+  // continua exigindo, porque a parte faturada é cobrada normalmente.
+  if(cortesiaAtiva){
+    var cheio=_cortesiaValorCheio();
+    var doado=cortesiaValor>0?Math.min(cortesiaValor,cheio):cheio;
+    if(cheio-doado<=0.004) return {ok:true, faltando:[], cortesia:true};
+  }
   var faltando=[];
   var lista=finParcelas||[];
   if(!lista.length){
@@ -16056,6 +16253,15 @@ function _pgtoRenderAviso(){
   ['pgto-aviso-fin','pgto-aviso-inline'].forEach(function(id){
     var el=document.getElementById(id);
     if(!el) return;
+    if(r.cortesia){
+      el.style.display='block';
+      el.innerHTML='<b>🎁 '+eh(_cortesiaRot(cortesiaTipo))+' — nada a cobrar</b> — este evento está marcado como cortesia integral, '
+        +'então o financeiro não pede condição de pagamento. O valor aparece no relatório de investimento, não no faturamento.';
+      el.style.background='rgba(106,27,154,.14)';
+      el.style.borderColor='#6a1b9a';
+      return;
+    }
+    el.style.background=''; el.style.borderColor='';
     if(r.ok || comercialStatus!=='ganha'){ el.style.display='none'; el.innerHTML=''; return; }
     el.style.display='block';
     el.innerHTML='<b>⛔ Condição de pagamento obrigatória</b> — esta venda está marcada como <b>Venda Ganha</b>. '
@@ -21292,10 +21498,114 @@ function finRemoverComprovante(i){
 var _relDados=[];
 var _relAbaAtual='periodo';
 
+/* ── Relatório de Patrocínios / Cortesias ──────────────────────────────
+   "Quero poder mensurar qual valor estamos investindo como patrocinador."
+   É o outro lado da moeda: o faturamento some dos relatórios de venda, e
+   aparece aqui como investimento, com a contrapartida registrada.
+
+   Conta pela DATA DO EVENTO, como o resto da análise de eventos — é
+   quando o investimento acontece de verdade, não quando o orçamento foi
+   feito.                                                                 */
+function relCortesiaDados(de, ate, tipo){
+  var out=[];
+  (_dashDados||[]).forEach(function(o){
+    var d=o.dados||{};
+    if(!d.cortesiaAtiva) return;
+    // Cortesia de venda perdida não é investimento: não aconteceu.
+    var cs=d.comercialStatus||'';
+    if(cs==='perdida') return;
+    var f=o.form||{};
+    var dia=f['f-dia']||'';
+    if(de&&dia&&dia<de) return;
+    if(ate&&dia&&dia>ate) return;
+    if(tipo&&(d.cortesiaTipo||'patrocinio')!==tipo) return;
+    var cheio=_dashValBruto(o);
+    var doado=dashValCortesia(o);
+    out.push({
+      o:o, num:f['f-num']||'', cliente:f['f-cliente']||'—', evento:f['f-nome-evento']||'',
+      dia:dia, consultor:f['f-cons']||'', tipo:d.cortesiaTipo||'patrocinio',
+      motivo:d.cortesiaMotivo||'', cheio:cheio, doado:doado, faturado:Math.max(0,cheio-doado),
+      status:cs
+    });
+  });
+  return out.sort(function(a,b){ return b.doado-a.doado; });
+}
+
+function relGerarCortesia(){
+  var el=document.getElementById('rel-cort-body');
+  if(!el) return;
+  var selT=document.getElementById('rf-cort-tipo');
+  if(selT&&selT.options.length<=1){
+    selT.innerHTML='<option value="">Todos</option>'
+      +CORTESIA_TIPOS.map(function(t){ return '<option value="'+t.id+'">'+eh(t.rot)+'</option>'; }).join('');
+  }
+  var de=(document.getElementById('rf-cort-de')||{}).value||'';
+  var ate=(document.getElementById('rf-cort-ate')||{}).value||'';
+  var tipo=(selT||{}).value||'';
+  var lista=relCortesiaDados(de,ate,tipo);
+  _relCortesiaUltima=lista;
+  if(!lista.length){
+    el.innerHTML='<div class="dash-vazio" style="padding:26px">Nenhuma cortesia ou patrocínio no período.'
+      +'<div style="margin-top:7px;font-size:11px;color:var(--text-dim)">Marque um orçamento como cortesia no painel 🎁 Cortesia / Patrocínio, dentro do orçamento.</div></div>';
+    return;
+  }
+  var total=lista.reduce(function(t,x){return t+x.doado;},0);
+  var porTipo={};
+  lista.forEach(function(x){ porTipo[x.tipo]=(porTipo[x.tipo]||0)+x.doado; });
+  var parciais=lista.filter(function(x){ return x.faturado>0; });
+
+  el.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'
+    +_relCortTile('Investido no período', fmt(total), lista.length+' evento(s)', '#ab47bc')
+    +_relCortTile('Ticket médio', fmt(total/lista.length), 'por cortesia')
+    +_relCortTile('Cortesias parciais', String(parciais.length), parciais.length?fmt(parciais.reduce(function(t,x){return t+x.faturado;},0))+' faturados junto':'nenhuma')
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">'
+      +Object.keys(porTipo).sort(function(a,b){ return porTipo[b]-porTipo[a]; }).map(function(k){
+        return '<b>'+eh(_cortesiaRot(k))+':</b> '+fmt(porTipo[k]);
+      }).join(' &nbsp;·&nbsp; ')
+    +'</div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">'
+    +'<thead><tr style="border-bottom:2px solid var(--R)">'
+    +['Data','Nº','Cliente / Evento','Tipo','Contrapartida','Consultor','Valor do evento','Investido','Faturado']
+      .map(function(h,i){ return '<th style="padding:5px 7px;font-size:9.5px;color:var(--text-muted);text-transform:uppercase;text-align:'+(i>=6?'right':'left')+'">'+h+'</th>'; }).join('')
+    +'</tr></thead><tbody>'
+    +lista.map(function(x){
+      return '<tr style="border-bottom:1px solid var(--border)">'
+        +'<td style="padding:5px 7px;color:var(--text-dim);white-space:nowrap">'+(x.dia?fD(x.dia):'—')+'</td>'
+        +'<td style="padding:5px 7px;color:var(--text-muted)">'
+          +(x.o.driveId?'<span onclick="logAbrirPreviewOS(\''+eh(x.o.driveId)+'\')" style="cursor:pointer;color:#90caf9;text-decoration:underline">'+eh(x.num||'—')+'</span>':eh(x.num||'—'))
+        +'</td>'
+        +'<td style="padding:5px 7px;font-weight:700">'+eh(x.cliente)+(x.evento?' <span style="font-weight:400;color:var(--text-dim)">— '+eh(x.evento)+'</span>':'')+'</td>'
+        +'<td style="padding:5px 7px"><span style="display:inline-block;padding:1px 7px;border-radius:9px;font-size:9.5px;font-weight:800;background:#6a1b9a;color:#fff">'+eh(_cortesiaRot(x.tipo))+'</span></td>'
+        +'<td style="padding:5px 7px;color:var(--text-dim);font-size:10.5px">'+eh(x.motivo||'—')+'</td>'
+        +'<td style="padding:5px 7px;color:var(--text-dim)">'+eh(x.consultor||'—')+'</td>'
+        +'<td style="padding:5px 7px;text-align:right;color:var(--text-dim)">'+fmt(x.cheio)+'</td>'
+        +'<td style="padding:5px 7px;text-align:right;font-weight:900;color:#ab47bc">'+fmt(x.doado)+'</td>'
+        +'<td style="padding:5px 7px;text-align:right;color:'+(x.faturado>0?'#2e7d32':'var(--text-muted)')+'">'+(x.faturado>0?fmt(x.faturado):'—')+'</td>'
+        +'</tr>';
+    }).join('')
+    +'<tr style="border-top:2px solid var(--R);font-weight:900">'
+      +'<td colspan="7" style="padding:7px">TOTAL INVESTIDO</td>'
+      +'<td style="padding:7px;text-align:right;color:#ab47bc">'+fmt(total)+'</td><td></td></tr>'
+    +'</tbody></table></div>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:8px">'
+    +'Estes valores <b>não entram</b> no faturamento, nas metas, na comissão nem nos relatórios de venda — '
+    +'é este relatório que os mede. Venda perdida marcada como cortesia fica de fora: não aconteceu.</div>';
+}
+
+var _relCortesiaUltima=[];
+
+function _relCortTile(rot,val,sub,cor){
+  return '<div style="flex:1;min-width:150px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:9px 12px">'
+    +'<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800">'+rot+'</div>'
+    +'<div style="font-size:18px;font-weight:900;color:'+(cor||'var(--text)')+';margin-top:2px">'+val+'</div>'
+    +(sub?'<div style="font-size:9.5px;color:var(--text-dim)">'+sub+'</div>':'')+'</div>';
+}
+
 function relAba(aba){
   _relAbaAtual=aba;
   document.querySelectorAll('.rel-tab').forEach(function(t,i){
-    var abas=['periodo','consultor','perda','financeiro','eventos','proximos'];
+    var abas=['periodo','consultor','perda','financeiro','eventos','proximos','cortesia'];
     t.classList.toggle('active',abas[i]===aba);
   });
   document.querySelectorAll('.rel-pane').forEach(function(p){p.classList.remove('active');});
@@ -22276,7 +22586,39 @@ function dashFiltrar(){
   });
 }
 
+/* Quanto deste orçamento é cortesia/patrocínio. Lido do documento salvo,
+   não das variáveis globais — dashValOrc roda sobre a lista do dashboard,
+   com o orçamento fechado.                                               */
+function dashValCortesia(o){
+  var d=(o&&o.dados)||{};
+  if(!d.cortesiaAtiva) return 0;
+  var v=parseFloat(d.cortesiaValor)||0;
+  if(v>0) return Math.min(v, _dashValBruto(o));
+  return _dashValBruto(o);     // sem valor informado, a cortesia é integral
+}
+function dashCortesiaTipo(o){
+  var d=(o&&o.dados)||{};
+  return d.cortesiaAtiva?(d.cortesiaTipo||'patrocinio'):'';
+}
+
+/* O valor CHEIO do orçamento, antes de descontar a cortesia. É o número
+   que o cliente vê e o que os relatórios de patrocínio medem.            */
+function _dashValBruto(o){
+  return _dashValOrcCalc(o);
+}
+
+/* dashValOrc continua sendo a fonte única do FATURAMENTO — e faturamento
+   é o que entra de dinheiro. A parte doada sai daqui, e com isso sai de
+   uma vez só das metas, da Curva ABC, dos dashboards, da comissão e do
+   contas a receber, sem cada um deles precisar saber que cortesia
+   existe.                                                                */
 function dashValOrc(o){
+  var cheio=_dashValOrcCalc(o);
+  var cort=dashValCortesia(o);
+  return Math.max(0, cheio-cort);
+}
+
+function _dashValOrcCalc(o){
   var fimp=(o.dados&&o.dados.finImposto)||'cimp';
   var form=o.form||{};
   var valLiq=parseFloat(form['val-liq'])||0;
