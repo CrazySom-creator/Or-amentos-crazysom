@@ -1524,6 +1524,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div class="modal-tabs" style="flex:1">
         <div class="modal-tab active" id="tab-pend" onclick="mudarAbaAprov('pend')">⏳ Pendentes</div>
         <div class="modal-tab" id="tab-aprov" onclick="mudarAbaAprov('aprov')">✅ Aprovados</div>
+        <div class="modal-tab" id="tab-reprov" onclick="mudarAbaAprov('reprov')">⛔ Reprovados <span id="reprov-badge" style="background:#bf360c;color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;margin-left:3px;display:none">0</span></div>
         <div class="modal-tab" id="tab-excl" onclick="mudarAbaAprov('excl')">🗑️ Exclusões <span id="excl-badge" style="background:var(--R);color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;margin-left:3px;display:none">0</span></div>
       </div>
       <button class="btn btn-o btn-sm" id="btn-atualizar-aprov" onclick="atualizarAprovacoes(this)" title="Atualizar lista de pendências" style="white-space:nowrap">🔄 Atualizar</button>
@@ -8401,10 +8402,35 @@ function atualizarBadgeExclusoes(){
     }
   }
 }
+/* ── Aba Reprovados ────────────────────────────────────────────────────
+   Pedido do Fabiano: "coloque a lista de orçamentos reprovados no módulo
+   Aprovações". Quando o reprovado saiu da fila de Pendentes (ele não é
+   pendência — a decisão já foi tomada), ficou sem lugar nenhum nesta tela:
+   só aparecia no aviso da Home. A aba devolve o lugar, sem devolvê-lo à
+   fila de quem decide.                                                   */
+
+// Já teve desfecho no funil? Venda ganha ou perdida registrada encerra o
+// assunto. Negociação, standby e proposta enviada NÃO encerram: a
+// reprovação pode estar sendo contornada, e o consultor ainda deve algo.
+function _aprovReprovResolvido(x){
+  var cs=(x.dados&&x.dados.comercialStatus)||'';
+  return cs==='ganha'||cs==='perdida';
+}
+
+function _aprovAtualizarBadgeReprov(todos){
+  var pend=(todos||[]).filter(function(x){
+    return x.st==='reprovado' && !_aprovReprovResolvido(x);
+  }).length;
+  var b=document.getElementById('reprov-badge');
+  if(b){ b.textContent=pend; b.style.display=pend>0?'inline':'none'; }
+}
+
 function mudarAbaAprov(aba){
   abaAprovAtual=aba;
   document.getElementById('tab-pend').classList.toggle('active',aba==='pend');
   document.getElementById('tab-aprov').classList.toggle('active',aba==='aprov');
+  var tabRep=document.getElementById('tab-reprov');
+  if(tabRep) tabRep.classList.toggle('active',aba==='reprov');
   var tabExcl=document.getElementById('tab-excl');
   if(tabExcl)tabExcl.classList.toggle('active',aba==='excl');
   var barraF=document.getElementById('aprov-filtro');
@@ -8610,12 +8636,23 @@ async function carregarListaAprov(aba){
     validos=_dedupPorDriveId(validos);
 
     if(aba==='pend'){
-      // Reprovado saiu da fila: a decisão já foi tomada. Fica visível no
-      // bloco de avisos do consultor, que é quem tem o que fazer com ele.
+      // Reprovado saiu da fila: a decisão já foi tomada. Tem aba própria.
       _aprovTodos=validos.filter(function(x){return x.st!=='aprovado'&&x.st!=='rascunho'&&x.st!=='reprovado';});
+    }else if(aba==='reprov'){
+      // Os reprovados que ainda não tiveram desfecho no funil ficam no topo:
+      // são os que esperam alguma coisa de alguém. Os já resolvidos (venda
+      // ganha ou perdida registrada) continuam na lista, mas depois — a aba
+      // também serve de histórico de reprovação.
+      _aprovTodos=validos.filter(function(x){return x.st==='reprovado';})
+        .sort(function(a,b){
+          var ra=_aprovReprovResolvido(a)?1:0, rb=_aprovReprovResolvido(b)?1:0;
+          if(ra!==rb) return ra-rb;
+          return (b.modificado||'')<(a.modificado||'')?-1:1;
+        });
     }else{
       _aprovTodos=validos.filter(function(x){return x.st==='aprovado';});
     }
+    _aprovAtualizarBadgeReprov(validos);
     aprovPopularConsultores();
     aprovRenderizarLista();
   }catch(e){
@@ -8702,7 +8739,9 @@ function aprovRenderizarLista(){
 
   if(!_aprovTodos.length){
     lista.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px">'
-      +(abaAprovAtual==='pend'?'✅ Nenhum orçamento pendente!':'Nenhum orçamento aprovado ainda.')+'</div>';
+      +(abaAprovAtual==='pend'?'✅ Nenhum orçamento pendente!'
+        :abaAprovAtual==='reprov'?'✅ Nenhum orçamento reprovado.'
+        :'Nenhum orçamento aprovado ainda.')+'</div>';
     return;
   }
   if(!filtrados.length){
@@ -8767,9 +8806,29 @@ function buildOrcCard(orc,idx){
   else{histHtml='<div style="color:var(--text-muted);font-size:11px;margin-bottom:8px">Sem histórico.</div>';}
   var infoAgd=orc.st!=='aprovado'?'<b>Aguardando:</b> '+(aguardando[orc.st]||'—')+(minhaVez?' <b style="color:#ff9800">← SUA VEZ</b>':'')+'<br>':'';
   var infoEv=orc.form['f-dia']?new Date(orc.form['f-dia']+'T12:00:00').toLocaleDateString('pt-BR'):'';
+  // Num orçamento reprovado, o motivo é a informação principal do card — é
+  // por ele que se decide o que fazer, e sem ele a aba seria só uma lista
+  // de números. O desfecho no funil aparece junto, porque é o que diz se o
+  // assunto está encerrado ou ainda espera alguém.
+  var infoRep='';
+  if(orc.st==='reprovado'){
+    var d=orc.dados||{};
+    var csR=(d.comercialStatus||'');
+    var siR=(typeof COM_SI!=='undefined'&&COM_SI[csR])?COM_SI[csR].label:'';
+    infoRep='<div style="background:#fbe9e7;border-left:4px solid #bf360c;border-radius:4px;padding:6px 9px;margin:5px 0;color:#5d2c1c">'
+      +'<b style="color:#bf360c">⛔ '+eh(d.reprovMotivo||'sem motivo registrado')+'</b>'
+      +(d.reprovDetalhe?'<div style="font-size:10.5px;margin-top:2px">'+eh(d.reprovDetalhe)+'</div>':'')
+      +'<div style="font-size:9.5px;margin-top:3px;opacity:.85">'
+        +(d.reprovPor?'por '+eh(d.reprovPor):'')+(d.reprovEm?' em '+eh(d.reprovEm):'')
+        +' · '+(_aprovReprovResolvido(orc)
+            ? 'desfecho registrado: '+eh(siR||csR)
+            : '<b>aguardando o consultor registrar o desfecho</b>'+(siR?' (hoje: '+eh(siR)+')':''))
+      +'</div></div>';
+  }
   return '<div class="orc-card '+orc.st+'" id="orc-card-'+idx+'" onclick="toggleDetalhes('+idx+')">'
     +'<div class="orc-topo"><span class="orc-num">'+(orc.form['f-num']||'—')+'</span><span class="orc-cli">'+(orc.form['f-cliente']||'—')+(orc.form['f-nome-evento']?' — '+orc.form['f-nome-evento']:'')+'</span><span class="orc-val" title="Valor do orçamento">'+_valorOrcColuna(orc)+'</span><span class="orc-badge" style="background:'+si.bg+';color:'+si.tx+';border:1px solid '+si.bd+'">'+si.label+'</span></div>'
     +'<div class="orc-info">'+infoAgd+(orc.form['f-cons']?'<b>Consultor:</b> '+orc.form['f-cons']+' · ':'')+(infoEv?'<b>Evento:</b> '+infoEv+' · ':'')+' <b>Atualizado:</b> '+orc.modificado+(ult?'<br><b>Última ação:</b> '+ult.acao+' por '+_nomeUsuario(ult.usuario):'')+'</div>'
+    +infoRep
     +'<div class="etapas">'+etapasHTML+'</div>'
     +'<div id="det-'+idx+'" class="aprov-detalhe">'+histHtml
     +(temAcao?'<div class="acao-wrap"><textarea class="acao-obs" id="obs-'+idx+'" placeholder="Observação / Motivo..."></textarea><div class="acao-btns">'+botoesAcao+'</div></div>':'')
