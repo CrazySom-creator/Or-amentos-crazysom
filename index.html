@@ -26348,6 +26348,75 @@ function _logTemPreReservaReal(o){
 // Ganha) — sempre conta; ou Pré-reservado (enviada/negociação/standby) —
 // só conta se já tiver a pré-reserva real no Google Agenda (ver
 // _logTemPreReservaReal acima). Qualquer outra etapa não ocupa.
+/* ── Aditivo não é outro evento ────────────────────────────────────────
+   Relato do Fabiano: "no dia 12/11 temos um aditivo que deveria unificar
+   no mesmo evento e não aparecer como 2 eventos".
+
+   O aditivo (20266347/1) é Venda Ganha como o original, então a Agenda e a
+   Logística o tratavam como mais um evento — duas tarjas do mesmo cliente
+   no mesmo dia, e, na escala, duas etapas de montagem para uma montagem
+   só. A OS já juntava os dois desde o começo; faltava a agenda fazer o
+   mesmo.
+
+   Regra: tudo que divide o número ANTES da barra é o mesmo evento. Fica o
+   orçamento BASE, com os aditivos pendurados nele.
+
+   A trava que importa: se o base NÃO estiver na lista (ainda não é Venda
+   Ganha, foi filtrado por consultor, ou não carregou), o aditivo FICA no
+   lugar dele. Sumir com o evento para "não duplicar" seria trocar uma
+   tarja a mais por uma montagem que ninguém vê — já aconteceu três vezes
+   neste sistema, e é sempre pior.                                        */
+function _logDobrarAditivos(itens){
+  var porEvento={}, ordem=[];
+  (itens||[]).forEach(function(it){
+    var num=((it.o&&it.o.form)||{})['f-num']||'';
+    // Sem número não há família: cada um por si.
+    var chave=num?_aditivoBaseNum(num):('__'+((it.o&&it.o.driveId)||Math.random()));
+    if(!porEvento[chave]){ porEvento[chave]=[]; ordem.push(chave); }
+    porEvento[chave].push(it);
+  });
+  return ordem.map(function(k){
+    var grupo=porEvento[k];
+    if(grupo.length===1) return grupo[0];
+    var base=grupo.filter(function(it){
+      return !_ehAditivoNum(((it.o&&it.o.form)||{})['f-num']||'');
+    })[0];
+    // Sem o base na lista, o aditivo de menor sequência representa o evento.
+    var principal=base||grupo.slice().sort(function(a,b){
+      return _aditivoSeq(((a.o&&a.o.form)||{})['f-num']||'')-_aditivoSeq(((b.o&&b.o.form)||{})['f-num']||'');
+    })[0];
+    var outros=grupo.filter(function(it){ return it!==principal; });
+    var fundido=Object.assign({}, principal);
+    fundido.aditivos=outros.map(function(it){ return it.o; });
+    fundido.semBase=!base;
+    // O período abraça o de todos: um aditivo pode ter trazido um dia a
+    // mais de montagem, e perder esse dia esconderia trabalho real.
+    if(principal.range){
+      var ini=principal.range.inicio, fim=principal.range.fim;
+      outros.forEach(function(it){
+        if(!it.range) return;
+        if(it.range.inicio && it.range.inicio<ini) ini=it.range.inicio;
+        if(it.range.fim && it.range.fim>fim) fim=it.range.fim;
+      });
+      fundido.range={inicio:ini, fim:fim};
+    }
+    // Pendência de montagem de qualquer um da família pende do evento.
+    fundido.pendente=grupo.some(function(it){ return it.pendente; });
+    if(!principal.pendente){
+      var comPend=grupo.filter(function(it){ return it.pendente; })[0];
+      if(comPend) fundido.pendTexto=comPend.pendTexto;
+    }
+    // Data inconsistente em qualquer um precisa ser vista.
+    fundido.datasRuins=(principal.datasRuins||[]).slice();
+    outros.forEach(function(it){
+      (it.datasRuins||[]).forEach(function(p){
+        if(fundido.datasRuins.indexOf(p)<0) fundido.datasRuins.push(p);
+      });
+    });
+    return fundido;
+  });
+}
+
 function _logOcupaAgenda(o){
   var cs=(o&&o.dados&&o.dados.comercialStatus)||'';
   if(cs==='ganha') return true;
@@ -26386,7 +26455,7 @@ function logRenderizar(){
             pendente:pend, pendTexto:pend?_montagemTarjaTextoDe(o.form||{}, o.dados||{}):''};
   });
 
-  window._logItens=itens;
+  window._logItens=_logDobrarAditivos(itens);
 
   _logAtualizarToggleBtns();
   if(_logView==='dia') _logRenderizarDia();
@@ -26503,13 +26572,17 @@ function _logCardDia(it,diaISO){
     +'<div style="display:flex;gap:6px;align-items:center">'
     +(it.pendente?'<span class="log-pend-chip" title="'+eh(it.pendTexto)+'">⚠️ OS PENDENTE</span>':'')
     +((it.datasRuins&&it.datasRuins.length)?'<span class="log-pend-chip" style="background:#e65100" title="'+eh('Datas inconsistentes: '+it.datasRuins.join('; ')+'. Abra o orçamento e corrija — com data trocada o evento ocupa a agenda no período errado.')+'">⚠️ DATAS</span>':'')
+    +((it.aditivos&&it.aditivos.length)?'<span class="log-pend-chip" style="background:#1565c0" title="'+eh('Este evento tem '+it.aditivos.length+' aditivo(s), já somados aqui: '+it.aditivos.map(function(a){return (a.form&&a.form['f-num'])||'—';}).join(', ')+'. Os equipamentos deles entram na mesma OS.')+'">➕ '+it.aditivos.length+' ADITIVO'+(it.aditivos.length>1?'S':'')+'</span>':'')
     +'<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:10px;background:'+st.cor+'22;color:'+st.cor+'">'+st.label+'</span>'
     +_logChipsFase(o,diaISO,fv)
     +'</div></div>'
     +(it.pendente?'<div style="font-size:9.5px;color:#ffb4b4;margin-top:4px">⚠️ Liberação de Montagem pendente — '+eh(it.pendTexto)+'</div>':'')
     +((it.datasRuins&&it.datasRuins.length)?'<div style="font-size:9.5px;color:#ffb74d;margin-top:4px">⚠️ Datas inconsistentes: '+eh(it.datasRuins.join('; '))+' — abra o orçamento e corrija.</div>':'')
     +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">'+eh(f['f-tipo']||'')+(f['f-local']?' · '+eh(f['f-local']):'')+(endereco?' · '+eh(endereco):'')+'</div>'
-    +'<div style="font-size:10px;color:var(--text-dim);margin-top:2px">'+eh(f['f-num']||'')+(f['f-cons']?' · Consultor: '+eh(f['f-cons']):'')+'</div>'
+    +'<div style="font-size:10px;color:var(--text-dim);margin-top:2px">'+eh(f['f-num']||'')
+      +((it.aditivos&&it.aditivos.length)?' <span style="color:#90caf9">+ '+it.aditivos.map(function(a){ return eh((a.form&&a.form['f-num'])||'—'); }).join(' + ')+'</span>':'')
+      +(it.semBase?' <span style="color:#ffa726" title="O orçamento base deste número não está na agenda — pode não estar em Venda Ganha. O aditivo foi mantido para o evento não sumir.">⚠️ sem o orçamento base</span>':'')
+      +(f['f-cons']?' · Consultor: '+eh(f['f-cons']):'')+'</div>'
     +'</div>';
 }
 
@@ -27675,9 +27748,13 @@ function _escGerarNoDia(dia,itens){
 // Mesma regra da grade da Agenda (_logOcupaAgenda + _logRangeEvento), lida
 // direto de _dashDados — nunca da lista já filtrada que a Agenda guarda.
 function _escItensAgenda(){
-  return (_dashDados||[]).filter(_logOcupaAgenda).map(function(o){
+  var itens=(_dashDados||[]).filter(_logOcupaAgenda).map(function(o){
     return {o:o, range:_logRangeEvento(o)};
   }).filter(function(it){ return it.range && it.range.inicio; });
+  // Mesma dobra da Agenda: um aditivo não é outra montagem. Sem isto, a
+  // escala gerava uma etapa para o 20266347 e outra para o 20266347/1 —
+  // duas equipes para o mesmo caminhão.
+  return _logDobrarAditivos(itens);
 }
 
 function escNovoCard(tipo){
