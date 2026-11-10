@@ -3591,9 +3591,9 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
 <div class="card">
   <div class="st">🗓️ Datas e Horários</div>
   <div class="g4" style="margin-bottom:8px">
-    <div><label>Início do Evento</label><input type="date" id="f-dia" oninput="setDS();calcDiariasAuto();marcarAlterado();atualizarDatasOrc()"></div>
+    <div><label>Início do Evento</label><input type="date" id="f-dia" onfocus="datasOrcFocar()" onblur="datasOrcDesfocar()" oninput="setDS();calcDiariasAuto();marcarAlterado();atualizarDatasOrc()"></div>
     <div><label>Dia da Semana</label><input id="f-sem" readonly placeholder="Auto"></div>
-    <div><label>Fim do Evento</label><input type="date" id="f-dia-fim" oninput="setDSFim();calcDiariasAuto();marcarAlterado();atualizarDatasOrc()"></div>
+    <div><label>Fim do Evento</label><input type="date" id="f-dia-fim" onfocus="datasOrcFocar()" onblur="datasOrcDesfocar()" oninput="setDSFim();calcDiariasAuto();marcarAlterado();atualizarDatasOrc()"></div>
     <div><label>Dia da Semana (fim)</label><input id="f-sem-fim" readonly placeholder="Auto"></div>
   </div>
   <div class="g4" style="margin-bottom:8px">
@@ -3603,15 +3603,15 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     <div><label>Diárias Equip. (½)</label><input id="f-diarias-equip" readonly style="background:#e8f4fd;border-color:#90caf9;font-weight:700;color:#1565c0"></div>
   </div>
   <div class="g4" style="margin-bottom:8px">
-    <div><label>Início Montagem</label><input type="date" id="f-dm" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc();atualizarBadgeEqOrc()"></div>
+    <div><label>Início Montagem</label><input type="date" id="f-dm" onfocus="datasOrcFocar()" onblur="datasOrcDesfocar()" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc();atualizarBadgeEqOrc()"></div>
     <div><label>Hora Montagem</label><input type="time" id="f-hm" oninput="marcarAlterado()"></div>
-    <div><label>Fim Montagem</label><input type="date" id="f-dm-fim" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc();atualizarBadgeEqOrc()"></div>
+    <div><label>Fim Montagem</label><input type="date" id="f-dm-fim" onfocus="datasOrcFocar()" onblur="datasOrcDesfocar()" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc();atualizarBadgeEqOrc()"></div>
     <div><label>LED disponível?</label><button type="button" class="btn btn-o btn-sm" id="btn-led-disp" onclick="ledConsultarOrcamento()" title="Confere, na janela de montagem até desmontagem deste orçamento, se há metros quadrados de painel de LED livres — ou quanto falta sublocar" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px">🟥 LED <span id="led-badge" style="background:var(--surface-3);border-radius:10px;padding:1px 8px;font-weight:800;font-size:11px;color:var(--text-dim)">—</span></button></div>
   </div>
   <div class="g4" style="margin-bottom:8px">
-    <div><label>Início Desmontagem</label><input type="date" id="f-dd" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc();atualizarBadgeEqOrc()"></div>
+    <div><label>Início Desmontagem</label><input type="date" id="f-dd" onfocus="datasOrcFocar()" onblur="datasOrcDesfocar()" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc();atualizarBadgeEqOrc()"></div>
     <div><label>Hora Desmontagem</label><input type="time" id="f-hd" oninput="marcarAlterado()"></div>
-    <div><label>Fim Desmontagem</label><input type="date" id="f-dd-fim" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc();atualizarBadgeEqOrc()"></div>
+    <div><label>Fim Desmontagem</label><input type="date" id="f-dd-fim" onfocus="datasOrcFocar()" onblur="datasOrcDesfocar()" oninput="marcarAlterado();atualizarContadorAgendaOrc();atualizarBadgeLedOrc();atualizarBadgeEqOrc()"></div>
     <div><label>Agenda</label><button type="button" class="btn btn-o btn-sm" id="btn-agenda-contador" onclick="abrirAgendaLogisticaDoOrcamento()" title="Ver a agenda da Logística pra esse período — eventos fechados e pré-reservados que se sobrepõem" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px">📅 Agenda <span id="agenda-contador-badge" style="background:var(--surface-3);border-radius:10px;padding:1px 8px;font-weight:800;font-size:11px;color:var(--text-dim)">—</span></button></div>
   </div>
   <div id="datas-aviso" style="display:none;background:rgba(255,167,38,.12);border:1px solid #ffa726;border-radius:6px;padding:8px 12px;margin:0 0 8px;font-size:11px;color:#e65100"></div>
@@ -5379,16 +5379,69 @@ function _travaDatasOrc(acao){
 // Limites no próprio seletor de data: o calendário já abre sem os dias que
 // quebrariam a ordem. Guia sem impedir de digitar em qualquer ordem — é o
 // que separa "guiar" de "brigar".
+/* Os seis campos de data do orçamento, e a trava que impede o seletor de
+   engolir o que está sendo digitado.
+
+   Relato do Rafael: "digito dia, depois mês, depois ano; quando chega no
+   ano ele não completa 2026, buga e pula para 0026 e sai o resto da data."
+
+   A causa: estes limites eram reaplicados a cada tecla. Digitando o ano, o
+   valor do campo passa por 0002, 0020, 0202 antes de virar 2026 — e, ao
+   mexer no min/max de um <input type="date"> que está em foco com um valor
+   fora da faixa, o Chrome DESCARTA o que já foi digitado. O campo voltava
+   vazio no meio da digitação e o resto das teclas caía num campo zerado.
+
+   Agora os limites são suspensos enquanto o campo tem foco e voltam quando
+   ele é deixado — que é quando a data está inteira e a checagem faz
+   sentido.                                                               */
+var ID_DATAS_ORC=['f-dm','f-dm-fim','f-dia','f-dia-fim','f-dd','f-dd-fim'];
+var _datasOrcEditando=false;
+
+function _limparLimitesDatasOrc(){
+  ID_DATAS_ORC.forEach(function(id){
+    var e=document.getElementById(id);
+    if(!e) return;
+    e.removeAttribute('min'); e.removeAttribute('max');
+  });
+}
+
+function datasOrcFocar(){
+  _datasOrcEditando=true;
+  _limparLimitesDatasOrc();
+}
+
+function datasOrcDesfocar(){
+  _datasOrcEditando=false;
+  _aplicarLimitesDatasOrc();
+  atualizarAvisoDatasOrc();
+}
+
+// Data com ano impossível não serve de limite para ninguém: usá-la
+// empurraria os outros campos para uma faixa de dois mil anos.
+function _dataUtilParaLimite(v){
+  if(!v) return '';
+  if(typeof _anoImplausivel==='function' && _anoImplausivel(v)) return '';
+  return v;
+}
+
+// O campo em foco é o que importa de verdade: a marca é conveniência, e
+// basta ela sair de sincronia uma vez para o defeito voltar.
+function _dataOrcEmFoco(){
+  var a=document.activeElement;
+  return !!(a && a.id && ID_DATAS_ORC.indexOf(a.id)>=0);
+}
+
 function _aplicarLimitesDatasOrc(){
+  if(_datasOrcEditando || _dataOrcEmFoco()) return;   // quem está digitando manda
   function lim(id,min,max){
     var e=document.getElementById(id);
     if(!e) return;
     if(min) e.setAttribute('min',min); else e.removeAttribute('min');
     if(max) e.setAttribute('max',max); else e.removeAttribute('max');
   }
-  var dm=gv('f-dm'), dmF=gv('f-dm-fim');
-  var dia=gv('f-dia'), diaF=gv('f-dia-fim');
-  var dd=gv('f-dd');
+  var dm=_dataUtilParaLimite(gv('f-dm')), dmF=_dataUtilParaLimite(gv('f-dm-fim'));
+  var dia=_dataUtilParaLimite(gv('f-dia')), diaF=_dataUtilParaLimite(gv('f-dia-fim'));
+  var dd=_dataUtilParaLimite(gv('f-dd'));
   lim('f-dm','',dia||'');
   lim('f-dm-fim',dm||'',dia||'');
   lim('f-dia',dmF||dm||'','');
@@ -5404,6 +5457,14 @@ function _aplicarLimitesDatasOrc(){
 function atualizarAvisoDatasOrc(){
   var el=document.getElementById('datas-aviso');
   if(!el) return;
+  // Ano pela metade é digitação em curso, não erro: reclamar a cada tecla
+  // ("o ano está 0002") ensina a ignorar o aviso. Ele volta ao sair do campo.
+  if(_datasOrcEditando){
+    var a=document.activeElement;
+    if(a && a.value && typeof _anoImplausivel==='function' && _anoImplausivel(a.value)){
+      el.style.display='none'; el.innerHTML=''; return;
+    }
+  }
   var p=_logDatasInconsistentes(_datasDoOrcAberto());
   if(!p.length){ el.style.display='none'; el.innerHTML=''; return; }
   el.style.display='';
