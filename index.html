@@ -27705,6 +27705,13 @@ async function escSalvar(silencioso){
   }
   var btn=document.getElementById('esc-btn-salvar');
   if(btn){ btn.disabled=true; btn.textContent='⏳ Salvando...'; }
+  // Primeiro o caminho de volta: o que foi digitado aqui vira o horário e o
+  // endereço do orçamento, e corrige os eventos que já estão na agenda.
+  // Antes dos meses, porque é a gravação dos meses que leva junto a marca
+  // de "já devolvido" em cada card.
+  var dev={orcamentos:0, agenda:0, erros:[], agendaPendente:0};
+  try{ dev=await _escDevolverAosOrcamentos(silencioso); }
+  catch(eDev){ console.warn('escSalvar devolver:',eDev); }
   var erros=0;
   for(var i=0;i<meses.length;i++){
     var m=meses[i];
@@ -27735,7 +27742,17 @@ async function escSalvar(silencioso){
       +'As alterações continuam na tela — nada do que você escalou foi perdido.');
     if(abrir && typeof bancoDiagAbrir==='function') bancoDiagAbrir();
   }
-  else if(!erros && !silencioso) _toastMostrar('💾 Escala salva.','',4000);
+  else if(!erros && !silencioso){
+    var extra=[];
+    if(dev.orcamentos) extra.push('📝 '+dev.orcamentos+' orçamento(s) atualizado(s) com o horário/endereço da escala');
+    if(dev.agenda) extra.push('📅 '+dev.agenda+' evento(s) corrigido(s) no Google Agenda');
+    if(dev.agendaPendente) extra.push('⚠️ '+dev.agendaPendente+' evento(s) do Google Agenda ainda com o horário antigo — use 📅 Agenda no orçamento');
+    _toastMostrar('💾 Escala salva.', extra.join(' · '), extra.length?9000:4000);
+  }
+  if(dev.erros&&dev.erros.length&&!silencioso){
+    alert('A escala foi salva, mas não consegui gravar a alteração em '+dev.erros.length+' orçamento(s):\n\n• '
+      +dev.erros.join('\n• ')+'\n\nO horário continua certo na escala. Corrija no próprio orçamento ou tente salvar de novo.');
+  }
   escAtualizarBotaoSalvar();
 }
 
@@ -28229,14 +28246,22 @@ function _escGerarNoDia(dia,itens){
       achados.push({it:it, fase:fase});
     });
   });
-  if(!achados.length) return {criados:0, pulados:0};
+  if(!achados.length) return {criados:0, pulados:0, atualizados:0};
   var lista=escCards(dia), removidos=_escRemovidos(dia);
-  var criados=0, pulados=0;
+  var criados=0, pulados=0, atualizados=0;
   achados.forEach(function(a){
     var o=a.it.o, f=o.form||{};
     var tipo=ESC_FASE_PARA_TIPO[a.fase]||'operacao';
     var num=f['f-num']||'';
-    if(_escCardDaOrigem(lista,tipo,o)){ pulados++; return; }
+    var jaTem=_escCardObjDaOrigem(lista,tipo,o);
+    if(jaTem){
+      // Aqui estava a origem do "evento duplicado": a etapa já existia e a
+      // sincronização só a ignorava, então o que mudou no orçamento nunca
+      // chegava ao card — e cada tentativa de resolver isso à mão virava
+      // uma etapa a mais. Agora o card existente é corrigido.
+      if(_escRefrescarCard(jaTem,o,a.fase).length) atualizados++;
+      pulados++; return;
+    }
     // Nem recriar o que já existe em OUTRO dia. Sem isto, uma etapa movida
     // à mão para a véspera ganhava uma cópia no dia do orçamento a cada
     // atualização — trocando um card perdido por dois.
@@ -28263,8 +28288,8 @@ function _escGerarNoDia(dia,itens){
     });
     criados++;
   });
-  if(criados) _escMarcarSujo(dia);
-  return {criados:criados, pulados:pulados};
+  if(criados||atualizados) _escMarcarSujo(dia);
+  return {criados:criados, pulados:pulados, atualizados:atualizados};
 }
 
 // Mesma regra da grade da Agenda (_logOcupaAgenda + _logRangeEvento), lida
@@ -28319,6 +28344,9 @@ function escSet(id,campo,valor){
   var c=escAcharCard(id);
   if(!c) return;
   c[campo]=valor;
+  // Campo digitado aqui passa a ser da Logística: a sincronização não o
+  // sobrescreve mais, e o salvar leva o valor de volta ao orçamento.
+  _escMarcarManual(c,campo);
   c.editadoEm=new Date().toLocaleString('pt-BR');
   _escMarcarSujo(_escDiaDoCard(id));
   if(campo==='saida'||campo==='local'||campo==='termino') escAtualizarConflitos();
@@ -28995,30 +29023,291 @@ function _escRealinharDatas(itens){
   return movidas;
 }
 
+/* ── A Logística devolve ao orçamento ───────────────────────────────────
+   "se tiverem sido feitas alterações na logística e salvas devem alterar
+   no orçamento também, para que quando seja atualizada pelo botão na
+   logística não perca as atualizações buscando informação antiga no
+   orçamento."
+
+   Antes, o card nascia com uma cópia do orçamento e os dois seguiam
+   caminhos separados: corrigir o horário na escala não chegava à OS nem
+   ao Google Agenda, e qualquer releitura trazia de volta o valor velho —
+   ou, pior, criava um segundo card ao lado do corrigido.
+
+   Agora cada campo tem um dono. O que a Logística digitou é dela: a
+   sincronização não encosta, e o salvar grava o valor no orçamento. O que
+   ninguém digitou continua do orçamento, e é atualizado no card existente
+   em vez de virar card novo.                                             */
+
+var ESC_CAMPOS_DO_ORC=['evento','endereco','local','termino'];
+
+function _escFaseDoTipo(tipo){
+  if(tipo==='montagem') return 'montagem';
+  if(tipo==='desmontagem') return 'desmontagem';
+  if(tipo==='operacao') return 'evento';
+  return '';     // separação, carregamento e etapa avulsa não têm fase
+}
+
+function _escMarcarManual(c,campo){
+  if(!c) return;
+  if(ESC_CAMPOS_DO_ORC.indexOf(campo)<0) return;
+  c.manual=c.manual||{};
+  c.manual[campo]=1;
+}
+
+// O que o orçamento diz hoje para cada campo que o card copia dele.
+function _escValorDoOrc(campo,o,fase){
+  var f=(o&&o.form)||{};
+  if(campo==='evento') return (f['f-cliente']||'')+(f['f-nome-evento']?' — '+f['f-nome-evento']:'');
+  if(campo==='endereco'){
+    var e=[f['f-end-ev'],f['f-num-ev'],f['f-bairro-ev'],f['f-cid-ev']].filter(Boolean).join(', ');
+    return f['f-local']?(f['f-local']+(e?' — '+e:'')):e;
+  }
+  if(campo==='local') return _logHorarioFase(o,fase)||'';
+  if(campo==='termino') return fase==='evento'?(f['f-hf']||''):'';
+  return '';
+}
+
+// Atualiza o card existente com o que mudou no orçamento, respeitando o
+// que foi digitado aqui. Devolve a lista de campos que mudaram.
+function _escRefrescarCard(c,o,fase){
+  var mudou=[];
+  if(!c||!o||!fase) return mudou;
+  // Card montado antes desta regra existir não tem dono marcado em campo
+  // nenhum. Sair sobrescrevendo seria perder, de uma vez, todo horário que
+  // a Logística já tinha corrigido à mão. Então, na primeira passagem, o
+  // que está diferente do orçamento é reconhecido como da Logística — e
+  // fica como está, sem ser devolvido ao orçamento sem ninguém pedir.
+  if(!c.manual){
+    c.manual={};
+    ESC_CAMPOS_DO_ORC.forEach(function(campo){
+      var atual=String(c[campo]||''), doOrc=String(_escValorDoOrc(campo,o,fase)||'');
+      if(atual && atual!==doOrc) c.manual[campo]=1;
+    });
+    if(Object.keys(c.manual).length){
+      var jaEra=_escCamposParaOrc(c);
+      if(jaEra) c.devolvidoAssinatura=JSON.stringify(jaEra);
+    }
+  }
+  ESC_CAMPOS_DO_ORC.forEach(function(campo){
+    if(c.manual&&c.manual[campo]) return;             // dono é a Logística
+    var novo=_escValorDoOrc(campo,o,fase);
+    if(!novo && campo!=='evento') return;             // vazio não apaga o que há
+    if(String(c[campo]||'')===String(novo||'')) return;
+    c[campo]=novo;
+    mudou.push(campo);
+  });
+  if(mudou.length) c.doOrcamentoEm=new Date().toLocaleString('pt-BR');
+  return mudou;
+}
+
+// O card, e não só "existe um". É o que permite corrigir em vez de pular.
+function _escCardObjDaOrigem(lista,tipo,o){
+  var num=((o&&o.form)||{})['f-num']||'';
+  var drive=(o&&o.driveId)||'';
+  var achados=(lista||[]).filter(function(c){
+    if(c.tipo!==tipo) return false;
+    if(num && c.orcNum===num) return true;
+    if(!num && drive && c.driveId===drive) return true;
+    return false;
+  });
+  return achados[0]||null;
+}
+
+// Duas etapas iguais no mesmo dia, do mesmo orçamento, é sempre defeito:
+// nasceram de uma sincronização que não se reconheceu. Some a que está
+// vazia; a que tem equipe, veículo ou observação fica, sempre.
+function _escColapsarDuplicados(dia){
+  var lista=escCards(dia);
+  if(!lista||lista.length<2) return 0;
+  var porChave={}, remover=[];
+  lista.forEach(function(c){
+    if(!c.orcNum && !c.driveId) return;               // etapa avulsa é única
+    var k=c.tipo+'|'+(c.orcNum||('drive:'+c.driveId));
+    (porChave[k]=porChave[k]||[]).push(c);
+  });
+  Object.keys(porChave).forEach(function(k){
+    var g=porChave[k];
+    if(g.length<2) return;
+    // Fica a que tem trabalho dentro; na dúvida, a primeira.
+    var comConteudo=g.filter(function(c){ return !_escCardVazio(c); });
+    var manter=comConteudo.length?comConteudo[0]:g[0];
+    g.forEach(function(c){ if(c!==manter && _escCardVazio(c)) remover.push(c); });
+  });
+  if(!remover.length) return 0;
+  remover.forEach(function(c){
+    var i=lista.indexOf(c);
+    if(i>=0) lista.splice(i,1);
+  });
+  _escMarcarSujo(dia);
+  return remover.length;
+}
+
+/* ── O caminho de volta: card → orçamento → Google Agenda ─────────────── */
+
+// O endereço do card é um texto só; o orçamento guarda local, rua, número,
+// bairro e cidade separados. Desmonta no mesmo formato em que o card foi
+// montado ("Local — Rua, Número, Bairro, Cidade"), que é o caso normal.
+// Texto livre que não siga esse desenho vai inteiro para o Local, e os
+// campos partidos são limpos — melhor um endereço certo num campo só do
+// que pedaços errados em quatro.
+function _escEnderecoParaOrc(txt){
+  var t=String(txt||'').trim();
+  var out={'f-local':'','f-end-ev':'','f-num-ev':'','f-bairro-ev':'','f-cid-ev':''};
+  if(!t) return out;
+  var p=t.split(' — ');
+  var local=p.length>1?p.shift().trim():'';
+  var resto=p.join(' — ').trim();
+  var partes=resto?resto.split(',').map(function(x){ return x.trim(); }).filter(Boolean):[];
+  out['f-local']=local;
+  if(partes.length>=4){
+    out['f-cid-ev']=partes.pop();
+    out['f-bairro-ev']=partes.pop();
+    out['f-num-ev']=partes.pop();
+    out['f-end-ev']=partes.join(', ');
+  } else if(partes.length){
+    // Não dá para adivinhar: mantém legível no Local em vez de inventar.
+    out['f-local']=(local?local+' — ':'')+partes.join(', ');
+  }
+  return out;
+}
+
+// O que cada card quer gravar no orçamento de onde veio.
+function _escCamposParaOrc(c){
+  var fase=_escFaseDoTipo(c&&c.tipo);
+  if(!fase || !c.manual) return null;
+  var campos={};
+  if(c.manual.local && c.local){
+    campos[fase==='montagem'?'f-hm':(fase==='desmontagem'?'f-hd':'f-hi')]=c.local;
+  }
+  if(c.manual.termino && c.termino && fase==='evento') campos['f-hf']=c.termino;
+  if(c.manual.endereco) Object.assign(campos,_escEnderecoParaOrc(c.endereco));
+  return Object.keys(campos).length?campos:null;
+}
+
+// Junta, por orçamento, tudo o que a Logística mudou e ainda não devolveu.
+function _escPendentesParaOrc(){
+  var porOrc={};
+  Object.keys(_escMeses||{}).forEach(function(ym){
+    var dias=(_escMeses[ym]||{}).dias||{};
+    Object.keys(dias).forEach(function(d){
+      (dias[d]||[]).forEach(function(c){
+        if(!c || !c.driveId) return;
+        var campos=_escCamposParaOrc(c);
+        if(!campos) return;
+        // Já devolvido e nada mudou desde então: não reescreve à toa.
+        var assinatura=JSON.stringify(campos);
+        if(c.devolvidoAssinatura===assinatura) return;
+        var reg=porOrc[c.driveId]=porOrc[c.driveId]||{campos:{},cards:[]};
+        Object.assign(reg.campos,campos);
+        reg.cards.push({c:c, assinatura:assinatura});
+      });
+    });
+  });
+  return porOrc;
+}
+
+// Grava no orçamento e, quando ele já tem eventos na agenda, atualiza os
+// eventos existentes pelo id guardado — nunca cria outro.
+async function _escDevolverAosOrcamentos(silencioso){
+  var porOrc=_escPendentesParaOrc();
+  var ids=Object.keys(porOrc);
+  if(!ids.length) return {orcamentos:0, agenda:0, erros:[], agendaPendente:0};
+  var feitos=0, agenda=0, erros=[], pendentes=[];
+  for(var i=0;i<ids.length;i++){
+    var driveId=ids[i], reg=porOrc[driveId];
+    try{
+      await fbDb.collection('orcamentos').doc(driveId).set({form:reg.campos},{merge:true});
+      // Espelha na memória: o dashboard e o cache são a fonte da próxima
+      // sincronização, e deixá-los velhos é justamente o que trazia a
+      // informação antiga de volta ao clicar em Atualizar.
+      var alvo=(_dashDados||[]).filter(function(o){ return o.driveId===driveId; })[0];
+      if(alvo){
+        alvo.form=Object.assign({},alvo.form||{},reg.campos);
+        if(alvo.dados) alvo.dados.form=Object.assign({},alvo.dados.form||{},reg.campos);
+      }
+      try{
+        var cache=(typeof _driveCacheGet==='function')?_driveCacheGet(driveId):null;
+        if(cache){
+          cache.form=Object.assign({},cache.form||{},reg.campos);
+          if(cache.dados) cache.dados.form=Object.assign({},cache.dados.form||{},reg.campos);
+        }
+      }catch(eC){}
+      reg.cards.forEach(function(x){ x.c.devolvidoAssinatura=x.assinatura; x.c.devolvidoEm=new Date().toLocaleString('pt-BR'); });
+      feitos++;
+      if(alvo){
+        var ag=await _escAtualizarAgendaDoOrc(alvo,false);
+        if(ag==='ok') agenda++;
+        else if(ag==='pendente') pendentes.push(alvo);
+      }
+    }catch(e){
+      erros.push((reg.cards[0]&&reg.cards[0].c.evento||driveId)+': '+(e&&e.message||e));
+    }
+  }
+  // Uma pergunta só, no fim: autorizar o Google agora ou deixar para o
+  // botão 📅 Agenda. Perguntar por orçamento seria insuportável.
+  if(pendentes.length && !silencioso){
+    if(confirm(pendentes.length+' evento(s) do Google Agenda precisam do seu login do Google para serem corrigidos '
+      +'com o horário novo.\n\nAutorizar agora?\n\nSe deixar para depois, o orçamento já está salvo — '
+      +'basta abrir o orçamento e clicar em 📅 Agenda.')){
+      for(var k=0;k<pendentes.length;k++){
+        if(await _escAtualizarAgendaDoOrc(pendentes[k],true)==='ok') agenda++;
+      }
+    }
+  }
+  return {orcamentos:feitos, agenda:agenda, erros:erros, agendaPendente:Math.max(0,pendentes.length-agenda)};
+}
+
+// Reescreve na agenda os eventos que ESTE orçamento já tem. Sem id gravado
+// não faz nada: criar evento é decisão do botão 📅 Agenda, não da escala —
+// é assim que a correção de horário não vira um segundo evento no dia.
+async function _escAtualizarAgendaDoOrc(o,comPopup){
+  try{
+    var dados=(o&&o.dados)||{};
+    var ids=dados.googleAgenda||{};
+    if(!ids.montagemEventId && !ids.eventoEventId && !ids.desmontagemEventId) return false;
+    if(typeof _gaEnviarEventosParaOrcamento!=='function') return false;
+    var eventos=_gaEventosDisponiveisDe(o.form||{},dados);
+    if(!eventos.length) return false;
+    // Sem popup na primeira tentativa: salvar a escala não pode abrir uma
+    // janela do Google do nada. Quando o login é preciso, quem chamou
+    // pergunta uma vez só, no fim, em vez de uma vez por orçamento.
+    await _gaEnviarEventosParaOrcamento(o.driveId,o.form||{},dados,eventos,comPopup?{}:{semPopup:true});
+    return 'ok';
+  }catch(e){
+    if(/autorizacao-google-necessaria/.test(e&&e.message||'')) return 'pendente';
+    console.warn('[Logística] agenda não atualizada:',e&&e.message);
+    return false;
+  }
+}
+
 async function escSincronizarAgenda(){
   var itens=_escItensAgenda();
   // O realinhamento roda ANTES da saída antecipada: um orçamento que saiu da
   // Agenda (venda perdida, data apagada) deixa etapas órfãs, e é justamente
   // quando não há mais item que elas precisam ser sinalizadas.
   var movidas=_escRealinharDatas(itens);
-  if(!itens.length) return {criados:0, dias:0, movidas:movidas, foraDeData:_escForaDeData.length};
+  if(!itens.length) return {criados:0, dias:0, movidas:movidas, atualizados:0, duplicados:0, foraDeData:_escForaDeData.length};
 
   var hoje=_logISO(new Date());
   var de=_logAddDias(hoje,-ESC_SINC_DIAS_ATRAS), ate=de;
   itens.forEach(function(it){ if(it.range.fim>ate) ate=it.range.fim; });
-  if(ate<de) return {criados:0, dias:0, movidas:movidas, foraDeData:_escForaDeData.length};
+  if(ate<de) return {criados:0, dias:0, movidas:movidas, atualizados:0, duplicados:0, foraDeData:_escForaDeData.length};
 
   await _escCarregarFaixa(de,ate);
 
-  var criados=0, dias=0, dia=de, guarda=0;
+  var criados=0, dias=0, atualizados=0, duplicados=0, dia=de, guarda=0;
   // Trava de segurança: a janela vai até o evento mais distante, e um
   // orçamento com data digitada errada pode jogar isso anos à frente.
   while(dia<=ate && guarda++<800){
+    duplicados+=_escColapsarDuplicados(dia);
     var r=_escGerarNoDia(dia,itens);
     if(r.criados){ criados+=r.criados; dias++; }
+    atualizados+=r.atualizados||0;
     dia=_logAddDias(dia,1);
   }
-  return {criados:criados, dias:dias, movidas:movidas, foraDeData:_escForaDeData.length};
+  return {criados:criados, dias:dias, movidas:movidas, atualizados:atualizados,
+          duplicados:duplicados, foraDeData:_escForaDeData.length};
 }
 
 // Depois de sincronizar, grava sozinho. Sem isto o módulo abriria sempre com
@@ -29026,7 +29315,7 @@ async function escSincronizarAgenda(){
 // alteração que o próprio sistema fez.
 async function _escSincronizarEGravar(){
   var r=await escSincronizarAgenda();
-  if(r.criados||r.movidas) await escSalvar(true);
+  if(r.criados||r.movidas||r.atualizados||r.duplicados) await escSalvar(true);
   return r;
 }
 
@@ -29046,6 +29335,8 @@ async function escAtualizar(){
   escRenderizar();
   var partes=[];
   if(r.criados) partes.push('⚡ '+r.criados+' etapa(s) nova(s) em '+r.dias+' dia(s)');
+  if(r.atualizados) partes.push('✏️ '+r.atualizados+' etapa(s) corrigida(s) com o que mudou no orçamento');
+  if(r.duplicados) partes.push('🧹 '+r.duplicados+' etapa(s) repetida(s) e vazia(s) removida(s)');
   if(r.movidas) partes.push('📅 '+r.movidas+' etapa(s) movida(s) para a data nova do orçamento');
   if(r.foraDeData) partes.push('⚠️ '+r.foraDeData+' fora da data do orçamento — veja o aviso no quadro');
   _toastMostrar(partes.length
@@ -29384,8 +29675,43 @@ function _escCardHtml(c,cf){
           ? '<span onclick="logAbrirPreviewOS(\''+eh(c.driveId)+'\')" title="Ver a Ordem de Serviço" style="cursor:pointer;text-decoration:underline;color:#90caf9">Orç. '+eh(c.orcNum)+'</span>'
           : 'Orç. '+eh(c.orcNum))+'<br>':'')
       +'Criado: '+eh(c.criadoEm||'—')+(c.editadoEm?'<br>Última edição: '+eh(c.editadoEm):'')
+      +_escRodapeManual(c)
     +'</div>'
     +'</div></div>';
+}
+
+var _ESC_ROT_MANUAL={evento:'evento/cliente', endereco:'endereço', local:'horário no local', termino:'término'};
+
+// Diz, no pé do card, quais campos a Logística assumiu — e dá o caminho de
+// volta. Sem isto, "por que este horário não acompanha o orçamento?" seria
+// um mistério, e o jeito de desfazer seria adivinhação.
+function _escRodapeManual(c){
+  if(!c||!c.manual) return '';
+  var campos=Object.keys(c.manual).filter(function(k){ return c.manual[k]; });
+  if(!campos.length) return '';
+  var nomes=campos.map(function(k){ return _ESC_ROT_MANUAL[k]||k; }).join(', ');
+  return '<br><span style="color:#ab47bc;font-weight:800">✏️ definido aqui: '+eh(nomes)+'</span>'
+    +(c.devolvidoEm?'<br><span style="color:#2e7d32">↩ gravado no orçamento em '+eh(c.devolvidoEm)+'</span>':'')
+    +(_escPodeEditar()?' <span onclick="escSoltarManual(\''+c.id+'\')" title="Voltar a seguir o orçamento nestes campos" '
+      +'style="cursor:pointer;text-decoration:underline;color:#90caf9">seguir o orçamento</span>':'');
+}
+
+function escSoltarManual(id){
+  if(_escBloqueado()) return;
+  var c=escAcharCard(id);
+  if(!c||!c.manual) return;
+  if(!confirm('Voltar a seguir o orçamento?\n\nO horário, o endereço e o nome do evento deste card passam a vir do '
+    +'orçamento de novo, na próxima atualização. O que você digitou aqui será substituído.\n\n'
+    +'O que já foi gravado no orçamento continua lá — isto não desfaz a gravação.')) return;
+  // Objeto vazio, não apagado: apagar faria a adoção automática acima
+  // reconhecer os valores atuais como "da Logística" de novo, e o card
+  // nunca mais seguiria o orçamento.
+  c.manual={};
+  delete c.devolvidoAssinatura;
+  c.editadoEm=new Date().toLocaleString('pt-BR');
+  _escMarcarSujo(_escDiaDoCard(id));
+  escRenderizar();
+  _toastMostrar('↩ O card volta a seguir o orçamento.','Clique em 🔄 Atualizar para trazer os valores de lá.',6000);
 }
 
 function _escCampo(rot,html){
