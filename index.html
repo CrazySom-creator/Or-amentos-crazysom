@@ -14625,6 +14625,165 @@ async function _gaExcluirEvento(calendarId, eventId, token){
 // apagados aqui.
 var _GA_ROTULO={montagemEventId:'Montagem', eventoEventId:'Evento', desmontagemEventId:'Desmontagem', preReservaEventId:'Pré-reserva'};
 
+/* ── Aditivo e Google Agenda: uma família, um conjunto de eventos ───────
+   "quando carrega o aditivo para agenda está salvando e mantendo o antigo
+   e isso está causando confusão."
+
+   Um aditivo é outro documento, com outro driveId — então, ao ser enviado,
+   ele não conhecia os ids dos eventos do orçamento original e CRIAVA os
+   seus. O dia ficava com MONTAGEM, EVENTO e DESMONTAGEM em duplicata, uma
+   versão com os dados velhos e outra com os novos, e não dá para saber
+   qual é a boa olhando a agenda.
+
+   A regra agora: a família (o orçamento base e todos os seus aditivos)
+   divide UM conjunto de eventos, que é o do base. Quem envia escreve
+   nesses eventos; os ids ficam gravados nos dois documentos, e o que a
+   família tiver criado por fora é apagado da agenda.                     */
+
+var _GA_CHAVES_EVENTO=['montagemEventId','eventoEventId','desmontagemEventId','preReservaEventId'];
+
+// O número base da família deste orçamento ('20266389/1' → '20266389').
+function _gaNumBase(form){
+  var n=((form||{})['f-num'])||'';
+  return (typeof _aditivoBaseNum==='function')?_aditivoBaseNum(n):String(n||'').split('/')[0].trim();
+}
+function _gaEhAditivo(form,dados){
+  if(dados && dados.aditivoDe) return true;
+  var n=((form||{})['f-num'])||'';
+  return (typeof _ehAditivoNum==='function')?_ehAditivoNum(n):/\/\d+\s*$/.test(String(n));
+}
+
+// Os outros documentos da mesma família que já estão em memória. Sem rede:
+// quem envia à agenda já passou pelo dashboard, e procurar na nuvem a cada
+// envio custaria caro para resolver um caso que é a exceção.
+function _gaFamiliaEmMemoria(driveId, form){
+  var base=_gaNumBase(form);
+  if(!base) return [];
+  return (typeof _dashDados!=='undefined'&&_dashDados?_dashDados:[]).filter(function(o){
+    if(!o || o.driveId===driveId) return false;
+    return _gaNumBase(o.form)===base;
+  });
+}
+
+// O documento que manda na agenda da família: o base. Procura no registro
+// do aditivo, depois na memória; devolve null quando não dá para afirmar —
+// e, sem certeza, nada é mesclado nem apagado.
+function _gaDonoDaAgenda(driveId, form, dados){
+  if(!_gaEhAditivo(form,dados)) return {driveId:driveId, proprio:true};
+  var reg=(dados&&dados.aditivoDe)||{};
+  var base=_gaNumBase(form);
+  var cand=null;
+  if(reg.driveId) cand={driveId:reg.driveId};
+  if(!cand){
+    var achado=_gaFamiliaEmMemoria(driveId,form).filter(function(o){
+      return _gaNumBase(o.form)===((o.form||{})['f-num']||'').trim();   // sem sufixo = é o base
+    })[0];
+    if(achado) cand={driveId:achado.driveId};
+  }
+  if(!cand || !cand.driveId || cand.driveId===driveId) return null;
+  return {driveId:cand.driveId, proprio:false, base:base};
+}
+
+// Lê do banco os ids de eventos de um orçamento. É a fonte confiável: a
+// memória pode estar de antes do último envio.
+async function _gaIdsGravados(driveId){
+  try{
+    var snap=await fbDb.collection('orcamentos').doc(driveId).get();
+    if(!snap||!snap.exists) return {};
+    return (snap.data()||{}).googleAgenda||{};
+  }catch(e){
+    console.warn('[Google Agenda] ids da família não lidos:',e&&e.message);
+    return {};
+  }
+}
+
+// Os ids que a família criou por fora e que não são os que ficam. São os
+// eventos duplicados na agenda — a confusão do relato.
+function _gaIdsSobrando(idsDeAlguem, idsMantidos){
+  var fora=[];
+  _GA_CHAVES_EVENTO.forEach(function(k){
+    var v=(idsDeAlguem||{})[k];
+    if(!v) return;
+    var mantido=(idsMantidos||{})[k];
+    if(v===mantido) return;
+    // Nunca apaga um evento que é o único daquela fase: ele É o da família.
+    if(!mantido) return;
+    if(fora.indexOf(v)<0) fora.push(v);
+  });
+  return fora;
+}
+
+// Apaga da agenda os eventos duplicados da família e limpa os ids no banco.
+async function _gaLimparDuplicadosDaFamilia(driveId, form, dados, idsMantidos, token, idsProprosAntes){
+  var removidos=0;
+  var membros=_gaFamiliaEmMemoria(driveId,form);
+  var dono=_gaDonoDaAgenda(driveId,form,dados);
+  if(dono && !dono.proprio){
+    // Visto do aditivo, o próprio aditivo também pode ter criado os seus.
+    membros=membros.concat([{driveId:driveId, dados:dados}]);
+  }
+  for(var i=0;i<membros.length;i++){
+    var m=membros[i];
+    if(dono && m.driveId===dono.driveId) continue;        // o dono guarda os bons
+    // Para quem acabou de enviar, o documento JÁ foi regravado com os ids
+    // bons: ler do banco aqui esconderia justamente os eventos criados por
+    // fora. Por isso quem chama entrega os ids de antes do envio.
+    var ids=(m.driveId===driveId && idsProprosAntes)?idsProprosAntes:await _gaIdsGravados(m.driveId);
+    var sobrando=_gaIdsSobrando(ids,idsMantidos);
+    if(!sobrando.length) continue;
+    var apagados=[];
+    for(var j=0;j<sobrando.length;j++){
+      try{
+        await _gaExcluirEvento(GOOGLE_AGENDA_CONFIG.calendarId, sobrando[j], token);
+        apagados.push(sobrando[j]); removidos++;
+      }catch(e){ console.warn('[Google Agenda] duplicado não removido:',e&&e.message); }
+    }
+    if(!apagados.length) continue;
+    // Os ids apagados saem do documento, e os bons entram no lugar: a
+    // família inteira passa a apontar para os mesmos eventos.
+    try{
+      var novo={};
+      _GA_CHAVES_EVENTO.forEach(function(k){
+        if(apagados.indexOf((ids||{})[k])>=0 || (idsMantidos||{})[k]) novo[k]=(idsMantidos||{})[k]||null;
+      });
+      Object.keys(novo).forEach(function(k){ if(novo[k]===null) delete novo[k]; });
+      await fbDb.collection('orcamentos').doc(m.driveId).set({googleAgenda:novo},{merge:true});
+      var emMem=(typeof _dashDados!=='undefined'&&_dashDados?_dashDados:[]).filter(function(o){ return o.driveId===m.driveId; })[0];
+      if(emMem&&emMem.dados) emMem.dados.googleAgenda=Object.assign({},emMem.dados.googleAgenda||{},novo);
+    }catch(e){ console.warn('[Google Agenda] ids da família não atualizados:',e&&e.message); }
+  }
+  return removidos;
+}
+
+// Grava os ids também no orçamento base, quando quem enviou foi o aditivo.
+async function _gaEspelharNoDono(driveId, form, dados, ids){
+  var dono=_gaDonoDaAgenda(driveId,form,dados);
+  if(!dono || dono.proprio) return false;
+  try{
+    await fbDb.collection('orcamentos').doc(dono.driveId).set({googleAgenda:ids},{merge:true});
+    var emMem=(typeof _dashDados!=='undefined'&&_dashDados?_dashDados:[]).filter(function(o){ return o.driveId===dono.driveId; })[0];
+    if(emMem&&emMem.dados) emMem.dados.googleAgenda=Object.assign({},emMem.dados.googleAgenda||{},ids);
+    return true;
+  }catch(e){
+    console.warn('[Google Agenda] ids não espelhados no orçamento base:',e&&e.message);
+    return false;
+  }
+}
+
+// Antes de enviar: o aditivo adota os eventos do orçamento base. É o que
+// faz o envio ATUALIZAR em vez de criar outro conjunto no mesmo dia.
+async function _gaIdsDaFamilia(driveId, form, dados, idsProprios){
+  var dono=_gaDonoDaAgenda(driveId,form,dados);
+  if(!dono || dono.proprio) return idsProprios||{};
+  var idsDono=await _gaIdsGravados(dono.driveId);
+  var temDono=_GA_CHAVES_EVENTO.some(function(k){ return idsDono[k]; });
+  if(!temDono) return idsProprios||{};
+  // O do base ganha onde os dois existem; onde só o aditivo tem, o evento
+  // dele passa a ser o da família.
+  return Object.assign({},idsProprios||{},idsDono);
+}
+
+
 function _gaRemoverEventosDoOrcamento(driveId, ids, opts){
   return _gaEnfileirar(function(){ return _gaRemoverEventosDoOrcamentoInterno(driveId, ids, opts); });
 }
@@ -14818,6 +14977,10 @@ async function _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompleto
   }catch(e){
     console.warn('[Google Agenda] Não foi possível reler os IDs gravados antes do envio:', e&&e.message);
   }
+  // Aditivo não tem agenda própria: ele escreve nos eventos do orçamento
+  // base. Sem isto, cada aditivo criava um conjunto novo no mesmo dia.
+  var _idsProprios=Object.assign({},idsExistentes);
+  idsExistentes=await _gaIdsDaFamilia(driveId, form, dadosCompletos, idsExistentes);
   var descricao=_gaMontarDescricaoDe(form,(dadosCompletos&&dadosCompletos.state)||{});
   var enderecoEvento=[form['f-end-ev'],form['f-num-ev'],form['f-bairro-ev'],form['f-cid-ev']].filter(Boolean).join(', ');
   var resultado=await _gaEnviarListaEventos(eventosDisp,descricao,enderecoEvento,idsExistentes,GOOGLE_AGENDA_CONFIG.calendarId,token);
@@ -14854,6 +15017,10 @@ async function _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompleto
   }
 
   await fbDb.collection('orcamentos').doc(driveId).set({googleAgenda:googleAgendaAtualizado},{merge:true});
+  await _gaEspelharNoDono(driveId, form, dadosCompletos, googleAgendaAtualizado);
+  var _dupFam=0;
+  try{ _dupFam=await _gaLimparDuplicadosDaFamilia(driveId, form, dadosCompletos, googleAgendaAtualizado, token, _idsProprios); }
+  catch(e){ console.warn('[Google Agenda] limpeza da família:',e&&e.message); }
   if(preReservaRemovida){
     // Um .set(...,{merge:true}) nunca apaga uma chave que já existia no
     // documento — só sobrescreve as chaves presentes no objeto enviado. Por
@@ -14876,7 +15043,7 @@ async function _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompleto
     if(orcCache&&orcCache.dados){ orcCache.dados.googleAgenda=googleAgendaAtualizado; }
   }
   if(erros.length){ throw new Error(erros.join('; ')); }
-  return {googleAgenda:googleAgendaAtualizado, preReservaRemovida:preReservaRemovida};
+  return {googleAgenda:googleAgendaAtualizado, preReservaRemovida:preReservaRemovida, duplicadosFamilia:_dupFam};
 }
 
 // Notificação flutuante (toast) que funciona em qualquer tela do sistema —
@@ -15142,9 +15309,13 @@ async function googleAgendaEnviarOS(){
   // Fila + leitura dos IDs no último instante (ver _gaEnfileirar): o envio
   // manual não pode atropelar o envio automático de Venda Ganha que esteja
   // acontecendo no mesmo momento, senão os dois criam eventos separados.
-  var idsExistentes={};
-  var resultado=await _gaEnfileirar(function(){
+  var idsExistentes={}, _idsProprios={};
+  var _formEnvio=getForm(), _dadosEnvio=getDadosCompletos();
+  var resultado=await _gaEnfileirar(async function(){
     idsExistentes=Object.assign({},orcAtualGoogleAgenda||{});
+    _idsProprios=Object.assign({},idsExistentes);
+    // Aditivo escreve nos eventos do orçamento base — ver _gaIdsDaFamilia.
+    idsExistentes=await _gaIdsDaFamilia(idOrcamentoEnvio,_formEnvio,_dadosEnvio,idsExistentes);
     return _gaEnviarListaEventos(eventosDisp,descricao,enderecoEvento,idsExistentes,GOOGLE_AGENDA_CONFIG.calendarId,token);
   });
   var novosIds=resultado.novosIds;
@@ -15165,8 +15336,17 @@ async function googleAgendaEnviarOS(){
   }catch(e){
     erros.push('Não foi possível salvar os IDs dos eventos no orçamento: '+e.message);
   }
+  var dupFamilia=0;
+  try{
+    await _gaEspelharNoDono(idOrcamentoEnvio,_formEnvio,_dadosEnvio,googleAgendaAtualizado);
+    dupFamilia=await _gaLimparDuplicadosDaFamilia(idOrcamentoEnvio,_formEnvio,_dadosEnvio,googleAgendaAtualizado,token,_idsProprios);
+  }catch(e){ console.warn('[Google Agenda] família:',e&&e.message); }
 
   var ajustes=resultado.ajustes||[];
+  if(dupFamilia){
+    ajustes.push(dupFamilia+' evento(s) que o aditivo tinha criado por fora foram removidos da agenda — '
+      +'a família inteira passa a usar os mesmos eventos do orçamento '+eh(_gaNumBase(_formEnvio))+'.');
+  }
   if(erros.length){
     driveStatus('⚠️ Enviado com '+erros.length+' erro(s).','err');
     console.warn('googleAgendaEnviarOS erros:',erros);
