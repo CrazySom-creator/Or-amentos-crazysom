@@ -610,6 +610,15 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 .fk-board::-webkit-scrollbar-track{background:var(--surface-2);border-radius:6px;}
 .fk-board::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:6px;border:2px solid var(--surface-2);}
 .fk-board::-webkit-scrollbar-thumb:hover{background:var(--text-dim);}
+
+/* Rolagem lateral sempre visível — na Logística a fileira de cards passa
+   da largura da tela e, com a barra fantasma do Chrome, quem não arrasta
+   com o mouse nem percebe que há mais etapas à direita.                  */
+.rolagem-x{overflow-x:auto;overflow-y:hidden;padding-bottom:4px;scrollbar-width:auto;scrollbar-color:var(--border-strong) var(--surface-2);}
+.rolagem-x::-webkit-scrollbar{height:13px;}
+.rolagem-x::-webkit-scrollbar-track{background:var(--surface-2);border-radius:7px;border:1px solid var(--border);}
+.rolagem-x::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:7px;border:2px solid var(--surface-2);}
+.rolagem-x::-webkit-scrollbar-thumb:hover{background:var(--text-dim);}
 .fk-col{flex:0 0 210px;width:210px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;max-height:560px;transition:background .15s,border-color .15s;}
 .fk-col.fk-col-over{background:#e3f2fd;border-color:#1565c0;}
 .fk-col-head{padding:8px 10px;border-radius:8px 8px 0 0;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:6px;}
@@ -2900,7 +2909,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
 
       <div id="esc-conflitos"></div>
 
-      <div id="esc-quadro" style="overflow-x:auto;padding-bottom:8px"></div>
+      <div id="esc-quadro" style="padding-bottom:8px"></div>
 
       <div style="font-size:10px;color:var(--text-dim);margin-top:10px;line-height:1.7">
         <b>Como usar:</b> as etapas dos eventos entram sozinhas ao abrir e no 🔄 Atualizar ·
@@ -29142,7 +29151,7 @@ function escRenderQuadro(){
     var lista=escCards(_escData);
     if(!lista.length){ el.innerHTML=_escQuadroVazio('para '+fD(_escData)); return; }
     var cf=escConflitos(_escData);
-    el.innerHTML='<div style="display:flex;gap:9px;align-items:flex-start;min-width:min-content">'
+    el.innerHTML='<div class="rolagem-x" style="display:flex;gap:9px;align-items:flex-start;padding-bottom:6px">'
       +lista.map(function(c){ return _escCardHtml(c,cf); }).join('')+'</div>';
     return;
   }
@@ -29232,7 +29241,7 @@ function _escBlocoDia(dia){
     +(nConf?'<span style="font-size:10px;font-weight:800;color:#ff8a8a">⛔ '+nConf+' com conflito</span>':'')
     +'</div>';
   var corpo=lista.length
-    ? '<div style="display:flex;gap:9px;align-items:flex-start;min-width:min-content;overflow-x:auto;padding-bottom:6px">'
+    ? '<div class="rolagem-x" style="display:flex;gap:9px;align-items:flex-start;padding-bottom:6px">'
         +lista.map(function(c){ return _escCardHtml(c,cf); }).join('')+'</div>'
     : '<div style="font-size:10px;color:var(--text-muted);padding:2px 0 8px">—</div>';
   // O bloco inteiro é alvo de soltura: arrastar um card para outro dia na
