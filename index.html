@@ -8432,6 +8432,16 @@ function renderStatusOrc(){
   else if(nivel==='diretor'&&aprovStatus==='diretoria'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#c62828','🔄 Reprovar / Revisão',"aprovAcao('revisao')")+'</div>';}
   else if(['adm','gerente','diretor'].includes(usuarioAtual.nivel)&&aprovStatus!=='aprovado'&&aprovStatus!=='rascunho'){acoes=obsHtml+'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+btn('#2e7d32','✅ Aprovar',"aprovAcao('aprovado')")+btn('#6a1b9a','🏆 Enviar para Diretoria',"aprovAcao('diretoria')")+btn('#c62828','🔄 Solicitar Revisão',"aprovAcao('revisao')")+'</div>';}
   else{var msgs={rascunho:'Aguardando envio pelo consultor.',analise:'Aguardando análise técnica.',gerencial:'Aguardando aprovação do gerente.',diretoria:'Aguardando aprovação da diretoria.',aprovado:'✅ Orçamento aprovado!',revisao:'🔄 Revisão solicitada.',reprovado:'⛔ Orçamento reprovado — veja o motivo no topo.'};acoes='<p style="font-size:11px;color:var(--text-muted);padding:6px 0">'+(msgs[aprovStatus]||'')+'</p>';}
+  // Gerente e Diretor que montam o próprio orçamento também precisam
+  // enviá-lo para a Análise Técnica — ver _podeEnviarParaAnalise().
+  if(_podeEnviarParaAnalise()){
+    var _btnEnv='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'
+      +btn('#1565c0',_rotuloEnviarAnalise(),"aprovAcao('analise')")+'</div>';
+    // Quando a cadeia acima só devolveu a mensagem de espera, ela sai: num
+    // orçamento que é dele, "Aguardando envio pelo consultor" não ajuda.
+    acoes=(acoes.indexOf('aprov-obs')>=0)?(acoes+_btnEnv):(obsHtml+_btnEnv);
+  }
+
   // Reprovar — decisão da gestão, com motivo obrigatório. Aparece em
   // qualquer etapa que não seja Rascunho (não se reprova o que ainda não foi
   // enviado) e some quando o orçamento JÁ está reprovado.
@@ -8578,6 +8588,33 @@ async function aprovAcao(novo){
   }
 }
 
+/* Quem pode mandar um rascunho para a Análise Técnica.
+
+   Relato: "botão enviar para análise não aparece para o usuário Felipe
+   Brum". Felipe é Diretor Comercial — e, elaborando o próprio orçamento,
+   ele caía fora de todas as faixas: a do consultor exige nível consultor,
+   e a da gestão exige que o orçamento JÁ tenha saído do rascunho. Sobrava
+   a mensagem "Aguardando envio pelo consultor", num orçamento que era
+   dele. Quem monta o orçamento precisa conseguir enviá-lo, seja qual for
+   o cargo.
+
+   A Área Técnica fica de fora de propósito: ela não envia para si mesma,
+   já tem os botões de aprovação desde o rascunho.                        */
+var APROV_ENVIO_STATUS=['rascunho','revisao','reprovado'];
+
+// Gerência e Diretoria: o botão ENTRA junto com o que eles já tinham, em
+// vez de no lugar. Um gerente olhando um orçamento em revisão continua
+// podendo aprovar — ele só ganha também o caminho de mandar para a
+// Análise Técnica quando o orçamento é dele.
+function _podeEnviarParaAnalise(){
+  if(!usuarioAtual) return false;
+  if(APROV_ENVIO_STATUS.indexOf(aprovStatus)<0) return false;
+  return ['gerente','diretor'].indexOf(usuarioAtual.nivel)>=0;
+}
+function _rotuloEnviarAnalise(){
+  return aprovStatus==='rascunho'?'📤 Enviar para Análise Técnica':'📤 Reenviar para Análise Técnica';
+}
+
 function renderAprovInline(){
   var box=document.getElementById('aprov-inline-box');
   var btnsEl=document.getElementById('aprov-inline-btns');
@@ -8594,6 +8631,10 @@ function renderAprovInline(){
   else if(nivel==='gerente'&&aprovStatus==='gerencial'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#6a1b9a','🏆 Enviar para Diretoria','diretoria'));btnsEl.appendChild(btn('#c62828','🔄 Solicitar Revisão','revisao'));}
   else if(nivel==='diretor'&&aprovStatus==='diretoria'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#c62828','🔄 Reprovar / Revisão','revisao'));}
   else if(['adm','gerente','diretor'].includes(usuarioAtual.nivel)&&aprovStatus!=='aprovado'&&aprovStatus!=='rascunho'){mostrar=true;btnsEl.appendChild(btn('#2e7d32','✅ Aprovar','aprovado'));btnsEl.appendChild(btn('#6a1b9a','🏆 Enviar para Diretoria','diretoria'));btnsEl.appendChild(btn('#c62828','🔄 Solicitar Revisão','revisao'));}
+  if(_podeEnviarParaAnalise()){
+    mostrar=true;
+    btnsEl.appendChild(btn('#1565c0',_rotuloEnviarAnalise(),'analise'));
+  }
   if(_podeReprovar()&&aprovStatus!=='rascunho'&&aprovStatus!=='reprovado'){
     mostrar=true;
     var bRep=document.createElement('button');
