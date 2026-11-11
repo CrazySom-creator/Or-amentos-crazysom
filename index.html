@@ -1607,6 +1607,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
       <div class="rel-tab" onclick="admAba('precos')">💵 Tabela de Preços</div>
       <div class="rel-tab" onclick="admAba('anexos')">📎 Anexos</div>
       <div class="rel-tab" onclick="admAba('googleagenda')">🗓️ Google Agenda</div>
+      <div class="rel-tab" onclick="admAba('contrato')">✍️ Assinatura do Contrato</div>
     </div>
     <!-- ABA Usuários -->
     <div class="rel-pane active" id="admpane-usuarios">
@@ -1810,6 +1811,36 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
           <button class="btn btn-o btn-sm" onclick="googleAgendaTestarConexao()">🔌 Testar Conexão</button>
         </div>
         <div id="ga-status" style="font-size:11px;color:var(--text-muted)"></div>
+      </div>
+    </div>
+    <!-- ABA Assinatura do Contrato -->
+    <div class="rel-pane" id="admpane-contrato">
+      <div style="display:flex;flex-direction:column;gap:14px;max-width:620px">
+        <p style="font-size:11.5px;color:var(--text-muted);margin:0">
+          Quem assina o contrato pela Crazy Som. O nome e o documento aparecem no bloco
+          <b>CONTRATADA</b> e nas duas linhas de assinatura (contrato e Anexo 1).
+          Vale para os contratos emitidos daqui em diante — os já gerados continuam como estão.
+        </p>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--text);display:block;margin-bottom:4px">Nome de quem assina</label>
+          <input id="ctr-rep-nome" oninput="_contratoRepPrevia()" type="text" placeholder="Nome completo" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);color:var(--text);font-size:12px">
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <label style="font-size:11px;font-weight:700;color:var(--text);display:block;margin-bottom:4px">CPF</label>
+            <input id="ctr-rep-doc" type="text" placeholder="000.000.000-00" oninput="fmtDoc(this);_contratoRepPrevia()" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);color:var(--text);font-size:12px">
+          </div>
+          <div style="flex:1;min-width:200px">
+            <label style="font-size:11px;font-weight:700;color:var(--text);display:block;margin-bottom:4px">Cargo (opcional)</label>
+            <input id="ctr-rep-cargo" oninput="_contratoRepPrevia()" type="text" placeholder="Ex: Sócio-administrador" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);color:var(--text);font-size:12px">
+          </div>
+        </div>
+        <div id="ctr-rep-previa" style="font-size:11px;color:var(--text-dim);background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-g btn-sm" onclick="contratoRepSalvar()">💾 Salvar</button>
+          <button class="btn btn-o btn-sm" onclick="contratoRepRenderAdmin(true)">↩ Recarregar</button>
+        </div>
+        <div id="ctr-rep-status" style="font-size:11px;color:var(--text-muted)"></div>
       </div>
     </div>
   </div>
@@ -12232,6 +12263,7 @@ async function atualizarDadosAgora(){
   await passo('tarefas', function(){ return tarefasCarregarStorage().then(function(){ if(typeof atualizarBadgeTarefas==='function') atualizarBadgeTarefas(); }); });
   await passo('metas', function(){ return typeof metasCarregar==='function'?metasCarregar():null; });
   await passo('configuração da agenda', function(){ return typeof googleAgendaCarregarConfig==='function'?googleAgendaCarregarConfig():null; });
+  await passo('assinatura do contrato', function(){ return typeof contratoRepCarregar==='function'?contratoRepCarregar():null; });
   // Listas de orçamentos (é o que mais muda no dia a dia)
   _driveCache={};
   await passo('lista de orçamentos', function(){ return driveListarSilencioso(); });
@@ -31997,7 +32029,7 @@ function dashTemAcesso(dashId){
 
 function admAba(aba){
   document.querySelectorAll('#adm-ov .rel-tab').forEach(function(t,i){
-    var abas=['usuarios','cargos','permissoes','dashboards','tiposevento','tipostarefa','categoriasproduto','gruposproduto','subgruposproduto','enderecosproduto','painelled','estoqueeq','precos','anexos','googleagenda'];
+    var abas=['usuarios','cargos','permissoes','dashboards','tiposevento','tipostarefa','categoriasproduto','gruposproduto','subgruposproduto','enderecosproduto','painelled','estoqueeq','precos','anexos','googleagenda','contrato'];
     t.classList.toggle('active',abas[i]===aba);
   });
   document.querySelectorAll('#adm-ov .rel-pane').forEach(function(p){p.classList.remove('active');});
@@ -32014,6 +32046,7 @@ function admAba(aba){
   if(aba==='enderecosproduto') enderecosProdutoRenderAdmin();
   if(aba==='painelled') painelLedRenderAdmin();
   if(aba==='estoqueeq') eqAdminRenderizar();
+  if(aba==='contrato') contratoRepRenderAdmin();
   if(aba==='precos'){ _precoRascunho={}; _precoRestaurarPendente=false; precosRenderAdmin(); }
   if(aba==='anexos') anxDiagRenderAdmin();
   if(aba==='googleagenda') googleAgendaRenderAdmin();
@@ -38466,8 +38499,116 @@ function confirmarGerarContrato(){
   gerarContrato();
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   QUEM ASSINA O CONTRATO PELA EMPRESA
+   ──────────────────────────────────────────────────────────────────────────
+   "quero alterar o nome de quem assina o contrato pela empresa".
+
+   O nome e o CPF do representante estavam escritos dentro do gerador do
+   PDF, em dois lugares (o bloco CONTRATADA e as linhas de assinatura, que
+   saem duas vezes: contrato e Anexo 1). Trocar quem assina exigia mexer no
+   código — e esquecer um dos lugares significava um contrato com dois
+   nomes diferentes.
+
+   Agora vem de config/contrato, editável em Admin > Assinatura do
+   Contrato. Enquanto ninguém configurar, continua saindo o que sempre
+   saiu: um contrato em branco seria pior do que um desatualizado.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+var CONTRATO_REP_PADRAO={nome:'Fabiano Santos', doc:'821.578.980-34', cargo:''};
+var CONTRATO_REP=Object.assign({},CONTRATO_REP_PADRAO);
+var _contratoRepCarregado=false;
+
+async function contratoRepCarregar(forcar){
+  if(_contratoRepCarregado && !forcar) return CONTRATO_REP;
+  try{
+    var snap=await fbDb.collection('config').doc('contrato').get();
+    if(snap&&snap.exists){
+      var d=snap.data()||{};
+      CONTRATO_REP={
+        nome:(d.repNome||'').trim()||CONTRATO_REP_PADRAO.nome,
+        doc:(d.repDoc||'').trim()||CONTRATO_REP_PADRAO.doc,
+        cargo:(d.repCargo||'').trim()
+      };
+    }
+  }catch(e){ console.warn('contratoRepCarregar:',e&&e.message); }
+  // Marcado mesmo quando a leitura falha: sem isto, gerarContrato() tentaria
+  // de novo a cada chamada e entraria em laço infinito com o banco fora.
+  _contratoRepCarregado=true;
+  return CONTRATO_REP;
+}
+
+// A linha que vai no PDF, do jeito que ela vai sair.
+function _contratoRepLinha(){
+  var r=CONTRATO_REP||CONTRATO_REP_PADRAO;
+  return 'Representante: '+r.nome+(r.cargo?' ('+r.cargo+')':'')+(r.doc?' — CPF: '+r.doc:'');
+}
+
+async function contratoRepRenderAdmin(forcar){
+  await contratoRepCarregar(forcar);
+  var n=document.getElementById('ctr-rep-nome');
+  var d=document.getElementById('ctr-rep-doc');
+  var c=document.getElementById('ctr-rep-cargo');
+  if(n) n.value=CONTRATO_REP.nome||'';
+  if(d) d.value=CONTRATO_REP.doc||'';
+  if(c) c.value=CONTRATO_REP.cargo||'';
+  _contratoRepPrevia();
+  var st=document.getElementById('ctr-rep-status');
+  if(st&&forcar) st.textContent='Recarregado do banco.';
+}
+
+// Mostra a linha do contrato enquanto se digita: é o que evita descobrir o
+// erro de digitação depois, no PDF assinado.
+function _contratoRepPrevia(){
+  var el=document.getElementById('ctr-rep-previa');
+  if(!el) return;
+  var nome=((document.getElementById('ctr-rep-nome')||{}).value||'').trim();
+  var doc=((document.getElementById('ctr-rep-doc')||{}).value||'').trim();
+  var cargo=((document.getElementById('ctr-rep-cargo')||{}).value||'').trim();
+  if(!nome){
+    el.innerHTML='<b>Sem nome configurado</b> — o contrato sai com '+eh(CONTRATO_REP_PADRAO.nome)+', como hoje.';
+    return;
+  }
+  el.innerHTML='No contrato vai sair assim:<br>'
+    +'<span style="color:var(--text)">Representante: '+eh(nome)+(cargo?' ('+eh(cargo)+')':'')
+    +(doc?' — CPF: '+eh(doc):'')+'</span>'
+    +'<br><span style="color:var(--text-muted)">E, na linha de assinatura: <b>'+eh(nome)+'</b>'
+    +(doc?' · CPF: '+eh(doc):'')+'</span>';
+}
+
+async function contratoRepSalvar(){
+  var st=document.getElementById('ctr-rep-status');
+  var nome=((document.getElementById('ctr-rep-nome')||{}).value||'').trim();
+  var doc=((document.getElementById('ctr-rep-doc')||{}).value||'').trim();
+  var cargo=((document.getElementById('ctr-rep-cargo')||{}).value||'').trim();
+  if(!nome){ alert('Informe o nome de quem assina o contrato pela empresa.'); return; }
+  if(!doc && !confirm('Salvar sem o CPF?\n\nO contrato vai sair só com o nome na linha de assinatura.')) return;
+  try{
+    await fbDb.collection('config').doc('contrato').set({
+      repNome:nome, repDoc:doc, repCargo:cargo,
+      atualizadoEm:new Date().toLocaleString('pt-BR'),
+      atualizadoPor:(usuarioAtual&&usuarioAtual.nome)||''
+    },{merge:true});
+    CONTRATO_REP={nome:nome, doc:doc, cargo:cargo};
+    _contratoRepCarregado=true;
+    if(st) st.textContent='✅ Salvo. Os próximos contratos saem com '+nome+'.';
+    _toastMostrar('✍️ Quem assina o contrato agora é '+nome+'.','Vale para os contratos emitidos daqui em diante.',7000);
+  }catch(e){
+    if(st) st.textContent='⚠️ Não foi possível salvar: '+(e&&e.message||e);
+    alert('Não consegui salvar quem assina o contrato.\n\n'+(e&&e.message||e)
+      +'\n\nA escala e as configurações ficam na coleção "config" do banco — se o erro falar em permissão, '
+      +'rode o teste de acesso em Admin > Diagnóstico do Banco.');
+  }
+}
+
 function gerarContrato(){
   if(_bloqueadoSemAprovacao())return;
+  // Lê quem assina antes de montar o PDF. Se a leitura falhar, segue com o
+  // padrão: contrato com o nome antigo é ruim, contrato sem assinante é pior.
+  if(!_contratoRepCarregado){
+    contratoRepCarregar().then(function(){ gerarContrato(); });
+    return;
+  }
   // ── Coletar valor real (value, placeholder ou cálculo) ──
   var _elLiq   = document.getElementById('val-liq');
   var _elLiqSI = document.getElementById('val-liq-si');
@@ -38615,7 +38756,8 @@ function gerarContrato(){
     function campo(label,valor,xOff,mVW){xOff=xOff||0;mVW=mVW||(cw-38-xOff);checkY(14);font('bold',7.5);rgb(C.cmed);doc.text(label+':',ml+xOff,y);font('normal',8);rgb(C.pt);var lw=doc.getTextWidth(label+': ')+2;var vL=doc.splitTextToSize(valor||'—',mVW);vL.forEach(function(l,i){if(i>0){y+=5;checkY(12);}doc.text(l,ml+xOff+lw,y);});y+=5.5;}
     function campo2(l1,v1,l2,v2){checkY(14);var half=cw/2-4;font('bold',7.5);rgb(C.cmed);doc.text(l1+':',ml,y);font('normal',8);rgb(C.pt);doc.text(doc.splitTextToSize(v1||'—',half-doc.getTextWidth(l1+': ')-1)[0],ml+doc.getTextWidth(l1+': ')+1,y);if(l2){font('bold',7.5);rgb(C.cmed);doc.text(l2+':',ml+cw/2+2,y);font('normal',8);rgb(C.pt);doc.text(doc.splitTextToSize(v2||'—',half-doc.getTextWidth(l2+': ')-1)[0],ml+cw/2+2+doc.getTextWidth(l2+': ')+1,y);}y+=5.5;}
     function clausula(num,titulo){checkY(20);y+=3;fill(C.pt);doc.rect(ml,y-4.5,cw,7.5,'F');fill(C.vm);doc.rect(ml,y-4.5,2.5,7.5,'F');rgb(C.br);font('bold',8.5);doc.text('CLAUSULA '+num+' — '+titulo.toUpperCase(),ml+5,y);y+=5;rgb(C.cesc);font('normal',8.5);}
-    function assinBlock(col1,col2,larg){draw(C.cesc);doc.line(col1,y,col1+larg,y);doc.line(col2,y,col2+larg,y);y+=5;font('bold',8);rgb(C.pt);doc.text('CONTRATANTE',col1,y);doc.text('CONTRATADA',col2,y);y+=4;font('normal',7.5);rgb(C.cesc);doc.text(doc.splitTextToSize(cli,larg)[0],col1,y);doc.text('Fabiano Santos',col2,y);y+=4;doc.text('CPF/CNPJ: '+(docCli||'—'),col1,y);doc.text('CPF: 821.578.980-34',col2,y);y+=4;draw(C.clt);doc.line(col1,y,col1+larg,y);doc.line(col2,y,col2+larg,y);y+=3;font('normal',7);rgb(C.cmed);doc.text('Assinatura / Data',col1,y);doc.text('Assinatura / Data',col2,y);}
+    var _repC=(typeof CONTRATO_REP!=='undefined'&&CONTRATO_REP&&CONTRATO_REP.nome)?CONTRATO_REP:CONTRATO_REP_PADRAO;
+    function assinBlock(col1,col2,larg){draw(C.cesc);doc.line(col1,y,col1+larg,y);doc.line(col2,y,col2+larg,y);y+=5;font('bold',8);rgb(C.pt);doc.text('CONTRATANTE',col1,y);doc.text('CONTRATADA',col2,y);y+=4;font('normal',7.5);rgb(C.cesc);doc.text(doc.splitTextToSize(cli,larg)[0],col1,y);doc.text(doc.splitTextToSize(_repC.nome,larg)[0],col2,y);y+=4;doc.text('CPF/CNPJ: '+(docCli||'—'),col1,y);doc.text(_repC.doc?('CPF: '+_repC.doc):'',col2,y);y+=4;draw(C.clt);doc.line(col1,y,col1+larg,y);doc.line(col2,y,col2+larg,y);y+=3;font('normal',7);rgb(C.cmed);doc.text('Assinatura / Data',col1,y);doc.text('Assinatura / Data',col2,y);}
 
     var col1=ml,col2=ml+cw/2+6,larg=cw/2-10;
 
@@ -38635,7 +38777,7 @@ function gerarContrato(){
     doc.text('CRAZY COMERCIO E LOCACAO DE EQUIPAMENTOS LTDA.',ml+5,y+5);
     doc.text('CNPJ: 10.909.827/0001-76',ml+5,y+10);
     doc.text('Rua Osvaldo Cruz, n. 36 — Bairro Niteroi — Canoas/RS',ml+5,y+15);
-    doc.text('Representante: Fabiano Santos — CPF: 821.578.980-34',ml+5,y+20);
+    doc.text(_contratoRepLinha(),ml+5,y+20);
     y+=30;
     fill(C.cinzaf);doc.rect(ml,y-3.5,cw,27,'F');fill(C.vm);doc.rect(ml,y-3.5,2.5,27,'F');
     font('bold',8.5);rgb(C.pt);doc.text('CONTRATANTE',ml+5,y);font('normal',7.5);rgb(C.cesc);
