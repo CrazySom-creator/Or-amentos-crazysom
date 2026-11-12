@@ -619,6 +619,15 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 .rolagem-x::-webkit-scrollbar-track{background:var(--surface-2);border-radius:7px;border:1px solid var(--border);}
 .rolagem-x::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:7px;border:2px solid var(--surface-2);}
 .rolagem-x::-webkit-scrollbar-thumb:hover{background:var(--text-dim);}
+/* Logística: a fileira esconde a barra própria e quem rola é a barra
+   espelho, grudada no rodapé da tela enquanto o dia estiver à vista. */
+.esc-linha{scrollbar-width:none;}
+.esc-linha::-webkit-scrollbar{display:none;height:0;}
+.esc-barra-x{position:sticky;bottom:0;z-index:5;overflow-x:scroll;overflow-y:hidden;height:16px;margin-top:-2px;background:var(--surface);border-top:1px solid var(--border);scrollbar-width:auto;scrollbar-color:var(--border-strong) var(--surface-2);}
+.esc-barra-x::-webkit-scrollbar{height:14px;}
+.esc-barra-x::-webkit-scrollbar-track{background:var(--surface-2);border-radius:7px;border:1px solid var(--border);}
+.esc-barra-x::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:7px;border:2px solid var(--surface-2);}
+.esc-barra-x::-webkit-scrollbar-thumb:hover{background:var(--text-dim);}
 .fk-col{flex:0 0 210px;width:210px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;max-height:560px;transition:background .15s,border-color .15s;}
 .fk-col.fk-col-over{background:#e3f2fd;border-color:#1565c0;}
 .fk-col-head{padding:8px 10px;border-radius:8px 8px 0 0;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:6px;}
@@ -29748,7 +29757,65 @@ function _escAtualizarBotoesView(){
 
 /* ── Quadro ───────────────────────────────────────────────────────────── */
 
+/* Pedido do Fabiano (nov/2026): na Logística a barra de rolagem lateral
+   tem que estar SEMPRE à vista (antes ficava lá embaixo dos cards, fora
+   da tela) e nenhuma alteração pode jogar o quadro de volta para a
+   esquerda. Como o quadro é redesenhado inteiro a cada mudança (innerHTML),
+   guardamos a posição de cada fileira (por dia) antes e devolvemos depois.
+   A barra visível é uma "barra espelho" grudada (sticky) no rodapé da tela,
+   sincronizada com a fileira; a barra nativa da fileira fica escondida. */
+var _escPosX={};
 function escRenderQuadro(){
+  var el=document.getElementById('esc-quadro');
+  if(el){
+    el.querySelectorAll('.esc-linha').forEach(function(l){ _escPosX[l.getAttribute('data-dia')]=l.scrollLeft; });
+  }
+  var caixa=el?el.closest('.modal-box'):null;
+  var y=caixa?caixa.scrollTop:0;
+  _escRenderQuadroBase();
+  if(!el) return;
+  el.querySelectorAll('.esc-linha').forEach(function(l){
+    var x=_escPosX[l.getAttribute('data-dia')];
+    if(x) l.scrollLeft=x;
+    _escMontarBarraX(l);
+  });
+  if(caixa && caixa.scrollTop!==y) caixa.scrollTop=y;
+}
+
+function _escMontarBarraX(linha){
+  var barra=document.createElement('div');
+  barra.className='esc-barra-x';
+  var miolo=document.createElement('div');
+  miolo.style.height='1px';
+  barra.appendChild(miolo);
+  linha.parentNode.insertBefore(barra,linha.nextSibling);
+  function medir(){
+    miolo.style.width=linha.scrollWidth+'px';
+    barra.style.display=(linha.scrollWidth>linha.clientWidth+1)?'':'none';
+    barra.scrollLeft=linha.scrollLeft;
+  }
+  medir();
+  var travado=false;
+  barra.addEventListener('scroll',function(){
+    if(travado){ travado=false; return; }
+    travado=true; linha.scrollLeft=barra.scrollLeft;
+    _escPosX[linha.getAttribute('data-dia')]=linha.scrollLeft;
+  });
+  linha.addEventListener('scroll',function(){
+    _escPosX[linha.getAttribute('data-dia')]=linha.scrollLeft;
+    if(travado){ travado=false; return; }
+    travado=true; barra.scrollLeft=linha.scrollLeft;
+  });
+  if(window.ResizeObserver){
+    var ro=new ResizeObserver(function(){
+      if(!document.body.contains(linha)){ ro.disconnect(); return; }
+      medir();
+    });
+    ro.observe(linha);
+  }
+}
+
+function _escRenderQuadroBase(){
   var el=document.getElementById('esc-quadro');
   if(!el) return;
 
@@ -29756,7 +29823,7 @@ function escRenderQuadro(){
     var lista=escCards(_escData);
     if(!lista.length){ el.innerHTML=_escQuadroVazio('para '+fD(_escData)); return; }
     var cf=escConflitos(_escData);
-    el.innerHTML='<div class="rolagem-x" style="display:flex;gap:9px;align-items:flex-start;padding-bottom:6px">'
+    el.innerHTML='<div class="rolagem-x esc-linha" data-dia="'+_escData+'" style="display:flex;gap:9px;align-items:flex-start;padding-bottom:6px">'
       +lista.map(function(c){ return _escCardHtml(c,cf); }).join('')+'</div>';
     return;
   }
@@ -29846,7 +29913,7 @@ function _escBlocoDia(dia){
     +(nConf?'<span style="font-size:10px;font-weight:800;color:#ff8a8a">⛔ '+nConf+' com conflito</span>':'')
     +'</div>';
   var corpo=lista.length
-    ? '<div class="rolagem-x" style="display:flex;gap:9px;align-items:flex-start;padding-bottom:6px">'
+    ? '<div class="rolagem-x esc-linha" data-dia="'+dia+'" style="display:flex;gap:9px;align-items:flex-start;padding-bottom:6px">'
         +lista.map(function(c){ return _escCardHtml(c,cf); }).join('')+'</div>'
     : '<div style="font-size:10px;color:var(--text-muted);padding:2px 0 8px">—</div>';
   // O bloco inteiro é alvo de soltura: arrastar um card para outro dia na
