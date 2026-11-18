@@ -614,11 +614,25 @@ table.pres .lrow td{background:rgba(192,0,26,.9);color:var(--text);font-weight:9
 /* Rolagem lateral sempre visível — na Logística a fileira de cards passa
    da largura da tela e, com a barra fantasma do Chrome, quem não arrasta
    com o mouse nem percebe que há mais etapas à direita.                  */
-.rolagem-x{overflow-x:auto;overflow-y:hidden;padding-bottom:4px;scrollbar-width:auto;scrollbar-color:var(--border-strong) var(--surface-2);}
-.rolagem-x::-webkit-scrollbar{height:13px;}
-.rolagem-x::-webkit-scrollbar-track{background:var(--surface-2);border-radius:7px;border:1px solid var(--border);}
-.rolagem-x::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:7px;border:2px solid var(--surface-2);}
-.rolagem-x::-webkit-scrollbar-thumb:hover{background:var(--text-dim);}
+.rolagem-x{overflow-x:auto;overflow-y:hidden;scrollbar-width:none;}
+.rolagem-x::-webkit-scrollbar{height:0;display:none;}
+
+/* A barra fica GRUDADA NO RODAPÉ da tela, não no pé da fileira.
+
+   Antes ela nascia junto com os cards — e, como o card tem quase meia tela
+   de altura, bastava olhar o topo da fileira para a barra ficar fora de
+   vista. Esta aqui é uma barra separada, com position:sticky dentro do
+   popup (que é quem rola), então ela acompanha o rodapé enquanto o dia
+   estiver à vista. A fileira continua sendo quem rola de verdade; as duas
+   andam juntas.                                                          */
+.rolagem-barra{position:sticky;bottom:0;z-index:6;overflow-x:auto;overflow-y:hidden;
+  background:var(--surface);border-top:1px solid var(--border);padding-top:2px;margin-top:2px;display:none;
+  scrollbar-width:auto;scrollbar-color:var(--border-strong) var(--surface-2);}
+.rolagem-barra>div{height:1px;}
+.rolagem-barra::-webkit-scrollbar{height:13px;}
+.rolagem-barra::-webkit-scrollbar-track{background:var(--surface-2);border-radius:7px;border:1px solid var(--border);}
+.rolagem-barra::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:7px;border:2px solid var(--surface-2);}
+.rolagem-barra::-webkit-scrollbar-thumb:hover{background:var(--text-dim);}
 .fk-col{flex:0 0 210px;width:210px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;max-height:560px;transition:background .15s,border-color .15s;}
 .fk-col.fk-col-over{background:#e3f2fd;border-color:#1565c0;}
 .fk-col-head{padding:8px 10px;border-radius:8px 8px 0 0;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:6px;}
@@ -29890,6 +29904,64 @@ function _escAtualizarBotoesView(){
 
 /* ── Quadro ───────────────────────────────────────────────────────────── */
 
+/* ── A barra de rolagem do rodapé, e a posição que não se perde ─────────
+   Dois relatos, mesma origem: a fileira de cards era quem mostrava a
+   barra, e ela é redesenhada inteira a cada alteração.
+
+   "a barra de rolagem lateral não está mais fixa na parte inferior da
+   tela" — a barra nascia no pé da fileira, e o card tem quase meia tela de
+   altura. Agora é uma barra à parte, grudada no rodapé do popup.
+
+   "toda vez que excluo o último evento da direita rola automaticamente
+   para esquerda" — innerHTML novo é um elemento novo, e elemento novo
+   nasce com scrollLeft zero. A posição de cada dia é guardada e devolvida
+   depois de desenhar.                                                    */
+
+var _escRolagemX={};     // {dia: scrollLeft}
+
+function _escBarraRolagem(dia){
+  return '<div class="rolagem-barra" id="escbar-'+dia+'" data-dia="'+dia+'"><div></div></div>';
+}
+
+// Liga cada fileira à sua barra e devolve a posição de antes. Roda depois
+// de cada desenho do quadro.
+function escAtualizarRolagem(){
+  var q=document.getElementById('esc-quadro');
+  if(!q) return;
+  Array.prototype.forEach.call(q.querySelectorAll('.rolagem-x'), function(fileira){
+    var dia=(fileira.id||'').replace('escrow-','');
+    var barra=document.getElementById('escbar-'+dia);
+    var precisa=fileira.scrollWidth>fileira.clientWidth+1;
+
+    if(barra){
+      barra.style.display=precisa?'block':'none';
+      // O filho é o que dá comprimento à barra: ele imita a largura total
+      // da fileira, e assim o polegar tem o tamanho certo.
+      if(barra.firstElementChild) barra.firstElementChild.style.width=fileira.scrollWidth+'px';
+    }
+
+    // Devolve onde o usuário estava. Uma etapa excluída não pode levar a
+    // fileira de volta ao começo — ele estava olhando a ponta direita.
+    var alvo=_escRolagemX[dia];
+    if(alvo){
+      var max=Math.max(0,fileira.scrollWidth-fileira.clientWidth);
+      fileira.scrollLeft=Math.min(alvo,max);
+      if(barra) barra.scrollLeft=fileira.scrollLeft;
+      _escRolagemX[dia]=fileira.scrollLeft;
+    }
+
+    // As duas andam juntas, sem laço: quem recebeu o gesto manda.
+    fileira.onscroll=function(){
+      _escRolagemX[dia]=fileira.scrollLeft;
+      if(barra && barra.scrollLeft!==fileira.scrollLeft) barra.scrollLeft=fileira.scrollLeft;
+    };
+    if(barra) barra.onscroll=function(){
+      if(fileira.scrollLeft!==barra.scrollLeft) fileira.scrollLeft=barra.scrollLeft;
+      _escRolagemX[dia]=fileira.scrollLeft;
+    };
+  });
+}
+
 function escRenderQuadro(){
   var el=document.getElementById('esc-quadro');
   if(!el) return;
@@ -29898,8 +29970,10 @@ function escRenderQuadro(){
     var lista=escCards(_escData);
     if(!lista.length){ el.innerHTML=_escQuadroVazio('para '+fD(_escData)); return; }
     var cf=escConflitos(_escData);
-    el.innerHTML='<div class="rolagem-x" style="display:flex;gap:9px;align-items:flex-start;padding-bottom:6px">'
-      +lista.map(function(c){ return _escCardHtml(c,cf); }).join('')+'</div>';
+    el.innerHTML='<div class="rolagem-x" id="escrow-'+_escData+'" style="display:flex;gap:9px;align-items:flex-start">'
+      +lista.map(function(c){ return _escCardHtml(c,cf); }).join('')+'</div>'
+      +_escBarraRolagem(_escData);
+    escAtualizarRolagem();
     return;
   }
 
@@ -29916,6 +29990,7 @@ function escRenderQuadro(){
   // meio da semana ser visível (é informação, não vazio inútil).
   var aDesenhar=(_escView==='semana')?dias:comEtapa;
   el.innerHTML=aDesenhar.map(_escBlocoDia).join('');
+  escAtualizarRolagem();
 }
 
 // Primeiro e último dia com etapa, em tudo que está carregado. É o que
@@ -29988,8 +30063,9 @@ function _escBlocoDia(dia){
     +(nConf?'<span style="font-size:10px;font-weight:800;color:#ff8a8a">⛔ '+nConf+' com conflito</span>':'')
     +'</div>';
   var corpo=lista.length
-    ? '<div class="rolagem-x" style="display:flex;gap:9px;align-items:flex-start;padding-bottom:6px">'
+    ? '<div class="rolagem-x" id="escrow-'+dia+'" style="display:flex;gap:9px;align-items:flex-start">'
         +lista.map(function(c){ return _escCardHtml(c,cf); }).join('')+'</div>'
+        +_escBarraRolagem(dia)
     : '<div style="font-size:10px;color:var(--text-muted);padding:2px 0 8px">—</div>';
   // O bloco inteiro é alvo de soltura: arrastar um card para outro dia na
   // visão Semana é o gesto natural, e sem isto só a faixa de cima aceitava.
