@@ -28165,9 +28165,20 @@ async function escSalvar(silencioso){
     // nada — limpa antes de salvar.
     var dias=(_escMeses[m]||{dias:{}}).dias;
     Object.keys(dias).forEach(function(d){ if(!dias[d]||!dias[d].length) delete dias[d]; });
+    // A lista de etapas EXCLUÍDAS DE PROPÓSITO vai junto. Sem ela, o
+    // documento era gravado só com `dias` e a marca de exclusão morria no
+    // navegador: na releitura seguinte a sincronização não sabia mais que
+    // aquela etapa tinha sido tirada e a recriava — a etapa excluída e
+    // salva reaparecia no quadro e no relatório, que é o relato do Fabiano
+    // ("quero que fique como salvei").
+    var removidos=(_escMeses[m]||{}).removidos||{};
+    Object.keys(removidos).forEach(function(d){
+      if(!removidos[d] || !removidos[d].length) delete removidos[d];
+    });
     try{
       await fbDb.collection('config').doc('escala-'+m).set({
         dias:dias,
+        removidos:removidos,
         atualizadoEm:new Date().toLocaleString('pt-BR'),
         atualizadoPor:(usuarioAtual&&usuarioAtual.nome)||''
       });
