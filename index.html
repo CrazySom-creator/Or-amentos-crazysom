@@ -15177,6 +15177,38 @@ function _gaRegistrarLiberadaNoEnvio(driveId, valor){
 function _gaEnviarEventosParaOrcamento(driveId, form, dadosCompletos, eventosDisp, opcoesToken){
   return _gaEnfileirar(function(){ return _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompletos, eventosDisp, opcoesToken); });
 }
+/* ── O evento da agenda é o do EVENTO, não o de um orçamento ────────────
+   "o sistema não está unificando na agenda google quando tem aditivo, está
+   retirando o evento original e inserindo somente o aditivo."
+
+   A família já dividia o mesmo evento na agenda (ver _gaIdsDaFamilia), mas
+   o CONTEÚDO continuava sendo o do orçamento que mandou: o aditivo
+   reescrevia o evento com os seus próprios itens e o seu próprio número, e
+   o som do orçamento original sumia da descrição.
+
+   A Ordem de Serviço já resolve isto há tempos, com dadosOSComAditivos():
+   parte do orçamento base e soma os itens dos aditivos fechados. O evento
+   da agenda passa a sair da mesma fonte — é o mesmo papel, uma lido na
+   prancheta e outro no celular.                                          */
+async function _gaUnificarFamilia(form, dados){
+  var saida={form:form||{}, dados:dados||{}, entraram:[], fora:[], unificou:false};
+  try{
+    var num=((form||{})['f-num'])||'';
+    if(!num) return saida;
+    var familia=await aditivosCarregarFamilia(_aditivoBaseNum(num), true);
+    if(!familia || !familia.length) return saida;
+    var r=dadosOSComAditivos(form||{}, dados||{}, familia);
+    if(!r || !r.form) return saida;
+    return {form:r.form, dados:r.dados, entraram:r.entraram||[], fora:r.fora||[], unificou:true};
+  }catch(e){
+    // Sem a família, o evento sai com o que este orçamento tem — melhor um
+    // evento incompleto do que nenhum. Quem conferir a agenda vê o número
+    // do orçamento na descrição e sabe de onde veio.
+    console.warn('[Google Agenda] família não unificada:', e&&e.message);
+    return saida;
+  }
+}
+
 async function _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompletos, eventosDisp, opcoesToken){
   if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
   if(!GOOGLE_AGENDA_CONFIG.clientId||!GOOGLE_AGENDA_CONFIG.calendarId){
@@ -15200,8 +15232,16 @@ async function _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompleto
   // base. Sem isto, cada aditivo criava um conjunto novo no mesmo dia.
   var _idsProprios=Object.assign({},idsExistentes);
   idsExistentes=await _gaIdsDaFamilia(driveId, form, dadosCompletos, idsExistentes);
-  var descricao=_gaMontarDescricaoDe(form,(dadosCompletos&&dadosCompletos.state)||{});
-  var enderecoEvento=[form['f-end-ev'],form['f-num-ev'],form['f-bairro-ev'],form['f-cid-ev']].filter(Boolean).join(', ');
+  // O evento é do EVENTO, não deste orçamento: parte do base e soma os
+  // aditivos fechados, igual à Ordem de Serviço.
+  var uni=await _gaUnificarFamilia(form, dadosCompletos);
+  var formEv=uni.form, dadosEv=uni.dados;
+  // Com a família unificada, as datas, o título e a tarja de liberação
+  // também passam a ser os do evento — senão a descrição falaria de um
+  // evento e o horário seria de outro.
+  if(uni.unificou) eventosDisp=_gaEventosDisponiveisDe(formEv, dadosEv);
+  var descricao=_gaMontarDescricaoDe(formEv,(dadosEv&&dadosEv.state)||{});
+  var enderecoEvento=[formEv['f-end-ev'],formEv['f-num-ev'],formEv['f-bairro-ev'],formEv['f-cid-ev']].filter(Boolean).join(', ');
   var resultado=await _gaEnviarListaEventos(eventosDisp,descricao,enderecoEvento,idsExistentes,GOOGLE_AGENDA_CONFIG.calendarId,token);
   var novosIds=resultado.novosIds, erros=resultado.erros;
   var googleAgendaAtualizado=Object.assign({},idsExistentes,novosIds);
@@ -15520,9 +15560,13 @@ async function googleAgendaEnviarOS(){
   try{ token=await googleAgendaObterToken(); }
   catch(e){ driveStatus('⚠️ '+e.message,'err'); return; }
 
-  var descricao=_gaMontarDescricao(await _gaStateDoEvento());
-  var eventosDisp=_gaEventosDisponiveis();
-  var enderecoEvento=[gv('f-end-ev'),gv('f-num-ev'),gv('f-bairro-ev'),gv('f-cid-ev')].filter(Boolean).join(', ');
+  // Mesma regra do envio automático: o evento da agenda é o do EVENTO.
+  // Antes daqui só o STATE era unificado — o número da OS, as datas e o
+  // título continuavam sendo os do aditivo aberto na tela.
+  var _uniM=await _gaUnificarFamilia(getForm(), getDadosCompletos());
+  var descricao=_gaMontarDescricaoDe(_uniM.form,(_uniM.dados&&_uniM.dados.state)||{});
+  var eventosDisp=_uniM.unificou?_gaEventosDisponiveisDe(_uniM.form,_uniM.dados):_gaEventosDisponiveis();
+  var enderecoEvento=[_uniM.form['f-end-ev'],_uniM.form['f-num-ev'],_uniM.form['f-bairro-ev'],_uniM.form['f-cid-ev']].filter(Boolean).join(', ');
   driveStatus('📅 Enviando '+eventosDisp.length+' evento(s) para o Google Agenda...','');
 
   // Fila + leitura dos IDs no último instante (ver _gaEnfileirar): o envio
@@ -15541,7 +15585,12 @@ async function googleAgendaEnviarOS(){
   var erros=resultado.erros;
 
   var googleAgendaAtualizado=Object.assign({},idsExistentes,novosIds);
-  googleAgendaAtualizado.liberadaNoEnvio=montagemLiberada();
+  // O estado de liberação gravado é o do evento que FOI escrito na agenda —
+  // com a família unificada, o do orçamento base. Guardar o do aditivo faria
+  // a conferência seguinte achar que a tarja está errada e reescrever tudo.
+  googleAgendaAtualizado.liberadaNoEnvio=_uniM.unificou
+    ? _montagemLiberadaDe(_uniM.form,_uniM.dados)
+    : montagemLiberada();
   googleAgendaAtualizado.ultimoErro=erros.length?{quando:new Date().toISOString(), itens:erros.slice(0,6)}:null;
   if(driveIdAtual===idOrcamentoEnvio) orcAtualGoogleAgenda=googleAgendaAtualizado;
   try{
