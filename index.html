@@ -2528,6 +2528,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
         <button class="btn btn-r btn-sm" onclick="concAtualizar()" title="Rebusca os orçamentos do Drive antes de recalcular">🔄 Atualizar</button>
         <button class="btn btn-o btn-sm" onclick="concVerificarAoVivo()" title="Confere cada evento já enviado direto no Google Calendar (existe? a data bate?) — pode pedir login do Google">🔎 Verificar ao Vivo</button>
         <button class="btn btn-b btn-sm" id="conc-btn-reenviar" onclick="concReenviarFaltantes()" title="Recria/corrige no Google Agenda os eventos que estão faltando, foram apagados na agenda, estão com a data divergente ou com a tarja de liberação errada">🔁 Reenviar Faltantes</button>
+        <button class="btn btn-b btn-sm" id="conc-btn-sincronizar" onclick="concSincronizarTudo()" title="Reescreve na agenda TODAS as vendas ganhas filtradas com as regras de hoje — unifica os aditivos no evento do orçamento base e tira o EVENTO de quem não tem técnico">🔃 Sincronizar Tudo</button>
         <button class="btn btn-o btn-sm" id="conc-btn-limpar" onclick="concLimparAgendaOrfaos()" title="Procura eventos que continuam no Google Agenda de orçamentos que NÃO estão mais em Venda Ganha (perdidos, standby, em negociação) e remove">🧹 Limpar Agenda</button>
         <button class="btn btn-o btn-sm" onclick="concExportarExcel()" title="Exporta esta listagem para Excel (.csv)">📊 Exportar Excel</button>
         <button class="btn btn-o btn-sm" onclick="document.getElementById('conc-ov').classList.remove('open');voltarDoModulo()">✕</button>
@@ -15196,8 +15197,8 @@ function _gaRegistrarLiberadaNoEnvio(driveId, valor){
   }catch(e){ console.warn('[Google Agenda] _gaRegistrarLiberadaNoEnvio:', e&&e.message); }
 }
 
-function _gaEnviarEventosParaOrcamento(driveId, form, dadosCompletos, eventosDisp, opcoesToken){
-  return _gaEnfileirar(function(){ return _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompletos, eventosDisp, opcoesToken); });
+function _gaEnviarEventosParaOrcamento(driveId, form, dadosCompletos, eventosDisp, opcoesToken, familiaPronta){
+  return _gaEnfileirar(function(){ return _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompletos, eventosDisp, opcoesToken, familiaPronta); });
 }
 /* ── O evento da agenda é o do EVENTO, não o de um orçamento ────────────
    "o sistema não está unificando na agenda google quando tem aditivo, está
@@ -15248,12 +15249,16 @@ async function _gaRemoverFasesObsoletas(driveId, ids, eventosAtuais, token){
   return saiu;
 }
 
-async function _gaUnificarFamilia(form, dados){
+async function _gaUnificarFamilia(form, dados, familiaPronta){
   var saida={form:form||{}, dados:dados||{}, entraram:[], fora:[], unificou:false};
   try{
     var num=((form||{})['f-num'])||'';
     if(!num) return saida;
-    var familia=await aditivosCarregarFamilia(_aditivoBaseNum(num), true);
+    // Numa sincronização em lote a família já vem montada da memória: ir à
+    // nuvem por orçamento transformaria uma varredura de centenas de vendas
+    // em centenas de listagens.
+    var familia=(familiaPronta&&familiaPronta.length)?familiaPronta
+      :await aditivosCarregarFamilia(_aditivoBaseNum(num), true);
     if(!familia || !familia.length) return saida;
     var r=dadosOSComAditivos(form||{}, dados||{}, familia);
     if(!r || !r.form) return saida;
@@ -15267,7 +15272,7 @@ async function _gaUnificarFamilia(form, dados){
   }
 }
 
-async function _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompletos, eventosDisp, opcoesToken){
+async function _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompletos, eventosDisp, opcoesToken, familiaPronta){
   if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
   if(!GOOGLE_AGENDA_CONFIG.clientId||!GOOGLE_AGENDA_CONFIG.calendarId){
     throw new Error('Google Agenda não configurado');
@@ -15292,7 +15297,7 @@ async function _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompleto
   idsExistentes=await _gaIdsDaFamilia(driveId, form, dadosCompletos, idsExistentes);
   // O evento é do EVENTO, não deste orçamento: parte do base e soma os
   // aditivos fechados, igual à Ordem de Serviço.
-  var uni=await _gaUnificarFamilia(form, dadosCompletos);
+  var uni=await _gaUnificarFamilia(form, dadosCompletos, familiaPronta);
   var formEv=uni.form, dadosEv=uni.dados;
   // Com a família unificada, as datas, o título e a tarja de liberação
   // também passam a ser os do evento — senão a descrição falaria de um
@@ -15372,7 +15377,9 @@ async function _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompleto
     if(orcCache&&orcCache.dados){ orcCache.dados.googleAgenda=googleAgendaAtualizado; }
   }
   if(erros.length){ throw new Error(erros.join('; ')); }
-  return {googleAgenda:googleAgendaAtualizado, preReservaRemovida:preReservaRemovida, duplicadosFamilia:_dupFam};
+  return {googleAgenda:googleAgendaAtualizado, preReservaRemovida:preReservaRemovida,
+          duplicadosFamilia:_dupFam, fasesRemovidas:_fasesFora,
+          eventos:(eventosDisp||[]).map(function(e){ return e.tipo; })};
 }
 
 // Notificação flutuante (toast) que funciona em qualquer tela do sistema —
@@ -26886,6 +26893,115 @@ function _concFaltantes(){
     });
     return {it:it, motivos:motivos};
   });
+}
+
+/* ── Sincronizar tudo: a agenda passa a obedecer as regras de hoje ──────
+   "quero que na conciliação de agenda tenha um botão sincronizar para que
+   todas as alterações feitas em todos os orçamentos sejam atualizadas,
+   como essa última modificação sobre não considerar operação quando não
+   houver técnico."
+
+   O "🔁 Reenviar Faltantes" cuida do que está FALTANDO. Este aqui é outra
+   coisa: reescreve o que já existe, para a agenda refletir uma regra que
+   mudou depois de os eventos terem sido criados. Hoje é a operação sem
+   técnico e a unificação dos aditivos; amanhã será outra.
+
+   Uma passada por FAMÍLIA, não por orçamento: base e aditivos dividem os
+   mesmos eventos, então mandar os dois seria escrever duas vezes no mesmo
+   lugar — e cobrar o dobro do Google por nada.                           */
+
+// Agrupa os orçamentos filtrados por número base, com a família inteira
+// vinda da memória (o dashboard já carregou tudo).
+function _concFamiliasFiltradas(){
+  var itens=(window._concLista||[]).filter(function(it){ return it && it.o && it.o.driveId; });
+  var porBase={};
+  itens.forEach(function(it){
+    var base=_gaNumBase(it.o.form);
+    if(!base) base='sem-numero:'+it.o.driveId;
+    (porBase[base]=porBase[base]||[]).push(it.o);
+  });
+  return Object.keys(porBase).map(function(base){
+    // A família completa (inclusive membros fora do filtro) sai de
+    // _dashDados: é ela que a unificação precisa para somar os aditivos.
+    var familia=(_dashDados||[]).filter(function(o){ return _gaNumBase(o.form)===base; })
+      .map(function(o){ return {driveId:o.driveId, nome:o.nome, form:o.form, dados:o.dados}; })
+      .sort(function(a,b){ return _aditivoSeq(a.form['f-num'])-_aditivoSeq(b.form['f-num']); });
+    // Quem representa a família é o orçamento BASE; sem ele (aditivo cujo
+    // original saiu de Venda Ganha), o primeiro da fila.
+    var dono=familia.filter(function(x){ return !_ehAditivoNum(x.form['f-num']); })[0]
+          || porBase[base][0];
+    return {base:base, dono:dono, familia:familia, quantos:porBase[base].length};
+  });
+}
+
+async function concSincronizarTudo(){
+  var grupos=_concFamiliasFiltradas();
+  if(!grupos.length){
+    alert('Não há venda ganha no filtro atual para sincronizar.\n\nAjuste o ano, o mês ou o consultor acima.');
+    return;
+  }
+  var orcamentos=grupos.reduce(function(t,g){ return t+g.quantos; },0);
+  if(!confirm('🔃 SINCRONIZAR TUDO COM A AGENDA\n\n'
+    +grupos.length+' evento(s), de '+orcamentos+' orçamento(s) no filtro atual.\n\n'
+    +'Cada evento é REESCRITO na agenda com as regras de hoje:\n\n'
+    +'• o aditivo entra no evento do orçamento original, somado — não cria evento à parte;\n'
+    +'• evento sem técnico lançado perde o "EVENTO" e fica só com montagem e desmontagem;\n'
+    +'• a descrição é refeita com os itens, as datas e os contatos atuais.\n\n'
+    +'Nada é criado do zero aqui: só os eventos que já existem são corrigidos, e os que faltam '
+    +'continuam com o "🔁 Reenviar Faltantes".\n\n'
+    +'Pode demorar alguns minutos. Continuar?')) return;
+
+  if(!_gaConfigCarregada) await googleAgendaCarregarConfig();
+  if(!GOOGLE_AGENDA_CONFIG.clientId||!GOOGLE_AGENDA_CONFIG.calendarId){
+    alert('⚠️ O Google Agenda ainda não foi configurado (Admin > Google Agenda).');
+    return;
+  }
+
+  var btn=document.getElementById('conc-btn-sincronizar');
+  var txt=btn?btn.innerHTML:'';
+  if(btn){ btn.disabled=true; btn.innerHTML='⏳ Sincronizando...'; }
+  var st=document.getElementById('conc-status');
+
+  var ok=0, semEvento=0, operacaoTirada=[], duplicadosLimpos=0, falhas=[];
+  for(var i=0;i<grupos.length;i++){
+    var g=grupos[i], o=g.dono, f=o.form||{};
+    if(st) st.textContent='🔃 Sincronizando '+(i+1)+' de '+grupos.length+': '+(f['f-cliente']||f['f-num']||'');
+    try{
+      var uni=await _gaUnificarFamilia(o.form||{}, o.dados||{}, g.familia);
+      var evs=_gaEventosDisponiveisDe(uni.form, uni.dados);
+      if(!evs.length){ semEvento++; continue; }
+      // Só corrige quem JÁ tem evento: criar em lote é decisão do
+      // "Reenviar Faltantes", que lista antes o que vai criar.
+      var ids=await _gaIdsGravados(o.driveId);
+      var temAlgum=_GA_CHAVES_EVENTO.some(function(k){ return ids[k]; });
+      if(!temAlgum){ semEvento++; continue; }
+
+      var r=await _gaEnviarEventosParaOrcamento(o.driveId, o.form||{}, o.dados||{}, evs, null, g.familia);
+      ok++;
+      duplicadosLimpos+=(r&&r.duplicadosFamilia)||0;
+      if(r && (r.fasesRemovidas||[]).indexOf('eventoEventId')>=0){
+        operacaoTirada.push((f['f-num']||'')+' '+(f['f-cliente']||''));
+      }
+    }catch(e){
+      falhas.push((f['f-num']||'')+' '+(f['f-cliente']||'')+': '+_gaErroAmigavel(e&&e.message));
+    }
+  }
+
+  if(btn){ btn.disabled=false; btn.innerHTML=txt; }
+  if(st) st.textContent='';
+  await concAtualizar();
+
+  var msg='🔃 SINCRONIZAÇÃO CONCLUÍDA\n\n✅ '+ok+' evento(s) reescrito(s) na agenda.';
+  if(operacaoTirada.length){
+    msg+='\n\n🔧 '+operacaoTirada.length+' perderam o "EVENTO" por não terem técnico lançado '
+      +'(ficaram com montagem e desmontagem):\n\n• '+operacaoTirada.slice(0,12).join('\n• ')
+      +(operacaoTirada.length>12?('\n… e mais '+(operacaoTirada.length-12)):'');
+  }
+  if(duplicadosLimpos) msg+='\n\n🧹 '+duplicadosLimpos+' evento(s) duplicado(s) de aditivo removido(s).';
+  if(semEvento) msg+='\n\nℹ️ '+semEvento+' ainda não tinham evento na agenda — use "🔁 Reenviar Faltantes" para criá-los.';
+  if(falhas.length) msg+='\n\n⚠️ Não foi possível sincronizar:\n\n• '+falhas.slice(0,10).join('\n• ')
+    +(falhas.length>10?('\n… e mais '+(falhas.length-10)):'');
+  alert(msg);
 }
 
 async function concReenviarFaltantes(){
