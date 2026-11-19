@@ -5516,12 +5516,32 @@ function atualizarAvisoDatasOrc(){
     }
   }
   var p=_logDatasInconsistentes(_datasDoOrcAberto());
-  if(!p.length){ el.style.display='none'; el.innerHTML=''; return; }
+  var nota=_avisoSemOperacao();
+  if(!p.length && !nota){ el.style.display='none'; el.innerHTML=''; return; }
   el.style.display='';
-  el.innerHTML='<b>⚠️ Confira as datas</b> — '
-    +p.map(function(x){ return eh(x); }).join('; ')
-    +'.<div style="font-size:10px;color:var(--text-dim);margin-top:3px">'
-    +'O orçamento salva assim mesmo, mas com data trocada ele ocupa a agenda no período errado — e a equipe trabalha pela OS.</div>';
+  el.innerHTML=(p.length
+      ? '<b>⚠️ Confira as datas</b> — '
+        +p.map(function(x){ return eh(x); }).join('; ')
+        +'.<div style="font-size:10px;color:var(--text-dim);margin-top:3px">'
+        +'O orçamento salva assim mesmo, mas com data trocada ele ocupa a agenda no período errado — e a equipe trabalha pela OS.</div>'
+      : '')
+    +nota;
+}
+
+// Explica, no próprio orçamento, por que o dia do evento não vai virar
+// card na Logística. Sem isto, "cadê meu evento na escala?" viraria
+// mistério — e o desconfiado é sempre o sistema.
+function _avisoSemOperacao(){
+  try{
+    if(!gv('f-dia')) return '';
+    if(!gv('f-dm') && !gv('f-dd')) return '';
+    if(_logTemTecnico({form:getForm(), dados:{state:state}})) return '';
+    return '<div style="font-size:10.5px;color:#90caf9;margin-top:'+(gv('f-dia')?'4px':'0')+'">'
+      +'🔧 <b>Sem técnico lançado</b> — este evento entra na Agenda e na Logística só pela '
+      +'<b>montagem</b> e pela <b>desmontagem</b>, e o "EVENTO" não é criado no Google Agenda. '
+      +'É o caso do equipamento que fica instalado e ninguém opera. '
+      +'Lançando um item de Serviço (técnico, operador, auxiliar), os dias do evento voltam a contar como operação.</div>';
+  }catch(e){ return ''; }
 }
 
 // Ponto único: aviso + limites do seletor. Chamado por todos os seis campos
@@ -14445,7 +14465,9 @@ function _gaEventosDisponiveis(){
     if(dmFim&&dmFim!==gv('f-dm')){ evM.fim=dmFim+'T23:59:00'; } else { evM.duracaoHoras=2; }
     eventos.push(evM);
   }
-  if(gv('f-dia')){
+  // Sem técnico não há operação — ver _logEventoEhOperacao(). O equipamento
+  // instalado por dias entra na agenda pela montagem e pela desmontagem.
+  if(gv('f-dia') && _logEventoEhOperacao({form:getForm(), dados:{state:state}})){
     var fimE=gv('f-dia-fim')||gv('f-dia');
     eventos.push({tipo:'evento',summary:'EVENTO: '+titulo,colorId:corEvento,eventLabelId:labelEvento,inicio:gv('f-dia')+'T'+(gv('f-hi')||'08:00')+':00',fim:fimE+'T'+(gv('f-hf')||'23:59')+':00'});
   }
@@ -14732,7 +14754,7 @@ function _gaEventosDisponiveisDe(form, dadosCompletos){
     if(dmFim&&dmFim!==form['f-dm']){ evM.fim=dmFim+'T23:59:00'; } else { evM.duracaoHoras=2; }
     eventos.push(evM);
   }
-  if(form['f-dia']){
+  if(form['f-dia'] && _logEventoEhOperacao({form:form, dados:dadosCompletos||{}})){
     var fimE=form['f-dia-fim']||form['f-dia'];
     eventos.push({tipo:'evento',summary:'EVENTO: '+titulo,colorId:corEvento,eventLabelId:labelEvento,inicio:form['f-dia']+'T'+(form['f-hi']||'08:00')+':00',fim:fimE+'T'+(form['f-hf']||'23:59')+':00'});
   }
@@ -15190,6 +15212,42 @@ function _gaEnviarEventosParaOrcamento(driveId, form, dadosCompletos, eventosDis
    parte do orçamento base e soma os itens dos aditivos fechados. O evento
    da agenda passa a sair da mesma fonte — é o mesmo papel, uma lido na
    prancheta e outro no celular.                                          */
+/* Fase que deixou de existir sai da agenda. Hoje acontece com a operação
+   de um evento sem técnico (ver _logEventoEhOperacao), mas vale para
+   qualquer fase cuja data foi apagada do orçamento: um evento que ninguém
+   mais vai cumprir, parado na agenda da empresa, é pior do que nenhum.
+
+   Só age quando a lista de fases ATUAIS não está vazia — lista vazia é
+   sinal de que algo falhou antes, e nesse caso apagar tudo seria o erro
+   mais caro possível.                                                    */
+var _GA_CHAVES_FASE={montagem:'montagemEventId', evento:'eventoEventId', desmontagem:'desmontagemEventId'};
+
+async function _gaRemoverFasesObsoletas(driveId, ids, eventosAtuais, token){
+  if(!eventosAtuais || !eventosAtuais.length) return [];
+  var tipos={};
+  eventosAtuais.forEach(function(ev){ tipos[ev.tipo]=true; });
+  var saiu=[];
+  var fases=Object.keys(_GA_CHAVES_FASE);
+  for(var i=0;i<fases.length;i++){
+    var fase=fases[i], chave=_GA_CHAVES_FASE[fase];
+    if(tipos[fase]) continue;
+    var id=(ids||{})[chave];
+    if(!id) continue;
+    try{
+      await _gaExcluirEvento(GOOGLE_AGENDA_CONFIG.calendarId, id, token);
+      saiu.push(chave);
+    }catch(e){ console.warn('[Google Agenda] fase obsoleta não removida:', e&&e.message); }
+  }
+  if(saiu.length && driveId){
+    try{
+      var upd={};
+      saiu.forEach(function(k){ upd['googleAgenda.'+k]=firebase.firestore.FieldValue.delete(); });
+      await fbDb.collection('orcamentos').doc(driveId).update(upd);
+    }catch(e){ console.warn('[Google Agenda] ids de fase obsoleta não limpos:', e&&e.message); }
+  }
+  return saiu;
+}
+
 async function _gaUnificarFamilia(form, dados){
   var saida={form:form||{}, dados:dados||{}, entraram:[], fora:[], unificou:false};
   try{
@@ -15274,6 +15332,18 @@ async function _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompleto
     }
     delete googleAgendaAtualizado.preReservaEventId;
   }
+
+  // Só dá para dizer que uma fase não existe mais quando se está olhando o
+  // EVENTO inteiro. Num aditivo cuja família não carregou, a lista é só a
+  // dele — e um aditivo de vídeo sem técnico pediria a remoção do "EVENTO"
+  // do orçamento base. Apagar evento por causa de uma falha de rede é o
+  // pior desfecho possível, então aqui não se apaga nada.
+  var _fasesFora=[];
+  if(uni.unificou || !_gaEhAditivo(form, dadosCompletos)){
+    try{ _fasesFora=await _gaRemoverFasesObsoletas(driveId, googleAgendaAtualizado, eventosDisp, token); }
+    catch(e){ console.warn('[Google Agenda] fases obsoletas:',e&&e.message); }
+  }
+  _fasesFora.forEach(function(k){ delete googleAgendaAtualizado[k]; });
 
   await fbDb.collection('orcamentos').doc(driveId).set({googleAgenda:googleAgendaAtualizado},{merge:true});
   await _gaEspelharNoDono(driveId, form, dadosCompletos, googleAgendaAtualizado);
@@ -15604,8 +15674,13 @@ async function googleAgendaEnviarOS(){
   }catch(e){
     erros.push('Não foi possível salvar os IDs dos eventos no orçamento: '+e.message);
   }
-  var dupFamilia=0;
+  var dupFamilia=0, fasesFora=[];
   try{
+    if(_uniM.unificou || !_gaEhAditivo(_formEnvio,_dadosEnvio)){
+      fasesFora=await _gaRemoverFasesObsoletas(idOrcamentoEnvio, googleAgendaAtualizado, eventosDisp, token);
+    }
+    fasesFora.forEach(function(k){ delete googleAgendaAtualizado[k]; });
+    if(driveIdAtual===idOrcamentoEnvio) orcAtualGoogleAgenda=googleAgendaAtualizado;
     await _gaEspelharNoDono(idOrcamentoEnvio,_formEnvio,_dadosEnvio,googleAgendaAtualizado);
     dupFamilia=await _gaLimparDuplicadosDaFamilia(idOrcamentoEnvio,_formEnvio,_dadosEnvio,googleAgendaAtualizado,token,_idsProprios);
   }catch(e){ console.warn('[Google Agenda] família:',e&&e.message); }
@@ -15614,6 +15689,10 @@ async function googleAgendaEnviarOS(){
   if(dupFamilia){
     ajustes.push(dupFamilia+' evento(s) que o aditivo tinha criado por fora foram removidos da agenda — '
       +'a família inteira passa a usar os mesmos eventos do orçamento '+eh(_gaNumBase(_formEnvio))+'.');
+  }
+  if(fasesFora.indexOf('eventoEventId')>=0){
+    ajustes.push('O evento "EVENTO" saiu da agenda: sem técnico lançado não há operação — '
+      +'o período fica marcado pela montagem e pela desmontagem.');
   }
   if(erros.length){
     driveStatus('⚠️ Enviado com '+erros.length+' erro(s).','err');
@@ -27302,6 +27381,57 @@ function _logDatasInconsistentes(f){
 // parava na primeira que casasse — então nesse dia a desmontagem ficava
 // invisível, e filtrar por "Desmontagem" não trazia o evento (bug relatado:
 // evento com desmontagem em 24/10 não aparecia na Logística daquele dia).
+/* ── Evento sem técnico não é operação ──────────────────────────────────
+   "quero que quando não tenha nenhum técnico o sistema não considere
+   operação nem na agenda nem na logística, porque fica sujando a
+   informação. Deve constar somente na data de montagem e desmontagem.
+   Existem eventos que instalamos equipamentos e ficam por períodos
+   maiores mas sem operação."
+
+   É o caso do equipamento que fica instalado por dias: tem montagem, tem
+   desmontagem, e no meio não vai ninguém. Marcar esses dias como operação
+   enchia a Logística de cards vazios e a Agenda de eventos sem equipe —
+   e, pior, escondia os dias em que de fato há gente trabalhando.
+
+   O que define operação é ter GENTE no local: um item da seção Serviço.
+   Papel não conta — laudo, ART, projeto, consultoria, taxa e seguro saem
+   da seção Serviço mas não botam ninguém no evento. Qualquer serviço novo
+   cadastrado na Tabela de Preços conta como gente, que é o caso comum.   */
+var LOG_SERVICO_SEM_GENTE=/laudo|\bart\b|projeto|consultoria|assessoria|taxa|seguro|licenc|alvar/i;
+
+function _logItensServico(dados){
+  var st=(dados&&dados.state)||{};
+  var sec=st.servico;
+  if(!sec) return [];
+  var out=[];
+  (sec.ambientes||[{id:'default'}]).forEach(function(a){
+    (sec.rows[a.id]||[]).forEach(function(r){
+      if(!r || !r.name) return;
+      if((parseFloat(r.qty)||0)<=0) return;
+      out.push(r.name);
+    });
+  });
+  return out;
+}
+
+// Tem alguém da equipe técnica neste evento?
+function _logTemTecnico(o){
+  var dados=(o&&o.dados)||o||{};
+  return _logItensServico(dados).some(function(nome){
+    return !LOG_SERVICO_SEM_GENTE.test(String(nome));
+  });
+}
+
+// A fase de operação só existe quando há técnico — e só é retirada quando
+// sobra alguma outra fase. Um orçamento que só tem a data do evento
+// continua aparecendo: sumir da Logística seria pior do que aparecer sem
+// equipe.
+function _logEventoEhOperacao(o){
+  if(_logTemTecnico(o)) return true;
+  var f=(o&&o.form)||{};
+  return !f['f-dm'] && !f['f-dd'];
+}
+
 function _logFasesNoDia(o,diaISO){
   var f=(o&&o.form)||{};
   var fases=[];
@@ -27309,7 +27439,7 @@ function _logFasesNoDia(o,diaISO){
     var dmFim=f['f-dm-fim']||f['f-dm'];
     if(diaISO>=f['f-dm']&&diaISO<=dmFim) fases.push('montagem');
   }
-  if(f['f-dia']){
+  if(f['f-dia'] && _logEventoEhOperacao(o)){
     var diaFim=f['f-dia-fim']||f['f-dia'];
     if(diaISO>=f['f-dia']&&diaISO<=diaFim) fases.push('evento');
   }
