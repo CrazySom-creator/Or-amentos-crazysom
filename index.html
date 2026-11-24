@@ -13799,23 +13799,69 @@ function downloadPDF(){
     +'#pw{width:'+areaUtil+'px;overflow:hidden}'
     +'.pdf-page{width:'+areaUtil+'px!important;overflow:hidden}'
     +'table{table-layout:fixed;word-break:break-word}'
+    // O cabeçalho da coluna não pode quebrar: com table-layout:fixed e
+    // word-break ligado, "QTD" virava "QT / D" em duas linhas.
+    +'table th{word-break:normal;white-space:nowrap}'
     +'#st{position:fixed;top:0;left:0;right:0;background:#d63447;color:#fff;text-align:center;padding:12px;font-family:Arial;font-size:13px;font-weight:bold;z-index:9999}'
     +'</style>'
     +'<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>'
     +'</head><body>'
     +'<div id="st">Gerando PDF, aguarde...</div>'
-    +'<div id="pw" style="margin-top:44px">'+html+'</div>'
+    // A folga da tarja "Gerando PDF" fica num espaçador à parte, nunca
+    // como margem do #pw: o html2pdf clona o elemento com os estilos dele
+    // e a margem entrava na conta da altura, empurrando o fim da proposta
+    // para uma segunda página quase vazia.
+    +'<div style="height:44px"></div>'
+    +'<div id="pw">'+html+'</div>'
     +'<script>'
     +'window.onload=function(){'
     +'setTimeout(function(){'
     +'var pw=document.getElementById("pw");'
+    /* ── Ajustar para caber na folha ────────────────────────────────────
+       O html2pdf encaixa a LARGURA do elemento na largura útil da página.
+       Então alargar o elemento é o mesmo que reduzir o zoom: o texto
+       reflui, o conteúdo encurta e tudo entra numa folha só.
+
+       É o que o navegador faz sozinho ao imprimir, e é o que faltava
+       aqui: a proposta do 20266797 passava da folha por 15px (1,4%) e a
+       forma de pagamento ia inteira para uma segunda página, deixando
+       meia folha em branco — o "orçamento desconfigurado".
+
+       Até 1,3x de ajuste (uns 77% de zoom) ainda sai legível; acima
+       disso a proposta merece mesmo duas páginas e nada é forçado.     */
+    // 276 e não 281 (a altura útil real): o html2canvas arredonda a altura
+    // do canvas para cima, e sem essa folga de ~2% a proposta "cabia" pela
+    // minha conta e o html2pdf ainda assim abria uma segunda página só
+    // para o rodapé.
+    +'var LARG0='+areaUtil+', ALTURA_MM=276, LARG_MM=190, LIMITE=1.3;'
+    +'function alturaMm(w){ pw.style.width=w+"px"; return pw.scrollHeight*(LARG_MM/w); }'
+    +'var larg=LARG0;'
+    +'for(var i=0;i<4;i++){'
+    +'  var h=alturaMm(larg);'
+    +'  if(h<=ALTURA_MM) break;'
+    +'  var fator=h/ALTURA_MM;'
+    +'  if(larg*fator>LARG0*LIMITE){ larg=LARG0; alturaMm(larg); break; }'
+    +'  larg=Math.min(larg*fator*1.01, LARG0*LIMITE);'
+    +'}'
+    +'document.documentElement.style.width=larg+"px";'
+    +'document.body.style.width=larg+"px";'
+    +'pw.style.width=larg+"px";'
     +'var opt={'
     +'margin:[8,10,8,10],'
     +'filename:"'+nomeArq+'.pdf",'
     +'image:{type:"jpeg",quality:1},'
-    +'html2canvas:{scale:2,useCORS:true,logging:false,backgroundColor:"#ffffff",windowWidth:'+areaUtil+',width:'+areaUtil+'},'
+    +'html2canvas:{scale:2,useCORS:true,logging:false,backgroundColor:"#ffffff",windowWidth:larg,width:larg},'
     +'jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},'
-    +'pagebreak:{mode:"avoid-all"}'
+    // "avoid-all" recusa quebrar QUALQUER elemento: um bloco que não cabe
+    // inteiro no resto da folha é jogado por completo para a página
+    // seguinte. Era o que deixava a proposta com uma segunda página
+    // contendo só o quadro de totais e a forma de pagamento, com meia
+    // folha em branco acima — o "orçamento desconfigurado" do relato.
+    // Agora as regras de CSS mandam: as tabelas podem quebrar ENTRE LINHAS
+    // (cada <tr> continua inteiro), e só os blocos que não fazem sentido
+    // partidos — a caixa do cliente, a do evento, a forma de pagamento e
+    // as observações — são mantidos de uma peça.
+    +'pagebreak:{mode:["css","legacy"],avoid:["tr",".clibox",".evpbox",".pgto-pdf",".obs-pdf",".psec",".ambhdr"]}'
     +'};'
     +'html2pdf().set(opt).from(pw).save().then(function(){'
     +'document.getElementById("st").style.background="#2e7d32";'
