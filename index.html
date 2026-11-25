@@ -8308,6 +8308,18 @@ function _comExtDisponivel(){ return _comExtPctConsultor()>0 || comExtPct>0; }
 // Percentual que vale para ESTE orçamento.
 function _comExtPctVigente(){ return comExtPct || _comExtPctConsultor(); }
 
+/* Quem enxerga e mexe no percentual de comissão: gerência, diretoria e
+   administração. Decisão do Fabiano — é informação de gestão, e quem
+   recebe a comissão não decide quanto ela é.
+
+   O percentual continua sendo APLICADO aos itens para todo mundo: ele
+   está embutido no preço desde o lançamento. O que o consultor deixa de
+   ver é o painel, não o efeito.                                          */
+function _comExtPodeVer(){
+  if(!usuarioAtual) return false;
+  return ['gerente','diretor','adm'].indexOf(usuarioAtual.nivel)>=0;
+}
+
 function _comExtNomeConsultor(){
   var u=_comExtConsultorDoOrc();
   var n=(u&&u.nome)||'';
@@ -9837,12 +9849,12 @@ function _comExtTemLinhasAntigas(){
 function renderComissaoExterna(){
   var box=document.getElementById('com-ext-box');
   if(!box) return;
-  if(!_comExtDisponivel()){ box.style.display='none'; return; }
+  if(!_comExtDisponivel() || !_comExtPodeVer()){ box.style.display='none'; box.innerHTML=''; return; }
   var pct=_comExtPctVigente();
   box.style.display='block';
-  var souEu=(usuarioAtual && usuarioAtual.cargo==='Consultor Externo'
-             && _comExtPctUsuario()>0 && !gv('f-cons'));
-  var rotulo=souEu?'minha comissão':('a comissão de '+eh(_comExtNomeConsultor()));
+  // Quem vê este painel é sempre gerência/diretoria, nunca o consultor:
+  // a comissão é sempre "a de fulano".
+  var rotulo='a comissão de '+eh(_comExtNomeConsultor());
   var padrao=_comExtPctConsultor();
   var mudado=(comExtPct>0 && padrao>0 && Math.abs(comExtPct-padrao)>0.004);
 
@@ -9891,6 +9903,7 @@ function comExtTrocouConsultor(){
    Só vale aqui dentro: mexer no cadastro do Admin mudaria o padrão do
    consultor em tudo o que vier depois, e o acerto costuma ser por evento. */
 function comExtMudarPct(valor){
+  if(!_comExtPodeVer()){ renderComissaoExterna(); return; }
   var txt=String(valor==null?'':valor).trim();
   // Campo vazio ou rabisco não decide nada: redesenha e devolve o número
   // que estava valendo. Zerar comissão por um apagão de digitação seria o
@@ -9930,6 +9943,7 @@ function _comExtFmtPct(p){
 }
 
 function comExtMudar(ligada){
+  if(!_comExtPodeVer()){ renderComissaoExterna(); return; }
   var antigas=_comExtTemLinhasAntigas();
   if(!ligada && antigas>0){
     if(!confirm('⚠️ '+antigas+' item(ns) deste orçamento foram lançados antes deste controle.\n\n'
