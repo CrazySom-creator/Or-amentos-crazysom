@@ -3504,7 +3504,7 @@ tr.fk-linha-alterada td{border-top:1px solid #ffb74d;border-bottom:1px solid #ff
     <div><label>Validade</label><input type="date" id="f-val" oninput="marcarAlterado()"></div>
     <div><label>Consultor</label>
       <div style="display:flex;gap:6px">
-        <select id="f-cons" onchange="marcarAlterado()" style="flex:1"><option value="">Selecione...</option></select>
+        <select id="f-cons" onchange="marcarAlterado();comExtTrocouConsultor()" style="flex:1"><option value="">Selecione...</option></select>
         <button type="button" class="btn btn-o btn-sm" onclick="transferAbrirIndividualAtual()" title="Transferir este orçamento para outro consultor, mantendo todo o histórico" style="white-space:nowrap;padding:6px 9px;font-size:12px">🔄</button>
       </div>
     </div>
@@ -8269,15 +8269,57 @@ function _comExtPctUsuario(){
   if(usuarioAtual && usuarioAtual.cargo==='Consultor Externo') return Number(usuarioAtual.comissaoPercentual)||0;
   return 0;
 }
-function _comExtDisponivel(){ return _comExtPctUsuario()>0; }
+
+/* A comissão é do CONSULTOR DO ORÇAMENTO, não de quem está com ele aberto.
+
+   Antes, o percentual saía do usuário logado. Isso escondia o painel de
+   todo mundo que não fosse o próprio consultor externo — e, pior, um item
+   lançado pelo gerente no orçamento do Luiz entrava SEM a comissão, porque
+   para o gerente o percentual era zero. O orçamento ficava com metade dos
+   itens comissionados e metade não, sem ninguém perceber.                */
+function _comExtConsultorDoOrc(){
+  var nome='';
+  try{ nome=(gv('f-cons')||'').trim(); }catch(e){}
+  if(!nome) return null;
+  var alvo=(typeof _normalizarNomeItem==='function')?_normalizarNomeItem(nome):nome.toLowerCase();
+  var lista=(typeof USUARIOS!=='undefined'&&USUARIOS)?USUARIOS:[];
+  for(var i=0;i<lista.length;i++){
+    var u=lista[i];
+    var n=(typeof _normalizarNomeItem==='function')?_normalizarNomeItem(u.nome||''):String(u.nome||'').toLowerCase();
+    if(n===alvo) return u;
+  }
+  return null;
+}
+
+// O percentual de fábrica do consultor deste orçamento (o do cadastro).
+function _comExtPctConsultor(){
+  var u=_comExtConsultorDoOrc();
+  if(u) return (u.cargo==='Consultor Externo')?(Number(u.comissaoPercentual)||0):0;
+  // Orçamento novo, com o campo de consultor ainda vazio: vale o de quem
+  // está montando, que é o caso do próprio consultor externo.
+  return _comExtPctUsuario();
+}
+
+// O painel aparece quando o consultor do orçamento é externo — e também
+// quando o orçamento JÁ tem um percentual gravado, senão um acerto feito
+// aqui sumiria da tela se o cadastro do consultor mudasse depois.
+function _comExtDisponivel(){ return _comExtPctConsultor()>0 || comExtPct>0; }
+
 // Percentual que vale para ESTE orçamento.
-function _comExtPctVigente(){ return comExtPct || _comExtPctUsuario(); }
+function _comExtPctVigente(){ return comExtPct || _comExtPctConsultor(); }
+
+function _comExtNomeConsultor(){
+  var u=_comExtConsultorDoOrc();
+  var n=(u&&u.nome)||'';
+  try{ if(!n) n=(gv('f-cons')||''); }catch(e){}
+  return n||'o consultor';
+}
 function _comExtSecRecebe(sec){ return !COM_EXT_SECS_FORA[sec]; }
 
 function precoComMarkup(v, sec){
   if(sec!==undefined && !_comExtSecRecebe(sec)) return v;
   if(!comExtAtiva) return v;
-  var pct=_comExtPctUsuario();
+  var pct=_comExtPctVigente();
   if(!pct) return v;
   return v*(1+pct/100);
 }
@@ -9741,7 +9783,7 @@ function addRow(s,name,val,custom){
   var st=state[s],aid=st.ambAtiva;if(!st.rows[aid])st.rows[aid]=[];
   var painel=s==='video'&&isPainel(name),palco=s==='estrutura'&&isPalco(name);
   var dAuto=s==='servico'?getDiasEvento():s==='logistica'?1:getDiariasEquip();
-  var _pctN=(comExtAtiva && _comExtSecRecebe(s))?_comExtPctUsuario():0;
+  var _pctN=(comExtAtiva && _comExtSecRecebe(s))?_comExtPctVigente():0;
   var _baseN=_pctN?((parseFloat(val)||0)/(1+_pctN/100)):(parseFloat(val)||0);
   st.rows[aid].push({id:uid(),name:name,val:val,valBase:_baseN,comPct:_pctN,qty:1,diaria:dAuto,diaria_auto:true,custom:custom,painel:painel,larg:painel?3:palco?4:null,alt:painel?2:null,prof:palco?2:null,elev:painel?0:null,elObj:palco?ELEV[0]:null,palco:palco,carp:palco?false:null,carpT:palco?'novo':null,carpC:palco?'':null,marg:20});
   renderRows(s);calc();marcarAlterado();
@@ -9762,7 +9804,7 @@ function comExtRecalcular(){
         if(r.valBase===undefined || r.valBase===null){
           // Linha antiga: o que está embutido tem que ser deduzido do que o
           // sistema fazia antes — comissão em todas as seções.
-          var pctEmbutido=(_comExtPctUsuario()||pct);
+          var pctEmbutido=(pct||_comExtPctUsuario());
           r.valBase=pctEmbutido?(valAtual/(1+pctEmbutido/100)):valAtual;
           r.comPct=pctEmbutido;
           deduzidas++;
@@ -9798,17 +9840,89 @@ function renderComissaoExterna(){
   if(!_comExtDisponivel()){ box.style.display='none'; return; }
   var pct=_comExtPctVigente();
   box.style.display='block';
+  var souEu=(usuarioAtual && usuarioAtual.cargo==='Consultor Externo'
+             && _comExtPctUsuario()>0 && !gv('f-cons'));
+  var rotulo=souEu?'minha comissão':('a comissão de '+eh(_comExtNomeConsultor()));
+  var padrao=_comExtPctConsultor();
+  var mudado=(comExtPct>0 && padrao>0 && Math.abs(comExtPct-padrao)>0.004);
+
   box.innerHTML='<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">'
     +'<input type="checkbox" id="chk-com-ext" '+(comExtAtiva?'checked':'')+' onchange="comExtMudar(this.checked)" style="width:15px;height:15px;accent-color:var(--R);cursor:pointer;flex:none">'
     +'<span style="font-size:11.5px;font-weight:700;color:'+(comExtAtiva?'var(--text)':'var(--text-dim)')+'">'
-      +'Aplicar minha comissão de '+_comExtFmtPct(pct)+'% nos itens</span>'
+      +'Aplicar '+rotulo+' nos itens</span>'
     +'</label>'
+    // O percentual é editável AQUI: o acerto muda de evento para evento, e
+    // ir ao Admin trocaria o padrão do consultor em todos os orçamentos.
+    +'<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:7px">'
+      +'<span style="font-size:10.5px;color:var(--text-dim)">Percentual neste orçamento</span>'
+      +'<input type="number" id="com-ext-pct" step="0.1" min="0" max="100" value="'+(Math.round(pct*100)/100)+'" '
+        +'onchange="comExtMudarPct(this.value)" '
+        +(comExtAtiva?'':'disabled ')
+        +'style="width:86px;padding:5px 8px;font-size:11.5px;text-align:right;background:var(--surface);'
+        +'border:1px solid '+(mudado?'#ffb74d':'var(--border-strong)')+';border-radius:4px;'
+        +'color:'+(mudado?'#e65100':'var(--text)')+';font-weight:'+(mudado?'800':'600')+'">'
+      +'<span style="font-size:11.5px;color:var(--text-dim)">%</span>'
+      +(mudado
+        ? '<span style="font-size:10px;color:#e65100;font-weight:700">acertado só para este evento '
+          +'(cadastro: '+_comExtFmtPct(padrao)+'%)</span>'
+          +'<span onclick="comExtMudarPct('+padrao+')" title="Voltar ao percentual do cadastro" '
+          +'style="cursor:pointer;text-decoration:underline;color:#90caf9;font-size:10px">voltar ao padrão</span>'
+        : '')
+    +'</div>'
     +'<div style="font-size:10px;color:var(--text-dim);margin-top:4px;line-height:1.5">'
     +(comExtAtiva
       ? 'Os itens estão com os '+_comExtFmtPct(pct)+'% somados. <b>Desmarque</b> quando o valor deste evento foi acordado sem a comissão — todos os itens já lançados são recalculados na hora.'
       : '<b style="color:#e65100">Comissão desligada neste orçamento.</b> Os itens estão pelo preço de tabela. Marque de volta para somar os '+_comExtFmtPct(pct)+'% outra vez.')
     +'<br>💰 <b>Custos Extra nunca recebem a comissão</b>, marcada ou não.'
+    +'<br>O percentual mudado aqui vale <b>só para este orçamento</b>; o cadastro do consultor no Admin não muda.'
     +'</div>';
+}
+
+/* Trocar o consultor troca de quem é a comissão. Enquanto o orçamento não
+   tem percentual próprio gravado, o painel passa a mostrar o do consultor
+   novo; com percentual já acertado aqui, ele é mantido e a tela avisa que
+   difere do cadastro.                                                     */
+function comExtTrocouConsultor(){
+  try{ renderComissaoExterna(); }catch(e){}
+}
+
+/* Troca o percentual deste orçamento e recalcula os itens na hora.
+
+   Só vale aqui dentro: mexer no cadastro do Admin mudaria o padrão do
+   consultor em tudo o que vier depois, e o acerto costuma ser por evento. */
+function comExtMudarPct(valor){
+  var txt=String(valor==null?'':valor).trim();
+  // Campo vazio ou rabisco não decide nada: redesenha e devolve o número
+  // que estava valendo. Zerar comissão por um apagão de digitação seria o
+  // pior desfecho possível.
+  if(txt===''){ renderComissaoExterna(); return; }
+  var novo=parseFloat(txt);
+  if(isNaN(novo)){ renderComissaoExterna(); return; }
+  if(novo<0) novo=0;
+  if(novo>100) novo=100;
+  // 0% é o mesmo que não ter comissão: usa o controle que já existe, senão
+  // o campo mostraria 0 e o sistema continuaria somando o do cadastro.
+  if(novo===0){ comExtMudar(false); return; }
+  var antes=_comExtPctVigente();
+  if(Math.abs(novo-antes)<=0.004){ renderComissaoExterna(); return; }
+
+  var antigas=_comExtTemLinhasAntigas();
+  if(antigas>0 && !confirm('⚠️ '+antigas+' item(ns) deste orçamento foram lançados antes deste controle.\n\n'
+    +'Para trocar o percentual, o sistema precisa considerar que eles INCLUEM a comissão de '
+    +_comExtFmtPct(antes)+'% e refazer a conta a partir do preço limpo.\n\n'
+    +'Se não for o caso, os valores vão sair errados — confira os itens depois.\n\nContinuar?')){
+    renderComissaoExterna();
+    return;
+  }
+
+  comExtPct=novo;
+  var r=comExtRecalcular();
+  SECS.forEach(function(sec){ try{ renderRows(sec); }catch(e){} });
+  calc();
+  renderComissaoExterna();
+  marcarAlterado();
+  _toastMostrar('✅ Comissão deste orçamento: '+_comExtFmtPct(novo)+'%',
+    r.mudou+' item(ns) recalculado(s). O cadastro do consultor não mudou.', 6000);
 }
 function _comExtFmtPct(p){
   var n=Number(p)||0;
@@ -9828,7 +9942,7 @@ function comExtMudar(ligada){
     }
   }
   comExtAtiva=!!ligada;
-  if(!comExtPct) comExtPct=_comExtPctUsuario();
+  if(!comExtPct) comExtPct=_comExtPctConsultor();
   var r=comExtRecalcular();
   SECS.forEach(function(sec){ try{ renderRows(sec); }catch(e){} });
   calc();
@@ -10032,7 +10146,7 @@ function updRow(s,aid,id,field,val){
     // Guarda o preço limpo junto, pra caixa de comissão poder ligar/desligar
     // depois sem ter que adivinhar o que estava embutido.
     if(field==='val'){
-      var pctR=(comExtAtiva && _comExtSecRecebe(s))?_comExtPctUsuario():0;
+      var pctR=(comExtAtiva && _comExtSecRecebe(s))?_comExtPctVigente():0;
       r.valBase=pctR?(parsed/(1+pctR/100)):parsed;
       r.comPct=pctR;
     }
