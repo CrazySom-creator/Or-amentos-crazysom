@@ -28749,11 +28749,29 @@ function escAcharCard(id){
 
 /* ── Abrir / navegar ────────────────────────────────────────────────────── */
 
+// Abrir o módulo tem de mostrar o que está no banco AGORA. O escFechar() limpa
+// a memória, mas ele só roda no "✕": saindo pelo voltar, pelo Esc ou abrindo
+// outra tela por cima, o .open é removido sem passar por ele e a escala antiga
+// ficava em memória — na reabertura o escCarregarTudo() via _escTudoCarregado
+// e não lia nada, então o que outra pessoa gravou só aparecia depois do
+// 🔄 Atualizar. Aqui o cache é descartado na abertura; os meses com alteração
+// ainda não salva ficam, para ninguém perder o que estava montando.
+function _escDescartarCacheNaAbertura(){
+  var sujos=Object.keys(_escSujos||{});
+  _escTudoCarregado=false;         // força a releitura do banco
+  if(!sujos.length){ _escMeses={}; return 0; }
+  var mantidos={};
+  sujos.forEach(function(m){ if(_escMeses[m]) mantidos[m]=_escMeses[m]; });
+  _escMeses=mantidos;              // escCarregarTudo não sobrescreve estes
+  return sujos.length;
+}
+
 async function abrirEscala(){
   if(_moduloBloqueado('mod-escala')) return;
   _abrirOv('esc-ov');
   document.getElementById('esc-sub').textContent='Carregando...';
   if(!_escData) _escData=_logISO(new Date());
+  var _mantidos=_escDescartarCacheNaAbertura();
   await escCarregarCadastros();
   // true, não false: com o cache a Logística mostrava a versão antiga dos
   // orçamentos. Foi o que aconteceu com o 20266654 — o Fabiano corrigiu a
@@ -28765,6 +28783,7 @@ async function abrirEscala(){
   var _sinc=await _escSincronizarEGravar();
   _escAtualizarSub();
   if(_sinc.criados) _toastMostrar('⚡ '+_sinc.criados+' etapa(s) da Agenda entraram na escala, em '+_sinc.dias+' dia(s).','',7000);
+  if(_mantidos) _toastMostrar('⚠️ '+_mantidos+' mês(es) com alteração ainda não salva ficou como você deixou — salve para não perder.','',8000);
   escAba('quadro');
   // Abre já com o dia à vista no período — é o recorte mais comum. Depois o
   // usuário alarga para semana/mês e a escolha dele fica: navegar o dia não
