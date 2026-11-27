@@ -15452,19 +15452,10 @@ async function _gaEnviarEventosParaOrcamentoInterno(driveId, form, dadosCompleto
     throw new Error('Google Agenda não configurado');
   }
   var token=await googleAgendaObterToken(opcoesToken);
-  var idsExistentes=Object.assign({},(dadosCompletos&&dadosCompletos.googleAgenda)||{});
-  // Relê os IDs gravados no orçamento IMEDIATAMENTE antes de enviar. O
+  // Relê os IDs gravados no orçamento IMEDIATAMENTE antes de enviar — o
   // `dadosCompletos` pode ter sido montado segundos atrás (ou vir do cache do
-  // Funil/Dashboard) e não conhecer um evento criado nesse meio-tempo — e um
-  // ID que o sistema não conhece é exatamente um evento duplicado na agenda,
-  // porque o envio cria outro em vez de atualizar o que existe.
-  try{
-    var _snapGa=await fbDb.collection('orcamentos').doc(driveId).get();
-    var _gravadoGa=(_snapGa&&_snapGa.exists)?((_snapGa.data()||{}).googleAgenda||null):null;
-    if(_gravadoGa) idsExistentes=Object.assign(idsExistentes,_gravadoGa);
-  }catch(e){
-    console.warn('[Google Agenda] Não foi possível reler os IDs gravados antes do envio:', e&&e.message);
-  }
+  // Funil/Dashboard) e não conhecer um evento criado nesse meio-tempo.
+  var idsExistentes=await _gaIdsFrescosDoOrcamento(driveId,(dadosCompletos&&dadosCompletos.googleAgenda)||{});
   // Aditivo não tem agenda própria: ele escreve nos eventos do orçamento
   // base. Sem isto, cada aditivo criava um conjunto novo no mesmo dia.
   var _idsProprios=Object.assign({},idsExistentes);
@@ -15693,6 +15684,27 @@ function _gaTituloEventoAoVivo(){
   return _gaTituloEvento({'f-nome-evento':gv('f-nome-evento'),'f-cliente':gv('f-cliente')});
 }
 
+// Relê no Firestore os IDs de evento gravados no orçamento, no instante do
+// envio. O orcAtualGoogleAgenda é a foto de quando a tela abriu: se outra
+// pessoa (ou você em outra máquina) mandou o MESMO orçamento para a agenda
+// nesse meio-tempo, a memória não conhece os eventos que ela criou — e um ID
+// que o sistema não conhece é exatamente um evento duplicado, porque o envio
+// cria outro em vez de atualizar. Foi o que aconteceu com a OS 20266799: o
+// consultor enviou às 20:27, a gerência reenviou às 20:41 com a tela aberta
+// desde antes, e a agenda ficou com dois jogos de Montagem/Evento/Desmontagem.
+async function _gaIdsFrescosDoOrcamento(driveId, idsMemoria){
+  var ids=Object.assign({},idsMemoria||{});
+  if(!driveId) return ids;
+  try{
+    var snap=await fbDb.collection('orcamentos').doc(driveId).get();
+    var gravado=(snap&&snap.exists)?((snap.data()||{}).googleAgenda||null):null;
+    if(gravado) ids=Object.assign(ids,gravado);   // o que está gravado manda
+  }catch(e){
+    console.warn('[Google Agenda] Não foi possível reler os IDs gravados antes do envio:', e&&e.message);
+  }
+  return ids;
+}
+
 // Monta o evento único de Pré-Reserva (negociação avançada, ainda não
 // fechada) — cobre a data principal do evento (f-dia a f-dia-fim), com título
 // "PRÉ-RESERVA: Nome do Evento - Cliente" e cor própria configurável em
@@ -15754,8 +15766,8 @@ async function googleAgendaEnviarPreReserva(){
   // já gravados quando chega a vez dele — assim uma pré-reserva criada em
   // paralelo com o envio automático de Venda Ganha não vira evento duplicado.
   var idsExistentes={};
-  var resultado=await _gaEnfileirar(function(){
-    idsExistentes=Object.assign({},orcAtualGoogleAgenda||{});
+  var resultado=await _gaEnfileirar(async function(){
+    idsExistentes=await _gaIdsFrescosDoOrcamento(idOrcamentoEnvio, orcAtualGoogleAgenda);
     return _gaEnviarListaEventos([_gaEventoPreReserva()],descricao,enderecoEvento,idsExistentes,GOOGLE_AGENDA_CONFIG.calendarId,token);
   });
   var novosIds=resultado.novosIds, erros=resultado.erros;
@@ -15826,7 +15838,11 @@ async function googleAgendaEnviarOS(){
   var idsExistentes={}, _idsProprios={};
   var _formEnvio=getForm(), _dadosEnvio=getDadosCompletos();
   var resultado=await _gaEnfileirar(async function(){
-    idsExistentes=Object.assign({},orcAtualGoogleAgenda||{});
+    // Relê os IDs gravados AGORA, não os da abertura da tela — ver
+    // _gaIdsFrescosDoOrcamento(). Era por aqui que o reenvio manual
+    // duplicava os eventos de quem tinha enviado antes.
+    idsExistentes=await _gaIdsFrescosDoOrcamento(idOrcamentoEnvio, orcAtualGoogleAgenda);
+    if(driveIdAtual===idOrcamentoEnvio) orcAtualGoogleAgenda=Object.assign({},idsExistentes);
     _idsProprios=Object.assign({},idsExistentes);
     // Aditivo escreve nos eventos do orçamento base — ver _gaIdsDaFamilia.
     idsExistentes=await _gaIdsDaFamilia(idOrcamentoEnvio,_formEnvio,_dadosEnvio,idsExistentes);
